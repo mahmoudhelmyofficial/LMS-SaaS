@@ -1,0 +1,360 @@
+@model object
+
+@{
+    ViewData["Title"] = Html.T("تحليلات الاختبار", "Quiz Analytics");
+    ViewData["Subtitle"] = Html.T("إحصائيات وتحليلات مفصلة", "Detailed statistics and analytics");
+    var quiz = ViewBag.Quiz as LMS.Domain.Entities.Assessments.Quiz;
+    var analytics = ViewBag.Analytics;
+    var scoreDistribution = ViewBag.ScoreDistribution as List<dynamic>;
+    var recentAttempts = ViewBag.RecentAttempts as List<LMS.Domain.Entities.Assessments.QuizAttempt>;
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(
+        "<a href='" + Url.Action("Questions", new { quizId = quiz?.Id }) + "' class='btn btn-light me-2'><i class='feather-help-circle me-2'></i>إدارة الأسئلة</a>" +
+        "<a href='" + Url.Action("Attempts", new { quizId = quiz?.Id }) + "' class='btn btn-light me-2'><i class='feather-users me-2'></i>المحاولات</a>" +
+        "<a href='" + Url.Action("Index", new { courseId = quiz?.Lesson?.Module?.CourseId }) + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>العودة</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @if (quiz != null)
+    {
+        <!-- Quiz Info -->
+        <div class="alert alert-info mb-4">
+            <div class="d-flex align-items-center gap-3">
+                <div class="avatar-text avatar-md bg-primary text-white">
+                    <i class="feather-trending-up"></i>
+                </div>
+                <div>
+                    <h6 class="fw-bold mb-1">@quiz.Title</h6>
+                    <p class="mb-0 fs-13">@quiz.Lesson?.Module?.Title - @quiz.Lesson?.Module?.Course?.Title</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overview Statistics -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <p class="text-muted mb-1 fs-13">إجمالي المحاولات</p>
+                                <h3 class="fw-bold mb-0">@analytics.TotalAttempts</h3>
+                                <small class="text-success">
+                                    <i class="feather-check-circle me-1"></i>
+                                    @analytics.CompletedAttempts مكتملة
+                                </small>
+                            </div>
+                            <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                                <i class="feather-file-text"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <p class="text-muted mb-1 fs-13">متوسط الدرجات</p>
+                                <h3 class="fw-bold mb-0">@analytics.AverageScore.ToString("F1")%</h3>
+                                <small class="text-muted">
+                                    من @analytics.TotalPoints نقطة
+                                </small>
+                            </div>
+                            <div class="avatar-text avatar-lg bg-soft-warning text-warning">
+                                <i class="feather-bar-chart"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <p class="text-muted mb-1 fs-13">معدل النجاح</p>
+                                <h3 class="fw-bold mb-0 text-success">@analytics.PassRate.ToString("F1")%</h3>
+                                <small class="text-muted">
+                                    من @analytics.CompletedAttempts محاولة
+                                </small>
+                            </div>
+                            <div class="avatar-text avatar-lg bg-soft-success text-success">
+                                <i class="feather-trending-up"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <p class="text-muted mb-1 fs-13">متوسط الوقت</p>
+                                <h3 class="fw-bold mb-0">@analytics.AverageCompletionTime.ToString("F0")</h3>
+                                <small class="text-muted">دقيقة</small>
+                            </div>
+                            <div class="avatar-text avatar-lg bg-soft-info text-info">
+                                <i class="feather-clock"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Score Distribution Chart -->
+            <div class="col-lg-8 mb-4">
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-pie-chart me-2 text-primary"></i>
+                            توزيع الدرجات
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (analytics.CompletedAttempts > 0)
+                        {
+                            <canvas id="scoreDistributionChart" height="300"></canvas>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning mb-0">
+                                <i class="feather-info me-2"></i>
+                                لا توجد بيانات كافية لعرض التوزيع. يجب أن يكون هناك محاولات مكتملة.
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Performance Summary -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-activity me-2 text-primary"></i>
+                            ملخص الأداء
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="p-3 border rounded">
+                                    <p class="text-muted mb-1 fs-13">أعلى درجة</p>
+                                    <h4 class="fw-bold mb-0 text-success">@analytics.HighestScore.ToString("F1")%</h4>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 border rounded">
+                                    <p class="text-muted mb-1 fs-13">أقل درجة</p>
+                                    <h4 class="fw-bold mb-0 text-danger">@analytics.LowestScore.ToString("F1")%</h4>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 border rounded">
+                                    <p class="text-muted mb-1 fs-13">عدد الأسئلة</p>
+                                    <h4 class="fw-bold mb-0 text-primary">@analytics.QuestionCount</h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4 mb-4">
+                <!-- Quiz Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-settings me-2"></i>
+                            إعدادات الاختبار
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">درجة النجاح:</span>
+                            <span class="fw-bold">@quiz.PassingScore%</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">الوقت المحدد:</span>
+                            <span class="fw-bold">@(quiz.TimeLimitMinutes?.ToString() ?? "غير محدد") @(quiz.TimeLimitMinutes.HasValue ? "دقيقة" : "")</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">عدد المحاولات:</span>
+                            <span class="fw-bold">@(quiz.MaxAttempts?.ToString() ?? "غير محدد")</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="fs-13">خلط الأسئلة:</span>
+                            <span class="@(quiz.ShuffleQuestions ? "text-success" : "text-muted")">
+                                @(quiz.ShuffleQuestions ? "نعم" : "لا")
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Attempts -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-clock me-2"></i>
+                            أحدث المحاولات
+                        </h6>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (recentAttempts != null && recentAttempts.Any())
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var attempt in recentAttempts)
+                                {
+                                    var isPassed = attempt.Score >= quiz.PassingScore;
+                                    
+                                    <div class="list-group-item">
+                                        <div class="d-flex align-items-center gap-2 mb-2">
+                                            <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                @attempt.Student?.FirstName?.Substring(0, 1)@attempt.Student?.LastName?.Substring(0, 1)
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-0 fs-13">@attempt.Student?.FirstName @attempt.Student?.LastName</h6>
+                                            </div>
+                                            @if (attempt.CompletedAt != null)
+                                            {
+                                                <span class="badge @(isPassed ? "bg-success" : "bg-danger")">
+                                                    @attempt.Score.ToString("F1")%
+                                                </span>
+                                            }
+                                        </div>
+                                        <small class="text-muted">@attempt.StartedAt.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                    </div>
+                                }
+                            </div>
+                            <div class="card-footer">
+                                <a href="@Url.Action("Attempts", new { quizId = quiz.Id })" class="btn btn-sm btn-light w-100">
+                                    عرض جميع المحاولات
+                                </a>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <div class="alert alert-warning mb-0">
+                                    <i class="feather-alert-triangle me-2"></i>
+                                    لا توجد محاولات حتى الآن
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Score Distribution Details -->
+        @if (scoreDistribution != null && scoreDistribution.Any())
+        {
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-bar-chart-2 me-2 text-primary"></i>
+                        تفاصيل توزيع الدرجات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        @foreach (var range in scoreDistribution)
+                        {
+                            var percentage = analytics.CompletedAttempts > 0 
+                                ? (range.Count * 100.0 / analytics.CompletedAttempts) 
+                                : 0;
+                            
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <div class="p-3 border rounded">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-bold">@range.Label</span>
+                                        <span class="badge bg-soft-primary text-primary">@range.Count</span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar" role="progressbar" style="width: @percentage%" 
+                                             aria-valuenow="@percentage" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <small class="text-muted">@percentage.ToString("F1")% من المحاولات</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        $(document).ready(function () {
+            @if (analytics.CompletedAttempts > 0 && scoreDistribution != null)
+            {
+                <text>
+                // Score Distribution Chart
+                var ctx = document.getElementById('scoreDistributionChart').getContext('2d');
+                var scoreDistributionChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: [@Html.Raw(string.Join(",", scoreDistribution.Select(r => "'" + r.Label + "'")))],
+                        datasets: [{
+                            label: 'عدد الطلاب',
+                            data: [@Html.Raw(string.Join(",", scoreDistribution.Select(r => r.Count)))],
+                            backgroundColor: [
+                                'rgba(220, 53, 69, 0.7)',
+                                'rgba(255, 193, 7, 0.7)',
+                                'rgba(255, 159, 64, 0.7)',
+                                'rgba(54, 162, 235, 0.7)',
+                                'rgba(75, 192, 192, 0.7)'
+                            ],
+                            borderColor: [
+                                'rgb(220, 53, 69)',
+                                'rgb(255, 193, 7)',
+                                'rgb(255, 159, 64)',
+                                'rgb(54, 162, 235)',
+                                'rgb(75, 192, 192)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            title: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        }
+                    }
+                });
+                </text>
+            }
+        });
+    </script>
+}
+

@@ -1,0 +1,335 @@
+@model IEnumerable<LMS.Domain.Entities.Financial.InstructorEarning>
+
+@{
+    ViewData["Title"] = Html.T("إدارة العمولات", "Commissions Management");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة عمولاتك وأرباحك", "View and manage your commissions and earnings");
+}
+
+@{
+    var earningsUrl = Url.Action("Index", "Earnings");
+    var currencyIcon = ViewBag.DefaultCurrencySymbol != null 
+        ? "<span style='font-weight: bold; margin-left: 8px;'>" + ViewBag.DefaultCurrencySymbol + "</span>" 
+        : "<i class='feather-dollar-sign me-2'></i>";
+    var actionButtonsHtml = "<a href='" + earningsUrl + "' class='btn btn-light'>" +
+        currencyIcon +
+        "الأرباح" +
+        "</a>" +
+        "<button class='btn btn-primary' onclick='window.print()'>" +
+            "<i class='feather-printer me-2'></i>" +
+            "طباعة التقرير" +
+        "</button>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "إجمالي الأرباح" },
+                { "Value", CurrencyFormatHelper.FormatCurrency(ViewBag.Summary?.TotalEarnings ?? 0m, ViewBag.DefaultCurrencySymbol as string, 2) },
+                { "Icon", "dollar-sign" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "إجمالي العمولات" },
+                { "Value", CurrencyFormatHelper.FormatCurrency(ViewBag.Summary?.TotalCommission ?? 0m, ViewBag.DefaultCurrencySymbol as string, 2) },
+                { "Icon", "percent" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "عدد المعاملات" },
+                { "Value", ViewBag.Summary?.Count ?? 0 },
+                { "Icon", "file-text" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "متوسط العمولة" },
+                { "Value", $"{(ViewBag.AverageCommissionRate ?? 0):F0}%" },
+                { "Icon", "trending-up" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    <!-- Commissions List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("سجل العمولات", "Commissions log")</h5>
+                    <div class="card-header-action">
+                        <div class="card-header-btn">
+                            <div data-bs-toggle="tooltip" title="@Html.T("تحديث", "Refresh")">
+                                <a href="@Url.Action("Index")" class="avatar-text avatar-xs bg-warning">
+                                    <i class="feather-refresh-cw"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    <!-- Filter Bar -->
+                    <div class="p-4 border-bottom">
+                        <form method="get" class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label fs-12">@Html.T("من تاريخ", "From date")</label>
+                                <input type="date" class="form-control" name="fromDate" value="@ViewBag.FromDate?.ToString("yyyy-MM-dd")">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fs-12">@Html.T("إلى تاريخ", "To date")</label>
+                                <input type="date" class="form-control" name="toDate" value="@ViewBag.ToDate?.ToString("yyyy-MM-dd")">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fs-12">&nbsp;</label>
+                                <button class="btn btn-primary w-100" type="submit">
+                                    <i class="feather-filter me-2"></i>
+                                    @Html.T("تطبيق التصفية", "Apply filter")
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var earning in Model)
+                            {
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <div class="fw-medium text-muted fs-12">#@earning.Id · @earning.CreatedAt.ToString("dd/MM/yyyy")</div>
+                                        <a href="@Url.Action("Details", "Courses", new { id = earning.CourseId })" class="fw-semibold text-dark text-break d-block mt-1">@earning.Course?.Title</a>
+                                        <div class="text-muted fs-12">@earning.Payment?.Student?.FullName</div>
+                                        <div class="d-flex flex-wrap gap-2 mt-2">
+                                            <span class="badge bg-soft-warning text-warning">@earning.PlatformCommissionRate.ToString("F0")%</span>
+                                            <span class="fw-bold text-success">@Html.FormatCurrency(earning.NetAmount, 2)</span>
+                                        </div>
+                                        <div class="hstack gap-2 mt-2">
+                                            <a href="@Url.Action("Details", new { id = earning.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-eye"></i></a>
+                                            <a href="@Url.Action("Details", "Courses", new { id = earning.CourseId })" class="btn btn-sm btn-outline-secondary"><i class="feather-book"></i></a>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>@Html.T("الدورة", "Course")</th>
+                                            <th>@Html.T("الطالب", "Student")</th>
+                                            <th>@Html.T("المبلغ الإجمالي", "Total amount")</th>
+                                            <th>@Html.T("عمولة المنصة", "Platform commission")</th>
+                                            <th>@Html.T("صافي الربح", "Net profit")</th>
+                                            <th>@Html.T("نسبة العمولة", "Commission rate")</th>
+                                            <th>@Html.T("التاريخ", "Date")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var earning in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <span class="fw-medium">#@earning.Id</span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-image avatar-sm">
+                                                        <img src="@(earning.Course?.ThumbnailUrl ?? "/assets/images/general/placeholder.png")" alt="@earning.Course?.Title" class="img-fluid">
+                                                    </div>
+                                                    <div>
+                                                        <div class="fw-medium">@earning.Course?.Title</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="fw-medium">@earning.Payment?.Student?.FullName</div>
+                                                <div class="fs-11 text-muted">@earning.Payment?.Student?.Email</div>
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold">@Html.FormatCurrency(earning.GrossAmount, 2)</span>
+                                            </td>
+                                            <td>
+                                                <span class="text-danger fw-medium">-@Html.FormatCurrency(earning.PlatformCommission, 2)</span>
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold text-success">@Html.FormatCurrency(earning.NetAmount, 2)</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-warning text-warning">
+                                                    @earning.PlatformCommissionRate.ToString("F0")%
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="fs-13">@earning.CreatedAt.ToString("dd/MM/yyyy")</div>
+                                                <div class="fs-11 text-muted">@earning.CreatedAt.ToString("HH:mm")</div>
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { id = earning.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض التفاصيل", "View details")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    <a href="@Url.Action("Details", "Courses", new { id = earning.CourseId })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض الدورة", "View course")">
+                                                        <i class="feather-book"></i>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot class="bg-soft-light">
+                                                <tr>
+                                                    <th colspan="3" class="text-end">@Html.T("الإجمالي:", "Total:")</th>
+                                                    <th>@Html.FormatCurrency(Model.Sum(e => e.GrossAmount), 2)</th>
+                                                    <th class="text-danger">-@Html.FormatCurrency(Model.Sum(e => e.PlatformCommission), 2)</th>
+                                                    <th class="text-success">@Html.FormatCurrency(Model.Sum(e => e.NetAmount), 2)</th>
+                                                    <th colspan="3"></th>
+                                                </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-percent"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد عمولات بعد", "No commissions yet")</h5>
+                            <p class="text-muted mb-0">@Html.T("لم يتم تسجيل أي عمولات في الفترة المحددة", "No commissions in the selected period")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Commission Breakdown Chart -->
+    @if (Model != null && Model.Any())
+    {
+        <div class="row mt-4">
+            <div class="col-lg-6">
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("توزيع الأرباح حسب الدورة", "Earnings by course")</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="earningsByCourseChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("اتجاه الأرباح الشهري", "Monthly earnings trend")</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="monthlyEarningsChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            @if (Model != null && Model.Any())
+            {
+                @:// Earnings by Course Chart
+                @:const courseCtx = document.getElementById('earningsByCourseChart').getContext('2d');
+                @:new Chart(courseCtx, {
+                @:    type: 'doughnut',
+                @:    data: {
+                @:        labels: [@Html.Raw(string.Join(",", Model.GroupBy(e => e.Course?.Title).Select(g => $"'{g.Key}'")))],
+                @:        datasets: [{
+                @:            data: [@Html.Raw(string.Join(",", Model.GroupBy(e => e.Course?.Title).Select(g => g.Sum(e => e.NetAmount))))],
+                @:            backgroundColor: ['#667eea', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6']
+                @:        }]
+                @:    },
+                @:    options: {
+                @:        responsive: true,
+                @:        maintainAspectRatio: false,
+                @:        plugins: {
+                @:            legend: {
+                @:                position: 'bottom'
+                @:            }
+                @:        }
+                @:    }
+                @:});
+
+                // Generate monthly earnings data from actual model
+                var monthlyLabels = new List<string>();
+                var monthlyData = new List<decimal>();
+                for (int i = 5; i >= 0; i--)
+                {
+                    var date = DateTime.UtcNow.AddMonths(-i);
+                    var monthName = date.ToString("MMMM", new System.Globalization.CultureInfo("ar-SA"));
+                    monthlyLabels.Add(monthName);
+                    var monthEarnings = Model.Where(e => e.CreatedAt.Year == date.Year && e.CreatedAt.Month == date.Month).Sum(e => e.NetAmount);
+                    monthlyData.Add(monthEarnings);
+                }
+                @:// Monthly Earnings Chart
+                @:var monthlyLabelsJs = @Html.Raw(Json.Serialize(monthlyLabels));
+                @:var monthlyDataJs = @Html.Raw(Json.Serialize(monthlyData));
+                @:const monthlyCtx = document.getElementById('monthlyEarningsChart').getContext('2d');
+                @:new Chart(monthlyCtx, {
+                @:    type: 'line',
+                @:    data: {
+                @:        labels: monthlyLabelsJs,
+                @:        datasets: [{
+                @:            label: 'الأرباح',
+                @:            data: monthlyDataJs,
+                @:            borderColor: '#10b981',
+                @:            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                @:            fill: true,
+                @:            tension: 0.4
+                @:        }]
+                @:    },
+                @:    options: {
+                @:        responsive: true,
+                @:        maintainAspectRatio: false,
+                @:        plugins: {
+                @:            legend: {
+                @:                display: false
+                @:            }
+                @:        },
+                @:        scales: {
+                @:            y: {
+                @:                beginAtZero: true
+                @:            }
+                @:        }
+                @:    }
+                @:});
+            }
+        });
+    </script>
+}
+

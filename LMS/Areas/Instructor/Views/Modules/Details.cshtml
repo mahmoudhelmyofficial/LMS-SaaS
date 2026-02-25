@@ -1,0 +1,214 @@
+@model LMS.Domain.Entities.Courses.Module
+
+@{
+    ViewData["Title"] = Model.Title;
+    ViewData["Subtitle"] = Html.T("تفاصيل الوحدة", "Module details");
+    var course = ViewBag.Course as LMS.Domain.Entities.Courses.Course;
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="fs-12 fw-medium text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+        <ul class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Dashboard")">@Html.T("الرئيسية", "Home")</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Courses")">@Html.T("الدورات", "Courses")</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("CreateWizard", "Courses", new { id = course?.Id, step = 3 })">@course?.Title</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", new { courseId = course?.Id })">@Html.T("الوحدات", "Modules")</a></li>
+            <li class="breadcrumb-item active">@Model.Title</li>
+        </ul>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex align-items-center gap-2">
+            <a href="@Url.Action("Index", new { courseId = course?.Id })" class="btn btn-light">
+                <i class="feather-arrow-right me-2"></i>
+                @Html.T("العودة للوحدات", "Back to modules")
+            </a>
+            <a href="@Url.Action("Edit", new { id = Model.Id })" class="btn btn-primary">
+                <i class="feather-edit me-2"></i>
+                @Html.T("تعديل الوحدة", "Edit module")
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <!-- Module Info -->
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات الوحدة", "Module information")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="avatar-text avatar-lg bg-soft-@(Model.IsPublished ? "success" : "warning") text-@(Model.IsPublished ? "success" : "warning") me-3">
+                            <i class="feather-folder"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-1">@Model.Title</h5>
+                            <span class="badge bg-soft-@(Model.IsPublished ? "success" : "warning") text-@(Model.IsPublished ? "success" : "warning")">
+                                @(Model.IsPublished ? "منشورة" : "مسودة")
+                            </span>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.Description))
+                    {
+                        <div class="mb-4">
+                            <label class="text-muted small mb-2">الوصف</label>
+                            <p class="mb-0">@Model.Description</p>
+                        </div>
+                    }
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">عدد الدروس</span>
+                        <span class="fw-bold">@(Model.Lessons?.Count ?? 0)</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">الترتيب</span>
+                        <span class="fw-medium">#@Model.OrderIndex</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">تاريخ الإنشاء</span>
+                        <span class="fw-medium">@Model.CreatedAt.ToString("dd/MM/yyyy")</span>
+                    </div>
+
+                    <div class="d-grid gap-2 mt-4">
+                        <a href="@Url.Action("Create", "Lessons", new { moduleId = Model.Id })" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            إضافة درس جديد
+                        </a>
+                        <form asp-action="TogglePublish" asp-route-id="@Model.Id" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-@(Model.IsPublished ? "warning" : "success") w-100">
+                                <i class="feather-@(Model.IsPublished ? "eye-off" : "eye") me-2"></i>
+                                @(Model.IsPublished ? "إلغاء النشر" : "نشر الوحدة")
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lessons List -->
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-file-text text-primary me-2"></i>
+                        دروس الوحدة
+                    </h5>
+                    <div class="card-header-action">
+                        <a href="@Url.Action("Create", "Lessons", new { moduleId = Model.Id })" class="btn btn-sm btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            إضافة درس
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model.Lessons != null && Model.Lessons.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var lesson in Model.Lessons.OrderBy(l => l.OrderIndex))
+                            {
+                                var hasQuiz = lesson.Quiz != null;
+                                var hasAssignment = lesson.Assignment != null;
+                                
+                                <div class="list-group-item p-4">
+                                    <div class="d-flex align-items-center">
+                                        <!-- Lesson Icon -->
+                                        <div class="avatar-text avatar-md bg-soft-primary text-primary me-3">
+                                            @switch (lesson.Type)
+                                            {
+                                                case LMS.Domain.Enums.LessonType.Video:
+                                                    <i class="feather-video"></i>
+                                                    break;
+                                                case LMS.Domain.Enums.LessonType.Quiz:
+                                                    <i class="feather-help-circle"></i>
+                                                    break;
+                                                case LMS.Domain.Enums.LessonType.Assignment:
+                                                    <i class="feather-file-text"></i>
+                                                    break;
+                                                default:
+                                                    <i class="feather-book-open"></i>
+                                                    break;
+                                            }
+                                        </div>
+
+                                        <!-- Lesson Info -->
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">
+                                                <a href="@Url.Action("Edit", "Lessons", new { id = lesson.Id })" class="text-dark">
+                                                    @lesson.Title
+                                                </a>
+                                            </h6>
+                                            <div class="d-flex align-items-center gap-3 text-muted small">
+                                                <span>
+                                                    <i class="feather-clock me-1"></i>
+                                                    @(lesson.DurationSeconds / 60) دقيقة
+                                                </span>
+                                                @if (lesson.IsPreviewable)
+                                                {
+                                                    <span class="badge bg-soft-info text-info">معاينة مجانية</span>
+                                                }
+                                                @if (hasQuiz)
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning">
+                                                        <i class="feather-help-circle me-1"></i>
+                                                        اختبار
+                                                    </span>
+                                                }
+                                                @if (hasAssignment)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-file-text me-1"></i>
+                                                        واجب
+                                                    </span>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        <!-- Actions -->
+                                        <div class="hstack gap-2">
+                                            <a href="@Url.Action("Edit", "Lessons", new { id = lesson.Id })" class="btn btn-sm btn-light">
+                                                <i class="feather-edit-2"></i>
+                                            </a>
+                                            <form asp-controller="Lessons" asp-action="Delete" asp-route-id="@lesson.Id" method="post" style="display:inline;" onsubmit="return confirm('@Html.Raw((Html.T("هل أنت متأكد من حذف الدرس: ", "Are you sure you want to delete the lesson: ") + (lesson.Title ?? "").Replace("'", "\\'") + "؟").Replace("'", "\\'"))');">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="btn btn-sm btn-light text-danger">
+                                                    <i class="feather-trash-2"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-file-text"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد دروس بعد", "No lessons yet")</h5>
+                            <p class="text-muted mb-4">ابدأ بإضافة دروس لهذه الوحدة</p>
+                            <a href="@Url.Action("Create", "Lessons", new { moduleId = Model.Id })" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                إضافة درس جديد
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+

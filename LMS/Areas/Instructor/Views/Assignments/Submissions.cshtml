@@ -1,0 +1,246 @@
+@model IEnumerable<LMS.Areas.Instructor.ViewModels.SubmissionDisplayViewModel>
+
+@using LMS.Views.Shared
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("إجابات الواجبات", "Assignment Submissions");
+    ViewData["Subtitle"] = Html.T("مراجعة وتقييم إجابات الطلاب", "Review and grade student answers");
+    var assignmentTitle = ViewBag.AssignmentTitle;
+    var assignmentId = ViewBag.AssignmentId as int?;
+    var indexUrl = Url.Action("Index");
+    
+    // Load platform settings
+    var defaultPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Default", 10);
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1">@ViewData["Title"]</h4>
+        <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="@indexUrl" class="btn btn-light">
+            <i class="feather-arrow-right me-2"></i>@Html.T("العودة للواجبات", "Back to assignments")
+        </a>
+        @await Html.PartialAsync("_ExportDropdown", new ExportDropdownModel 
+        { 
+            ExportUrl = "/api/export/submissions",
+            EntityType = "submissions",
+            AdditionalParams = assignmentId.HasValue 
+                ? new Dictionary<string, string> { { "assignmentId", assignmentId.Value.ToString() } }
+                : null
+        })
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Assignment Info -->
+    @if (!string.IsNullOrEmpty(assignmentTitle))
+    {
+        <div class="alert alert-soft-primary mb-4">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h6 class="mb-1">@assignmentTitle</h6>
+                    <p class="mb-0 fs-13">
+                        <i class="feather-users me-2"></i>
+                        @Html.T("إجمالي الإجابات", "Total submissions"): @(Model?.Count() ?? 0)
+                    </p>
+                </div>
+                <a href="@Url.Action("Details", new { id = ViewBag.AssignmentId })" class="btn btn-sm btn-light">
+                    @Html.T("عرض الواجب", "View assignment")
+                </a>
+            </div>
+        </div>
+    }
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="fw-bold text-primary mb-1">@(ViewBag.TotalSubmissions ?? 0)</h3>
+                    <p class="fs-12 text-muted mb-0">@Html.T("إجمالي الإجابات", "Total submissions")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="fw-bold text-warning mb-1">@(ViewBag.PendingCount ?? 0)</h3>
+                    <p class="fs-12 text-muted mb-0">@Html.T("قيد المراجعة", "Pending review")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="fw-bold text-success mb-1">@(ViewBag.GradedCount ?? 0)</h3>
+                    <p class="fs-12 text-muted mb-0">@Html.T("تم التقييم", "Graded")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h3 class="fw-bold text-info mb-1">@(ViewBag.AverageGrade ?? 0)%</h3>
+                    <p class="fs-12 text-muted mb-0">@Html.T("متوسط الدرجات", "Average grade")</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-3">
+                            <select class="form-select" name="status" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الحالات", "All statuses")</option>
+                                <option value="Submitted">@Html.T("مرسل", "Submitted")</option>
+                                <option value="Graded">@Html.T("تم التقييم", "Graded")</option>
+                                <option value="Late">@Html.T("متأخر", "Late")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" name="sortBy" onchange="this.form.submit()">
+                                <option value="newest">@Html.T("الأحدث", "Newest")</option>
+                                <option value="oldest">@Html.T("الأقدم", "Oldest")</option>
+                                <option value="grade">@Html.T("الدرجة", "Grade")</option>
+                                <option value="name">@Html.T("الاسم", "Name")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" name="search" placeholder="@Html.T("بحث عن طالب...", "Search for student...")" value="@ViewBag.SearchTerm">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="feather-search"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Submissions List -->
+    <div class="row">
+        @if (Model != null && Model.Any())
+        {
+            foreach (var submission in Model)
+            {
+                <div class="col-lg-12 mb-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="avatar-text avatar-lg bg-soft-@(submission.Status == LMS.Domain.Enums.AssignmentStatus.Graded ? "success" : "warning") text-@(submission.Status == LMS.Domain.Enums.AssignmentStatus.Graded ? "success" : "warning")">
+                                    @(submission.StudentName?.Length > 0 ? submission.StudentName.Substring(0, 1) : "?")
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-start justify-content-between mb-2">
+                                        <div>
+                                            <h5 class="mb-1">@submission.StudentName</h5>
+                                            <p class="text-muted fs-12 mb-1">@submission.StudentEmail</p>
+                                            <div class="d-flex align-items-center gap-3 fs-13 text-muted">
+                                                <span>
+                                                    <i class="feather-book me-1"></i>
+                                                    @submission.CourseName - @submission.AssignmentTitle
+                                                </span>
+                                                <span>
+                                                    <i class="feather-calendar me-1"></i>
+                                                    @Html.T("تاريخ التسليم", "Submitted at"): @submission.SubmittedAt.ToString("dd/MM/yyyy HH:mm")
+                                                </span>
+                                                @if (submission.IsLate)
+                                                {
+                                                    <span class="badge bg-danger">@Html.T("متأخر", "Late")</span>
+                                                }
+                                                @if (submission.Status == LMS.Domain.Enums.AssignmentStatus.Graded)
+                                                {
+                                                    <span class="badge bg-success">@Html.T("تم التقييم", "Graded")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-warning">@Html.T("قيد المراجعة", "Pending review")</span>
+                                                }
+                                            </div>
+                                        </div>
+                                        @if (submission.Status == LMS.Domain.Enums.AssignmentStatus.Graded && submission.Grade.HasValue)
+                                        {
+                                            <div class="text-end">
+                                                <h3 class="fw-bold text-success mb-0">@submission.Grade</h3>
+                                                <p class="fs-12 text-muted mb-0">@Html.T("الدرجة", "Grade")</p>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <!-- Actions -->
+                                    <div class="d-flex gap-2">
+                                        @if (submission.Status != LMS.Domain.Enums.AssignmentStatus.Graded)
+                                        {
+                                            <a href="@Url.Action("Grade", new { id = submission.Id })" class="btn btn-sm btn-primary">
+                                                <i class="feather-edit me-2"></i>
+                                                @Html.T("تقييم الإجابة", "Grade submission")
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <a href="@Url.Action("Grade", new { id = submission.Id })" class="btn btn-sm btn-light">
+                                                <i class="feather-edit me-2"></i>
+                                                @Html.T("تعديل التقييم", "Edit grade")
+                                            </a>
+                                        }
+                                        <a href="@Url.Action("ViewSubmission", new { id = submission.Id })" class="btn btn-sm btn-light">
+                                            <i class="feather-eye me-2"></i>
+                                            @Html.T("عرض التفاصيل", "View details")
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* Pagination *@
+            var paginationData = new ViewDataDictionary(new Microsoft.AspNetCore.Mvc.ModelBinding.EmptyModelMetadataProvider(), new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary());
+            paginationData["CurrentPage"] = ViewBag.CurrentPage ?? 1;
+            paginationData["TotalPages"] = ViewBag.TotalPages ?? 1;
+            paginationData["TotalItems"] = ViewBag.TotalItems ?? 0;
+            paginationData["PageSize"] = ViewBag.PageSize ?? defaultPageSize;
+            paginationData["Action"] = "Submissions";
+            paginationData["Controller"] = "Assignments";
+            @await Html.PartialAsync("_Pagination", paginationData)
+        }
+        else
+        {
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                            <i class="feather-inbox"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">@Html.T("لا توجد إجابات بعد", "No submissions yet")</h5>
+                        <p class="text-muted mb-0">@Html.T("لم يقم أي طالب بتسليم إجابة لهذا الواجب", "No students have submitted this assignment yet")</p>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function showGradeForm(submissionId) {
+            document.getElementById('gradeForm-' + submissionId).style.display = 'block';
+        }
+
+        function hideGradeForm(submissionId) {
+            document.getElementById('gradeForm-' + submissionId).style.display = 'none';
+        }
+    </script>
+}
+

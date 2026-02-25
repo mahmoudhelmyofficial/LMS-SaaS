@@ -1,0 +1,279 @@
+@model LMS.Domain.Entities.Social.Review
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل التقييم", "Review Details");
+    ViewData["Subtitle"] = Model.Course?.Title;
+    var respondUrl = Url.Action("Respond", new { id = Model.Id });
+    var indexUrl = Url.Action("Index");
+    var respondBtnText = string.IsNullOrEmpty(Model.InstructorResponse) ? Html.T("إضافة رد", "Add reply") : Html.T("تعديل الرد", "Edit reply");
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + respondUrl + "' class='btn btn-primary'><i class='feather-message-circle me-2'></i>" + respondBtnText + "</a><a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة", "Back") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Review Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-body">
+                    <!-- Student Info -->
+                    <div class="d-flex align-items-start gap-3 mb-4">
+                        <div class="avatar-text avatar-lg @(Model.Rating >= 4 ? "bg-soft-success text-success" : Model.Rating >= 3 ? "bg-soft-warning text-warning" : "bg-soft-danger text-danger")">
+                            @Model.Student?.FirstName?.Substring(0, 1)
+                        </div>
+                        <div class="flex-grow-1">
+                            <h5 class="fw-bold mb-1">@Model.Student?.FullName</h5>
+                            <p class="text-muted fs-13 mb-2">@Model.Student?.Email</p>
+                            
+                            <!-- Rating Stars -->
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                @for (int i = 1; i <= 5; i++)
+                                {
+                                    <i class="feather-star @(i <= Model.Rating ? "text-warning fill-warning" : "text-muted")" style="font-size: 20px;"></i>
+                                }
+                                <span class="fw-bold text-dark ms-2">@Model.Rating.0 / 5.0</span>
+                            </div>
+
+                            <!-- Date -->
+                            <p class="text-muted fs-12 mb-0">
+                                <i class="feather-calendar me-1"></i>
+                                @Model.CreatedAt.ToString("dd MMMM yyyy - hh:mm tt")
+                            </p>
+                        </div>
+
+                        <!-- Status Badge -->
+                        @if (Model.IsApproved)
+                        {
+                            <span class="badge bg-soft-success text-success">
+                                <i class="feather-check-circle me-1"></i>
+                                معتمد
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-soft-warning text-warning">
+                                <i class="feather-clock me-1"></i>
+                                قيد المراجعة
+                            </span>
+                        }
+                    </div>
+
+                    <hr />
+
+                    <!-- Review Comment -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-3">@Html.T("التقييم:", "Rating:")</h6>
+                        <p class="text-dark" style="white-space: pre-wrap; line-height: 1.8;">@Model.Comment</p>
+                    </div>
+
+                    <!-- Course Link -->
+                    <div class="alert alert-light border">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-md bg-primary text-white">
+                                <i class="feather-book"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="fw-bold mb-1">@Html.T("الدورة:", "Course:") @Model.Course?.Title</h6>
+                                <p class="text-muted fs-13 mb-0">@Model.Course?.ShortDescription</p>
+                            </div>
+                            <a href="@Url.Action("Details", "Courses", new { id = Model.CourseId })" class="btn btn-sm btn-light">
+                                عرض الدورة
+                            </a>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.InstructorResponse))
+                    {
+                        <hr />
+
+                        <!-- Instructor Response -->
+                        <div class="bg-soft-primary p-4 rounded">
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <h6 class="fw-bold text-primary mb-0">
+                                    <i class="feather-message-circle me-2"></i>
+                                    ردك على هذا التقييم:
+                                </h6>
+                                @if (Model.ResponseAt.HasValue)
+                                {
+                                    <span class="text-muted fs-12">
+                                        @Model.ResponseAt.Value.ToString("dd MMM yyyy")
+                                    </span>
+                                }
+                            </div>
+                            <p class="mb-0" style="white-space: pre-wrap; line-height: 1.8;">@Model.InstructorResponse</p>
+                            
+                            <div class="d-flex gap-2 mt-3">
+                                <a href="@Url.Action("Respond", new { id = Model.Id })" class="btn btn-sm btn-primary">
+                                    <i class="feather-edit me-2"></i>
+                                    @Html.T("تعديل الرد", "Edit reply")
+                                </a>
+                                <form asp-action="DeleteResponse" asp-route-id="@Model.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف الرد؟", "Are you sure you want to delete the response?").Replace("'", "\\'"))')">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-light text-danger">
+                                        <i class="feather-trash-2 me-2"></i>
+                                        @Html.T("حذف الرد", "Delete reply")
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info">
+                            <i class="feather-info me-2"></i>
+                            لم تقم بالرد على هذا التقييم بعد. الرد على التقييمات يبني علاقة جيدة مع الطلاب.
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("إجراءات سريعة", "Quick actions")</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        @if (string.IsNullOrEmpty(Model.InstructorResponse))
+                        {
+                            <a href="@Url.Action("Respond", new { id = Model.Id })" class="btn btn-primary">
+                                <i class="feather-message-circle me-2"></i>
+                                @Html.T("إضافة رد", "Add reply")
+                            </a>
+                        }
+                        else
+                        {
+                            <a href="@Url.Action("Respond", new { id = Model.Id })" class="btn btn-primary">
+                                <i class="feather-edit me-2"></i>
+                                @Html.T("تعديل الرد", "Edit reply")
+                            </a>
+                        }
+                        
+                        <a href="@Url.Action("Compose", "Messages", new { receiverId = Model.StudentId })" class="btn btn-light">
+                            <i class="feather-mail me-2"></i>
+                            إرسال رسالة للطالب
+                        </a>
+                        
+                        <a href="@Url.Action("Details", "Students", new { enrollmentId = Model.Student?.Enrollments?.FirstOrDefault(e => e.CourseId == Model.CourseId)?.Id })" class="btn btn-light">
+                            <i class="feather-user me-2"></i>
+                            ملف الطالب
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rating Breakdown -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("تفاصيل التقييم", "Review details")</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">التقييم:</span>
+                            <span class="fw-bold">@Model.Rating / 5</span>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar @(Model.Rating >= 4 ? "bg-success" : Model.Rating >= 3 ? "bg-warning" : "bg-danger")" 
+                                 role="progressbar" 
+                                 style="width: @((Model.Rating * 20))%" 
+                                 aria-valuenow="@((Model.Rating * 20))" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">الحالة:</span>
+                        @if (Model.IsApproved)
+                        {
+                            <span class="badge bg-soft-success text-success">معتمد</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-soft-warning text-warning">قيد المراجعة</span>
+                        }
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">تم الرد:</span>
+                        @if (!string.IsNullOrEmpty(Model.InstructorResponse))
+                        {
+                            <span class="badge bg-soft-success text-success">
+                                <i class="feather-check-circle me-1"></i>
+                                نعم
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-soft-danger text-danger">
+                                <i class="feather-x-circle me-1"></i>
+                                لا
+                            </span>
+                        }
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">تاريخ التقييم:</span>
+                        <span class="fw-bold fs-13">@Model.CreatedAt.ToString("dd/MM/yyyy")</span>
+                    </div>
+
+                    @if (Model.ResponseAt.HasValue)
+                    {
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">تاريخ الرد:</span>
+                            <span class="fw-bold fs-13">@Model.ResponseAt.Value.ToString("dd/MM/yyyy")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Help Card -->
+            <div class="card stretch stretch-full bg-soft-info">
+                <div class="card-body">
+                    <h6 class="fw-bold text-info mb-3">
+                        <i class="feather-info me-2"></i>
+                        نصائح للرد على التقييمات
+                    </h6>
+                    <ul class="list-unstyled mb-0 fs-13">
+                        <li class="mb-2">
+                            <i class="feather-check me-2 text-success"></i>
+                            اشكر الطالب على التقييم
+                        </li>
+                        <li class="mb-2">
+                            <i class="feather-check me-2 text-success"></i>
+                            عالج أي مشاكل أو استفسارات
+                        </li>
+                        <li class="mb-2">
+                            <i class="feather-check me-2 text-success"></i>
+                            كن إيجابياً ومهنياً
+                        </li>
+                        <li class="mb-0">
+                            <i class="feather-check me-2 text-success"></i>
+                            استخدم الردود لتحسين الدورة
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <style>
+        .fill-warning {
+            fill: currentColor;
+        }
+    </style>
+}
+

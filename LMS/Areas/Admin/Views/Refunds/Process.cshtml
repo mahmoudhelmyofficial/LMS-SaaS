@@ -1,0 +1,449 @@
+@model LMS.Areas.Admin.ViewModels.ProcessRefundViewModel
+
+@{
+    ViewData["Title"] = Html.T("معالجة طلب الاسترداد", "Process refund request");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("طلبات الاسترداد", "Refund requests"), Url.Action("Index", "Refunds")),
+        (Html.T("معالجة الطلب", "Process request"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .process-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .decision-card {
+            transition: all 0.3s;
+            cursor: pointer;
+            border: 3px solid transparent;
+        }
+        .decision-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        }
+        .decision-card.selected {
+            border-color: currentColor;
+        }
+        .decision-card.approve-card.selected {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+        .decision-card.reject-card.selected {
+            border-color: #dc3545;
+            background: #f8d7da;
+        }
+        .amount-display {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #28a745;
+        }
+        .warning-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .info-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Process Header -->
+    <div class="process-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h3 class="text-white mb-3">@Html.T("معالجة طلب استرداد", "Process refund request") #@Model.RefundId</h3>
+                <div class="row g-3 text-white">
+                    <div class="col-md-4">
+                        <small class="text-white-50 d-block">@Html.T("الطالب", "Student")</small>
+                        <span class="fw-semibold">@Model.StudentName</span>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-white-50 d-block">@Html.T("الدورة", "Course")</small>
+                        <span class="fw-semibold">@Model.CourseName</span>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-white-50 d-block">@Html.T("المبلغ المطلوب", "Requested amount")</small>
+                        <span class="fw-semibold">@Model.RefundAmount.ToEGP()</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="amount-display text-white">
+                    @Model.RefundAmount.ToEGP()
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form asp-action="Process" asp-route-id="@Model.RefundId" method="post" id="processForm">
+        <input type="hidden" asp-for="RefundId" />
+        <input type="hidden" asp-for="Status" id="statusInput" />
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <div class="row">
+            <!-- Decision Section -->
+            <div class="col-lg-8">
+                <!-- Decision Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card decision-card approve-card" data-decision="Approved">
+                            <div class="card-body text-center p-4">
+                                <div class="avatar-text avatar-xxl bg-success text-white mx-auto mb-3">
+                                    <i class="feather-check-circle fs-1"></i>
+                                </div>
+                                <h4 class="text-success mb-2">@Html.T("الموافقة على الاسترداد", "Approve refund")</h4>
+                                <p class="text-muted mb-0">
+                                    @Html.T("سيتم إرجاع المبلغ للطالب وإلغاء التسجيل في الدورة", "Amount will be refunded to the student and enrollment will be cancelled")
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card decision-card reject-card" data-decision="Rejected">
+                            <div class="card-body text-center p-4">
+                                <div class="avatar-text avatar-xxl bg-danger text-white mx-auto mb-3">
+                                    <i class="feather-x-circle fs-1"></i>
+                                </div>
+                                <h4 class="text-danger mb-2">@Html.T("رفض الاسترداد", "Reject refund")</h4>
+                                <p class="text-muted mb-0">
+                                    @Html.T("سيتم رفض الطلب وإبلاغ الطالب بالسبب", "Request will be rejected and the student will be notified of the reason")
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Decision Details -->
+                <div class="card stretch stretch-full" id="decisionDetails" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-file-text me-2"></i>
+                            @Html.T("تفاصيل القرار", "Decision details")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group mb-4">
+                            <label class="form-label">
+                                <span id="notesLabel">@Html.T("ملاحظات", "Notes")</span>
+                                <span class="text-danger" id="notesRequired" style="display: none;">*</span>
+                            </label>
+                            <textarea asp-for="Notes" class="form-control" rows="5" id="notesTextarea" placeholder="@Html.T("أدخل ملاحظات إضافية (اختياري)", "Enter additional notes (optional)")"></textarea>
+                            <span asp-validation-for="Notes" class="text-danger"></span>
+                            <small class="form-text text-muted" id="notesHelp">
+                                أضف أي ملاحظات إضافية حول قرارك
+                            </small>
+                        </div>
+
+                        <!-- Warnings -->
+                        <div id="approveWarning" class="warning-box mb-3" style="display: none;">
+                            <h6 class="mb-2">
+                                <i class="feather-alert-triangle me-2"></i>
+                                @Html.T("تحذير: الموافقة على الاسترداد ستؤدي إلى:", "Warning: Approving the refund will:")
+                            </h6>
+                            <ul class="mb-0">
+                                <li>@Html.T("إرجاع", "Refund") @Model.RefundAmount.ToEGP() @Html.T("إلى الطالب", "to the student")</li>
+                                <li>@Html.T("إلغاء تسجيل الطالب في الدورة", "Cancel student enrollment in course") "@Model.CourseName"</li>
+                                <li>@Html.T("خصم المبلغ من أرباح المدرس", "Deduct amount from instructor earnings")</li>
+                                <li>@Html.T("تحديث إحصائيات الدورة", "Update course statistics")</li>
+                            </ul>
+                        </div>
+
+                        <div id="rejectWarning" class="warning-box mb-3" style="display: none;">
+                            <h6 class="mb-2">
+                                <i class="feather-alert-circle me-2"></i>
+                                ملاحظة: رفض الاسترداد يتطلب:
+                            </h6>
+                            <ul class="mb-0">
+                                <li>@Html.T("تقديم سبب واضح ومحدد للرفض", "Provide a clear, specific reason for rejection")</li>
+                                <li>@Html.T("التأكد من صحة القرار وعدالته", "Ensure the decision is correct and fair")</li>
+                                <li>@Html.T("سيتم إرسال إشعار للطالب بسبب الرفض", "The student will be notified of the rejection reason")</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Refund Information -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2"></i>
+                            معلومات الطلب
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="info-item">
+                                    <small class="text-muted d-block mb-1">@Html.T("رقم الطلب", "Request number")</small>
+                                    <span class="fw-semibold">#@Model.RefundId</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-item">
+                                    <small class="text-muted d-block mb-1">@Html.T("المبلغ المطلوب", "Requested amount")</small>
+                                    <span class="fw-semibold text-success">@Model.RefundAmount.ToEGP()</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-item">
+                                    <small class="text-muted d-block mb-1">@Html.T("اسم الطالب", "Student name")</small>
+                                    <span class="fw-semibold">@Model.StudentName</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-item">
+                                    <small class="text-muted d-block mb-1">@Html.T("اسم الدورة", "Course name")</small>
+                                    <span class="fw-semibold">@Model.CourseName</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons -->
+                <div class="card stretch stretch-full" id="submitSection" style="display: none;">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 justify-content-between align-items-center">
+                            <a asp-action="Details" asp-route-id="@Model.RefundId" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-secondary" id="reviewBtn">
+                                    <i class="feather-eye me-2"></i>
+                                    مراجعة القرار
+                                </button>
+                                <button type="submit" class="btn btn-primary" id="submitBtn">
+                                    <i class="feather-check-circle me-2"></i>
+                                    تأكيد وإرسال
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Decision Summary -->
+                <div class="card stretch stretch-full" id="summaryCard" style="display: none;">
+                    <div class="card-header" id="summaryHeader">
+                        <h5 class="card-title mb-0">
+                            <i class="feather-check-circle me-2"></i>
+                            <span id="summaryTitle">@Html.T("ملخص القرار", "Decision summary")</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center mb-4">
+                            <div class="avatar-text avatar-xxl mx-auto mb-3" id="summaryIcon">
+                                <i class="feather-check-circle fs-1"></i>
+                            </div>
+                            <h5 id="summaryDecision">@Html.T("الموافقة على الاسترداد", "Approve refund")</h5>
+                        </div>
+                        <div class="vstack gap-2">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">@Html.T("المبلغ:", "Amount:")</span>
+                                <span class="fw-semibold">@Model.RefundAmount.ToEGP()</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">@Html.T("الطالب:", "Student:")</span>
+                                <span class="fw-semibold">@Model.StudentName</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">@Html.T("القرار:", "Decision:")</span>
+                                <span class="badge" id="summaryBadge">@Html.T("موافقة", "Approved")</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Guide -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-help-circle me-2"></i>
+                            @Html.T("دليل سريع", "Quick guide")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="vstack gap-3">
+                            <div>
+                                <h6 class="mb-2">
+                                    <i class="feather-check text-success me-2"></i>
+                                    @Html.T("متى توافق؟", "When to approve?")
+                                </h6>
+                                <small class="text-muted">
+                                    - @Html.T("الطالب لم يستفد من الدورة", "Student did not benefit from the course")<br>
+                                    - @Html.T("مشكلة تقنية في المحتوى", "Technical issue with content")<br>
+                                    - @Html.T("طلب ضمن فترة الضمان", "Request within warranty period")
+                                </small>
+                            </div>
+                            <hr>
+                            <div>
+                                <h6 class="mb-2">
+                                    <i class="feather-x text-danger me-2"></i>
+                                    @Html.T("متى ترفض؟", "When to reject?")
+                                </h6>
+                                <small class="text-muted">
+                                    - @Html.T("انتهت فترة الضمان", "Warranty period has ended")<br>
+                                    - @Html.T("استفاد من معظم المحتوى", "Benefited from most of the content")<br>
+                                    - @Html.T("طلب غير مبرر", "Unjustified request")
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contact Info -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-user me-2"></i>
+                            @Html.T("معلومات الاتصال", "Contact information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2"><strong>@Html.T("الطالب:", "Student:")</strong> @Model.StudentName</p>
+                        <p class="mb-2"><strong>@Html.T("الدورة:", "Course:")</strong> @Model.CourseName</p>
+                        <hr>
+                        <div class="d-grid gap-2">
+                            <a asp-controller="Users" asp-action="Details" class="btn btn-sm btn-light-brand">
+                                <i class="feather-user me-2"></i>
+                                @Html.T("ملف الطالب", "Student profile")
+                            </a>
+                            <a asp-controller="Courses" asp-action="Details" class="btn btn-sm btn-light-brand">
+                                <i class="feather-book me-2"></i>
+                                @Html.T("تفاصيل الدورة", "Course details")
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            let selectedDecision = '';
+
+            // Decision card click
+            $('.decision-card').click(function() {
+                $('.decision-card').removeClass('selected');
+                $(this).addClass('selected');
+                
+                selectedDecision = $(this).data('decision');
+                $('#statusInput').val(selectedDecision);
+                
+                // Show/hide warnings and requirements
+                if (selectedDecision === 'Approved') {
+                    $('#approveWarning').show();
+                    $('#rejectWarning').hide();
+                    $('#notesLabel').text('ملاحظات (اختياري)');
+                    $('#notesRequired').hide();
+                    $('#notesHelp').text('أضف أي ملاحظات إضافية حول قرارك');
+                    $('#notesTextarea').attr('placeholder', 'ملاحظات إضافية (اختياري)').removeAttr('required');
+                    
+                    // Update summary
+                    $('#summaryHeader').removeClass('bg-danger').addClass('bg-success');
+                    $('#summaryIcon').removeClass('bg-danger text-white').addClass('bg-success text-white');
+                    $('#summaryDecision').text('الموافقة على الاسترداد').removeClass('text-danger').addClass('text-success');
+                    $('#summaryBadge').removeClass('bg-danger').addClass('bg-success').text('موافقة');
+                } else {
+                    $('#rejectWarning').show();
+                    $('#approveWarning').hide();
+                    $('#notesLabel').text('سبب الرفض');
+                    $('#notesRequired').show();
+                    $('#notesHelp').text('يجب تقديم سبب واضح ومحدد لرفض الطلب');
+                    $('#notesTextarea').attr('placeholder', 'أدخل سبب رفض طلب الاسترداد...').attr('required', 'required');
+                    
+                    // Update summary
+                    $('#summaryHeader').removeClass('bg-success').addClass('bg-danger');
+                    $('#summaryIcon').removeClass('bg-success text-white').addClass('bg-danger text-white');
+                    $('#summaryDecision').text('رفض الاسترداد').removeClass('text-success').addClass('text-danger');
+                    $('#summaryBadge').removeClass('bg-success').addClass('bg-danger').text('رفض');
+                }
+                
+                // Show decision details and submit section
+                $('#decisionDetails').slideDown();
+                $('#submitSection').slideDown();
+                $('#summaryCard').slideDown();
+                
+                // Scroll to details
+                $('html, body').animate({
+                    scrollTop: $('#decisionDetails').offset().top - 100
+                }, 500);
+            });
+
+            // Review button
+            $('#reviewBtn').click(function() {
+                const decision = selectedDecision === 'Approved' ? 'الموافقة' : 'الرفض';
+                const notes = $('#notesTextarea').val();
+                
+                let message = `قرارك: ${decision}\n`;
+                message += `المبلغ: @Model.RefundAmount.ToEGP()\n`;
+                message += `الطالب: @Model.StudentName\n`;
+                if (notes) {
+                    message += `\nالملاحظات:\n${notes}`;
+                }
+                
+                alert(message);
+            });
+
+            // Form validation
+            window.__RefundProcessT = {
+                selectDecision: '@Html.Raw(Html.T("يرجى اختيار قرار (موافقة أو رفض)", "Please select a decision (approve or reject)").Replace("'", "\\'"))',
+                enterRejectReason: '@Html.Raw(Html.T("يجب إدخال سبب الرفض", "Please enter rejection reason").Replace("'", "\\'"))',
+                confirmApprove: '@Html.Raw(Html.T("هل أنت متأكد من الموافقة على طلب الاسترداد؟", "Are you sure you want to approve this refund request?").Replace("'", "\\'"))',
+                confirmReject: '@Html.Raw(Html.T("هل أنت متأكد من رفض طلب الاسترداد؟", "Are you sure you want to reject this refund request?").Replace("'", "\\'"))',
+                processing: '@Html.Raw(Html.T("جاري المعالجة...", "Processing...").Replace("'", "\\'"))'
+            };
+            $('#processForm').on('submit', function(e) {
+                if (!selectedDecision) {
+                    e.preventDefault();
+                    alert(window.__RefundProcessT.selectDecision);
+                    return false;
+                }
+                
+                if (selectedDecision === 'Rejected') {
+                    const notes = $('#notesTextarea').val().trim();
+                    if (!notes) {
+                        e.preventDefault();
+                        alert(window.__RefundProcessT.enterRejectReason);
+                        $('#notesTextarea').focus();
+                        return false;
+                    }
+                }
+                
+                const confirmMsg = selectedDecision === 'Approved' ? window.__RefundProcessT.confirmApprove : window.__RefundProcessT.confirmReject;
+                if (!confirm(confirmMsg)) {
+                    e.preventDefault();
+                    return false;
+                }
+                
+                // Disable submit button to prevent double submission
+                $('#submitBtn').prop('disabled', true).html('<i class="spinner-border spinner-border-sm me-2"></i> ' + window.__RefundProcessT.processing);
+            });
+        });
+    </script>
+}
+

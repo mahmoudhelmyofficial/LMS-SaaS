@@ -1,0 +1,414 @@
+@model LMS.Areas.Instructor.ViewModels.AssignmentCreateViewModel
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إنشاء تكليف جديد", "Create New Assignment");
+    ViewData["Subtitle"] = Html.T("إضافة تكليف للدرس", "Add assignment to lesson");
+    var lesson = ViewBag.Lesson as LMS.Domain.Entities.Courses.Lesson;
+    var lessons = ViewBag.Lessons as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var indexUrl = Url.Action("Index", new { courseId = lesson?.Module?.CourseId });
+    
+    // Load platform settings
+    var maxGradeLimit = await PlatformSettings.GetIntSettingAsync("Assignment.MaxGrade.Limit", 1000);
+    var defaultMaxGrade = await PlatformSettings.GetIntSettingAsync("Assignment.MaxGrade.Default", 100);
+    var defaultLatePenalty = await PlatformSettings.GetIntSettingAsync("Assignment.LatePenalty.Default", 10);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة", "Back") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @* Error message display with retry option *@
+    @if (ViewBag.ErrorMessage != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <div class="d-flex align-items-center">
+                <i class="feather-alert-circle me-2 fs-4"></i>
+                <div class="flex-grow-1">
+                    <strong>@Html.T("خطأ:", "Error:")</strong> @ViewBag.ErrorMessage
+                </div>
+            </div>
+            @if (ViewBag.ShowRetryButton == true)
+            {
+                <div class="mt-3">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="location.reload()">
+                        <i class="feather-refresh-cw me-2"></i>
+                        @Html.T("إعادة المحاولة", "Retry")
+                    </button>
+                    <a href="@Url.Action("Index")" class="btn btn-light btn-sm ms-2">
+                        <i class="feather-arrow-right me-2"></i>
+                        @Html.T("العودة للقائمة", "Back to list")
+                    </a>
+                </div>
+            }
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="@Html.T("إغلاق", "Close")"></button>
+        </div>
+    }
+
+    @* Info message display *@
+    @if (ViewBag.InfoMessage != null)
+    {
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            <i class="feather-info me-2"></i>
+            @ViewBag.InfoMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="@Html.T("إغلاق", "Close")"></button>
+        </div>
+    }
+
+    @if (lessons != null && lesson == null)
+    {
+        <!-- Lesson Selection -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="feather-list me-2 text-primary"></i>
+                    @Html.T("اختر الدرس لإنشاء التكليف", "Choose lesson to create assignment")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <i class="feather-info me-2"></i>
+                    @Html.T("يرجى اختيار الدرس الذي تريد إضافة تكليف له من القائمة أدناه", "Please select the lesson you want to add an assignment to from the list below")
+                </div>
+
+                @if (lessons == null || !lessons.Any())
+                {
+                    <div class="alert alert-warning">
+                        <i class="feather-alert-triangle me-2"></i>
+                        @Html.T("لا توجد دروس متاحة لإضافة تكليف. جميع الدروس تحتوي على تكليفات بالفعل.", "No lessons available to add assignment. All lessons already have assignments.")
+                    </div>
+                }
+                else
+                {
+                    <div class="form-group">
+                        <label class="form-label">@Html.T("اختر الدرس", "Choose lesson") <span class="text-danger">*</span></label>
+                        <select id="lessonSelector" class="form-control form-select" required>
+                            <option value="">-- @Html.T("اختر الدرس", "Choose lesson") --</option>
+                            @foreach (var item in lessons.Where(l => l != null).GroupBy(l => l.CourseTitle?.ToString() ?? Html.T("غير محدد", "Not set")))
+                            {
+                                <optgroup label="@item.Key">
+                                    @foreach (var l in item)
+                                    {
+                                        <option value="@(l?.Id ?? 0)">@(l?.ModuleTitle?.ToString() ?? "") - @(l?.Title?.ToString() ?? "")</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                    </div>
+                    <button type="button" id="btnContinue" class="btn btn-primary mt-3" disabled>
+                        <i class="feather-arrow-left me-2"></i>
+                        @Html.T("متابعة", "Continue")
+                    </button>
+                }
+            </div>
+        </div>
+    }
+    else if (lesson != null)
+    {
+        <!-- Lesson Info -->
+        <div class="alert alert-info mb-4">
+            <div class="d-flex align-items-center gap-3">
+                <div class="avatar-text avatar-md bg-primary text-white">
+                    <i class="feather-book"></i>
+                </div>
+                <div>
+                    <h6 class="fw-bold mb-1">@Html.T("الدرس", "Lesson"): @(lesson.Title ?? Html.T("غير محدد", "Not set"))</h6>
+                    <p class="mb-0 fs-13">@(lesson.Module?.Title ?? Html.T("غير محدد", "Not set")) - @(lesson.Module?.Course?.Title ?? Html.T("غير محدد", "Not set"))</p>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- No lesson selected and no lessons available -->
+        <div class="alert alert-warning">
+            <i class="feather-alert-triangle me-2"></i>
+            <strong>@Html.T("تحذير:", "Warning:")</strong> @Html.T("لم يتم تحديد درس. يرجى العودة واختيار درس صحيح.", "No lesson selected. Please go back and select a valid lesson.")
+        </div>
+    }
+
+    @if (lesson != null)
+    {
+    <form asp-action="Create" asp-route-lessonId="@Model.LessonId" method="post" id="assignmentForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="LessonId" />
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            @Html.T("المعلومات الأساسية", "Basic information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("عنوان التكليف", "Assignment title") <span class="text-danger">*</span></label>
+                                <input asp-for="Title" class="form-control" placeholder="@Html.T("مثال: تكليف الوحدة الأولى", "e.g. Unit 1 Assignment")">
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("الوصف", "Description")</label>
+                                <textarea asp-for="Description" class="form-control" rows="4" placeholder="@Html.T("وصف مختصر عن التكليف", "Brief description of the assignment")"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("التعليمات", "Instructions")</label>
+                                <textarea asp-for="Instructions" class="form-control" rows="5" placeholder="@Html.T("اكتب التعليمات المفصلة للطلاب", "Write detailed instructions for students")"></textarea>
+                                <span asp-validation-for="Instructions" class="text-danger"></span>
+                                <div class="form-text">
+                                    <i class="feather-info me-1"></i>
+                                    @Html.T("مثال: اكتب تقريراً مفصلاً، يجب أن يحتوي على...", "e.g. Write a detailed report that includes...")
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assignment Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-settings me-2 text-primary"></i>
+                            @Html.T("إعدادات التكليف", "Assignment settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("الدرجة القصوى", "Max grade") <span class="text-danger">*</span></label>
+                                <input asp-for="MaxGrade" type="number" min="1" max="@maxGradeLimit" class="form-control" placeholder="@defaultMaxGrade">
+                                <span asp-validation-for="MaxGrade" class="text-danger"></span>
+                                <div class="form-text">@Html.T("الحد الأقصى للدرجة (1-1000)", "Max grade (1-1000)")</div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("تاريخ التسليم", "Due date")</label>
+                                <input asp-for="DueDate" type="datetime-local" class="form-control">
+                                <span asp-validation-for="DueDate" class="text-danger"></span>
+                                <div class="form-text">@Html.T("اتركه فارغاً إذا لم يكن محدداً", "Leave empty if not set")</div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4" />
+
+                        <h6 class="fw-bold mb-3">@Html.T("خيارات التسليم المتأخر", "Late submission options")</h6>
+                        
+                        <div class="row g-3">
+                            <div class="col-lg-6">
+                                <div class="form-check form-switch">
+                                    <input asp-for="AllowLateSubmissions" class="form-check-input" type="checkbox" id="allowLateSubmissions">
+                                    <label class="form-check-label" for="allowLateSubmissions">
+                                        @Html.T("السماح بالتسليم المتأخر", "Allow late submissions")
+                                    </label>
+                                </div>
+                                <div class="form-text">@Html.T("السماح للطلاب بالتسليم بعد الموعد المحدد", "Allow students to submit after the due date")</div>
+                            </div>
+
+                            <div class="col-lg-6" id="latePenaltyContainer">
+                                <label class="form-label">@Html.T("نسبة خصم التأخير (%)", "Late penalty (%)")</label>
+                                <input asp-for="LatePenaltyPercentage" type="number" min="0" max="100" class="form-control" placeholder="@defaultLatePenalty">
+                                <span asp-validation-for="LatePenaltyPercentage" class="text-danger"></span>
+                                <div class="form-text">@Html.T("الخصم على كل يوم تأخير", "Deduction per day late")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Quick Settings Guide -->
+                <div class="card stretch stretch-full mb-4 bg-soft-primary">
+                    <div class="card-body">
+                        <h6 class="fw-bold text-primary mb-3">
+                            <i class="feather-help-circle me-2"></i>
+                            @Html.T("نصائح إعداد التكليف", "Assignment setup tips")
+                        </h6>
+                        <ul class="list-unstyled mb-0 fs-13">
+                            <li class="mb-3">
+                                <i class="feather-check-circle me-2 text-success"></i>
+                                <strong>@Html.T("العنوان:", "Title:")</strong> @Html.T("اجعله واضحاً ومحدداً", "Make it clear and specific")
+                            </li>
+                            <li class="mb-3">
+                                <i class="feather-file-text me-2 text-info"></i>
+                                <strong>@Html.T("التعليمات:", "Instructions:")</strong> @Html.T("اشرح المطلوب بالتفصيل", "Explain requirements in detail")
+                            </li>
+                            <li class="mb-3">
+                                <i class="feather-calendar me-2 text-warning"></i>
+                                <strong>@Html.T("الموعد:", "Due date:")</strong> @Html.T("اعطِ وقتاً كافياً للطلاب", "Give students enough time")
+                            </li>
+                            <li class="mb-0">
+                                <i class="feather-award me-2 text-danger"></i>
+                                <strong>@Html.T("الدرجة:", "Grade:")</strong> @Html.T("حدد معايير واضحة للتقييم", "Set clear grading criteria")
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Preview Card -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-eye me-2"></i>
+                            @Html.T("معاينة سريعة", "Quick preview")
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("الدرجة القصوى", "Max grade"):</span>
+                            <span class="fw-bold" id="previewMaxGrade">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("تاريخ التسليم", "Due date"):</span>
+                            <span class="fw-bold" id="previewDueDate">@Html.T("غير محدد", "Not set")</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("التسليم المتأخر", "Late submission"):</span>
+                            <span class="fw-bold" id="previewLateSubmission">@Html.T("لا", "No")</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="fs-13">@Html.T("خصم التأخير", "Late penalty"):</span>
+                            <span class="fw-bold" id="previewPenalty">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Note -->
+                <div class="alert alert-info">
+                    <i class="feather-info me-2"></i>
+                    <strong>@Html.T("ملاحظة:", "Note:")</strong> @Html.T("سيتمكن الطلاب من رؤية التكليف فوراً بعد الإنشاء", "Students will see the assignment immediately after creation")
+                </div>
+
+                <!-- Submit Button -->
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-save me-2"></i>
+                            @Html.T("إنشاء التكليف", "Create assignment")
+                        </button>
+                        <a href="@Url.Action("Index", new { courseId = lesson?.Module?.CourseId })" class="btn btn-light w-100">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("إلغاء", "Cancel")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+    }
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        $(document).ready(function() {
+            // Lesson selector functionality
+            $('#lessonSelector').on('change', function() {
+                var lessonId = $(this).val();
+                $('#btnContinue').prop('disabled', !lessonId);
+            });
+
+            $('#btnContinue').on('click', function() {
+                var lessonId = $('#lessonSelector').val();
+                if (lessonId) {
+                    window.location.href = '@Url.Action("Create")?lessonId=' + lessonId;
+                }
+            });
+        });
+    </script>
+    
+    <script>
+        Object.assign(window.__T || (window.__T = {}), {
+            AssignmentTitleRequired: '@Html.Raw(Html.T("يرجى إدخال عنوان للتكليف (3 أحرف على الأقل)", "Please enter an assignment title (at least 3 characters)").Replace("\\", "\\\\").Replace("'", "\\'"))',
+            MaxGradeInvalid: '@Html.Raw(Html.T("يرجى إدخال درجة قصوى صحيحة (1-1000)", "Please enter a valid max grade (1-1000)").Replace("\\", "\\\\").Replace("'", "\\'"))',
+            DueDateFuture: '@Html.Raw(Html.T("تاريخ التسليم يجب أن يكون في المستقبل", "Due date must be in the future").Replace("\\", "\\\\").Replace("'", "\\'"))'
+        });
+        $(document).ready(function () {
+            // Toggle late penalty input
+            function toggleLatePenalty() {
+                if ($('#AllowLateSubmissions').is(':checked')) {
+                    $('#latePenaltyContainer').show();
+                } else {
+                    $('#latePenaltyContainer').hide();
+                }
+            }
+
+            $('#AllowLateSubmissions').on('change', toggleLatePenalty);
+            toggleLatePenalty(); // Initial state
+
+            // Update preview in real-time
+            function updatePreview() {
+                const maxGrade = $('#MaxGrade').val() || '--';
+                const dueDate = $('#DueDate').val();
+                const allowLate = $('#AllowLateSubmissions').is(':checked');
+                const penalty = $('#LatePenaltyPercentage').val() || '0';
+
+                $('#previewMaxGrade').text(maxGrade);
+                
+                if (dueDate) {
+                    const date = new Date(dueDate);
+                    $('#previewDueDate').text(date.toLocaleDateString('ar-EG') + ' ' + date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }));
+                } else {
+                    $('#previewDueDate').text('@Html.Raw(Html.T("غير محدد", "Not set").Replace("'", "\\'"))');
+                }
+
+                $('#previewLateSubmission').text(allowLate ? '@Html.Raw(Html.T("نعم", "Yes").Replace("'", "\\'"))' : '@Html.Raw(Html.T("لا", "No").Replace("'", "\\'"))');
+                $('#previewPenalty').text(allowLate ? penalty + '%' : '--');
+            }
+
+            // Attach event listeners
+            $('#MaxGrade, #DueDate, #LatePenaltyPercentage').on('input', updatePreview);
+            $('#AllowLateSubmissions').on('change', updatePreview);
+
+            // Initial update
+            updatePreview();
+
+            // Form validation
+            $('#assignmentForm').on('submit', function(e) {
+                const title = $('#Title').val().trim();
+                const maxGrade = parseInt($('#MaxGrade').val());
+
+                if (!title || title.length < 3) {
+                    e.preventDefault();
+                    alert((window.__T && window.__T.AssignmentTitleRequired) || 'Please enter an assignment title (at least 3 characters)');
+                    $('#Title').focus();
+                    return false;
+                }
+
+                if (isNaN(maxGrade) || maxGrade < 1 || maxGrade > 1000) {
+                    e.preventDefault();
+                    alert((window.__T && window.__T.MaxGradeInvalid) || 'Please enter a valid max grade (1-1000)');
+                    $('#MaxGrade').focus();
+                    return false;
+                }
+
+                const dueDate = $('#DueDate').val();
+                if (dueDate) {
+                    const dueDateObj = new Date(dueDate);
+                    const now = new Date();
+                    if (dueDateObj <= now) {
+                        e.preventDefault();
+                        alert((window.__T && window.__T.DueDateFuture) || 'Due date must be in the future');
+                        $('#DueDate').focus();
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+        });
+    </script>
+}
+

@@ -1,0 +1,248 @@
+@model IEnumerable<LMS.Domain.Entities.Marketing.FlashSale>
+
+@{
+    ViewData["Title"] = Html.T("العروض السريعة", "Flash Sales");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التسويق", "Marketing"), null),
+        (Html.T("العروض السريعة", "Flash Sales"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إضافة عرض سريع", "Add Flash Sale"), "feather-zap", Url.Action("Create", "FlashSales"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+    var now = DateTime.UtcNow;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                        <i class="feather-zap"></i>
+                        </div>
+                    <div>
+                        <span class="text-truncate-1-line">@Html.T("عروض نشطة", "Active Sales")</span>
+                        <h3 class="fw-bolder d-block">@Model.Count(s => s.IsActive && s.StartDate <= now && s.EndDate >= now).ToString("N0")</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                        <i class="feather-clock"></i>
+                    </div>
+                    <div>
+                        <span class="text-truncate-1-line">@Html.T("قادمة", "Upcoming")</span>
+                        <h3 class="fw-bolder d-block">@Model.Count(s => s.StartDate > now).ToString("N0")</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                        <i class="feather-x-circle"></i>
+                    </div>
+                    <div>
+                        <span class="text-truncate-1-line">@Html.T("منتهية", "Ended")</span>
+                        <h3 class="fw-bolder d-block">@Model.Count(s => s.EndDate < now).ToString("N0")</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                        <i class="feather-percent"></i>
+                    </div>
+                    <div>
+                        <span class="text-truncate-1-line">@Html.T("متوسط الخصم", "Avg. Discount")</span>
+                        <h3 class="fw-bolder d-block">@(Model.Any() ? Model.Average(s => s.DiscountPercentage).ToString("F0") : "0")%</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="flashSalesTable">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("العرض", "Sale")</th>
+                                    <th>@Html.T("الخصم", "Discount")</th>
+                                    <th>@Html.T("تاريخ البداية", "Start date")</th>
+                                    <th>@Html.T("تاريخ النهاية", "End date")</th>
+                                    <th>@Html.T("المبيعات", "Sales")</th>
+                                    <th>@Html.T("الدورات", "Courses")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var sale in Model.OrderByDescending(s => s.CreatedAt))
+                                {
+                                    var isActive = sale.IsActive && sale.StartDate <= now && sale.EndDate >= now;
+                                    var isUpcoming = sale.StartDate > now;
+                                    var isExpired = sale.EndDate < now;
+                                    var isSoldOut = sale.MaxSales.HasValue && sale.CurrentSales >= sale.MaxSales.Value;
+
+                                    <tr>
+                                        <td>
+                                            <div>
+                                                <a href="@Url.Action("Details", "FlashSales", new { id = sale.Id })" class="fw-bold text-dark">
+                                                    @sale.Name
+                                                </a>
+                                                @if (!string.IsNullOrEmpty(sale.Description))
+                                                {
+                                                    <div class="fs-12 text-muted text-truncate" style="max-width: 200px;">@sale.Description</div>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-success text-success fs-6">
+                                                <i class="feather-tag me-1"></i>
+                                                @sale.DiscountPercentage%
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="fs-12">
+                                                <div>@sale.StartDate.ToString("dd/MM/yyyy")</div>
+                                                <div class="text-muted">@sale.StartDate.ToString("hh:mm tt")</div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="fs-12">
+                                                <div>@sale.EndDate.ToString("dd/MM/yyyy")</div>
+                                                <div class="text-muted">@sale.EndDate.ToString("hh:mm tt")</div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (sale.MaxSales.HasValue)
+                                            {
+                                                var percentage = (sale.CurrentSales * 100.0 / sale.MaxSales.Value);
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="progress flex-grow-1" style="height: 20px; width: 100px;">
+                                                        <div class="progress-bar @(percentage >= 100 ? "bg-danger" : percentage >= 75 ? "bg-warning" : "bg-success")" 
+                                                             style="width: @percentage%">
+                                                        </div>
+                                                    </div>
+                                                    <span class="text-muted fs-12">@sale.CurrentSales/@sale.MaxSales.Value</span>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-primary text-primary">@sale.CurrentSales @Html.T("مبيعة", "sold")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-info text-info">@sale.FlashSaleCourses.Count @Html.T("دورة", "course(s)")</span>
+                                        </td>
+                                        <td>
+                                            @if (isSoldOut)
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">
+                                                    <i class="feather-shopping-cart fs-12 me-1"></i>
+                                                    @Html.T("نفذت الكمية", "Sold out")
+                                                </span>
+                                            }
+                                            else if (isActive)
+                                            {
+                                                <span class="badge bg-soft-success text-success">
+                                                    <i class="feather-zap fs-12 me-1"></i>
+                                                    @Html.T("نشطة", "Active")
+                                                </span>
+                                            }
+                                            else if (isUpcoming)
+                                            {
+                                                <span class="badge bg-soft-warning text-warning">
+                                                    <i class="feather-clock fs-12 me-1"></i>
+                                                    @Html.T("قادمة", "Upcoming")
+                                                </span>
+                                            }
+                                            else if (isExpired)
+                                            {
+                                                <span class="badge bg-soft-secondary text-secondary">
+                                                    <i class="feather-x fs-12 me-1"></i>
+                                                    @Html.T("منتهية", "Ended")
+                                                </span>
+                                            }
+                                            else if (!sale.IsActive)
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">
+                                                    <i class="feather-pause fs-12 me-1"></i>
+                                                    @Html.T("معطلة", "Disabled")
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="@Url.Action("Details", "FlashSales", new { id = sale.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                <a href="@Url.Action("Edit", "FlashSales", new { id = sale.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                    <i class="feather-edit"></i>
+                                                </a>
+                                                <form method="post" action="@Url.Action("ToggleActive", "FlashSales", new { id = sale.Id })" style="display:inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="avatar-text avatar-md border-0 bg-transparent" data-bs-toggle="tooltip" title="@(sale.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))">
+                                                        <i class="feather-@(sale.IsActive ? "toggle-right text-success" : "toggle-left text-muted")"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            $('#flashSalesTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[2, "desc"]],
+                "pageLength": 25
+            });
+
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+

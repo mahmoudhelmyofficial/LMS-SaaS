@@ -1,0 +1,461 @@
+@model List<LMS.Areas.Admin.ViewModels.BookAdminListViewModel>
+@using LMS.Areas.Admin.ViewModels
+@using LMS.Domain.Enums
+@{
+    ViewData["Title"] = Html.T("إدارة الكتب", "Book Management");
+    var stats = ViewBag.Stats as BookStatsAdminViewModel;
+    var filter = ViewBag.Filter as BookAdminFilterViewModel;
+    var totalCount = ViewBag.TotalCount != null ? (int)ViewBag.TotalCount : 0;
+    var totalPages = ViewBag.TotalPages != null ? (int)ViewBag.TotalPages : 0;
+    var hasError = TempData["ErrorMessage"] != null;
+    
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("إدارة المحتوى", "Content Management"), null),
+        (Html.T("الكتب", "Books"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("قيد المراجعة", "Pending Review"), "feather-clock", Url.Action("PendingReview"), stats?.PendingReviewBooks > 0 ? "btn-warning" : "btn-outline-warning"),
+        (Html.T("الإحصائيات", "Statistics"), "feather-bar-chart-2", Url.Action("Statistics"), "btn-outline-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        /* Status badges with gradients */
+        .status-draft { background: linear-gradient(135deg, #6c757d 0%, #495057 100%); }
+        .status-pending { background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%); color: #212529; }
+        .status-published { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); }
+        .status-rejected { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
+        .status-suspended { background: linear-gradient(135deg, #343a40 0%, #212529 100%); }
+        
+        /* Book card hover effect */
+        .book-row:hover {
+            background-color: rgba(0, 74, 173, 0.03);
+        }
+        
+        /* Error state styling */
+        .error-state {
+            background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+            border: 1px solid #feb2b2;
+        }
+        
+        .error-state .error-icon {
+            font-size: 4rem;
+            color: #e53e3e;
+            animation: shake 0.5s ease-in-out;
+        }
+        
+        @@keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        /* Stats card hover */
+        .stats-card {
+            transition: all 0.3s ease;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        /* Book cover placeholder */
+        .book-cover-placeholder {
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
+        }
+        
+        /* Rating stars */
+        .rating-display {
+            color: #f6ad55;
+        }
+        
+        /* Action buttons */
+        .action-btn {
+            transition: all 0.2s ease;
+        }
+        
+        .action-btn:hover {
+            transform: scale(1.1);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+
+    <!-- Statistics Cards -->
+    @if (stats != null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card border-0 shadow-sm h-100 bg-primary bg-opacity-10 stats-card">
+                    <div class="card-body text-center">
+                        <h4 class="text-primary mb-1">@stats.TotalBooks</h4>
+                        <small class="text-muted">@Html.T("إجمالي الكتب", "Total books")</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card border-0 shadow-sm h-100 bg-success bg-opacity-10 stats-card">
+                    <div class="card-body text-center">
+                        <h4 class="text-success mb-1">@stats.PublishedBooks</h4>
+                        <small class="text-muted">@Html.T("منشورة", "Published")</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card border-0 shadow-sm h-100 bg-warning bg-opacity-10 stats-card">
+                    <div class="card-body text-center">
+                        <h4 class="text-warning mb-1">@stats.PendingReviewBooks</h4>
+                        <small class="text-muted">@Html.T("قيد المراجعة", "Pending Review")</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card border-0 shadow-sm h-100 bg-info bg-opacity-10 stats-card">
+                    <div class="card-body text-center">
+                        <h4 class="text-info mb-1">@stats.TotalSales</h4>
+                        <small class="text-muted">@Html.T("المبيعات", "Sales")</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card border-0 shadow-sm h-100 stats-card">
+                    <div class="card-body text-center">
+                        <h4 class="text-dark mb-1">@stats.TotalRevenue.ToString("N0")</h4>
+                        <small class="text-muted">@Html.T("الإيرادات", "Revenue") (EGP)</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-2 col-md-4 col-6">
+                <div class="card border-0 shadow-sm h-100 stats-card">
+                    <div class="card-body text-center">
+                        <h4 class="text-success mb-1">@stats.PlatformEarnings.ToString("N0")</h4>
+                        <small class="text-muted">@Html.T("أرباح المنصة", "Platform earnings")</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Error State - Show when loading failed but still allow retry *@
+    @if (hasError && !Model.Any())
+    {
+        <div class="card border-0 shadow-sm mb-4 error-state">
+            <div class="card-body text-center py-5">
+                <i class="feather-alert-circle error-icon mb-3 d-block"></i>
+                <h4 class="text-danger mb-2">@Html.T("حدث خطأ أثناء تحميل البيانات", "An error occurred while loading data")</h4>
+                <p class="text-muted mb-4">
+                    @Html.T("لم نتمكن من تحميل قائمة الكتب. قد يكون هذا بسبب مشكلة مؤقتة في الاتصال.", "We could not load the books list. This may be due to a temporary connection issue.")
+                </p>
+                <div class="d-flex justify-content-center gap-3">
+                    <a href="@Url.Action("Index")" class="btn btn-primary btn-lg">
+                        <i class="feather-refresh-cw me-2"></i>
+                        @Html.T("إعادة المحاولة", "Retry")
+                    </a>
+                    <a href="@Url.Action("Index", "Dashboard")" class="btn btn-outline-secondary btn-lg">
+                        <i class="feather-home me-2"></i>
+                        @Html.T("العودة للرئيسية", "Back to dashboard")
+                    </a>
+                </div>
+                <div class="mt-4">
+                    <small class="text-muted">
+                        <i class="feather-info me-1"></i>
+                        @Html.T("إذا استمرت المشكلة، يرجى التواصل مع الدعم الفني", "If the problem persists, please contact technical support")
+                    </small>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Filters -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <form asp-action="Index" method="get" class="row g-3">
+                <div class="col-md-3">
+                    <input type="text" name="Search" value="@filter?.Search" 
+                           class="form-control" placeholder="@Html.T("بحث بالعنوان أو المؤلف...", "Search by title or author...")">
+                </div>
+                <div class="col-md-2">
+                    <select name="Status" class="form-select" asp-items="ViewBag.Statuses">
+                        <option value="">@Html.T("جميع الحالات", "All statuses")</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="CategoryId" class="form-select" asp-items="ViewBag.Categories">
+                        <option value="">@Html.T("جميع التصنيفات", "All categories")</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select name="InstructorId" class="form-select" asp-items="ViewBag.Instructors">
+                        <option value="">@Html.T("جميع المدربين", "All instructors")</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <div class="btn-group w-100">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="feather-search me-1"></i>
+                            @Html.T("بحث", "Search")
+                        </button>
+                        <a href="@Url.Action("Index")" class="btn btn-outline-secondary">
+                            <i class="feather-refresh-cw me-1"></i>
+                            @Html.T("إعادة تعيين", "Reset")
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Books Table -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">@Html.T("قائمة الكتب", "Books list")</h5>
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="feather-download me-2"></i>@Html.T("تصدير", "Export")
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <a class="dropdown-item" href="/api/export/books?format=csv">
+                            <i class="feather-file-text me-2 text-success"></i>@Html.T("تصدير CSV", "Export CSV")
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="/api/export/books?format=excel">
+                            <i class="feather-file me-2 text-primary"></i>@Html.T("تصدير Excel", "Export Excel")
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item" href="/api/export/books?format=pdf">
+                            <i class="feather-file-text me-2 text-danger"></i>@Html.T("تصدير PDF", "Export PDF")
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item" href="javascript:void(0)" onclick="window.print()">
+                            <i class="feather-printer me-2 text-secondary"></i>@Html.T("طباعة", "Print")
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            @if (Model.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th class="border-0">@Html.T("الكتاب", "Book")</th>
+                                <th class="border-0">@Html.T("المدرس", "Instructor")</th>
+                                <th class="border-0">@Html.T("السعر", "Price")</th>
+                                <th class="border-0">@Html.T("الحالة", "Status")</th>
+                                <th class="border-0">@Html.T("المبيعات", "Sales")</th>
+                                <th class="border-0">@Html.T("التقييم", "Rating")</th>
+                                <th class="border-0">@Html.T("التاريخ", "Date")</th>
+                                <th class="border-0 text-end">@Html.T("الإجراءات", "Actions")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var book in Model)
+                            {
+                                <tr class="book-row">
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            @if (!string.IsNullOrEmpty(book.CoverImageUrl))
+                                            {
+                                                <img src="@book.CoverImageUrl" alt="@book.Title" 
+                                                     class="rounded me-3 shadow-sm" style="width: 45px; height: 60px; object-fit: cover;">
+                                            }
+                                            else
+                                            {
+                                                <div class="book-cover-placeholder rounded me-3 d-flex align-items-center justify-content-center" 
+                                                     style="width: 45px; height: 60px;">
+                                                    <i class="feather-book text-muted"></i>
+                                                </div>
+                                            }
+                                            <div>
+                                                <h6 class="mb-0 small fw-semibold">@book.Title</h6>
+                                                <small class="text-muted">@book.CategoryName</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(book.InstructorId))
+                                        {
+                                            <a href="@Url.Action("Index", new { InstructorId = book.InstructorId })" 
+                                               class="text-decoration-none">
+                                                @book.InstructorName
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">@book.InstructorName</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (book.DiscountPrice.HasValue)
+                                        {
+                                            <div>
+                                                <span class="text-success fw-bold">@book.DiscountPrice.Value.ToString("N0")</span>
+                                                <small class="text-muted text-decoration-line-through d-block">@book.Price.ToString("N0")</small>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="fw-bold">@book.Price.ToString("N0")</span>
+                                        }
+                                        <small class="text-muted">EGP</small>
+                                    </td>
+                                    <td>
+                                        @{
+                                            var statusClass = book.Status switch
+                                            {
+                                                BookStatus.Draft => "status-draft",
+                                                BookStatus.PendingReview => "status-pending",
+                                                BookStatus.Published => "status-published",
+                                                BookStatus.Rejected => "status-rejected",
+                                                BookStatus.Suspended => "status-suspended",
+                                                _ => "bg-secondary"
+                                            };
+                                            var statusText = book.Status switch
+                                            {
+                                                BookStatus.Draft => Html.T("مسودة", "Draft").ToString(),
+                                                BookStatus.PendingReview => Html.T("قيد المراجعة", "Pending Review").ToString(),
+                                                BookStatus.Published => Html.T("منشور", "Published").ToString(),
+                                                BookStatus.Rejected => Html.T("مرفوض", "Rejected").ToString(),
+                                                BookStatus.Suspended => Html.T("معلق", "Suspended").ToString(),
+                                                _ => Html.T("غير معروف", "Unknown").ToString()
+                                            };
+                                            var statusIcon = book.Status switch
+                                            {
+                                                BookStatus.Draft => "feather-edit-3",
+                                                BookStatus.PendingReview => "feather-clock",
+                                                BookStatus.Published => "feather-check-circle",
+                                                BookStatus.Rejected => "feather-x-circle",
+                                                BookStatus.Suspended => "feather-pause-circle",
+                                                _ => "feather-help-circle"
+                                            };
+                                        }
+                                        <span class="badge @statusClass">
+                                            <i class="@statusIcon me-1" style="font-size: 0.7rem;"></i>
+                                            @statusText
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-primary">@book.TotalSales</span>
+                                        <small class="text-muted d-block">
+                                            <i class="feather-download" style="font-size: 0.7rem;"></i>
+                                            @book.TotalDownloads
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center rating-display">
+                                            <i class="feather-star me-1" style="font-size: 0.9rem;"></i>
+                                            <span class="fw-bold">@book.AverageRating.ToString("N1")</span>
+                                            <small class="text-muted ms-1">(@book.TotalReviews)</small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            @book.CreatedAt.ToString("dd/MM/yyyy")
+                                        </small>
+                                        @if (book.SubmittedForReviewAt.HasValue && book.Status == BookStatus.PendingReview)
+                                        {
+                                            <small class="text-warning d-block">
+                                                <i class="feather-send" style="font-size: 0.65rem;"></i>
+                                                @book.SubmittedForReviewAt.Value.ToString("dd/MM")
+                                            </small>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group">
+                                            <a href="@Url.Action("Details", new { id = book.Id })" 
+                                               class="btn btn-sm btn-outline-primary action-btn" title="@Html.T("التفاصيل", "Details")">
+                                                <i class="feather-eye"></i>
+                                            </a>
+                                            @if (book.Status == BookStatus.PendingReview)
+                                            {
+                                                <form asp-action="Publish" method="post" class="d-inline"
+                                                      onsubmit="return confirm('@(Html.T("هل أنت متأكد من نشر هذا الكتاب؟", "Are you sure you want to publish this book?"))');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@book.Id">
+                                                    <button type="submit" class="btn btn-sm btn-success action-btn" title="@Html.T("نشر", "Publish")">
+                                                        <i class="feather-check"></i>
+                                                    </button>
+                                                </form>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                @if (totalPages > 1)
+                {
+                    <nav class="p-3">
+                        <ul class="pagination mb-0 justify-content-center">
+                            @for (int i = 1; i <= Math.Min(totalPages, 10); i++)
+                            {
+                                <li class="page-item @(i == filter?.Page ? "active" : "")">
+                                    <a class="page-link" href="@Url.Action("Index", new { 
+                                        Page = i, 
+                                        Status = filter?.Status.HasValue == true ? (int?)filter.Status : null, 
+                                        CategoryId = filter?.CategoryId,
+                                        InstructorId = filter?.InstructorId,
+                                        Search = filter?.Search 
+                                    })">@i</a>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                }
+            }
+            else if (!hasError)
+            {
+                @* Empty state - no error, just no matching books *@
+                <div class="text-center py-5">
+                    <div class="mb-4">
+                        <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center" 
+                             style="width: 100px; height: 100px;">
+                            <i class="feather-book-open fs-1 text-muted"></i>
+                        </div>
+                    </div>
+                    @if (filter != null && (!string.IsNullOrEmpty(filter.Search) || filter.Status.HasValue || filter.CategoryId.HasValue || !string.IsNullOrEmpty(filter.InstructorId)))
+                    {
+                        <h5>@Html.T("لا توجد نتائج", "No results")</h5>
+                        <p class="text-muted mb-4">@Html.T("لا توجد كتب تطابق معايير البحث المحددة", "No books match the specified search criteria")</p>
+                        <a href="@Url.Action("Index")" class="btn btn-outline-primary">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("مسح الفلاتر", "Clear filters")
+                        </a>
+                    }
+                    else
+                    {
+                        <h5>@Html.T("لا توجد كتب بعد", "No books yet")</h5>
+                        <p class="text-muted mb-4">@Html.T("لم يتم إضافة أي كتب إلى المنصة حتى الآن", "No books have been added to the platform yet")</p>
+                        <div class="d-flex justify-content-center gap-2">
+                            <a href="@Url.Action("Index", "Dashboard")" class="btn btn-outline-primary">
+                                <i class="feather-home me-2"></i>
+                                @Html.T("الصفحة الرئيسية", "Dashboard")
+                            </a>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+

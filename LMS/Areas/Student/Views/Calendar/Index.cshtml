@@ -1,0 +1,232 @@
+@model IEnumerable<LMS.Domain.Entities.Learning.CalendarEvent>
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("التقويم", "Calendar");
+    var currentMonth = ViewBag.CurrentMonth as DateTime? ?? DateTime.Now;
+    
+    // UI settings
+    var upcomingEventsLimit = await PlatformSettings.GetIntSettingAsync("UI.UpcomingEvents.Limit", 5);
+    var upcomingEvents = Model.Where(e => e.StartTime >= DateTime.UtcNow).OrderBy(e => e.StartTime).Take(upcomingEventsLimit).ToList();
+}
+
+@section Styles {
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" />
+<style>
+    .fc {
+        direction: rtl;
+    }
+    .event-type-assignment { border-color: #ef4444; background-color: #fef2f2; }
+    .event-type-quiz { border-color: #f59e0b; background-color: #fffbeb; }
+    .event-type-liveclass { border-color: #3b82f6; background-color: #eff6ff; }
+    .event-type-study { border-color: #22c55e; background-color: #f0fdf4; }
+    .event-type-reminder { border-color: #8b5cf6; background-color: #f5f3ff; }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-calendar text-primary me-2"></i>
+                    @Html.T("تقويم الدراسة", "Study Calendar")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("تتبع مواعيدك الدراسية وجلساتك المباشرة", "Track your study schedule and live sessions")</p>
+            </div>
+            <a asp-action="Create" class="btn btn-primary">
+                <i class="feather-plus me-2"></i>
+                @Html.T("إضافة حدث", "Add event")
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Calendar -->
+    <div class="col-lg-9">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div id="calendar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upcoming Events -->
+    <div class="col-lg-3">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">
+                    <i class="feather-clock me-2"></i>
+                    @Html.T("الأحداث القادمة", "Upcoming events")
+                </h6>
+            </div>
+            <div class="card-body">
+                @if (upcomingEvents.Any())
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var evt in upcomingEvents)
+                        {
+                            var iconClass = evt.EventType switch {
+                                "assignment" => "file-text",
+                                "quiz" => "edit",
+                                "live_class" => "video",
+                                "study" => "book-open",
+                                _ => "calendar"
+                            };
+                            var colorClass = evt.EventType switch {
+                                "assignment" => "danger",
+                                "quiz" => "warning",
+                                "live_class" => "info",
+                                "study" => "success",
+                                _ => "secondary"
+                            };
+                            var daysUntil = (evt.StartTime.Date - DateTime.UtcNow.Date).Days;
+                            var timeText = daysUntil == 0 ? Html.T("اليوم", "Today") : (daysUntil == 1 ? Html.T("غداً", "Tomorrow") : Html.T("خلال", "In") + " " + daysUntil + " " + Html.T("أيام", "days"));
+                            
+                            <div class="list-group-item px-0">
+                                <div class="d-flex align-items-start">
+                                    <div class="avatar-text avatar-sm bg-soft-@colorClass text-@colorClass me-3 flex-shrink-0">
+                                        <i class="feather-@iconClass"></i>
+                                    </div>
+                                    <div class="flex-grow-1 min-w-0">
+                                        <h6 class="fw-semibold mb-1 text-break">@evt.Title</h6>
+                                        <p class="text-muted fs-12 mb-0">
+                                            @timeText • @evt.StartTime.ToString("hh:mm tt")
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-4">
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary mb-3 mx-auto">
+                            <i class="feather-calendar"></i>
+                        </div>
+                        <p class="text-muted mb-0">@Html.T("لا توجد أحداث قادمة", "No upcoming events")</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="card stretch stretch-full mt-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">@Html.T("أنواع الأحداث", "Event types")</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-danger me-2" style="width: 20px; height: 20px;"></span>
+                    <span class="fs-12">@Html.T("واجبات", "Assignments")</span>
+                </div>
+                <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-warning me-2" style="width: 20px; height: 20px;"></span>
+                    <span class="fs-12">@Html.T("اختبارات", "Quizzes")</span>
+                </div>
+                <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-info me-2" style="width: 20px; height: 20px;"></span>
+                    <span class="fs-12">@Html.T("جلسات مباشرة", "Live sessions")</span>
+                </div>
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-success me-2" style="width: 20px; height: 20px;"></span>
+                    <span class="fs-12">@Html.T("جلسات دراسة", "Study sessions")</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var calendarEl = document.getElementById('calendar');
+        if (!calendarEl) return;
+        
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+            locale: 'ar',
+            direction: 'rtl',
+            initialView: 'dayGridMonth',
+            initialDate: '@currentMonth.ToString("yyyy-MM-dd")',
+            headerToolbar: {
+                start: 'prev,next today',
+                center: 'title',
+                end: 'dayGridMonth,timeGridWeek,listWeek'
+            },
+            height: 'auto',
+            events: function(fetchInfo, successCallback, failureCallback) {
+                fetch('@Url.Action("GetEvents")?start=' + fetchInfo.startStr + '&end=' + fetchInfo.endStr)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Calendar events loaded:', data);
+                        var events = data.map(function(e) {
+                            var color, bgColor;
+                            // EventType is a string like "assignment", "quiz", "live_class", etc.
+                            var eventType = (e.eventType || '').toLowerCase();
+                            switch(eventType) {
+                                case 'assignment':
+                                case 'course_deadline':
+                                    color = '#ef4444'; bgColor = '#fef2f2'; break;
+                                case 'quiz':
+                                    color = '#f59e0b'; bgColor = '#fffbeb'; break;
+                                case 'live_class':
+                                case 'liveclass':
+                                    color = '#3b82f6'; bgColor = '#eff6ff'; break;
+                                case 'study':
+                                case 'studysession':
+                                    color = '#22c55e'; bgColor = '#f0fdf4'; break;
+                                case 'reminder':
+                                    color = '#8b5cf6'; bgColor = '#f5f3ff'; break;
+                                case 'custom':
+                                default:
+                                    color = e.color || '#667eea'; bgColor = '#f0f4ff';
+                            }
+                            return {
+                                id: e.id,
+                                title: e.title,
+                                start: e.start,
+                                end: e.end,
+                                allDay: e.allDay || false,
+                                backgroundColor: bgColor,
+                                borderColor: color,
+                                textColor: color,
+                                extendedProps: {
+                                    eventType: eventType
+                                }
+                            };
+                        });
+                        successCallback(events);
+                    })
+                    .catch(function(error) {
+                        console.error('Error loading events:', error);
+                        // Return empty array on error instead of failing
+                        successCallback([]);
+                    });
+            },
+            eventClick: function(info) {
+                window.location.href = '@Url.Action("Details")/' + info.event.id;
+            },
+            dateClick: function(info) {
+                window.location.href = '@Url.Action("Create")?date=' + info.dateStr;
+            },
+            eventDidMount: function(info) {
+                // Add tooltip on hover
+                info.el.title = info.event.title;
+            }
+        });
+        calendar.render();
+    });
+</script>
+}

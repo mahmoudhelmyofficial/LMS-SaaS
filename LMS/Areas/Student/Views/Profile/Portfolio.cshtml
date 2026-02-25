@@ -1,0 +1,386 @@
+@model LMS.Areas.Student.Controllers.PortfolioViewModel
+@{
+    ViewData["Title"] = Html.T("محفظتي التعليمية", "My Learning Portfolio");
+    var totalCourses = Model.CompletedCourses?.Count ?? 0;
+    var totalCertificates = Model.Certificates?.Count ?? 0;
+    var totalBadges = Model.Badges?.Count ?? 0;
+    var totalStudyHours = Model.CompletedCourses?.Sum(c => c.Course?.DurationHours ?? 0) ?? 0;
+}
+
+@section Styles {
+<style>
+    .portfolio-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 60px 40px;
+        color: white;
+        margin-bottom: 30px;
+        position: relative;
+        overflow: hidden;
+    }
+    .portfolio-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 100%;
+        height: 100%;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"><path fill="rgba(255,255,255,0.1)" d="M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,122.7C672,117,768,139,864,149.3C960,160,1056,160,1152,138.7C1248,117,1344,75,1392,53.3L1440,32L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>') no-repeat bottom;
+        opacity: 0.3;
+    }
+    .achievement-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+        height: 100%;
+        border: 2px solid transparent;
+    }
+    .achievement-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        border-color: #667eea;
+    }
+    .certificate-card {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        border: 2px solid #e5e7eb;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    .certificate-card::before {
+        content: '🏆';
+        position: absolute;
+        top: -20px;
+        left: -20px;
+        font-size: 120px;
+        opacity: 0.05;
+    }
+    .certificate-card:hover {
+        border-color: #fbbf24;
+        box-shadow: 0 8px 25px rgba(251, 191, 36, 0.2);
+    }
+    .skill-bar {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+    }
+    .skill-progress {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        border-radius: 10px;
+        transition: width 1s ease;
+    }
+    .timeline-item {
+        position: relative;
+        padding-right: 40px;
+        padding-bottom: 30px;
+        border-right: 2px solid #e5e7eb;
+    }
+    .timeline-item:last-child {
+        border-right: none;
+        padding-bottom: 0;
+    }
+    .timeline-dot {
+        position: absolute;
+        right: -9px;
+        top: 0;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #667eea;
+        border: 3px solid white;
+        box-shadow: 0 0 0 3px #e5e7eb;
+    }
+    .share-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .share-btn {
+        flex: 1;
+        min-width: 120px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Portfolio Header -->
+<div class="portfolio-header">
+    <div class="row align-items-center position-relative">
+        <div class="col-lg-8">
+            <h1 class="text-white fw-bold mb-3">@Html.T("محفظتي التعليمية", "My Learning Portfolio")</h1>
+            <p class="text-white opacity-75 fs-5 mb-4">
+                @Html.T("عرض شامل لإنجازاتي ومهاراتي المكتسبة", "A comprehensive view of my achievements and acquired skills")
+            </p>
+            <div class="d-flex gap-3 flex-wrap">
+                <div class="bg-white bg-opacity-25 rounded px-4 py-2">
+                    <i class="feather-book-open me-2"></i>
+                    <strong>@totalCourses</strong> @Html.T("دورة مكتملة", "Courses Completed")
+                </div>
+                <div class="bg-white bg-opacity-25 rounded px-4 py-2">
+                    <i class="feather-award me-2"></i>
+                    <strong>@totalCertificates</strong> @Html.T("شهادة", "Certificates")
+                </div>
+                <div class="bg-white bg-opacity-25 rounded px-4 py-2">
+                    <i class="feather-clock me-2"></i>
+                    <strong>@totalStudyHours</strong> @Html.T("ساعة تعلم", "Learning Hours")
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 text-end">
+            <div class="share-buttons">
+                <button class="btn btn-light share-btn" onclick="sharePortfolio('linkedin')">
+                    <i class="feather-share-2 me-2"></i>
+                    @Html.T("مشاركة على LinkedIn", "Share on LinkedIn")
+                </button>
+                <button class="btn btn-light share-btn" onclick="printPortfolio()">
+                    <i class="feather-printer me-2"></i>
+                    @Html.T("طباعة", "Print")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Certificates & Achievements -->
+<div class="row g-4 mb-4">
+    <!-- Certificates -->
+    <div class="col-lg-8">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0">
+                        <i class="feather-award text-warning me-2"></i>
+                        @Html.T("الشهادات المحصلة", "Certificates Earned")
+                    </h5>
+                    <span class="badge bg-soft-warning text-warning">@totalCertificates @Html.T("شهادة", "Certificates")</span>
+                </div>
+            </div>
+            <div class="card-body">
+                @if (Model.Certificates != null && Model.Certificates.Any())
+                {
+                    <div class="row g-4">
+                        @foreach (var certificate in Model.Certificates.Take(6))
+                        {
+                            <div class="col-md-6">
+                                <div class="certificate-card">
+                                    <div class="d-flex align-items-start mb-3">
+                                        <div class="avatar-text avatar-lg bg-soft-warning text-warning me-3">
+                                            <i class="feather-award fs-3"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="fw-bold mb-1">@certificate.Course?.Title</h6>
+                                            <p class="text-muted small mb-0">@certificate.Course?.Instructor?.FullName</p>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <small class="text-muted">
+                                            <i class="feather-calendar me-1"></i>
+                                            @Html.T("تم الحصول عليها في", "Obtained on") @(certificate.IssuedDate?.ToString("dd MMMM yyyy") ?? Html.T("غير محدد", "Not specified"))
+                                        </small>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <a asp-area="Student" asp-controller="Certificates" asp-action="View" asp-route-id="@certificate.Id" class="btn btn-sm btn-outline-primary flex-grow-1">
+                                            <i class="feather-eye me-1"></i>
+                                            @Html.T("عرض", "View")
+                                        </a>
+                                        <a asp-area="Student" asp-controller="Certificates" asp-action="Download" asp-route-id="@certificate.Id" class="btn btn-sm btn-outline-secondary flex-grow-1">
+                                            <i class="feather-download me-1"></i>
+                                            @Html.T("تحميل", "Download")
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-5">
+                        <i class="feather-award fs-1 text-muted mb-3 d-block"></i>
+                        <h6 class="text-muted">@Html.T("لا توجد شهادات بعد", "No certificates yet")</h6>
+                        <p class="text-muted small">@Html.T("أكمل دوراتك للحصول على الشهادات", "Complete your courses to earn certificates")</p>
+                        <a asp-controller="Courses" asp-action="Index" class="btn btn-primary">
+                            <i class="feather-book-open me-2"></i>
+                            @Html.T("استعرض الدورات", "Browse Courses")
+                        </a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Badges & Points -->
+    <div class="col-lg-4">
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">
+                    <i class="feather-star text-warning me-2"></i>
+                    @Html.T("الشارات المحصلة", "Badges Earned") (@totalBadges)
+                </h6>
+            </div>
+            <div class="card-body">
+                @if (Model.Badges != null && Model.Badges.Any())
+                {
+                    <div class="row g-3">
+                        @foreach (var userBadge in Model.Badges.Take(4))
+                        {
+                            <div class="col-6">
+                                <div class="achievement-card">
+                                    <div class="fs-1 mb-2">@(userBadge.Badge?.IconEmoji ?? "🏆")</div>
+                                    <h6 class="fw-bold mb-1 fs-13">@userBadge.Badge?.Name</h6>
+                                    <small class="text-muted">@userBadge.AwardedAt.ToString("dd/MM/yyyy")</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <a asp-controller="Gamification" asp-action="Dashboard" class="btn btn-sm btn-outline-primary w-100 mt-3">
+                        @Html.T("عرض جميع الشارات", "View All Badges")
+                    </a>
+                }
+                else
+                {
+                    <div class="text-center py-4">
+                        <i class="feather-star fs-1 text-muted mb-2 d-block"></i>
+                        <p class="text-muted small mb-0">@Html.T("لا توجد شارات بعد", "No badges yet")</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Skills & Competencies -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-header">
+        <h5 class="fw-bold mb-0">
+            <i class="feather-trending-up text-success me-2"></i>
+            @Html.T("المهارات المكتسبة", "Acquired Skills")
+        </h5>
+    </div>
+    <div class="card-body">
+        @if (Model.Skills != null && Model.Skills.Any())
+        {
+            <div class="row g-4">
+                @foreach (var skill in Model.Skills)
+                {
+                    var percentage = skill.CoursesCount * 20; // Each course adds 20% mastery
+                    if (percentage > 100) percentage = 100;
+                    var levelLabel = skill.Level switch {
+                        "Expert" => Html.T("خبير", "Expert"),
+                        "Advanced" => Html.T("متقدم", "Advanced"),
+                        "Intermediate" => Html.T("متوسط", "Intermediate"),
+                        _ => Html.T("مبتدئ", "Beginner")
+                    };
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="fw-semibold">@skill.SkillName</span>
+                                <span class="text-muted">@percentage% - @levelLabel</span>
+                            </div>
+                            <div class="skill-bar">
+                                <div class="skill-progress" style="width: @percentage%"></div>
+                            </div>
+                            <small class="text-muted">@skill.CoursesCount @Html.T("دورة مكتملة", "Courses Completed")</small>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-4">
+                <i class="feather-trending-up fs-1 text-muted mb-3 d-block"></i>
+                <p class="text-muted">@Html.T("أكمل بعض الدورات لبناء مهاراتك", "Complete some courses to build your skills")</p>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Learning Journey Timeline -->
+<div class="card stretch stretch-full">
+    <div class="card-header">
+        <h5 class="fw-bold mb-0">
+            <i class="feather-activity text-info me-2"></i>
+            @Html.T("رحلتي التعليمية", "My Learning Journey")
+        </h5>
+    </div>
+    <div class="card-body">
+        @if (Model.CompletedCourses != null && Model.CompletedCourses.Any())
+        {
+            <div class="timeline">
+                @foreach (var enrollment in Model.CompletedCourses.OrderByDescending(e => e.CompletedAt).Take(5))
+                {
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="fw-bold mb-1">@Html.T("إكمال دورة", "Course completed:") @enrollment.Course?.Title</h6>
+                            <span class="badge bg-soft-success text-success">@Html.T("مكتمل", "Completed")</span>
+                        </div>
+                        <p class="text-muted small mb-2">
+                            @if (enrollment.FinalGrade.HasValue)
+                            {
+                                <span>@Html.T("الدرجة النهائية:", "Final Grade:") @enrollment.FinalGrade.Value.ToString("F1")%</span>
+                            }
+                        </p>
+                        <small class="text-muted">
+                            <i class="feather-calendar me-1"></i>
+                            @(enrollment.CompletedAt?.ToString("dd MMMM yyyy") ?? Html.T("غير محدد", "Not specified"))
+                        </small>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-4">
+                <i class="feather-activity fs-1 text-muted mb-3 d-block"></i>
+                <p class="text-muted">@Html.T("ابدأ رحلتك التعليمية الآن!", "Start your learning journey now!")</p>
+                <a asp-controller="Courses" asp-action="Browse" class="btn btn-primary">
+                    <i class="feather-search me-2"></i>
+                    @Html.T("استكشف الدورات", "Explore Courses")
+                </a>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function sharePortfolio(platform) {
+        var url = window.location.href;
+        var text = '@Html.Raw(Html.T("شاهد محفظتي التعليمية على منصة LMS", "Check out my learning portfolio on LMS"))';
+        
+        var shareUrl = '';
+        switch(platform) {
+            case 'linkedin':
+                shareUrl = 'https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(url);
+                break;
+        }
+        
+        if(shareUrl) {
+            window.open(shareUrl, '_blank', 'width=600,height=400');
+        }
+    }
+
+    function printPortfolio() {
+        window.print();
+    }
+
+    // Animate skill bars on load
+    $(document).ready(function() {
+        $('.skill-progress').each(function() {
+            var width = $(this).css('width');
+            $(this).css('width', '0').animate({ width: width }, 1000);
+        });
+    });
+</script>
+}

@@ -1,0 +1,205 @@
+@model LMS.Areas.Instructor.ViewModels.QuestionBankQuestionEditViewModel
+@using LMS.Helpers
+
+@{
+    ViewData["Title"] = Html.T("تعديل السؤال", "Edit Question");
+    ViewData["Subtitle"] = ViewBag.BankName;
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw($"<a href='{Url.Action("Details", new { id = Model.QuestionBankId })}' class='btn btn-light'><i class='feather-arrow-right me-2'></i>{Html.T("العودة", "Back")}</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="EditQuestion" asp-route-id="@Model.Id" method="post" id="questionForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="QuestionBankId" />
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header"><h5 class="card-title">@Html.T("معلومات السؤال", "Question details")</h5></div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label class="form-label" asp-for="QuestionText">@Html.T("نص السؤال", "Question text") <span class="text-danger">*</span></label>
+                                <textarea class="form-control" asp-for="QuestionText" rows="4" required></textarea>
+                                <span asp-validation-for="QuestionText" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="QuestionType">@Html.T("نوع السؤال", "Question type") <span class="text-danger">*</span></label>
+                                <select asp-for="QuestionType" class="form-select" id="questionType" required>
+                                    <option value="MultipleChoice">@Html.T("اختيار من متعدد", "Multiple choice")</option>
+                                    <option value="TrueFalse">@Html.T("صح أو خطأ", "True or False")</option>
+                                    <option value="Essay">@Html.T("مقالي", "Essay")</option>
+                                    <option value="FileUpload">@Html.T("رفع ملف", "File upload")</option>
+                                </select>
+                                <span asp-validation-for="QuestionType" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="Points">@Html.T("الدرجة", "Points") <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" asp-for="Points" min="1" max="100" required />
+                                <span asp-validation-for="Points" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="DifficultyLevel">@Html.T("مستوى الصعوبة", "Difficulty level")</label>
+                                <select asp-for="DifficultyLevel" class="form-select">
+                                    <option value="Easy">@Html.T("سهل", "Easy")</option>
+                                    <option value="Medium">@Html.T("متوسط", "Medium")</option>
+                                    <option value="Hard">@Html.T("صعب", "Hard")</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="Tags">@Html.T("الوسوم", "Tags")</label>
+                                <input type="text" class="form-control" asp-for="Tags" placeholder="@Html.T("الوسوم مفصولة بفواصل", "Tags separated by commas")" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Explanation">@Html.T("الشرح", "Explanation")</label>
+                                <textarea class="form-control" asp-for="Explanation" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" id="optionsCard">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الخيارات", "Options")</h5>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="addOption()">
+                            <i class="feather-plus me-1"></i>@Html.T("إضافة خيار", "Add option")
+                        </button>
+                    </div>
+                    <div class="card-body" id="optionsContainer">
+                        @if (Model.Options != null && Model.Options.Any())
+                        {
+                            @for (int i = 0; i < Model.Options.Count; i++)
+                            {
+                                <div class="option-item mb-3 p-3 border rounded" id="option_@i">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="mb-0">@Html.T("خيار", "Option") @(i + 1)</h6>
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="removeOption(@i)">
+                                            <i class="feather-x"></i>
+                                        </button>
+                                    </div>
+                                    <div class="mb-2">
+                                        <input type="text" class="form-control" name="Options[@i].OptionText" value="@Model.Options[i].OptionText" placeholder="@Html.T("نص الخيار", "Option text")" required />
+                                    </div>
+                                    <div class="form-check">
+                                        <input type="hidden" name="Options[@i].IsCorrect" value="false" />
+                                        <input class="form-check-input" type="checkbox" name="Options[@i].IsCorrect" value="true" id="correct_@i" @(Model.Options[i].IsCorrect ? "checked" : "") />
+                                        <label class="form-check-label" for="correct_@i">@Html.T("إجابة صحيحة", "Correct answer")</label>
+                                    </div>
+                                    <input type="hidden" name="Options[@i].DisplayOrder" value="@i" />
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الإجراءات", "Actions")</h5>
+                    </div>
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-check me-2"></i>حفظ التعديلات
+                        </button>
+                        <a href="@Url.Action("Details", new { id = Model.QuestionBankId })" class="btn btn-light w-100 mb-2">
+                            <i class="feather-x me-2"></i>إلغاء
+                        </a>
+                        <hr />
+                        <form asp-action="DeleteQuestion" asp-route-id="@Model.Id" asp-route-bankId="@Model.QuestionBankId" method="post" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا السؤال؟", "Are you sure you want to delete this question?").Replace("'", "\\'"))')">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-danger w-100">
+                                <i class="feather-trash-2 me-2"></i>@Html.T("حذف السؤال", "Delete question")
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("معلومات السؤال", "Question details")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="text-muted">@Html.T("نوع السؤال:", "Question type:")</span>
+                            <span class="badge bg-soft-primary text-primary" id="questionTypeDisplay">@Model.QuestionType</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="text-muted">@Html.T("الدرجة:", "Points:")</span>
+                            <span class="fw-bold">@Model.Points @Html.T("نقطة", "points")</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">@Html.T("المستوى:", "Level:")</span>
+                            <span class="badge bg-soft-warning text-warning">@Model.DifficultyLevel</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+<div id="qb-edit-i18n" data-option-label="@Html.T("خيار", "Option")" data-option-placeholder="@Html.T("نص الخيار", "Option text")" data-correct-label="@Html.T("إجابة صحيحة", "Correct answer")" data-confirm-remove="@Html.T("هل أنت متأكد من حذف هذا الخيار؟", "Are you sure you want to remove this option?")" style="display:none;"></div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        let optionIndex = @(Model.Options?.Count ?? 0);
+        var i18nEl = document.getElementById('qb-edit-i18n');
+        var optLabel = i18nEl ? (i18nEl.getAttribute('data-option-label') || 'Option') : 'Option';
+        var optPlaceholder = i18nEl ? (i18nEl.getAttribute('data-option-placeholder') || 'Option text') : 'Option text';
+        var correctLabel = i18nEl ? (i18nEl.getAttribute('data-correct-label') || 'Correct answer') : 'Correct answer';
+        var confirmRemove = i18nEl ? (i18nEl.getAttribute('data-confirm-remove') || 'Are you sure you want to remove this option?') : 'Are you sure you want to remove this option?';
+
+        function addOption() {
+            var phEsc = (optPlaceholder || '').replace(/"/g, '&quot;');
+            var lblEsc = (correctLabel || '').replace(/"/g, '&quot;');
+            const html = '<div class="option-item mb-3 p-3 border rounded" id="option_' + optionIndex + '">' +
+                '<div class="d-flex justify-content-between align-items-start mb-2">' +
+                '<h6 class="mb-0">' + optLabel + ' ' + (optionIndex + 1) + '</h6>' +
+                '<button type="button" class="btn btn-sm btn-danger" onclick="removeOption(' + optionIndex + ')"><i class="feather-x"></i></button>' +
+                '</div><div class="mb-2">' +
+                '<input type="text" class="form-control" name="Options[' + optionIndex + '].OptionText" placeholder="' + phEsc + '" required />' +
+                '</div><div class="form-check">' +
+                '<input type="hidden" name="Options[' + optionIndex + '].IsCorrect" value="false" />' +
+                '<input class="form-check-input" type="checkbox" name="Options[' + optionIndex + '].IsCorrect" value="true" id="correct_' + optionIndex + '" />' +
+                '<label class="form-check-label" for="correct_' + optionIndex + '">' + lblEsc + '</label>' +
+                '</div><input type="hidden" name="Options[' + optionIndex + '].DisplayOrder" value="' + optionIndex + '" /></div>';
+            document.getElementById('optionsContainer').insertAdjacentHTML('beforeend', html);
+            optionIndex++;
+        }
+
+        function removeOption(index) {
+            if (confirm(confirmRemove)) {
+                document.getElementById('option_' + index).remove();
+            }
+        }
+
+        $('#questionType').change(function() {
+            const type = $(this).val();
+            $('#questionTypeDisplay').text(type);
+            
+            if (type === 'MultipleChoice' || type === 'TrueFalse') {
+                $('#optionsCard').show();
+                if (type === 'TrueFalse' && optionIndex === 0) {
+                    // Add True/False options
+                    addOption();
+                    addOption();
+                }
+            } else {
+                $('#optionsCard').hide();
+            }
+        });
+
+        $(document).ready(function() {
+            $('#questionType').trigger('change');
+        });
+    </script>
+}
+

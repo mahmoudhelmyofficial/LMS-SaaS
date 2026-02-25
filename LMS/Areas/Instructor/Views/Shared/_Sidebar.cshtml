@@ -1,0 +1,775 @@
+@using LMS.Services.Interfaces
+@using LMS.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Caching.Memory
+@inject IPlatformSettingsService PlatformSettings
+@inject ICurrencyService CurrencyService
+@inject ApplicationDbContext DbContext
+@inject IMemoryCache Cache
+
+@{
+    var platformName = "WEBUILDER";
+    var platformLogo = "/logo.png";
+    
+    try
+    {
+        platformName = await PlatformSettings.GetPlatformNameAsync() ?? "WEBUILDER";
+        platformLogo = await PlatformSettings.GetPlatformLogoAsync() ?? "/logo.png";
+    }
+    catch
+    {
+        // Use default values on error
+    }
+    
+    // Set currency if not already set (for sidebar rendering)
+    if (ViewBag.DefaultCurrencySymbol == null)
+    {
+        try
+        {
+            const string cacheKey = "instructor_default_currency";
+            if (Cache.TryGetValue(cacheKey, out CurrencyInfo? cachedCurrency))
+            {
+                ViewBag.DefaultCurrencySymbol = cachedCurrency!.SymbolAr ?? cachedCurrency.Symbol;
+                ViewBag.DefaultCurrencyCode = cachedCurrency.Code;
+            }
+            else
+            {
+                var defaultCurrency = await DbContext.Currencies
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.IsBaseCurrency && c.IsActive);
+                
+                if (defaultCurrency != null)
+                {
+                    ViewBag.DefaultCurrencySymbol = defaultCurrency.SymbolAr ?? defaultCurrency.Symbol;
+                    ViewBag.DefaultCurrencyCode = defaultCurrency.Code;
+                }
+                else
+                {
+                    var platformCurrency = await DbContext.PlatformSettings
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(s => s.Key == "default_currency");
+                    
+                    var currencyCode = platformCurrency?.Value?.Trim().ToUpperInvariant() ?? "EGP";
+                    if (!CurrencyService.IsCurrencySupported(currencyCode))
+                    {
+                        currencyCode = "EGP";
+                    }
+                    
+                    ViewBag.DefaultCurrencySymbol = CurrencyService.GetCurrencySymbol(currencyCode);
+                    ViewBag.DefaultCurrencyCode = currencyCode;
+                }
+            }
+        }
+        catch
+        {
+            // Fallback to EGP
+            ViewBag.DefaultCurrencySymbol = CurrencyService.GetCurrencySymbol("EGP");
+            ViewBag.DefaultCurrencyCode = "EGP";
+        }
+    }
+    
+    // Get current controller and action for active state
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    var currentArea = ViewContext.RouteData.Values["area"]?.ToString() ?? "";
+    var isPlatformAnnouncements = currentController == "Announcements" && currentAction == "Index" && currentArea != "Instructor";
+}
+
+<nav class="nxl-navigation" id="main-sidebar">
+    <div class="navbar-wrapper">
+        <div class="m-header">
+            <a asp-area="Instructor" asp-controller="Dashboard" asp-action="Index" class="b-brand">
+                <img src="@Url.Content(string.IsNullOrEmpty(platformLogo) ? "~/logo.png" : "~" + platformLogo)" alt="@platformName" class="logo logo-lg" style="max-height: 80px;" onerror="this.src='@Url.Content("~/logo.png")'" />
+                <img src="@Url.Content(string.IsNullOrEmpty(platformLogo) ? "~/logo.png" : "~" + platformLogo)" alt="@platformName" class="logo logo-sm" style="max-height: 60px;" onerror="this.src='@Url.Content("~/logo.png")'" />
+            </a>
+            <button type="button" class="sidebar-close-btn d-xl-none" id="sidebar-close-btn" aria-label="@Html.T("إغلاق القائمة", "Close Menu")">
+                <i class="feather-x"></i>
+            </button>
+        </div>
+        <div class="navbar-content">
+            <ul class="nxl-navbar">
+                <!-- Main Menu -->
+                <li class="nxl-item nxl-caption">
+                    <label>@Html.T("الرئيسية", "Main")</label>
+                </li>
+                
+                <!-- Dashboard -->
+                <li class="nxl-item @(currentController == "Dashboard" ? "active" : "")">
+                    <a asp-area="Instructor" asp-controller="Dashboard" asp-action="Index" class="nxl-link" data-tooltip="@Html.T("لوحة التحكم", "Dashboard")">
+                        <span class="nxl-micon"><i class="feather-home"></i></span>
+                        <span class="nxl-mtext">@Html.T("لوحة التحكم", "Dashboard")</span>
+                    </a>
+                </li>
+                
+                <!-- Courses Section -->
+                <li class="nxl-item nxl-caption">
+                    <label>@Html.T("الدورات والمحتوى", "Courses & Content")</label>
+                </li>
+                
+                <!-- My Courses -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Courses" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link" data-tooltip="@Html.T("دوراتي", "My Courses")">
+                        <span class="nxl-micon"><i class="feather-book"></i></span>
+                        <span class="nxl-mtext">@Html.T("دوراتي", "My Courses")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Courses" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Courses" asp-action="Index" class="nxl-link">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("جميع الدورات", "All Courses")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Courses" && (currentAction == "Create" || currentAction == "CreateWizard") ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Courses" asp-action="CreateWizard" class="nxl-link">
+                                <i class="feather-plus-circle me-2"></i>
+                                <span class="d-inline-flex align-items-center">
+                                    @Html.T("إنشاء دورة جديدة", "Create New Course")
+                                    <span class="badge bg-soft-success text-success ms-2 fs-10">@Html.T("معالج", "Wizard")</span>
+                                </span>
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Courses" && currentAction == "Published" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Courses" asp-action="Published" class="nxl-link">
+                                <i class="feather-check-circle me-2"></i>
+                                @Html.T("الدورات المنشورة", "Published Courses")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Courses" && currentAction == "Draft" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Courses" asp-action="Draft" class="nxl-link">
+                                <i class="feather-file me-2"></i>
+                                @Html.T("المسودات", "Drafts")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Live Sessions (البث المباشر) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "LiveClasses" || currentController == "LiveClassAttendance" || currentController == "LiveSessionSchedules" || currentController == "Recordings" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-video"></i></span>
+                        <span class="nxl-mtext">@Html.T("البث المباشر", "Live Sessions")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "LiveClasses" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="LiveClasses" asp-action="Index" class="nxl-link">
+                                <i class="feather-video me-2"></i>
+                                @Html.T("جميع الجلسات", "All Sessions")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "LiveClasses" && currentAction == "Create" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="LiveClasses" asp-action="Create" class="nxl-link">
+                                <i class="feather-plus-circle me-2"></i>
+                                @Html.T("جدولة جلسة", "Schedule Session")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "LiveSessionSchedules" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="LiveSessionSchedules" asp-action="Index" class="nxl-link">
+                                <i class="feather-calendar me-2"></i>
+                                @Html.T("جداول الحصص", "Session Schedules")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Recordings" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Recordings" asp-action="Index" class="nxl-link">
+                                <i class="feather-film me-2"></i>
+                                @Html.T("التسجيلات", "Recordings")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "LiveClassAttendance" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="LiveClassAttendance" asp-action="Index" class="nxl-link">
+                                <i class="feather-users me-2"></i>
+                                @Html.T("سجل الحضور", "Attendance Log")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Modules & Lessons -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Modules" || currentController == "Lessons" || currentController == "LessonResources" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-layers"></i></span>
+                        <span class="nxl-mtext">@Html.T("الوحدات والدروس", "Modules & Lessons")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Modules" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Modules" asp-action="Index" class="nxl-link">
+                                <i class="feather-folder me-2"></i>
+                                @Html.T("الوحدات", "Modules")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Lessons" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Lessons" asp-action="Index" class="nxl-link">
+                                <i class="feather-file-text me-2"></i>
+                                @Html.T("الدروس", "Lessons")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "LessonResources" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="LessonResources" asp-action="Index" class="nxl-link">
+                                <i class="feather-paperclip me-2"></i>
+                                @Html.T("موارد الدروس", "Lesson Resources")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Question Bank & Quizzes -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "QuestionBank" || currentController == "Quizzes" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-help-circle"></i></span>
+                        <span class="nxl-mtext">@Html.T("الاختبارات وبنك الأسئلة", "Quizzes & Question Bank")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "QuestionBank" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="QuestionBank" asp-action="Index" class="nxl-link">
+                                <i class="feather-database me-2"></i>
+                                @Html.T("بنك الأسئلة", "Question Bank")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Quizzes" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Quizzes" asp-action="Index" class="nxl-link">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("الاختبارات", "Quizzes")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Assignments -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Assignments" || currentController == "AssignmentSubmissions" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-edit"></i></span>
+                        <span class="nxl-mtext">@Html.T("الواجبات", "Assignments")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Assignments" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Assignments" asp-action="Index" class="nxl-link">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("جميع الواجبات", "All Assignments")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Assignments" && currentAction == "Submissions" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Assignments" asp-action="Submissions" class="nxl-link">
+                                <i class="feather-inbox me-2"></i>
+                                @Html.T("الإجابات المرسلة", "Submitted Answers")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- My Books (كتبي) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Books" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-book-open"></i></span>
+                        <span class="nxl-mtext">@Html.T("كتبي", "My Books")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Books" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Books" asp-action="Index" class="nxl-link">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("جميع الكتب", "All Books")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Books" && currentAction == "Create" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Books" asp-action="Create" class="nxl-link">
+                                <i class="feather-plus-circle me-2"></i>
+                                @Html.T("إضافة كتاب", "Add Book")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Content Scheduling (جدولة المحتوى) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "ContentDrip" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-clock"></i></span>
+                        <span class="nxl-mtext">@Html.T("جدولة المحتوى", "Content Scheduling")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "ContentDrip" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="ContentDrip" asp-action="Index" class="nxl-link">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("قواعد الجدولة", "Scheduling Rules")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "ContentDrip" && currentAction == "Create" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="ContentDrip" asp-action="Create" class="nxl-link">
+                                <i class="feather-plus-circle me-2"></i>
+                                @Html.T("إضافة قاعدة", "Add Rule")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Learning Paths (مسارات التعلم) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "LearningPaths" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-git-branch"></i></span>
+                        <span class="nxl-mtext">@Html.T("مسارات التعلم", "Learning Paths")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "LearningPaths" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="LearningPaths" asp-action="Index" class="nxl-link">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("جميع المسارات", "All Paths")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "LearningPaths" && currentAction == "Create" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="LearningPaths" asp-action="Create" class="nxl-link">
+                                <i class="feather-plus-circle me-2"></i>
+                                @Html.T("إنشاء مسار", "Create Path")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Bundles (الباقات) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Bundles" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-package"></i></span>
+                        <span class="nxl-mtext">@Html.T("الباقات", "Bundles")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Bundles" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Bundles" asp-action="Index" class="nxl-link">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("جميع الباقات", "All Bundles")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Bundles" && currentAction == "Create" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Bundles" asp-action="Create" class="nxl-link">
+                                <i class="feather-plus-circle me-2"></i>
+                                @Html.T("إنشاء باقة", "Create Bundle")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Resources & Media -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Resources" || currentController == "Documents" || currentController == "MediaLibrary" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-archive"></i></span>
+                        <span class="nxl-mtext">@Html.T("الموارد والملفات", "Resources & Files")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Resources" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Resources" asp-action="Index" class="nxl-link">
+                                <i class="feather-file me-2"></i>
+                                @Html.T("الملفات", "Files")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Documents" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Documents" asp-action="Index" class="nxl-link">
+                                <i class="feather-file-text me-2"></i>
+                                @Html.T("المستندات", "Documents")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "MediaLibrary" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="MediaLibrary" asp-action="Index" class="nxl-link">
+                                <i class="feather-image me-2"></i>
+                                @Html.T("مكتبة الوسائط", "Media Library")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Students Section -->
+                <li class="nxl-item nxl-caption">
+                    <label>@Html.T("الطلاب والتفاعل", "Students & Engagement")</label>
+                </li>
+                
+                <!-- Students & Progress -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Students" || currentController == "Progress" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-users"></i></span>
+                        <span class="nxl-mtext">@Html.T("الطلاب", "Students")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Students" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Students" asp-action="Index" class="nxl-link">
+                                <i class="feather-users me-2"></i>
+                                @Html.T("جميع الطلاب", "All Students")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Students" && currentAction == "Progress" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Students" asp-action="Progress" class="nxl-link">
+                                <i class="feather-trending-up me-2"></i>
+                                @Html.T("تقدم الطلاب", "Student Progress")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Progress" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Progress" asp-action="Index" class="nxl-link">
+                                <i class="feather-bar-chart-2 me-2"></i>
+                                @Html.T("تحليل الأداء", "Performance Analysis")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Submissions -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Submissions" || currentController == "QuizAttempts" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-inbox"></i></span>
+                        <span class="nxl-mtext">@Html.T("الإجابات", "Submissions")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Submissions" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Submissions" asp-action="Index" class="nxl-link">
+                                <i class="feather-inbox me-2"></i>
+                                @Html.T("جميع الإجابات", "All Submissions")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "QuizAttempts" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="QuizAttempts" asp-action="Index" class="nxl-link">
+                                <i class="feather-check-square me-2"></i>
+                                @Html.T("محاولات الاختبارات", "Quiz Attempts")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Messages (الرسائل) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Messages" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-mail"></i></span>
+                        <span class="nxl-mtext">@Html.T("الرسائل", "Messages")</span>
+                        <span class="nxl-badge" id="unread-messages-badge"></span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Messages" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Messages" asp-action="Index" class="nxl-link">
+                                <i class="feather-inbox me-2"></i>
+                                @Html.T("البريد الوارد", "Inbox")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Messages" && currentAction == "Sent" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Messages" asp-action="Sent" class="nxl-link">
+                                <i class="feather-send me-2"></i>
+                                @Html.T("البريد المرسل", "Sent Mail")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Messages" && currentAction == "BulkMessage" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Messages" asp-action="BulkMessage" class="nxl-link">
+                                <i class="feather-users me-2"></i>
+                                @Html.T("رسالة جماعية", "Bulk Message")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Discussions (المناقشات) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Discussions" || currentController == "Comments" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-message-circle"></i></span>
+                        <span class="nxl-mtext">@Html.T("المناقشات", "Discussions")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Discussions" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Discussions" asp-action="Index" class="nxl-link">
+                                <i class="feather-message-circle me-2"></i>
+                                @Html.T("المناقشات", "Discussions")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Comments" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Comments" asp-action="Index" class="nxl-link">
+                                <i class="feather-message-square me-2"></i>
+                                @Html.T("التعليقات", "Comments")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Reviews & FAQ (التقييمات والأسئلة) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Reviews" || currentController == "Faq" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-star"></i></span>
+                        <span class="nxl-mtext">@Html.T("التقييمات والأسئلة", "Reviews & Questions")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Reviews" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Reviews" asp-action="Index" class="nxl-link">
+                                <i class="feather-star me-2"></i>
+                                @Html.T("التقييمات", "Reviews")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Reviews" && currentAction == "Statistics" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Reviews" asp-action="Statistics" class="nxl-link">
+                                <i class="feather-bar-chart-2 me-2"></i>
+                                @Html.T("إحصائيات التقييم", "Review Statistics")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Faq" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Faq" asp-action="Index" class="nxl-link">
+                                <i class="feather-help-circle me-2"></i>
+                                @Html.T("الأسئلة الشائعة", "FAQ")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Announcements (الإعلانات) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Announcements" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-speaker"></i></span>
+                        <span class="nxl-mtext">@Html.T("الإعلانات", "Announcements")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(isPlatformAnnouncements ? "active" : "")">
+                            <a href="/Instructor/PlatformAnnouncements" class="nxl-link">
+                                <i class="feather-bell me-2"></i>
+                                @Html.T("إعلانات المنصة", "Platform Announcements")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Announcements" && currentAction == "Index" && currentArea == "Instructor" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Announcements" asp-action="Index" class="nxl-link">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("إعلانات دوراتي", "My Course Announcements")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Announcements" && currentAction == "Create" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Announcements" asp-action="Create" class="nxl-link">
+                                <i class="feather-plus-circle me-2"></i>
+                                @Html.T("إنشاء إعلان", "Create Announcement")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Management & Analytics Section -->
+                <li class="nxl-item nxl-caption">
+                    <label>@Html.T("الإدارة والتحليلات", "Management & Analytics")</label>
+                </li>
+                
+                <!-- Co-Instructors (المدرسين المشاركين) -->
+                <li class="nxl-item @(currentController == "CourseInstructors" ? "active" : "")">
+                    <a asp-area="Instructor" asp-controller="CourseInstructors" asp-action="Index" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-user-plus"></i></span>
+                        <span class="nxl-mtext">@Html.T("المدرسين المشاركين", "Co-Instructors")</span>
+                    </a>
+                </li>
+                
+                <!-- Proctoring (مراقبة الاختبارات) -->
+                <li class="nxl-item @(currentController == "Proctoring" ? "active" : "")">
+                    <a asp-area="Instructor" asp-controller="Proctoring" asp-action="Index" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-eye"></i></span>
+                        <span class="nxl-mtext">@Html.T("مراقبة الاختبارات", "Exam Proctoring")</span>
+                    </a>
+                </li>
+                
+                <!-- Analytics (التحليلات) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Analytics" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-bar-chart-2"></i></span>
+                        <span class="nxl-mtext">@Html.T("التحليلات", "Analytics")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Analytics" && currentAction == "Overview" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Analytics" asp-action="Overview" class="nxl-link">
+                                <i class="feather-pie-chart me-2"></i>
+                                @Html.T("نظرة عامة", "Overview")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Analytics" && currentAction == "Performance" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Analytics" asp-action="Performance" class="nxl-link">
+                                <i class="feather-trending-up me-2"></i>
+                                @Html.T("أداء الدورات", "Course Performance")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Analytics" && currentAction == "StudentEngagement" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Analytics" asp-action="StudentEngagement" class="nxl-link">
+                                <i class="feather-users me-2"></i>
+                                @Html.T("تفاعل الطلاب", "Student Engagement")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Earnings -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Earnings" || currentController == "Commissions" || currentController == "WithdrawalRequests" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon">
+                            @{ ViewBag.CurrencyIconStyle = ""; }
+                            @await Html.PartialAsync("~/Areas/Instructor/Views/Shared/_CurrencyIcon.cshtml")
+                        </span>
+                        <span class="nxl-mtext">@Html.T("الأرباح", "Earnings")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Earnings" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Earnings" asp-action="Index" class="nxl-link">
+                                @{ ViewBag.CurrencyIconClass = "me-2"; ViewBag.CurrencyIconStyle = "margin-left: 8px;"; }
+                                @await Html.PartialAsync("~/Areas/Instructor/Views/Shared/_CurrencyIcon.cshtml")
+                                @Html.T("نظرة عامة", "Overview")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Earnings" && currentAction == "Transactions" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Earnings" asp-action="Transactions" class="nxl-link">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("المعاملات", "Transactions")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Commissions" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Commissions" asp-action="Index" class="nxl-link">
+                                <i class="feather-percent me-2"></i>
+                                @Html.T("العمولات", "Commissions")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "WithdrawalRequests" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="WithdrawalRequests" asp-action="Index" class="nxl-link">
+                                <i class="feather-arrow-up-circle me-2"></i>
+                                @Html.T("طلبات السحب", "Withdrawal Requests")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Coupons & Flash Sales (العروض والكوبونات) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Coupons" || currentController == "FlashSales" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-tag"></i></span>
+                        <span class="nxl-mtext">@Html.T("العروض والكوبونات", "Offers & Coupons")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Coupons" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Coupons" asp-action="Index" class="nxl-link">
+                                <i class="feather-tag me-2"></i>
+                                @Html.T("الكوبونات", "Coupons")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "FlashSales" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="FlashSales" asp-action="Index" class="nxl-link">
+                                <i class="feather-zap me-2"></i>
+                                @Html.T("العروض السريعة", "Flash Sales")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Affiliates -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Affiliates" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-link"></i></span>
+                        <span class="nxl-mtext">@Html.T("التسويق بالعمولة", "Affiliate Marketing")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Affiliates" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Affiliates" asp-action="Index" class="nxl-link">
+                                <i class="feather-link me-2"></i>
+                                @Html.T("روابط الإحالة", "Referral Links")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Affiliates" && currentAction == "Statistics" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Affiliates" asp-action="Statistics" class="nxl-link">
+                                <i class="feather-bar-chart-2 me-2"></i>
+                                @Html.T("الإحصائيات", "Statistics")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Settings Section -->
+                <li class="nxl-item nxl-caption">
+                    <label>@Html.T("الإعدادات", "Settings")</label>
+                </li>
+                
+                <!-- Profile -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Profile" ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-user"></i></span>
+                        <span class="nxl-mtext">@Html.T("الملف الشخصي", "Profile")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Profile" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Profile" asp-action="Index" class="nxl-link">
+                                <i class="feather-user me-2"></i>
+                                @Html.T("عرض الملف", "View Profile")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Profile" && currentAction == "Edit" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Profile" asp-action="Edit" class="nxl-link">
+                                <i class="feather-edit me-2"></i>
+                                @Html.T("تعديل الملف", "Edit Profile")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Profile" && currentAction == "PaymentSettings" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Profile" asp-action="PaymentSettings" class="nxl-link">
+                                <i class="feather-credit-card me-2"></i>
+                                @Html.T("إعدادات الدفع", "Payment Settings")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Help Center (مركز المساعدة) -->
+                <li class="nxl-item @(currentController == "Help" ? "active" : "")">
+                    <a asp-area="Instructor" asp-controller="Help" asp-action="Index" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-help-circle"></i></span>
+                        <span class="nxl-mtext">@Html.T("مركز المساعدة", "Help Center")</span>
+                        <span class="badge bg-soft-primary text-primary ms-2 fs-10">@Html.T("جديد", "New")</span>
+                    </a>
+                </li>
+                
+                <!-- Settings (الإعدادات) -->
+                <li class="nxl-item nxl-hasmenu @(currentController == "Profile" && (currentAction == "Settings" || currentAction == "Notifications" || currentAction == "SocialLinks" || currentAction == "Security" || currentAction == "Activity") ? "active" : "")">
+                    <a href="javascript:void(0);" class="nxl-link">
+                        <span class="nxl-micon"><i class="feather-settings"></i></span>
+                        <span class="nxl-mtext">@Html.T("الإعدادات", "Settings")</span>
+                        <span class="nxl-arrow"><i class="feather-chevron-left"></i></span>
+                    </a>
+                    <ul class="nxl-submenu">
+                        <li class="nxl-item @(currentController == "Profile" && currentAction == "Settings" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Profile" asp-action="Settings" class="nxl-link">
+                                <i class="feather-settings me-2"></i>
+                                @Html.T("إعدادات الحساب", "Account Settings")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Profile" && currentAction == "Notifications" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Profile" asp-action="Notifications" class="nxl-link">
+                                <i class="feather-bell me-2"></i>
+                                @Html.T("تفضيلات الإشعارات", "Notification Preferences")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Profile" && currentAction == "SocialLinks" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Profile" asp-action="SocialLinks" class="nxl-link">
+                                <i class="feather-link me-2"></i>
+                                @Html.T("روابط التواصل", "Social Links")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Profile" && currentAction == "Security" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Profile" asp-action="Security" class="nxl-link">
+                                <i class="feather-shield me-2"></i>
+                                @Html.T("الأمان", "Security")
+                            </a>
+                        </li>
+                        <li class="nxl-item @(currentController == "Profile" && currentAction == "Activity" ? "active" : "")">
+                            <a asp-area="Instructor" asp-controller="Profile" asp-action="Activity" class="nxl-link">
+                                <i class="feather-activity me-2"></i>
+                                @Html.T("سجل النشاط", "Activity Log")
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<partial name="~/Areas/Instructor/Views/Shared/_SidebarScripts.cshtml" />

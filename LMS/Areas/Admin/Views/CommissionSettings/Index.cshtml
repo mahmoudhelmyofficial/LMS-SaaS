@@ -1,0 +1,328 @@
+@model IEnumerable<LMS.Areas.Admin.ViewModels.CommissionSettingListViewModel>
+
+@{
+    ViewData["Title"] = Html.T("إعدادات العمولات", "Commission Settings");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإدارة المالية", "Finance"), null),
+        (Html.T("إعدادات العمولات", "Commission Settings"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("حاسبة العمولة", "Commission Calculator"), "feather-calculator", Url.Action("Preview", "CommissionSettings"), "btn-light-brand"),
+        (Html.T("إضافة إعداد عمولة", "Add Commission Setting"), "feather-plus", Url.Action("Create", "CommissionSettings"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-percent"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي الإعدادات", "Total Settings")</span>
+                            <h3 class="fw-bolder d-block">@ViewBag.TotalSettings.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                        <i class="feather-check-circle"></i>
+                    </div>
+                    <div>
+                        <span class="text-truncate-1-line">@Html.T("نشطة", "Active")</span>
+                        <h3 class="fw-bolder d-block">@ViewBag.ActiveSettings.ToString("N0")</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                        <i class="feather-layers"></i>
+                    </div>
+                    <div>
+                        <span class="text-truncate-1-line">@Html.T("حسب الفئة", "By category")</span>
+                        <h3 class="fw-bolder d-block">@Model.Count(s => s.Type.Equals("category", StringComparison.OrdinalIgnoreCase)).ToString("N0")</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                        <i class="feather-book-open"></i>
+                    </div>
+                    <div>
+                        <span class="text-truncate-1-line">@Html.T("حسب الدورة", "By course")</span>
+                        <h3 class="fw-bolder d-block">@Model.Count(s => s.Type.Equals("course", StringComparison.OrdinalIgnoreCase)).ToString("N0")</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section FilterDropdown {
+    <a href="@Url.Action("Index", "CommissionSettings")" class="dropdown-item">
+        <i class="feather-eye me-3"></i>
+        <span>@Html.T("الكل", "All")</span>
+    </a>
+    <div class="dropdown-divider"></div>
+    <a href="@Url.Action("Index", "CommissionSettings", new { type = "Global" })" class="dropdown-item">
+        <i class="feather-globe me-3"></i>
+        <span>@Html.T("عامة", "Global")</span>
+    </a>
+    <a href="@Url.Action("Index", "CommissionSettings", new { type = "Category" })" class="dropdown-item">
+        <i class="feather-layers me-3"></i>
+        <span>@Html.T("حسب الفئة", "By category")</span>
+    </a>
+    <a href="@Url.Action("Index", "CommissionSettings", new { type = "Course" })" class="dropdown-item">
+        <i class="feather-book-open me-3"></i>
+        <span>@Html.T("حسب الدورة", "By course")</span>
+    </a>
+    <a href="@Url.Action("Index", "CommissionSettings", new { type = "Instructor" })" class="dropdown-item">
+        <i class="feather-user me-3"></i>
+        <span>@Html.T("حسب المدرب", "By instructor")</span>
+    </a>
+    <div class="dropdown-divider"></div>
+    <a href="@Url.Action("Index", "CommissionSettings", new { active = true })" class="dropdown-item">
+        <i class="feather-check-circle me-3"></i>
+        <span>@Html.T("النشطة فقط", "Active only")</span>
+    </a>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="commissionsTable">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("الأولوية", "Priority")</th>
+                                    <th>@Html.T("الاسم", "Name")</th>
+                                    <th>@Html.T("النوع", "Type")</th>
+                                    <th>@Html.T("نطاق التطبيق", "Scope")</th>
+                                    <th>@Html.T("نسبة المنصة", "Platform rate")</th>
+                                    <th>@Html.T("نسبة المدرب", "Instructor rate")</th>
+                                    <th>@Html.T("فترة الحجز", "Hold period")</th>
+                                    <th>@Html.T("الصلاحية", "Validity")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var setting in Model)
+                                {
+                                    <tr>
+                                        <td>
+                                            <span class="badge bg-soft-secondary text-secondary">#@setting.Priority</span>
+                                        </td>
+                                        <td>
+                                            <div>
+                                                <a href="@Url.Action("Details", "CommissionSettings", new { id = setting.Id })" class="fw-bold text-dark">
+                                                    @setting.Name
+                                                </a>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @switch (setting.Type.ToLowerInvariant())
+                                            {
+                                                case "global":
+                                                    <span class="badge bg-soft-primary text-primary">
+                                                        <i class="feather-globe fs-12 me-1"></i>
+                                                        @Html.T("عامة", "Global")
+                                                    </span>
+                                                    break;
+                                                case "category":
+                                                    <span class="badge bg-soft-warning text-warning">
+                                                        <i class="feather-layers fs-12 me-1"></i>
+                                                        @Html.T("فئة", "Category")
+                                                    </span>
+                                                    break;
+                                                case "course":
+                                                    <span class="badge bg-soft-info text-info">
+                                                        <i class="feather-book-open fs-12 me-1"></i>
+                                                        @Html.T("دورة", "Course")
+                                                    </span>
+                                                    break;
+                                                case "instructor":
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-user fs-12 me-1"></i>
+                                                        @Html.T("مدرب", "Instructor")
+                                                    </span>
+                                                    break;
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (setting.Type.Equals("category", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(setting.CategoryName))
+                                            {
+                                                <span class="fs-12">@setting.CategoryName</span>
+                                            }
+                                            else if (setting.Type.Equals("course", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(setting.CourseName))
+                                            {
+                                                <span class="fs-12">@setting.CourseName</span>
+                                            }
+                                            else if (setting.Type.Equals("instructor", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(setting.InstructorName))
+                                            {
+                                                <span class="fs-12">@setting.InstructorName</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted fs-12">@Html.T("جميع الدورات", "All courses")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-danger text-danger">@setting.PlatformRate%</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-success text-success">@setting.InstructorRate%</span>
+                                        </td>
+                                        <td>
+                                            <span class="text-muted">@setting.HoldPeriodDays @Html.T("يوم", "day(s)")</span>
+                                        </td>
+                                        <td>
+                                            <div class="fs-12">
+                                                @if (setting.StartDate.HasValue && setting.EndDate.HasValue)
+                                                {
+                                                    <div>@Html.T("من", "From"): @setting.StartDate.Value.ToString("dd/MM/yyyy")</div>
+                                                    <div>@Html.T("إلى", "To"): @setting.EndDate.Value.ToString("dd/MM/yyyy")</div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-success">@Html.T("دائمة", "Permanent")</span>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (setting.IsActive)
+                                            {
+                                                <span class="badge bg-soft-success text-success">
+                                                    <i class="feather-check-circle fs-12 me-1"></i>
+                                                    @Html.T("نشطة", "Active")
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">
+                                                    <i class="feather-x-circle fs-12 me-1"></i>
+                                                    @Html.T("معطلة", "Disabled")
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="@Url.Action("Details", "CommissionSettings", new { id = setting.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                <a href="@Url.Action("Edit", "CommissionSettings", new { id = setting.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                    <i class="feather-edit"></i>
+                                                </a>
+                                                <form method="post" action="@Url.Action("ToggleActive", "CommissionSettings", new { id = setting.Id })" style="display:inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="avatar-text avatar-md border-0 bg-transparent" data-bs-toggle="tooltip" title="@(setting.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))">
+                                                        <i class="feather-@(setting.IsActive ? "toggle-right text-success" : "toggle-left text-muted")"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Commission Explanation -->
+            <div class="card stretch stretch-full mt-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("كيفية عمل نظام العمولات", "How the commission system works")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                        <span class="fw-bold">1</span>
+                                    </div>
+                                    <h6 class="mb-0">@Html.T("الأولوية", "Priority")</h6>
+                                </div>
+                                <p class="text-muted fs-12 mb-0">@Html.T("يتم تطبيق الإعدادات حسب الأولوية الأعلى أولاً", "Settings are applied by highest priority first")</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <div class="avatar-text avatar-sm bg-soft-warning text-warning">
+                                        <span class="fw-bold">2</span>
+                                    </div>
+                                    <h6 class="mb-0">@Html.T("فترة الحجز", "Hold period")</h6>
+                                </div>
+                                <p class="text-muted fs-12 mb-0">@Html.T("المدة التي يتم فيها حجز الأموال قبل التحويل للمدرب", "Period funds are held before transfer to instructor")</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <div class="avatar-text avatar-sm bg-soft-success text-success">
+                                        <span class="fw-bold">3</span>
+                                    </div>
+                                    <h6 class="mb-0">@Html.T("النسب", "Rates")</h6>
+                                </div>
+                                <p class="text-muted fs-12 mb-0">@Html.T("يجب أن يكون مجموع نسبة المنصة والمدرب = 100%", "Platform + instructor rate must equal 100%")</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            $('#commissionsTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[0, "desc"]],
+                "pageLength": 25
+            });
+
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+

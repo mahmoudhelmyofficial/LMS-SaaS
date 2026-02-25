@@ -1,0 +1,212 @@
+@model IEnumerable<LMS.Areas.Instructor.ViewModels.LiveSessionScheduleDisplayViewModel>
+
+@{
+    ViewData["Title"] = Html.T("إدارة جداول الحصص", "Session Schedule Management");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة جداول الحصص والجلسات المجدولة", "View and manage session schedules");
+}
+
+@{
+    var createUrl = Url.Action("Create");
+    var actionButtonsHtml = "<a href='" + createUrl + "' class='btn btn-primary'>" +
+        "<i class='feather-plus me-2'></i>" +
+        Html.T("إنشاء جدول جديد", "Create New Schedule") +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الجداول", "Total Schedules") },
+                { "Value", Model.Count() },
+                { "Icon", "calendar" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("جداول منشورة", "Published Schedules") },
+                { "Value", Model.Count(s => s.Status == LMS.Domain.Enums.LiveScheduleStatus.Published || s.Status == LMS.Domain.Enums.LiveScheduleStatus.Active) },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي المشتركين", "Total Subscribers") },
+                { "Value", Model.Sum(s => s.EnrolledCount) },
+                { "Icon", "users" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الإيرادات", "Total Revenue") },
+                { "Value", Model.Sum(s => s.TotalRevenue).ToString("N0") + " " + Html.T("ج.م", "EGP") },
+                { "Icon", "dollar-sign" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Status Tabs -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <ul class="nav nav-tabs">
+                <li class="nav-item">
+                    <a class="nav-link @(ViewBag.CurrentStatus == null ? "active" : "")" href="@Url.Action("Index")">@Html.T("الكل", "All")</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(ViewBag.CurrentStatus?.ToString() == "Draft" ? "active" : "")" href="@Url.Action("Index", new { status = "Draft" })">@Html.T("مسودة", "Draft")</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(ViewBag.CurrentStatus?.ToString() == "Published" ? "active" : "")" href="@Url.Action("Index", new { status = "Published" })">@Html.T("منشور", "Published")</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(ViewBag.CurrentStatus?.ToString() == "Active" ? "active" : "")" href="@Url.Action("Index", new { status = "Active" })">@Html.T("نشط", "Active")</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(ViewBag.CurrentStatus?.ToString() == "Completed" ? "active" : "")" href="@Url.Action("Index", new { status = "Completed" })">@Html.T("مكتمل", "Completed")</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(ViewBag.CurrentStatus?.ToString() == "Cancelled" ? "active" : "")" href="@Url.Action("Index", new { status = "Cancelled" })">@Html.T("ملغي", "Cancelled")</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Schedules Grid -->
+    @if (Model != null && Model.Any())
+    {
+        <div class="row">
+            @foreach (var schedule in Model)
+            {
+                <div class="col-12 col-md-6 col-xl-4 mb-4">
+                    <div class="card stretch stretch-full h-100">
+                        @if (!string.IsNullOrEmpty(schedule.ThumbnailUrl))
+                        {
+                            <img src="@schedule.ThumbnailUrl" class="card-img-top" alt="@schedule.Title" style="height: 160px; object-fit: cover;">
+                        }
+                        else
+                        {
+                            <div class="card-img-top bg-soft-primary d-flex align-items-center justify-content-center" style="height: 160px;">
+                                <i class="feather-calendar" style="font-size: 3rem; color: var(--bs-primary);"></i>
+                            </div>
+                        }
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title fw-bold mb-0">
+                                    <a href="@Url.Action("Details", new { id = schedule.Id })" class="text-dark">
+                                        @(schedule.TitleAr ?? schedule.Title)
+                                    </a>
+                                </h6>
+                                @switch (schedule.Status)
+                                {
+                                    case LMS.Domain.Enums.LiveScheduleStatus.Draft:
+                                        <span class="badge bg-soft-secondary text-secondary">@Html.T("مسودة", "Draft")</span>
+                                        break;
+                                    case LMS.Domain.Enums.LiveScheduleStatus.Published:
+                                        <span class="badge bg-soft-primary text-primary">@Html.T("منشور", "Published")</span>
+                                        break;
+                                    case LMS.Domain.Enums.LiveScheduleStatus.Active:
+                                        <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span>
+                                        break;
+                                    case LMS.Domain.Enums.LiveScheduleStatus.Completed:
+                                        <span class="badge bg-soft-info text-info">@Html.T("مكتمل", "Completed")</span>
+                                        break;
+                                    case LMS.Domain.Enums.LiveScheduleStatus.Cancelled:
+                                        <span class="badge bg-soft-danger text-danger">@Html.T("ملغي", "Cancelled")</span>
+                                        break;
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(schedule.Description))
+                            {
+                                <p class="text-muted fs-12 mb-3">@(schedule.Description.Length > 80 ? schedule.Description.Substring(0, 80) + "..." : schedule.Description)</p>
+                            }
+
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <span class="badge bg-soft-info text-info">
+                                    <i class="feather-video me-1"></i>@schedule.TotalSessions @Html.T("جلسة", "sessions")
+                                </span>
+                                <span class="badge bg-soft-warning text-warning">
+                                    <i class="feather-users me-1"></i>@schedule.EnrolledCount @Html.T("مشترك", "subscribers")
+                                </span>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mb-2 fs-12 text-muted">
+                                <span><i class="feather-calendar me-1"></i>@schedule.StartDate.ToString("dd/MM/yyyy")</span>
+                                <span>@Html.T("إلى", "to") @schedule.EndDate.ToString("dd/MM/yyyy")</span>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-transparent d-flex justify-content-between align-items-center">
+                            <div>
+                                @if (schedule.Price > 0)
+                                {
+                                    <span class="fw-bold text-success">@schedule.Price.ToString("N0") @schedule.Currency</span>
+                                    @if (schedule.OriginalPrice.HasValue && schedule.OriginalPrice > schedule.Price)
+                                    {
+                                        <span class="text-muted text-decoration-line-through fs-11 ms-1">@schedule.OriginalPrice.Value.ToString("N0")</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="badge bg-soft-success text-success">@Html.T("مجاني", "Free")</span>
+                                }
+                            </div>
+                            <div class="hstack gap-2">
+                                <a href="@Url.Action("Details", new { id = schedule.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                    <i class="feather-eye"></i>
+                                </a>
+                                @if (schedule.Status == LMS.Domain.Enums.LiveScheduleStatus.Draft || schedule.Status == LMS.Domain.Enums.LiveScheduleStatus.Published)
+                                {
+                                    <a href="@Url.Action("Edit", new { id = schedule.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                        <i class="feather-edit"></i>
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body p-5 text-center">
+                <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                    <i class="feather-calendar"></i>
+                </div>
+                <h5 class="fw-bold mb-2">@Html.T("لا توجد جداول حصص", "No Session Schedules")</h5>
+                <p class="text-muted mb-4">@Html.T("ابدأ بإنشاء جدول حصص لتنظيم جلساتك المباشرة", "Start by creating a session schedule to organize your live sessions")</p>
+                <a href="@Url.Action("Create")" class="btn btn-primary">
+                    <i class="feather-plus me-2"></i>
+                    @Html.T("إنشاء جدول جديد", "Create New Schedule")
+                </a>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}

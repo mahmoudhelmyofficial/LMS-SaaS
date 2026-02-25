@@ -1,0 +1,147 @@
+@model IEnumerable<LMS.Domain.Entities.Assessments.QuestionBank>
+
+@{
+    ViewData["Title"] = Html.T("بنوك الأسئلة", "Question Banks");
+    ViewData["Subtitle"] = Html.T("إدارة بنوك أسئلتك", "Manage your question banks");
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex gap-2">
+            <a asp-action="Create" class="btn btn-primary">
+                <i class="feather-plus me-2"></i>
+                إنشاء بنك جديد
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "إجمالي البنوك" },
+                { "Value", Model.Count() },
+                { "Icon", "database" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "إجمالي الأسئلة" },
+                { "Value", Model.Sum(b => b.TotalQuestions) },
+                { "Icon", "help-circle" },
+                { "Color", "success" }
+            })
+        </div>
+    </div>
+
+    <!-- Banks List -->
+    <div class="row">
+        @if (Model != null && Model.Any())
+        {
+            @foreach (var bank in Model)
+            {
+                <div class="col-12 col-xl-6 col-xxl-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div class="avatar-text avatar-lg bg-primary text-white">
+                                    <i class="feather-database"></i>
+                                </div>
+                                <div class="dropdown">
+                                    <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown">
+                                        <i class="feather-more-horizontal"></i>
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Edit", new { id = bank.Id })">
+                                                <i class="feather-edit me-3"></i>تعديل
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="deleteBank(@bank.Id, '@bank.Name')">
+                                                <i class="feather-trash-2 me-3"></i>حذف
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <h5 class="fw-bold mb-2">
+                                <a href="@Url.Action("Details", new { id = bank.Id })" class="text-dark">@bank.Name</a>
+                            </h5>
+                            <p class="text-muted mb-3">@bank.Description</p>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="badge bg-soft-primary text-primary">
+                                    @bank.QuestionCategory?.Name
+                                </span>
+                                <span class="badge bg-soft-success text-success">
+                                    @bank.TotalQuestions أسئلة
+                                </span>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <a href="@Url.Action("Details", new { id = bank.Id })" class="btn btn-sm btn-light flex-fill">
+                                    <i class="feather-eye me-1"></i>عرض
+                                </a>
+                                <a href="@Url.Action("AddQuestion", new { bankId = bank.Id })" class="btn btn-sm btn-primary flex-fill">
+                                    <i class="feather-plus me-1"></i>إضافة سؤال
+                                </a>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-soft-secondary border-0">
+                            <small class="text-muted">
+                                <i class="feather-calendar me-1"></i>
+                                تم الإنشاء: @bank.CreatedAt.ToString("dd/MM/yyyy")
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                            <i class="feather-database"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">@Html.T("لا توجد بنوك أسئلة", "No question banks")</h5>
+                        <p class="text-muted mb-4">ابدأ بإنشاء أول بنك أسئلة لتنظيم أسئلتك</p>
+                        <a href="@Url.Action("Create")" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>إنشاء بنك جديد
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<form id="deleteForm" method="post" style="display:none;">@Html.AntiForgeryToken()</form>
+
+@section Scripts {
+    <script>
+        function deleteBank(id, name) {
+            if (confirm('هل أنت متأكد من حذف بنك: ' + name + '?\nسيتم حذف جميع الأسئلة المرتبطة به.')) {
+                var form = document.getElementById('deleteForm');
+                form.action = '@Url.Action("Delete", "QuestionBank", new { area = "Instructor" })'.replace('?', '/' + id + '?').replace(/\/$/, '') || '@Url.Action("Delete")' + '/' + id;
+                // Proper URL construction
+                form.action = '/Instructor/QuestionBank/Delete/' + id;
+                form.submit();
+            }
+        }
+    </script>
+}
+

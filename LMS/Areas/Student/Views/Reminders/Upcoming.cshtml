@@ -1,0 +1,375 @@
+@model List<LMS.Domain.Entities.Learning.StudentReminder>
+@{
+    ViewData["Title"] = Html.T("التذكيرات القادمة", "Upcoming Reminders");
+}
+
+@section Styles {
+<style>
+    .reminder-item {
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 15px;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .reminder-item::before {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        height: 100%;
+        width: 5px;
+    }
+    
+    .reminder-item.priority-high::before {
+        background: #ef4444;
+    }
+    
+    .reminder-item.priority-medium::before {
+        background: #f59e0b;
+    }
+    
+    .reminder-item.priority-low::before {
+        background: #10b981;
+    }
+    
+    .reminder-item:hover {
+        transform: translateX(-5px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+    }
+    
+    .reminder-icon-box {
+        width: 60px;
+        height: 60px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+    
+    .time-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .countdown {
+        font-size: 1.1rem;
+        font-weight: 700;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+    <div class="card-body py-5">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h2 class="text-white fw-bold mb-2">
+                    <i class="feather-calendar me-2"></i>
+                    @Html.T("التذكيرات القادمة", "Upcoming reminders")
+                </h2>
+                <p class="text-white opacity-75 mb-0">@Html.T("التذكيرات المقرر إرسالها خلال الأسبوع القادم", "Reminders scheduled for the next week")</p>
+            </div>
+            <div class="col-lg-4 text-center">
+                <div class="bg-white bg-opacity-10 rounded p-3">
+                    <h1 class="text-white fw-bold mb-0">@Model.Count</h1>
+                    <p class="text-white opacity-75 mb-0">@Html.T("تذكير قادم", "Upcoming")</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Actions -->
+<div class="card stretch stretch-full mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <a asp-action="Index" class="btn btn-sm btn-light">
+                    <i class="feather-list me-2"></i>
+                    @Html.T("جميع التذكيرات", "All reminders")
+                </a>
+            </div>
+            <a asp-action="Create" class="btn btn-sm btn-primary">
+                <i class="feather-plus me-2"></i>
+                @Html.T("تذكير جديد", "New reminder")
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Reminders List -->
+@if (Model.Any())
+{
+    <div class="row">
+        <div class="col-12">
+            @foreach (var reminder in Model)
+            {
+                var timeUntil = reminder.RemindAt - DateTime.UtcNow;
+                var priorityClass = timeUntil.TotalDays <= 1 ? "priority-high" : 
+                                   timeUntil.TotalDays <= 3 ? "priority-medium" : "priority-low";
+                
+                var iconConfig = reminder.ReminderType switch
+                {
+                    "Study" => ("book-open", "primary"),
+                    "Assignment" => ("file-text", "warning"),
+                    "Quiz" => ("help-circle", "info"),
+                    "LiveClass" => ("video", "danger"),
+                    _ => ("bell", "secondary")
+                };
+                
+                <div class="reminder-item @priorityClass">
+                    <div class="d-flex gap-3">
+                        <div class="reminder-icon-box bg-soft-@iconConfig.Item2 text-@iconConfig.Item2">
+                            <i class="feather-@iconConfig.Item1"></i>
+                        </div>
+                        
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h5 class="fw-bold mb-1">@reminder.Title</h5>
+                                    @if (!string.IsNullOrEmpty(reminder.Description))
+                                    {
+                                        <p class="text-muted mb-0">@reminder.Description</p>
+                                    }
+                                </div>
+                                <div class="text-end">
+                                    @if (timeUntil.TotalDays <= 1)
+                                    {
+                                        <span class="time-badge bg-soft-danger text-danger">
+                                            <i class="feather-alert-circle"></i>
+                                            @Html.T("عاجل", "Urgent")
+                                        </span>
+                                    }
+                                    else if (timeUntil.TotalDays <= 3)
+                                    {
+                                        <span class="time-badge bg-soft-warning text-warning">
+                                            <i class="feather-clock"></i>
+                                            @Html.T("قريب", "Soon")
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                            
+                            <!-- Time Information -->
+                            <div class="d-flex align-items-center gap-4 mb-3">
+                                <div>
+                                    <i class="feather-calendar text-muted me-2"></i>
+                                    <span class="fw-semibold">@reminder.RemindAt.ToString("dd MMMM yyyy")</span>
+                                </div>
+                                <div>
+                                    <i class="feather-clock text-muted me-2"></i>
+                                    <span class="fw-semibold">@reminder.RemindAt.ToString("HH:mm")</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Countdown -->
+                            <div class="mb-3">
+                                <div class="countdown">
+                                    @if (timeUntil.TotalHours < 24)
+                                    {
+                                        <span class="text-danger">
+                                            <i class="feather-zap me-1"></i>
+                                            @Html.T("خلال", "In") @((int)timeUntil.TotalHours) @Html.T("ساعة و", "hr") @((int)timeUntil.Minutes) @Html.T("دقيقة", "min")
+                                        </span>
+                                    }
+                                    else if (timeUntil.TotalDays < 7)
+                                    {
+                                        <span class="text-warning">
+                                            <i class="feather-calendar me-1"></i>
+                                            @Html.T("خلال", "In") @((int)timeUntil.TotalDays) @Html.T("يوم", "days")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-success">
+                                            <i class="feather-calendar me-1"></i>
+                                            @Html.T("خلال", "In") @((int)timeUntil.TotalDays) @Html.T("يوم", "days")
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                            
+                            <!-- Course Info -->
+                            @if (reminder.Course != null)
+                            {
+                                <div class="mb-3">
+                                    <span class="badge bg-soft-primary text-primary">
+                                        <i class="feather-book-open me-1"></i>
+                                        @reminder.Course.Title
+                                    </span>
+                                </div>
+                            }
+                            
+                            <!-- Notification Methods -->
+                            <div class="d-flex gap-2 mb-3">
+                                @if (reminder.SendEmail)
+                                {
+                                    <span class="badge bg-soft-info text-info">
+                                        <i class="feather-mail me-1"></i>
+                                        @Html.T("بريد", "Email")
+                                    </span>
+                                }
+                                @if (reminder.SendPush)
+                                {
+                                    <span class="badge bg-soft-success text-success">
+                                        <i class="feather-bell me-1"></i>
+                                        @Html.T("إشعار", "Notification")
+                                    </span>
+                                }
+                            </div>
+                            
+                            <!-- Actions -->
+                            <div class="d-flex gap-2">
+                                <a asp-action="Edit" asp-route-id="@reminder.Id" class="btn btn-sm btn-outline-primary">
+                                    <i class="feather-edit me-1"></i>
+                                    @Html.T("تعديل", "Edit")
+                                </a>
+                                
+                                <form asp-action="Snooze" method="post" class="d-inline">
+                                    <input type="hidden" name="id" value="@reminder.Id" />
+                                    <input type="hidden" name="minutes" value="60" />
+                                    <button type="submit" class="btn btn-sm btn-outline-warning">
+                                        <i class="feather-clock me-1"></i>
+                                        @Html.T("تأجيل ساعة", "Snooze 1 hour")
+                                    </button>
+                                </form>
+                                
+                                <form asp-action="Complete" method="post" class="d-inline">
+                                    <input type="hidden" name="id" value="@reminder.Id" />
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="feather-check me-1"></i>
+                                        @Html.T("تم الإنجاز", "Mark done")
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+    
+    <!-- Quick Stats -->
+    <div class="row g-3 mt-4">
+        <div class="col-md-4">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-lg bg-soft-danger text-danger">
+                            <i class="feather-zap"></i>
+                        </div>
+                        <div>
+                            <h3 class="fw-bold mb-1">@Model.Count(r => (r.RemindAt - DateTime.UtcNow).TotalDays <= 1)</h3>
+                            <p class="text-muted mb-0">@Html.T("خلال 24 ساعة", "Within 24 hours")</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-lg bg-soft-warning text-warning">
+                            <i class="feather-clock"></i>
+                        </div>
+                        <div>
+                            <h3 class="fw-bold mb-1">@Model.Count(r => (r.RemindAt - DateTime.UtcNow).TotalDays > 1 && (r.RemindAt - DateTime.UtcNow).TotalDays <= 3)</h3>
+                            <p class="text-muted mb-0">@Html.T("خلال 3 أيام", "Within 3 days")</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-lg bg-soft-success text-success">
+                            <i class="feather-calendar"></i>
+                        </div>
+                        <div>
+                            <h3 class="fw-bold mb-1">@Model.Count(r => (r.RemindAt - DateTime.UtcNow).TotalDays > 3)</h3>
+                            <p class="text-muted mb-0">@Html.T("بعد 3 أيام", "After 3 days")</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            @{
+                ViewData["Icon"] = "calendar";
+                ViewData["Title"] = Html.T("لا توجد تذكيرات قادمة", "No upcoming reminders");
+                ViewData["Message"] = Html.T("لا يوجد لديك أي تذكيرات مجدولة خلال الأسبوع القادم. أنشئ تذكير جديد الآن.", "You have no reminders scheduled for the next week. Create a new reminder now.");
+                ViewData["ActionText"] = Html.T("إنشاء تذكير", "Create reminder").ToString();
+                ViewData["ActionArea"] = "Student";
+                ViewData["ActionController"] = "Reminders";
+                ViewData["ActionAction"] = "Create";
+            }
+            @await Html.PartialAsync("_EmptyState")
+        </div>
+    </div>
+}
+
+<!-- Tips Card -->
+<div class="card stretch stretch-full mt-4" style="background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border: none;">
+    <div class="card-body">
+        <div class="d-flex gap-3">
+            <div class="avatar-text avatar-lg bg-primary text-white">
+                <i class="feather-lightbulb"></i>
+            </div>
+            <div>
+                <h6 class="fw-bold mb-2">💡 @Html.T("نصيحة", "Tip")</h6>
+                <p class="text-muted mb-0">
+                    @Html.T("استخدم التذكيرات لتنظيم وقتك بشكل أفضل. يمكنك تعيين تذكيرات متعددة لنفس الحدث (مثلاً: تذكير قبل يوم، وتذكير قبل ساعة).", "Use reminders to organize your time better. You can set multiple reminders for the same event (e.g. one day before, one hour before).")
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Auto-refresh every minute to update countdown
+    setInterval(() => {
+        location.reload();
+    }, 60000);
+    
+    // Add animation to reminder items
+    document.addEventListener('DOMContentLoaded', function() {
+        const items = document.querySelectorAll('.reminder-item');
+        items.forEach((item, index) => {
+            item.style.opacity = '0';
+            item.style.transform = 'translateY(20px)';
+            
+            setTimeout(() => {
+                item.style.transition = 'all 0.5s ease';
+                item.style.opacity = '1';
+                item.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    });
+</script>
+}
+

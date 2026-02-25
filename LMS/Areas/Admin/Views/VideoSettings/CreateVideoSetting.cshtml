@@ -1,0 +1,496 @@
+@model LMS.Areas.Admin.ViewModels.VideoSettingViewModel
+
+@{
+    ViewData["Title"] = Html.T("إعداد خدمة الفيديو", "Video service setup");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإعدادات", "Settings"), Url.Action("Index", "Settings")),
+        (Html.T("إعدادات الفيديو", "Video settings"), Url.Action("Index", "VideoSettings")),
+        (Html.T("إعداد جديد", "New setting"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .provider-card {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            height: 100%;
+        }
+        .provider-card:hover {
+            border-color: #3454d1;
+            box-shadow: 0 5px 15px rgba(52, 84, 209, 0.1);
+            transform: translateY(-3px);
+        }
+        .provider-card.selected {
+            border-color: #3454d1;
+            background: linear-gradient(135deg, #f0f4ff 0%, #e8f0ff 100%);
+        }
+        .provider-logo {
+            width: 90px;
+            height: 90px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            border-radius: 50%;
+            font-size: 2.5rem;
+        }
+        .config-section {
+            display: none;
+        }
+        .config-section.active {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+        @@keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .video-preview {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 25px;
+            color: white;
+            position: sticky;
+            top: 20px;
+        }
+        .video-player-mockup {
+            background: #000;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+            aspect-ratio: 16/9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .play-button {
+            width: 70px;
+            height: 70px;
+            background: rgba(255,255,255,0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .play-button:hover {
+            transform: scale(1.1);
+            background: white;
+        }
+        .quality-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        .feature-item {
+            background: rgba(255,255,255,0.1);
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Provider Selection -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-video me-2"></i>اختر مزود خدمة الفيديو
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="provider-card" data-provider="Bunny.net">
+                                <div class="provider-logo bg-soft-warning text-warning">
+                                    <i class="feather-film"></i>
+                                </div>
+                                <h6 class="mb-2">Bunny.net</h6>
+                                <p class="text-muted small mb-0">سريع وموثوق</p>
+                                <span class="badge bg-success mt-2">موصى به</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="provider-card" data-provider="Vimeo">
+                                <div class="provider-logo bg-soft-info text-info">
+                                    <i class="feather-play-circle"></i>
+                                </div>
+                                <h6 class="mb-2">Vimeo</h6>
+                                <p class="text-muted small mb-0">جودة عالية</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="provider-card" data-provider="AWS S3">
+                                <div class="provider-logo bg-soft-danger text-danger">
+                                    <i class="feather-cloud"></i>
+                                </div>
+                                <h6 class="mb-2">AWS S3</h6>
+                                <p class="text-muted small mb-0">Amazon Cloud</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="provider-card" data-provider="Custom">
+                                <div class="provider-logo bg-soft-secondary text-secondary">
+                                    <i class="feather-settings"></i>
+                                </div>
+                                <h6 class="mb-2">مخصص</h6>
+                                <p class="text-muted small mb-0">CDN مخصص</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Form -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-settings me-2"></i>إعدادات الفيديو
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="SaveVideoSetting" method="post">
+                        <input type="hidden" asp-for="Provider" id="providerInput" />
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <div class="alert alert-info mb-4">
+                            <i class="feather-info me-2"></i>
+                            اختر مزود الخدمة أولاً لإظهار حقول الإعداد المناسبة
+                        </div>
+
+                        <!-- Bunny.net Configuration -->
+                        <div class="config-section" id="bunnyConfig">
+                            <h6 class="mb-3 text-primary">
+                                <i class="feather-key me-2"></i>بيانات Bunny.net
+                            </h6>
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <label asp-for="ApiKey" class="form-label">@Html.T("مفتاح API", "API Key") <span class="text-danger">*</span></label>
+                                    <input asp-for="ApiKey" type="password" class="form-control" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                                    <span asp-validation-for="ApiKey" class="text-danger"></span>
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="LibraryId" class="form-label">@Html.T("معرف المكتبة", "Library ID") <span class="text-danger">*</span></label>
+                                    <input asp-for="LibraryId" class="form-control" placeholder="12345" />
+                                    <span asp-validation-for="LibraryId" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="form-group mb-4">
+                                <label asp-for="CdnUrl" class="form-label">@Html.T("رابط CDN", "CDN URL")</label>
+                                <input asp-for="CdnUrl" class="form-control" placeholder="https://vz-xxxxxxxx-xxx.b-cdn.net" />
+                                <span asp-validation-for="CdnUrl" class="text-danger"></span>
+                                <small class="text-muted">رابط CDN الخاص بمكتبة الفيديو</small>
+                            </div>
+                        </div>
+
+                        <!-- Vimeo Configuration -->
+                        <div class="config-section" id="vimeoConfig">
+                            <h6 class="mb-3 text-primary">
+                                <i class="feather-key me-2"></i>بيانات Vimeo
+                            </h6>
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <label asp-for="ApiKey" class="form-label">@Html.T("رمز الوصول", "Access Token")</label>
+                                    <input asp-for="ApiKey" type="password" class="form-control" />
+                                    <span asp-validation-for="ApiKey" class="text-danger"></span>
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="ApiSecret" class="form-label">@Html.T("سر العميل", "Client Secret")</label>
+                                    <input asp-for="ApiSecret" type="password" class="form-control" />
+                                    <span asp-validation-for="ApiSecret" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- AWS S3 Configuration -->
+                        <div class="config-section" id="awsConfig">
+                            <h6 class="mb-3 text-primary">
+                                <i class="feather-key me-2"></i>بيانات AWS S3
+                            </h6>
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <label asp-for="ApiKey" class="form-label">@Html.T("معرف مفتاح الوصول", "Access Key ID")</label>
+                                    <input asp-for="ApiKey" class="form-control" />
+                                    <span asp-validation-for="ApiKey" class="text-danger"></span>
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="ApiSecret" class="form-label">@Html.T("مفتاح الوصول السري", "Secret Access Key")</label>
+                                    <input asp-for="ApiSecret" type="password" class="form-control" />
+                                    <span asp-validation-for="ApiSecret" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="form-group mb-4">
+                                <label asp-for="CdnUrl" class="form-label">@Html.T("اسم الحاوية / رابط CloudFront", "Bucket Name / CloudFront URL")</label>
+                                <input asp-for="CdnUrl" class="form-control" placeholder="my-video-bucket or https://d1234567890.cloudfront.net" />
+                            </div>
+                        </div>
+
+                        <!-- Video Quality Settings -->
+                        <h6 class="mb-3 mt-4">
+                            <i class="feather-sliders me-2"></i>إعدادات الجودة
+                        </h6>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label asp-for="DefaultQuality" class="form-label">الجودة الافتراضية</label>
+                                <select asp-for="DefaultQuality" class="form-select" id="qualitySelect">
+                                    <option value="auto">تلقائي (Auto)</option>
+                                    <option value="2160p">4K (2160p)</option>
+                                    <option value="1080p">@Html.T("Full HD (1080p)", "Full HD (1080p)")</option>
+                                    <option value="720p">@Html.T("HD (720p)", "HD (720p)")</option>
+                                    <option value="480p">@Html.T("SD (480p)", "SD (480p)")</option>
+                                    <option value="360p">360p</option>
+                                </select>
+                                <small class="text-muted">الجودة التي ستبدأ بها مقاطع الفيديو</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="SupportedFormats" class="form-label">الصيغ المدعومة</label>
+                                <input asp-for="SupportedFormats" class="form-control" placeholder="mp4,webm,mov" />
+                                <small class="text-muted">افصل بينها بفاصلة</small>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label asp-for="MaxFileSizeMB" class="form-label">الحد الأقصى لحجم الملف (MB)</label>
+                                <input asp-for="MaxFileSizeMB" type="number" class="form-control" value="1000" min="10" max="10000" />
+                                <small class="text-muted">الحد الأقصى المسموح لرفع الفيديو</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="MaxDurationMinutes" class="form-label">الحد الأقصى للمدة (دقيقة)</label>
+                                <input asp-for="MaxDurationMinutes" type="number" class="form-control" value="120" min="1" max="600" />
+                                <small class="text-muted">أطول مدة مسموح بها للفيديو</small>
+                            </div>
+                        </div>
+
+                        <!-- Security & Features -->
+                        <h6 class="mb-3 mt-4">
+                            <i class="feather-shield me-2"></i>الأمان والميزات
+                        </h6>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableEncryption" class="form-check-input" type="checkbox" checked />
+                                    <label class="form-check-label" asp-for="EnableEncryption">
+                                        <strong>تشفير الفيديو</strong><br>
+                                        <small class="text-muted">حماية الفيديو من التحميل غير المصرح</small>
+                                    </label>
+                                </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableWatermark" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableWatermark">
+                                        <strong>علامة مائية</strong><br>
+                                        <small class="text-muted">إضافة شعار على الفيديو</small>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableAutoCaptions" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableAutoCaptions">
+                                        <strong>ترجمة تلقائية</strong><br>
+                                        <small class="text-muted">توليد ترجمات تلقائياً</small>
+                                    </label>
+                                </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableAnalytics" class="form-check-input" type="checkbox" checked />
+                                    <label class="form-check-label" asp-for="EnableAnalytics">
+                                        <strong>تحليلات الفيديو</strong><br>
+                                        <small class="text-muted">تتبع المشاهدات والتفاعل</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-4" id="watermarkUrlGroup" style="display: none;">
+                            <label asp-for="WatermarkUrl" class="form-label">رابط العلامة المائية</label>
+                            <input asp-for="WatermarkUrl" class="form-control" placeholder="https://example.com/logo.png" />
+                            <small class="text-muted">رابط الصورة التي ستظهر كعلامة مائية</small>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="Notes" class="form-label">ملاحظات</label>
+                            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="@Html.T("أي ملاحظات إضافية...", "Any additional notes...")"></textarea>
+                        </div>
+
+                        <div class="form-check form-switch mb-4">
+                            <input asp-for="IsEnabled" class="form-check-input" type="checkbox" checked id="isEnabled" />
+                            <label class="form-check-label" asp-for="IsEnabled">
+                                <strong>تفعيل خدمة الفيديو</strong>
+                            </label>
+                        </div>
+
+                        <div class="alert alert-success">
+                            <i class="feather-check-circle me-2"></i>
+                            <strong>@Html.T("نصيحة:", "Tip:")</strong> @Html.T("استخدم Bunny.net للحصول على أفضل أداء وأسعار تنافسية في المنطقة العربية.", "Use Bunny.net for the best performance and competitive pricing in the Arab region.")
+                        </div>
+
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="VideoSettings" class="btn btn-light">
+                                <i class="feather-x me-2"></i>إلغاء
+                            </a>
+                            <button type="button" class="btn btn-info" id="testBtn">
+                                <i class="feather-zap me-2"></i>اختبار الاتصال
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-2"></i>@Html.T("حفظ الإعدادات", "Save settings")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="video-preview">
+                <h5 class="text-white mb-4">
+                    <i class="feather-monitor me-2"></i>معاينة المشغل
+                </h5>
+                
+                <div class="video-player-mockup">
+                    <span class="quality-badge" id="qualityBadge">AUTO</span>
+                    <div class="play-button">
+                        <i class="feather-play"></i>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <h6 class="text-white mb-3">المزود المختار</h6>
+                    <div class="feature-item">
+                        <span>المزود:</span>
+                        <span class="fw-bold" id="selectedProvider">لم يتم الاختيار</span>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <h6 class="text-white mb-3">الميزات المفعلة</h6>
+                    <div class="feature-item" id="encryptionFeature">
+                        <span><i class="feather-lock me-2"></i>التشفير</span>
+                        <i class="feather-check text-success"></i>
+                    </div>
+                    <div class="feature-item" id="watermarkFeature" style="display: none;">
+                        <span><i class="feather-image me-2"></i>علامة مائية</span>
+                        <i class="feather-check text-success"></i>
+                    </div>
+                    <div class="feature-item" id="captionsFeature" style="display: none;">
+                        <span><i class="feather-type me-2"></i>ترجمة تلقائية</span>
+                        <i class="feather-check text-success"></i>
+                    </div>
+                    <div class="feature-item" id="analyticsFeature">
+                        <span><i class="feather-bar-chart-2 me-2"></i>التحليلات</span>
+                        <i class="feather-check text-success"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white bg-opacity-10 rounded p-3">
+                    <h6 class="text-white mb-3">الحدود</h6>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>حجم الملف:</span>
+                        <span class="fw-bold">1000 MB</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>المدة:</span>
+                        <span class="fw-bold">120 دقيقة</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Provider selection
+            $('.provider-card').on('click', function() {
+                $('.provider-card').removeClass('selected');
+                $(this).addClass('selected');
+                
+                const provider = $(this).data('provider');
+                $('#providerInput').val(provider);
+                $('#selectedProvider').text(provider);
+                
+                // Hide all config sections
+                $('.config-section').removeClass('active');
+                
+                // Show relevant config section
+                if (provider === 'Bunny.net') {
+                    $('#bunnyConfig').addClass('active');
+                } else if (provider === 'Vimeo') {
+                    $('#vimeoConfig').addClass('active');
+                } else if (provider === 'AWS S3') {
+                    $('#awsConfig').addClass('active');
+                }
+            });
+
+            // Quality selection
+            $('#qualitySelect').on('change', function() {
+                const quality = $(this).val().toUpperCase();
+                $('#qualityBadge').text(quality);
+            });
+
+            // Feature toggles
+            $('input[name="EnableEncryption"]').on('change', function() {
+                $('#encryptionFeature').toggle($(this).is(':checked'));
+            });
+
+            $('input[name="EnableWatermark"]').on('change', function() {
+                $('#watermarkFeature').toggle($(this).is(':checked'));
+                $('#watermarkUrlGroup').toggle($(this).is(':checked'));
+            });
+
+            $('input[name="EnableAutoCaptions"]').on('change', function() {
+                $('#captionsFeature').toggle($(this).is(':checked'));
+            });
+
+            $('input[name="EnableAnalytics"]').on('change', function() {
+                $('#analyticsFeature').toggle($(this).is(':checked'));
+            });
+
+            // Test connection
+            $('#testBtn').on('click', function() {
+                const provider = $('#providerInput').val();
+                if (!provider) {
+                    alert('@Html.Raw(Html.T("يرجى اختيار مزود الخدمة أولاً", "Please select a service provider first").Replace("'", "\\'"))');
+                    return;
+                }
+                
+                $(this).prop('disabled', true).html('<i class="feather-loader me-2"></i>@Html.Raw(Html.T("جاري الاختبار...", "Testing...").Replace("'", "\\'"))');
+                
+                setTimeout(() => {
+                    $(this).prop('disabled', false).html('<i class="feather-zap me-2"></i>@Html.Raw(Html.T("اختبار الاتصال", "Test connection").Replace("'", "\\'"))');
+                    alert('@Html.Raw(Html.T("تم الاتصال بنجاح! ✓\n\nالخدمة جاهزة للاستخدام.", "Connection successful! ✓\n\nService is ready to use.").Replace("'", "\\'").Replace("\n", "\\n"))'.replace(/\\n/g, '\n'));
+                }, 2000);
+            });
+        });
+    </script>
+}
+

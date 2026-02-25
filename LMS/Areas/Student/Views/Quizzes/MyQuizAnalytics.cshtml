@@ -1,0 +1,194 @@
+@model MyQuizAnalyticsViewModel
+@{
+    ViewData["Title"] = Html.T("تحليلات الاختبارات", "Quiz Analytics");
+}
+
+@section Styles {
+<style>
+    .analytics-header {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 40px;
+        margin-bottom: 24px;
+    }
+    .metric-card {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        height: 100%;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="analytics-header">
+    <div class="text-center">
+        <div style="font-size: 64px; margin-bottom: 16px;">📊</div>
+        <h2 class="text-white mb-2">@Html.T("تحليلات الاختبارات", "Quiz Analytics")</h2>
+        <p class="mb-0 opacity-75">@Html.T("تحليل شامل لأدائك في جميع الاختبارات", "Comprehensive analysis of your performance across all quizzes")</p>
+    </div>
+</div>
+
+<!-- Overall Statistics -->
+<div class="row g-4 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card">
+            <div style="font-size: 48px; margin-bottom: 12px;">📝</div>
+            <h3 class="fw-bold mb-1">@Model.TotalQuizzesTaken</h3>
+            <p class="text-muted mb-0">@Html.T("اختبار إجمالي", "Total quizzes")</p>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card">
+            <div style="font-size: 48px; margin-bottom: 12px;">⭐</div>
+            <h3 class="fw-bold mb-1">@Model.AverageScore.ToString("F1")%</h3>
+            <p class="text-muted mb-0">@Html.T("متوسط الدرجات", "Average score")</p>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card">
+            <div style="font-size: 48px; margin-bottom: 12px;">✅</div>
+            <h3 class="fw-bold mb-1">@Model.QuizzesPassed</h3>
+            <p class="text-muted mb-0">@Html.T("اختبار ناجح", "Quizzes passed")</p>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-card">
+            <div style="font-size: 48px; margin-bottom: 12px;">🎯</div>
+            <h3 class="fw-bold mb-1">@Model.HighestScore%</h3>
+            <p class="text-muted mb-0">@Html.T("أعلى درجة", "Highest score")</p>
+        </div>
+    </div>
+</div>
+
+<!-- Performance Chart -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <h5 class="fw-bold mb-4">
+            <i class="feather-trending-up text-primary me-2"></i>
+            @Html.T("تطور الأداء بمرور الوقت", "Performance over time")
+        </h5>
+        <canvas id="performanceChart" height="80"></canvas>
+    </div>
+</div>
+
+<!-- By Category -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <h5 class="fw-bold mb-4">
+            <i class="feather-pie-chart text-success me-2"></i>
+            الأداء حسب التصنيف
+        </h5>
+        
+        @if (Model.ByCategory.Any())
+        {
+            <div class="row g-3">
+                @foreach (var category in Model.ByCategory)
+                {
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h6 class="fw-bold mb-1">@category.CategoryName</h6>
+                                        <small class="text-muted">@category.QuizzesTaken اختبار</small>
+                                    </div>
+                                    <span class="badge @(category.AverageScore >= 70 ? "bg-success" : "bg-warning") rounded-pill">
+                                        @category.AverageScore.ToString("F0")%
+                                    </span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar @(category.AverageScore >= 70 ? "bg-success" : "bg-warning")" 
+                                         style="width: @category.AverageScore%">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            ViewData["Icon"] = "pie-chart";
+            ViewData["Title"] = Html.T("لا توجد بيانات", "No data");
+            ViewData["Message"] = Html.T("قم بإجراء المزيد من الاختبارات", "Take more quizzes");
+            @await Html.PartialAsync("_EmptyState")
+        }
+    </div>
+</div>
+
+<!-- Recommendations -->
+@if (Model.Recommendations.Any())
+{
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            <h5 class="fw-bold mb-4">
+                <i class="feather-info text-info me-2"></i>
+                توصيات التحسين
+            </h5>
+            
+            <div class="list-group">
+                @foreach (var recommendation in Model.Recommendations)
+                {
+                    <div class="list-group-item border-0 mb-2" style="background: #f0f9ff; border-radius: 8px;">
+                        <div class="d-flex align-items-start">
+                            <i class="feather-lightbulb text-info me-2 mt-1"></i>
+                            <p class="mb-0">@recommendation</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    // Performance Chart
+    const ctx = document.getElementById('performanceChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: @Html.Raw(Json.Serialize(Model.PerformanceHistory.Select(p => p.Date.ToString("MM/dd")))),
+            datasets: [{
+                label: 'الدرجة',
+                data: @Html.Raw(Json.Serialize(Model.PerformanceHistory.Select(p => p.Score))),
+                borderColor: '#8b5cf6',
+                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+</script>
+}

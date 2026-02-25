@@ -1,0 +1,185 @@
+@model List<LMS.Domain.Entities.Payments.UserPaymentMethod>
+@{
+    ViewData["Title"] = Html.T("طرق الدفع", "Payment Methods");
+}
+
+@section Styles {
+<style>
+    .payment-card {
+        transition: all 0.2s ease;
+    }
+    .payment-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-credit-card text-primary me-2"></i>
+                    @Html.T("طرق الدفع المحفوظة", "Saved Payment Methods")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("إدارة بطاقات الدفع الخاصة بك", "Manage your payment cards")</p>
+            </div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPaymentMethodModal">
+                <i class="feather-plus me-2"></i>
+                @Html.T("إضافة بطاقة جديدة", "Add New Card")
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Methods Grid -->
+@if (Model?.Any() == true)
+{
+    <div class="row g-4">
+        @foreach (var method in Model)
+        {
+            <div class="col-lg-4 col-md-6">
+                <div class="card payment-card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                                <i class="feather-credit-card"></i>
+                            </div>
+                            @if (method.IsDefault)
+                            {
+                                <span class="badge bg-success">@Html.T("افتراضية", "Default")</span>
+                            }
+                        </div>
+                        
+                        <h5 class="fw-bold mb-2">**** **** **** @method.Last4Digits</h5>
+                        <p class="text-muted fs-12 mb-3">
+                            <strong>@method.CardBrand</strong> • @Html.T("ينتهي في", "Expires") @method.ExpiryMonth/@method.ExpiryYear
+                        </p>
+                        
+                        <div class="d-flex gap-2">
+                            @if (!method.IsDefault)
+                            {
+                                <form asp-action="SetDefault" asp-route-id="@method.Id" method="post" class="flex-grow-1">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                                        @Html.T("تعيين كافتراضية", "Set as Default")
+                                    </button>
+                                </form>
+                            }
+                            <form asp-action="Delete" asp-route-id="@method.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذه البطاقة؟", "Are you sure you want to delete this card?").Replace("'", "\\'"))')">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-icon btn-outline-danger">
+                                    <i class="feather-trash-2"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            @{
+                ViewData["Icon"] = "credit-card";
+                ViewData["Title"] = Html.T("لا توجد طرق دفع محفوظة", "No saved payment methods");
+                ViewData["Message"] = Html.T("أضف بطاقة الدفع الخاصة بك لتسهيل عمليات الشراء المستقبلية", "Add your payment card to facilitate future purchases");
+            }
+            @await Html.PartialAsync("_EmptyState")
+        </div>
+    </div>
+}
+
+<!-- Security Note -->
+<div class="card stretch stretch-full mt-4">
+    <div class="card-body">
+        <div class="d-flex align-items-start">
+            <i class="feather-shield text-success fs-3 me-3"></i>
+            <div>
+                <h6 class="fw-bold mb-2">@Html.T("أمان بياناتك", "Your Data Security")</h6>
+                <p class="text-muted mb-0">
+                    @Html.T("جميع معلومات بطاقات الدفع مشفرة وآمنة. نحن لا نحتفظ برقم CVV ونستخدم معايير PCI DSS للأمان.", "All payment card information is encrypted and secure. We do not store CVV numbers and use PCI DSS security standards.")
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Payment Method Modal -->
+<div class="modal fade" id="addPaymentMethodModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Html.T("إضافة بطاقة دفع جديدة", "Add New Payment Card")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="Add" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("رقم البطاقة", "Card Number")</label>
+                        <input type="text" name="CardNumber" class="form-control" placeholder="@Html.T("1234 5678 9012 3456", "1234 5678 9012 3456")" maxlength="19" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("اسم حامل البطاقة", "Cardholder Name")</label>
+                        <input type="text" name="CardHolderName" class="form-control" placeholder="@Html.T("كما هو مكتوب على البطاقة", "As written on the card")" required />
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-4">
+                            <label class="form-label">@Html.T("الشهر", "Month")</label>
+                            <select name="ExpiryMonth" class="form-select" required>
+                                <option value="">@Html.T("اختر", "Select")</option>
+                                @for (int i = 1; i <= 12; i++)
+                                {
+                                    <option value="@i">@i.ToString("00")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">@Html.T("السنة", "Year")</label>
+                            <select name="ExpiryYear" class="form-select" required>
+                                <option value="">@Html.T("اختر", "Select")</option>
+                                @for (int i = DateTime.Now.Year; i <= DateTime.Now.Year + 15; i++)
+                                {
+                                    <option value="@i">@i</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label">@Html.T("CVV", "CVV")</label>
+                            <input type="password" name="CVV" class="form-control" placeholder="@Html.T("***", "***")" maxlength="4" required />
+                            <small class="text-muted fs-11">@Html.T("لا يتم حفظه", "Not stored")</small>
+                        </div>
+                    </div>
+                    <input type="hidden" name="PaymentMethodType" value="Card" />
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="IsDefault" id="setAsDefault" value="true">
+                        <label class="form-check-label" for="setAsDefault">
+                            @Html.T("تعيين كبطاقة افتراضية", "Set as default card")
+                        </label>
+                    </div>
+                    <div class="alert alert-info mt-3 mb-0 small">
+                        <i class="feather-shield me-1"></i>
+                        @Html.T("بيانات بطاقتك مشفرة ولا يتم تخزين رقم CVV", "Your card data is encrypted and CVV is not stored")
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="feather-save me-2"></i>
+                        @Html.T("حفظ البطاقة", "Save Card")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

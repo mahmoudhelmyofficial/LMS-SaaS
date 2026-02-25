@@ -1,0 +1,152 @@
+@model LMS.Domain.Entities.Support.SupportTicket
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل التذكرة", "Ticket details");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        ("الدعم الفني", Url.Action("Index", "Support")),
+        ("تذكرة #" + Model.Id, null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Model.Title</h5>
+                    <div class="card-header-action">
+                        <span class="badge @(Model.Status switch {
+                            LMS.Domain.Enums.TicketStatus.Open => "bg-soft-primary text-primary",
+                            LMS.Domain.Enums.TicketStatus.InProgress => "bg-soft-warning text-warning",
+                            LMS.Domain.Enums.TicketStatus.Closed => "bg-soft-success text-success",
+                            _ => "bg-soft-secondary text-secondary"
+                        })">
+                            @(Model.Status switch {
+                                LMS.Domain.Enums.TicketStatus.Open => "مفتوحة",
+                                LMS.Domain.Enums.TicketStatus.InProgress => "قيد المعالجة",
+                                LMS.Domain.Enums.TicketStatus.Closed => "مغلقة",
+                                _ => Model.Status.ToString()
+                            })
+                        </span>
+                        <span class="badge @(Model.Priority switch {
+                            LMS.Domain.Enums.TicketPriority.High => "bg-soft-danger text-danger",
+                            LMS.Domain.Enums.TicketPriority.Medium => "bg-soft-warning text-warning",
+                            _ => "bg-soft-info text-info"
+                        }) ms-2">
+                            @(Model.Priority switch {
+                                LMS.Domain.Enums.TicketPriority.High => "عالية",
+                                LMS.Domain.Enums.TicketPriority.Medium => "متوسطة",
+                                _ => "منخفضة"
+                            })
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                            <i class="feather-user"></i>
+                        </div>
+                        <div>
+                            <h6 class="mb-0">@Model.User.FirstName @Model.User.LastName</h6>
+                            <small class="text-muted">@Model.User.Email</small>
+                            <br>
+                            <small class="text-muted">@Model.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")</small>
+                        </div>
+                    </div>
+                    <p class="mb-0">@Model.Description</p>
+                </div>
+            </div>
+
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">الردود (@Model.Replies.Count)</h5>
+                </div>
+                <div class="card-body">
+                    @foreach (var reply in Model.Replies.OrderBy(r => r.CreatedAt))
+                    {
+                        <div class="d-flex gap-3 mb-4 @(reply.IsFromStaff ? "flex-row-reverse" : "")">
+                            <div class="avatar-text bg-soft-@(reply.IsFromStaff ? "success" : "primary") text-@(reply.IsFromStaff ? "success" : "primary")">
+                                <i class="feather-@(reply.IsFromStaff ? "shield" : "user")"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="p-3 border rounded @(reply.IsFromStaff ? "bg-soft-success" : "")">
+                                    <small class="text-muted d-block mb-2">
+                                        @reply.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")
+                                    </small>
+                                    <p class="mb-0">@reply.Message</p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (Model.Status != LMS.Domain.Enums.TicketStatus.Closed)
+                    {
+                        <form asp-action="Reply" method="post" class="mt-4">
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <div class="mb-3">
+                                <label class="form-label">@Html.T("الرد على التذكرة", "Reply to ticket")</label>
+                                <textarea name="message" class="form-control" rows="4" placeholder="@Html.T("اكتب ردك هنا...", "Write your reply here...")" required></textarea>
+                            </div>
+                            <div class="text-end">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="feather-send me-2"></i>@Html.T("إرسال الرد", "Send reply")
+                                </button>
+                            </div>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات التذكرة", "Ticket information")</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-3">
+                            <strong>التصنيف:</strong><br>
+                            <span class="badge bg-soft-info text-info">@(Model.CategoryEntity?.Name ?? "غير مصنف")</span>
+                        </li>
+                        <li class="mb-3">
+                            <strong>تاريخ الإنشاء:</strong><br>
+                            @Model.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")
+                        </li>
+                        @if (Model.ClosedAt.HasValue)
+                        {
+                            <li class="mb-3">
+                                <strong>@Html.T("تاريخ الإغلاق:", "Closed at:")</strong><br>
+                                @Model.ClosedAt.Value.ToString("dd/MM/yyyy hh:mm tt")
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+
+            @if (Model.Status != LMS.Domain.Enums.TicketStatus.Closed)
+            {
+                <div class="card stretch stretch-full mt-3">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إجراءات", "Actions")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <form asp-action="Close" method="post" onsubmit="return confirm('@(Html.T("هل تريد إغلاق هذه التذكرة؟", "Do you want to close this ticket?").ToString().Replace("'", "\\'"))')">
+                                <input type="hidden" name="id" value="@Model.Id" />
+                                <button type="submit" class="btn btn-success w-100">
+                                    <i class="feather-check me-2"></i>@Html.T("إغلاق التذكرة", "Close ticket")
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+

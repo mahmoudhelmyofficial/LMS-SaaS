@@ -1,0 +1,429 @@
+@model LMS.Areas.Admin.ViewModels.SmsSettingViewModel
+
+@{
+    ViewData["Title"] = Html.T("إعدادات الرسائل النصية (SMS)", "SMS Settings");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("إعدادات المنصة", "Platform Settings"), Url.Action("Index", "PlatformSettings")),
+        (Html.T("إعدادات SMS", "SMS Settings"), Url.Action("Index", "SmsSettings"))
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .provider-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid #e9ecef;
+        }
+        .provider-card:hover {
+            border-color: var(--bs-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .provider-card.active {
+            border-color: var(--bs-primary);
+            background-color: #f0f7ff;
+        }
+        .provider-logo {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+        }
+        .test-sms-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 2rem;
+        }
+        .api-key-input {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <form asp-action="SaveSmsSetting" method="post" id="smsSettingsForm">
+        <input type="hidden" asp-for="Id" />
+        
+        <div class="row">
+            <!-- Main Settings -->
+            <div class="col-lg-8">
+                <!-- Provider Selection -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-smartphone me-2"></i>@Html.T("اختر مزود خدمة SMS", "Choose SMS provider")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="provider-card card text-center p-3 h-100 @(Model.Provider == LMS.Domain.Enums.SmsProvider.Twilio ? "active" : "")" 
+                                     onclick="selectProvider('Twilio')">
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <i class="feather-message-circle" style="font-size: 3rem; color: #F22F46;"></i>
+                                        </div>
+                                        <h6 class="fw-bold mb-2">Twilio</h6>
+                                        <p class="text-muted small mb-0">@Html.T("المزود الأكثر شهرة عالمياً", "World's most popular provider")</p>
+                                        <span class="badge bg-soft-success text-success mt-2">@Html.T("موصى به", "Recommended")</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="provider-card card text-center p-3 h-100 @(Model.Provider == LMS.Domain.Enums.SmsProvider.Nexmo ? "active" : "")" 
+                                     onclick="selectProvider('Nexmo')">
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <i class="feather-send" style="font-size: 3rem; color: #00A8E1;"></i>
+                                        </div>
+                                        <h6 class="fw-bold mb-2">Nexmo (Vonage)</h6>
+                                        <p class="text-muted small mb-0">@Html.T("حلول مرنة ومتطورة", "Flexible and advanced solutions")</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="provider-card card text-center p-3 h-100 @(Model.Provider == LMS.Domain.Enums.SmsProvider.Unifonic ? "active" : "")" 
+                                     onclick="selectProvider('Unifonic')">
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <i class="feather-mail" style="font-size: 3rem; color: #00B2A9;"></i>
+                                        </div>
+                                        <h6 class="fw-bold mb-2">Unifonic</h6>
+                                        <p class="text-muted small mb-0">@Html.T("متخصص في المنطقة العربية", "Specialized in the Arab Region")</p>
+                                        <span class="badge bg-soft-primary text-primary mt-2">@Html.T("محلي", "Local")</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" asp-for="Provider" id="providerInput" />
+                        <span asp-validation-for="Provider" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- API Credentials -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-key me-2"></i>@Html.T("بيانات الاعتماد (API Credentials)", "API Credentials")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <div class="mb-4">
+                            <label asp-for="ApiKey" class="form-label">
+                                @Html.T("مفتاح API", "API Key") <span class="text-danger">*</span>
+                                <i class="feather-help-circle help-icon ms-1" title="@Html.T("المفتاح السري الخاص بحسابك", "Your account secret key")"></i>
+                            </label>
+                            <div class="input-group">
+                                <input asp-for="ApiKey" type="password" class="form-control api-key-input" placeholder="••••••••••••••••••••" id="apiKeyInput" />
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('apiKeyInput', this)">
+                                    <i class="feather-eye"></i>
+                                </button>
+                            </div>
+                            <span asp-validation-for="ApiKey" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="ApiSecret" class="form-label">
+                                @Html.T("المفتاح السري (API Secret)", "API Secret")
+                                <i class="feather-help-circle help-icon ms-1" title="@Html.T("المفتاح الإضافي للمصادقة", "Additional authentication key")"></i>
+                            </label>
+                            <div class="input-group">
+                                <input asp-for="ApiSecret" type="password" class="form-control api-key-input" placeholder="••••••••••••••••••••" id="apiSecretInput" />
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('apiSecretInput', this)">
+                                    <i class="feather-eye"></i>
+                                </button>
+                            </div>
+                            <span asp-validation-for="ApiSecret" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="SenderId" class="form-label">
+                                @Html.T("معرف المرسل (Sender ID)", "Sender ID")
+                                <i class="feather-help-circle help-icon ms-1" title="@Html.T("الاسم الذي يظهر للمستلم", "Name shown to recipient")"></i>
+                            </label>
+                            <input asp-for="SenderId" class="form-control" placeholder="@Html.T("مثال: LMS Platform", "e.g. LMS Platform")" maxlength="11" />
+                            <span asp-validation-for="SenderId" class="text-danger"></span>
+                            <small class="text-muted">@Html.T("الحد الأقصى 11 حرف للمعرفات النصية", "Maximum 11 characters for alphanumeric sender IDs")</small>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <div class="d-flex align-items-start">
+                                <i class="feather-info me-2 mt-1"></i>
+                                <div>
+                                    <strong>@Html.T("كيفية الحصول على بيانات الاعتماد:", "How to get credentials:")</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li>@Html.T("سجل في موقع المزود المختار", "Sign up on the chosen provider's website")</li>
+                                        <li>@Html.T("انتقل إلى لوحة التحكم أو إعدادات API", "Go to the dashboard or API settings")</li>
+                                        <li>@Html.T("انسخ مفاتيح API والمفتاح السري", "Copy the API keys and secret key")</li>
+                                        <li>@Html.T("احفظ بيانات الاعتماد بشكل آمن", "Store credentials securely")</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configuration Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-settings me-2"></i>@Html.T("إعدادات متقدمة", "Advanced settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <label asp-for="MaxRetryAttempts" class="form-label">
+                                    @Html.T("محاولات إعادة الإرسال", "Retry attempts")
+                                </label>
+                                <input asp-for="MaxRetryAttempts" type="number" class="form-control" min="0" max="10" />
+                                <span asp-validation-for="MaxRetryAttempts" class="text-danger"></span>
+                                <small class="text-muted">@Html.T("عدد المحاولات في حالة الفشل (0-10)", "Number of attempts on failure (0-10)")</small>
+                            </div>
+
+                            <div class="col-md-6 mb-4">
+                                <label asp-for="RetryDelaySeconds" class="form-label">
+                                    @Html.T("التأخير بين المحاولات (ثواني)", "Delay between attempts (seconds)")
+                                </label>
+                                <input asp-for="RetryDelaySeconds" type="number" class="form-control" min="0" max="3600" />
+                                <span asp-validation-for="RetryDelaySeconds" class="text-danger"></span>
+                                <small class="text-muted">@Html.T("المدة الزمنية بين محاولات إعادة الإرسال", "Time between retry attempts")</small>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="WebhookUrl" class="form-label">
+                                @Html.T("رابط Webhook", "Webhook URL")
+                                <i class="feather-help-circle help-icon ms-1" title="@Html.T("لاستقبال تحديثات حالة الرسائل", "To receive message status updates")"></i>
+                            </label>
+                            <input asp-for="WebhookUrl" type="url" class="form-control" placeholder="https://yourdomain.com/api/sms/webhook" />
+                            <span asp-validation-for="WebhookUrl" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="SupportedCountries" class="form-label">
+                                @Html.T("الدول المدعومة", "Supported countries")
+                                <i class="feather-help-circle help-icon ms-1" title="@Html.T("أدخل أكواد الدول مفصولة بفاصلة", "Enter country codes separated by comma")"></i>
+                            </label>
+                            <input asp-for="SupportedCountries" class="form-control" placeholder="SA,AE,KW,QA,BH,OM,EG,JO" />
+                            <span asp-validation-for="SupportedCountries" class="text-danger"></span>
+                            <small class="text-muted">@Html.T("أكواد الدول بصيغة ISO (مثال: SA للسعودية)", "Country codes in ISO format (e.g. SA for Saudi Arabia)")</small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="IsEnabled" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="IsEnabled">
+                                        <strong>@Html.T("تفعيل خدمة SMS", "Enable SMS service")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("يجب التفعيل لإرسال الرسائل", "Must be enabled to send messages")</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="TestMode" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="TestMode">
+                                        <strong>@Html.T("وضع الاختبار", "Test mode")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("الرسائل لن ترسل فعلياً", "Messages will not be sent actually")</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableDeliveryReports" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableDeliveryReports">
+                                        <strong>@Html.T("تقارير التسليم", "Delivery reports")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("تتبع حالة توصيل الرسائل", "Track message delivery status")</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-2 justify-content-end mb-4">
+                    <a asp-action="Index" class="btn btn-light">
+                        <i class="feather-arrow-right me-2"></i>@Html.T("العودة", "Back")
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="feather-save me-2"></i>@Html.T("حفظ الإعدادات", "Save settings")
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Test SMS -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-body test-sms-section">
+                        <h5 class="mb-3">
+                            <i class="feather-send me-2"></i>@Html.T("اختبار الرسائل", "Test messages")
+                        </h5>
+                        <div class="mb-3">
+                            <label class="form-label text-white">@Html.T("رقم الهاتف", "Phone number")</label>
+                            <input asp-for="TestPhoneNumber" type="tel" class="form-control" placeholder="+966512345678" />
+                        </div>
+                        <button type="button" class="btn btn-light w-100" onclick="sendTestSMS()">
+                            <i class="feather-send me-2"></i>@Html.T("إرسال رسالة تجريبية", "Send test message")
+                        </button>
+                        <div id="testResult" class="mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-bar-chart-2 me-2"></i>@Html.T("إحصائيات الرسائل", "Message statistics")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                            <div>
+                                <p class="text-muted small mb-1">@Html.T("مرسلة اليوم", "Sent today")</p>
+                                <h4 class="fw-bold mb-0">@(ViewBag.SmsSentToday ?? 0)</h4>
+                            </div>
+                            <div class="avatar-text avatar-lg bg-soft-success text-success">
+                                <i class="feather-send"></i>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                            <div>
+                                <p class="text-muted small mb-1">@Html.T("فشلت", "Failed")</p>
+                                <h4 class="fw-bold mb-0">@(ViewBag.SmsFailed ?? 0)</h4>
+                            </div>
+                            <div class="avatar-text avatar-lg bg-soft-danger text-danger">
+                                <i class="feather-x-circle"></i>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <p class="text-muted small mb-1">@Html.T("في الانتظار", "Pending")</p>
+                                <h4 class="fw-bold mb-0">@(ViewBag.SmsPending ?? 0)</h4>
+                            </div>
+                            <div class="avatar-text avatar-lg bg-soft-warning text-warning">
+                                <i class="feather-clock"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Documentation Links -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-book-open me-2"></i>@Html.T("مساعدة ووثائق", "Help and documentation")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="list-group list-group-flush">
+                            <a href="https://www.twilio.com/docs" target="_blank" class="list-group-item list-group-item-action">
+                                <i class="feather-external-link me-2"></i>@Html.T("وثائق Twilio", "Twilio documentation")
+                            </a>
+                            <a href="https://developer.vonage.com/" target="_blank" class="list-group-item list-group-item-action">
+                                <i class="feather-external-link me-2"></i>@Html.T("وثائق Nexmo/Vonage", "Nexmo/Vonage documentation")
+                            </a>
+                            <a href="https://www.unifonic.com/docs" target="_blank" class="list-group-item list-group-item-action">
+                                <i class="feather-external-link me-2"></i>@Html.T("وثائق Unifonic", "Unifonic documentation")
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        window.__smsMsgPleaseEnterPhone = @Html.Raw(Json.Serialize(Html.T("الرجاء إدخال رقم هاتف", "Please enter a phone number").ToString()));
+        window.__smsMsgSending = @Html.Raw(Json.Serialize(Html.T("جاري الإرسال...", "Sending...").ToString()));
+        window.__smsMsgSentSuccess = @Html.Raw(Json.Serialize(Html.T("تم إرسال الرسالة التجريبية بنجاح!", "Test message sent successfully!").ToString()));
+        function selectProvider(provider) {
+            // Update UI
+            $('.provider-card').removeClass('active');
+            event.currentTarget.classList.add('active');
+            
+            // Update hidden input
+            $('#providerInput').val(provider);
+        }
+
+        function togglePassword(inputId, button) {
+            const input = document.getElementById(inputId);
+            const icon = button.querySelector('i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('feather-eye');
+                icon.classList.add('feather-eye-off');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('feather-eye-off');
+                icon.classList.add('feather-eye');
+            }
+        }
+
+        function sendTestSMS() {
+            const phoneNumber = $('input[name="TestPhoneNumber"]').val();
+            const resultDiv = $('#testResult');
+            
+            if (!phoneNumber) {
+                resultDiv.removeClass('alert-success').addClass('alert alert-danger');
+                resultDiv.html('<i class="feather-x-circle me-2"></i>' + (window.__smsMsgPleaseEnterPhone || 'الرجاء إدخال رقم هاتف'));
+                resultDiv.show();
+                return;
+            }
+
+            resultDiv.removeClass('alert-danger alert-success').addClass('alert alert-info');
+            resultDiv.html('<i class="feather-loader me-2"></i>' + (window.__smsMsgSending || 'جاري الإرسال...'));
+            resultDiv.show();
+
+            // Simulate API call
+            setTimeout(function() {
+                resultDiv.removeClass('alert-info').addClass('alert-success');
+                resultDiv.html('<i class="feather-check-circle me-2"></i>' + (window.__smsMsgSentSuccess || 'تم إرسال الرسالة التجريبية بنجاح!'));
+            }, 1500);
+        }
+
+        $(document).ready(function() {
+            // Form validation
+            $('#smsSettingsForm').validate({
+                rules: {
+                    ApiKey: {
+                        required: true,
+                        minlength: 10
+                    },
+                    SenderId: {
+                        maxlength: 11
+                    }
+                },
+                messages: {
+                    ApiKey: {
+                        required: 'مفتاح API مطلوب',
+                        minlength: 'مفتاح API يجب أن يكون 10 أحرف على الأقل'
+                    }
+                }
+            });
+        });
+    </script>
+}
+

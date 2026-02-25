@@ -1,0 +1,300 @@
+@model LMS.Domain.Entities.Assessments.AssignmentSubmission
+@{
+    ViewData["Title"] = Html.T("تسليم الواجب", "Submit Assignment");
+    var assignment = Model.Assignment;
+    var isOverdue = assignment.DueDate.HasValue && assignment.DueDate.Value < DateTime.UtcNow;
+}
+
+@section Styles {
+<style>
+    .assignment-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 40px;
+    }
+    .file-upload-area {
+        border: 2px dashed #e5e7eb;
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+    .file-upload-area:hover {
+        border-color: #667eea;
+        background: #f5f7ff;
+    }
+    .file-upload-area.dragover {
+        border-color: #667eea;
+        background: #eff6ff;
+    }
+</style>
+}
+
+<!-- Assignment Header -->
+<div class="assignment-header mb-4">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <h2 class="text-white fw-bold mb-2">@assignment.Title</h2>
+            <p class="text-white opacity-75 mb-3">@assignment.Lesson.Module.Course.Title</p>
+            <div class="d-flex align-items-center gap-3">
+                @if (assignment.DueDate.HasValue)
+                {
+                    <div class="badge bg-white bg-opacity-25 text-white">
+                        <i class="feather-calendar me-1"></i>
+                        @Html.T("الموعد النهائي:", "Deadline:") @assignment.DueDate.Value.ToString("dd/MM/yyyy HH:mm")
+                    </div>
+                }
+                <div class="badge bg-white bg-opacity-25 text-white">
+                    <i class="feather-award me-1"></i>
+                    @assignment.MaxScore @Html.T("درجة", "points")
+                </div>
+                @if (isOverdue)
+                {
+                    <div class="badge bg-danger">
+                        <i class="feather-alert-triangle me-1"></i>
+                        @Html.T("متأخر", "Overdue")
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Submission Form -->
+    <div class="col-lg-8">
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-info me-2"></i>
+                    @Html.T("تفاصيل الواجب", "Assignment details")
+                </h5>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(assignment.Description))
+                {
+                    <div class="mb-4">
+                        @Html.Raw(assignment.Description)
+                    </div>
+                }
+                
+                @if (!string.IsNullOrEmpty(assignment.Instructions))
+                {
+                    <div class="alert alert-info">
+                        <h6 class="fw-bold mb-2">
+                            <i class="feather-alert-circle me-2"></i>
+                            @Html.T("تعليمات التسليم", "Submission instructions")
+                        </h6>
+                        @Html.Raw(assignment.Instructions)
+                    </div>
+                }
+            </div>
+        </div>
+
+        <form asp-action="Submit" method="post" enctype="multipart/form-data" id="submissionForm">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="assignmentId" value="@assignment.Id" />
+            
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-edit me-2"></i>
+                    @Html.T("إجابتك", "Your answer")
+                </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label class="form-label">@Html.T("النص", "Text")</label>
+                        <textarea class="form-control" 
+                                  name="content" 
+                                  rows="10" 
+                                  placeholder="@Html.T("اكتب إجابتك هنا...", "Type your answer here...")"
+                                  required>@Model.Content</textarea>
+                        <small class="text-muted">@Html.T("يمكنك كتابة إجابتك أو شرح عملك", "You can type your answer or describe your work")</small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">@Html.T("المرفقات", "Attachments")</label>
+                        <div class="file-upload-area" id="fileUploadArea">
+                            <input type="file" 
+                                   name="files" 
+                                   id="fileInput" 
+                                   multiple 
+                                   accept=".pdf,.doc,.docx,.txt,.zip,.jpg,.png" 
+                                   style="display: none;" />
+                            <i class="feather-upload fs-1 text-muted mb-3"></i>
+                            <h6 class="fw-bold mb-2">@Html.T("اسحب الملفات هنا أو انقر للرفع", "Drag files here or click to upload")</h6>
+                            <p class="text-muted mb-0">PDF, DOC, DOCX, TXT, ZIP, JPG, PNG (@Html.T("حتى 10MB", "up to 10MB"))</p>
+                        </div>
+                        <div id="filesList" class="mt-3"></div>
+                    </div>
+
+                    @if (Model.Status == LMS.Domain.Enums.AssignmentStatus.Pending || Model.Status == LMS.Domain.Enums.AssignmentStatus.Draft)
+                    {
+                        <div class="alert alert-warning">
+                            <i class="feather-alert-circle me-2"></i>
+                            <strong>@Html.T("تنبيه:", "Warning:")</strong> @Html.T("تأكد من مراجعة عملك قبل التسليم النهائي. لن تتمكن من التعديل بعد التسليم.", "Make sure to review your work before final submission. You cannot edit after submitting.")
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <input type="hidden" name="isDraft" id="isDraftValue" value="true" />
+                    <div class="d-flex gap-3">
+                        <button type="button" class="btn btn-primary flex-grow-1" id="btnSubmitFinal">
+                            <i class="feather-send me-2"></i>
+                            @Html.T("تسليم نهائي", "Final submit")
+                        </button>
+                        <a asp-action="Index" class="btn btn-outline-secondary">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("إلغاء", "Cancel")
+                        </a>
+                        <button type="button" class="btn btn-outline-secondary" id="btnSaveDraft">
+                            <i class="feather-save me-2"></i>
+                            @Html.T("حفظ كمسودة", "Save as draft")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Status -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">@Html.T("حالة التسليم", "Submission status")</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                    <span class="text-muted">@Html.T("الحالة", "Status")</span>
+                    <span class="badge bg-soft-@(Model.Status == LMS.Domain.Enums.AssignmentStatus.Pending ? "warning" : Model.Status == LMS.Domain.Enums.AssignmentStatus.Submitted ? "info" : "success") text-@(Model.Status == LMS.Domain.Enums.AssignmentStatus.Pending ? "warning" : Model.Status == LMS.Domain.Enums.AssignmentStatus.Submitted ? "info" : "success")">
+                        @(Model.Status == LMS.Domain.Enums.AssignmentStatus.Pending ? Html.T("قيد الانتظار", "Pending") : Model.Status == LMS.Domain.Enums.AssignmentStatus.Submitted ? Html.T("مُسلّم", "Submitted") : Html.T("مُقيّم", "Graded"))
+                    </span>
+                </div>
+                
+                @if (assignment.DueDate.HasValue)
+                {
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("الموعد النهائي", "Deadline")</span>
+                        <strong class="@(isOverdue ? "text-danger" : "")">@assignment.DueDate.Value.ToString("dd/MM/yyyy")</strong>
+                    </div>
+                }
+                
+                <div class="d-flex align-items-center justify-content-between">
+                    <span class="text-muted">@Html.T("الدرجة", "Grade")</span>
+                    <strong>@(Model.Grade?.ToString() ?? "--") / @assignment.MaxScore</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tips -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">
+                    <i class="feather-lightbulb text-warning me-2"></i>
+                    @Html.T("نصائح", "Tips")
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0 ps-3">
+                    <li class="mb-2">@Html.T("اقرأ التعليمات بعناية", "Read the instructions carefully")</li>
+                    <li class="mb-2">@Html.T("تأكد من الإجابة على جميع الأسئلة", "Make sure you answer all questions")</li>
+                    <li class="mb-2">@Html.T("راجع عملك قبل التسليم", "Review your work before submitting")</li>
+                    <li class="mb-2">@Html.T("احفظ مسودة بشكل دوري", "Save draft periodically")</li>
+                    <li class="mb-0">@Html.T("تحقق من صحة المرفقات", "Verify your attachments")</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    (function(){ window.__T = window.__T || {}; window.__T.ConfirmFinalSubmit = '@Html.Raw(Html.T("هل أنت متأكد من التسليم النهائي؟ لن تتمكن من التعديل بعد ذلك.", "Are you sure you want to submit finally? You cannot edit after that.").Replace("\\", "\\\\").Replace("'", "\\'"))'; })();
+    document.getElementById('btnSubmitFinal')?.addEventListener('click', function() {
+        if (confirm((window.__T && window.__T.ConfirmFinalSubmit) || 'Submit finally?')) {
+            document.getElementById('isDraftValue').value = 'false';
+            document.getElementById('submissionForm').submit();
+        }
+    });
+    document.getElementById('btnSaveDraft')?.addEventListener('click', function() {
+        document.getElementById('isDraftValue').value = 'true';
+        document.getElementById('submissionForm').submit();
+    });
+    // File upload handling
+    const fileUploadArea = document.getElementById('fileUploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const filesList = document.getElementById('filesList');
+
+    fileUploadArea.addEventListener('click', () => fileInput.click());
+
+    fileUploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        fileUploadArea.classList.add('dragover');
+    });
+
+    fileUploadArea.addEventListener('dragleave', () => {
+        fileUploadArea.classList.remove('dragover');
+    });
+
+    fileUploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        fileUploadArea.classList.remove('dragover');
+        fileInput.files = e.dataTransfer.files;
+        displayFiles();
+    });
+
+    fileInput.addEventListener('change', displayFiles);
+
+    function displayFiles() {
+        filesList.innerHTML = '';
+        const files = Array.from(fileInput.files);
+        
+        if (files.length > 0) {
+            files.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'alert alert-secondary d-flex align-items-center justify-content-between mb-2';
+                fileItem.innerHTML = `
+                    <div>
+                        <i class="feather-file me-2"></i>
+                        <strong>${file.name}</strong>
+                        <small class="text-muted ms-2">(${(file.size / 1024).toFixed(2)} KB)</small>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-icon btn-outline-danger" onclick="removeFile(${index})">
+                        <i class="feather-x"></i>
+                    </button>
+                `;
+                filesList.appendChild(fileItem);
+            });
+        }
+    }
+
+    function removeFile(index) {
+        const dt = new DataTransfer();
+        const files = Array.from(fileInput.files);
+        
+        files.forEach((file, i) => {
+            if (i !== index) dt.items.add(file);
+        });
+        
+        fileInput.files = dt.files;
+        displayFiles();
+    }
+
+    // Auto-save draft every 2 minutes
+    setInterval(() => {
+        const content = document.querySelector('textarea[name="content"]').value;
+        if (content.trim()) {
+            // Auto-save implementation
+            console.log('Auto-saving draft...');
+        }
+    }, 120000);
+</script>
+}
+

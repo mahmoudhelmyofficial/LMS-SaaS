@@ -1,0 +1,300 @@
+@*
+    Media Picker Modal - Global modal for selecting/uploading media
+    Include this once at the bottom of the layout or page
+*@
+
+<!-- Anti-Forgery Token for AJAX uploads -->
+@Html.AntiForgeryToken()
+
+<!-- Media Picker Modal -->
+<div class="modal fade" id="mediaPickerModal" tabindex="-1" data-bs-backdrop="false" data-bs-keyboard="false" aria-labelledby="mediaPickerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <div class="w-100">
+                    <h5 class="modal-title mb-3" id="mediaPickerModalLabel">
+                        <i class="feather-folder me-2"></i>
+                        @Html.T("مكتبة الوسائط", "Media Library")
+                    </h5>
+                    <!-- Tabs -->
+                    <ul class="nav nav-pills" id="mediaPickerTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="libraryTab" data-bs-toggle="pill" data-bs-target="#libraryPane" type="button">
+                                <i class="feather-grid me-2"></i>
+                                @Html.T("المكتبة", "Library")
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="uploadTab" data-bs-toggle="pill" data-bs-target="#uploadPane" type="button">
+                                <i class="feather-upload me-2"></i>
+                                @Html.T("رفع جديد", "Upload new")
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@Html.T("إغلاق", "Close")"></button>
+            </div>
+            <div class="modal-body">
+                <div class="tab-content" id="mediaPickerTabContent">
+                    <!-- Library Tab -->
+                    <div class="tab-pane fade show active" id="libraryPane" role="tabpanel">
+                        <!-- Filters -->
+                        <div class="d-flex gap-3 mb-4 flex-wrap align-items-center">
+                            <div class="btn-group" role="group" id="mediaTypeFilter">
+                                <button type="button" class="btn btn-outline-primary active" data-type="All">@Html.T("الكل", "All")</button>
+                                <button type="button" class="btn btn-outline-primary" data-type="Image">
+                                    <i class="feather-image me-1"></i>@Html.T("صور", "Images")
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" data-type="Video">
+                                    <i class="feather-video me-1"></i>@Html.T("فيديو", "Video")
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" data-type="Document">
+                                    <i class="feather-file-text me-1"></i>@Html.T("مستندات", "Documents")
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" data-type="Audio">
+                                    <i class="feather-music me-1"></i>@Html.T("صوتيات", "Audio")
+                                </button>
+                            </div>
+                            <div class="input-group" style="max-width: 300px;">
+                                <span class="input-group-text"><i class="feather-search"></i></span>
+                                <input type="text" class="form-control" id="mediaSearchInput" placeholder="@Html.T("بحث...", "Search...")">
+                            </div>
+                        </div>
+
+                        <!-- Media Grid -->
+                        <div id="mediaGrid" class="row g-3">
+                            <!-- Items loaded via AJAX -->
+                        </div>
+
+                        <!-- Loading Spinner -->
+                        <div id="mediaLoading" class="text-center py-5 d-none">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">@Html.T("جاري التحميل...", "Loading...")</span>
+                            </div>
+                        </div>
+
+                        <!-- Empty State -->
+                        <div id="mediaEmpty" class="text-center py-5 d-none">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-3 mx-auto">
+                                <i class="feather-folder"></i>
+                            </div>
+                            <h6 class="fw-bold">@Html.T("لا توجد ملفات", "No files")</h6>
+                            <p class="text-muted mb-3">@Html.T("لم يتم العثور على ملفات تطابق البحث", "No files match your search")</p>
+                            <button type="button" class="btn btn-primary" onclick="document.getElementById('uploadTab').click()">
+                                <i class="feather-upload me-2"></i>
+                                @Html.T("رفع ملف جديد", "Upload new file")
+                            </button>
+                        </div>
+
+                        <!-- Load More -->
+                        <div id="loadMoreContainer" class="text-center mt-4 d-none">
+                            <button type="button" class="btn btn-outline-primary" id="loadMoreBtn" onclick="MediaPicker.loadMore()">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("تحميل المزيد", "Load more")
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Upload Tab -->
+                    <div class="tab-pane fade" id="uploadPane" role="tabpanel">
+                        <div class="row">
+                            <div class="col-lg-8">
+                                <!-- Drag & Drop Zone -->
+                                <div class="upload-dropzone border-2 border-dashed rounded-3 p-5 text-center mb-4"
+                                     id="uploadDropzone"
+                                     style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-color: #0284c7 !important; cursor: pointer; transition: all 0.3s ease;">
+                                    <!-- File input - positioned off-screen but still accessible -->
+                                    <input type="file" id="uploadFileInput" 
+                                           accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip"
+                                           style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;">
+                                    
+                                    <div id="uploadPlaceholder">
+                                        <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-3 mx-auto">
+                                            <i class="feather-upload-cloud fs-1"></i>
+                                        </div>
+                                        <h5 class="fw-bold mb-2">@Html.T("اسحب الملفات هنا أو انقر للاختيار", "Drag files here or click to select")</h5>
+                                        <p class="text-muted mb-0">@Html.T("يدعم: الصور، الفيديو، الصوت، المستندات", "Supports: Images, Video, Audio, Documents")</p>
+                                        <p class="text-muted small">@Html.T("الحجم الأقصى: 50 MB", "Max size: 50 MB")</p>
+                                    </div>
+
+                                    <div id="uploadProgress" class="d-none">
+                                        <div class="mb-3">
+                                            <i class="feather-file fs-1 text-primary"></i>
+                                        </div>
+                                        <h6 id="uploadFileName" class="fw-bold mb-3">filename.jpg</h6>
+                                        <div class="progress mb-2" style="height: 8px;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                                 id="uploadProgressBar" 
+                                                 role="progressbar" 
+                                                 style="width: 0%"></div>
+                                        </div>
+                                        <p class="text-muted small mb-0" id="uploadProgressText">@Html.T("جاري الرفع...", "Uploading...") 0%</p>
+                                    </div>
+
+                                    <div id="uploadSuccess" class="d-none">
+                                        <div class="mb-3">
+                                            <i class="feather-check-circle fs-1 text-success"></i>
+                                        </div>
+                                        <h6 class="fw-bold text-success mb-3">@Html.T("تم الرفع بنجاح!", "Upload successful!")</h6>
+                                        <button type="button" class="btn btn-primary" onclick="MediaPicker.useUploaded()">
+                                            <i class="feather-check me-2"></i>
+                                            @Html.T("استخدام هذا الملف", "Use this file")
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" onclick="MediaPicker.resetUpload()">
+                                            <i class="feather-upload me-2"></i>
+                                            @Html.T("رفع ملف آخر", "Upload another file")
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- File Info Form (appears after file selection) -->
+                                <div id="uploadFileInfo" class="card d-none">
+                                    <div class="card-body">
+                                        <div class="row g-3">
+                                            <div class="col-12">
+                                                <label class="form-label">@Html.T("عنوان الملف", "File title")</label>
+                                                <input type="text" class="form-control" id="uploadTitleInput" placeholder="@Html.T("سيتم استخدام اسم الملف إذا ترك فارغاً", "File name will be used if left empty")">
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label">@Html.T("الوصف (اختياري)", "Description (optional)")</label>
+                                                <textarea class="form-control" id="uploadDescInput" rows="2" placeholder="@Html.T("وصف مختصر للملف", "Brief description of the file")"></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-lg-4">
+                                <!-- Upload Tips -->
+                                <div class="card bg-soft-info border-0">
+                                    <div class="card-body">
+                                        <h6 class="fw-bold text-info mb-3">
+                                            <i class="feather-info me-2"></i>
+                                            @Html.T("نصائح الرفع", "Upload tips")
+                                        </h6>
+                                        <ul class="list-unstyled mb-0 small">
+                                            <li class="mb-2">
+                                                <i class="feather-check text-success me-2"></i>
+                                                @Html.T("الصور: JPG, PNG, WebP, GIF", "Images: JPG, PNG, WebP, GIF")
+                                            </li>
+                                            <li class="mb-2">
+                                                <i class="feather-check text-success me-2"></i>
+                                                @Html.T("الفيديو: MP4, WebM, MOV", "Video: MP4, WebM, MOV")
+                                            </li>
+                                            <li class="mb-2">
+                                                <i class="feather-check text-success me-2"></i>
+                                                @Html.T("الصوت: MP3, WAV, OGG", "Audio: MP3, WAV, OGG")
+                                            </li>
+                                            <li class="mb-2">
+                                                <i class="feather-check text-success me-2"></i>
+                                                @Html.T("المستندات: PDF, Word, Excel, PPT", "Documents: PDF, Word, Excel, PPT")
+                                            </li>
+                                            <li>
+                                                <i class="feather-check text-success me-2"></i>
+                                                @Html.T("الحجم الأقصى: 50 MB", "Max size: 50 MB")
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+                    <i class="feather-x me-2"></i>
+                    @Html.T("إلغاء", "Cancel")
+                </button>
+                <button type="button" class="btn btn-primary d-none" id="selectMediaBtn" onclick="MediaPicker.confirmSelection()">
+                    <i class="feather-check me-2"></i>
+                    @Html.T("اختيار الملف", "Select file")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Modal z-index management for proper stacking */
+    #mediaPickerModal {
+        z-index: 1060 !important;
+    }
+    
+    #mediaPickerModal + .modal-backdrop,
+    .modal-backdrop {
+        z-index: 1059 !important;
+    }
+    
+    /* File input - visually hidden but accessible */
+    #uploadFileInput {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+        pointer-events: auto !important;
+    }
+    
+    /* Ensure dropzone doesn't interfere with file input */
+    .upload-dropzone {
+        position: relative;
+    }
+    
+    .media-picker-preview {
+        transition: all 0.3s ease;
+    }
+    
+    .media-picker-preview:hover {
+        border-color: #0284c7 !important;
+    }
+    
+    .media-item {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: 2px solid transparent;
+    }
+    
+    .media-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .media-item.selected {
+        border-color: #0284c7;
+        background: #f0f9ff;
+    }
+    
+    .media-item .media-thumb {
+        aspect-ratio: 1;
+        object-fit: cover;
+        background: #f3f4f6;
+    }
+    
+    .upload-dropzone.dragover {
+        background: linear-gradient(135deg, #bae6fd 0%, #7dd3fc 100%) !important;
+        border-color: #0284c7 !important;
+        transform: scale(1.01);
+    }
+    
+    .media-type-icon {
+        width: 100%;
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+    }
+    
+    .media-type-icon.image { background: #dcfce7; color: #16a34a; }
+    .media-type-icon.video { background: #fee2e2; color: #dc2626; }
+    .media-type-icon.audio { background: #dbeafe; color: #2563eb; }
+    .media-type-icon.document { background: #fef3c7; color: #d97706; }
+    .media-type-icon.other { background: #f3f4f6; color: #6b7280; }
+</style>
+
+

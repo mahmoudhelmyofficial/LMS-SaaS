@@ -1,0 +1,559 @@
+@{
+    ViewData["Title"] = Html.T("تحليلات أداء الدورة", "Course Performance Analytics");
+    var course = ViewBag.Course as LMS.Domain.Entities.Courses.Course;
+    var enrollment = ViewBag.Enrollment as LMS.Domain.Entities.Learning.Enrollment;
+    var performance = ViewBag.Performance as LMS.Services.Interfaces.PerformanceAnalytics;
+    var strengths = ViewBag.Strengths as LMS.Services.Interfaces.StrengthsWeaknessesAnalysis;
+    var peerComparison = ViewBag.PeerComparison as LMS.Services.Interfaces.PeerComparison;
+    var engagementScore = (double?)ViewBag.EngagementScore ?? 0;
+}
+
+<style>
+    .course-analytics-card {
+        background: white;
+        border-radius: 16px;
+        padding: 28px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        height: 100%;
+        border: 1px solid #f0f0f0;
+    }
+    
+    .analytics-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 32px;
+        color: white;
+        margin-bottom: 24px;
+    }
+    
+    .metric-box {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    
+    .metric-box:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+    
+    .metric-value {
+        font-size: 36px;
+        font-weight: 700;
+        margin: 12px 0;
+    }
+    
+    .metric-label {
+        color: #6b7280;
+        font-size: 14px;
+    }
+    
+    .strength-item {
+        padding: 16px;
+        background: #dcfce7;
+        border-radius: 10px;
+        border-right: 4px solid #22c55e;
+        margin-bottom: 12px;
+    }
+    
+    .weakness-item {
+        padding: 16px;
+        background: #fee2e2;
+        border-radius: 10px;
+        border-right: 4px solid #ef4444;
+        margin-bottom: 12px;
+    }
+    
+    .comparison-bar {
+        height: 40px;
+        background: #f3f4f6;
+        border-radius: 8px;
+        position: relative;
+        overflow: hidden;
+        margin: 12px 0;
+    }
+    
+    .comparison-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        transition: width 0.5s ease;
+    }
+    
+    .engagement-ring {
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: conic-gradient(#667eea 0deg, #764ba2 calc(@(engagementScore * 360)deg), #f3f4f6 calc(@(engagementScore * 360)deg));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        position: relative;
+    }
+    
+    .engagement-ring::before {
+        content: '';
+        position: absolute;
+        width: 150px;
+        height: 150px;
+        background: white;
+        border-radius: 50%;
+    }
+    
+    .engagement-value {
+        position: relative;
+        z-index: 1;
+        font-size: 32px;
+        font-weight: 700;
+        color: #667eea;
+    }
+</style>
+
+<!-- Analytics Header -->
+<div class="analytics-header">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <div class="d-flex align-items-center mb-3">
+                <i class="feather-bar-chart-2 me-3" style="font-size: 40px;"></i>
+                <div>
+                    <h3 class="mb-1">@course?.Title</h3>
+                    <p class="mb-0 opacity-75">@Html.T("تحليل شامل لأدائك في هذه الدورة", "Comprehensive analysis of your performance in this course")</p>
+                </div>
+            </div>
+        </div>
+        <div class="text-start">
+            <div class="mb-2">
+                <span class="badge bg-white text-primary px-3 py-2" style="font-size: 14px;">
+                    @Html.T("التقدم:", "Progress:") @Math.Round((decimal)(enrollment?.ProgressPercentage ?? 0), 1)%
+                </span>
+            </div>
+            <div>
+                <span class="badge bg-white text-primary px-3 py-2" style="font-size: 14px;">
+                    @Html.T("المستوى:", "Level:") @(course?.Level ?? LMS.Domain.Enums.CourseLevel.Beginner)
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Key Metrics -->
+<div class="row g-4 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-box">
+            <div class="avatar-text avatar-md bg-primary-subtle text-primary mx-auto mb-3">
+                <i class="feather-target"></i>
+            </div>
+            <p class="metric-label">@Html.T("نسبة الإكمال", "Completion Rate")</p>
+            <h2 class="metric-value text-primary">@Math.Round((decimal)(enrollment?.ProgressPercentage ?? 0), 0)%</h2>
+            <small class="text-muted">@(enrollment?.CompletedLessonsCount ?? 0) @Html.T("من", "of") @(enrollment?.TotalLessons ?? 0) @Html.T("درس", "lessons")</small>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-box">
+            <div class="avatar-text avatar-md bg-success-subtle text-success mx-auto mb-3">
+                <i class="feather-award"></i>
+            </div>
+            <p class="metric-label">@Html.T("التقييم العام", "Overall Grade")</p>
+            @{
+                var finalGrade = enrollment?.FinalGrade ?? 0;
+            }
+            <h2 class="metric-value text-success">@finalGrade%</h2>
+            <small class="text-muted">@(finalGrade >= 90 ? Html.T("ممتاز", "Excellent") : finalGrade >= 80 ? Html.T("جيد جداً", "Very Good") : finalGrade >= 70 ? Html.T("جيد", "Good") : finalGrade >= 60 ? Html.T("مقبول", "Acceptable") : Html.T("يحتاج تحسين", "Needs improvement"))</small>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-box">
+            <div class="avatar-text avatar-md bg-warning-subtle text-warning mx-auto mb-3">
+                <i class="feather-clock"></i>
+            </div>
+            <p class="metric-label">@Html.T("الوقت المستغرق", "Time Spent")</p>
+            <h2 class="metric-value text-warning">@Math.Round((enrollment?.TotalWatchTimeMinutes ?? 0) / 60.0, 1)</h2>
+            <small class="text-muted">@Html.T("ساعة تعليمية", "learning hours")</small>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-box">
+            <div class="avatar-text avatar-md bg-info-subtle text-info mx-auto mb-3">
+                <i class="feather-activity"></i>
+            </div>
+            <p class="metric-label">@Html.T("مؤشر التفاعل", "Engagement Score")</p>
+            <h2 class="metric-value text-info">@Math.Round((decimal)(engagementScore * 100), 0)%</h2>
+            <small class="text-muted">@(engagementScore > 0.8 ? Html.T("ممتاز", "Excellent") : engagementScore > 0.6 ? Html.T("جيد", "Good") : engagementScore > 0.4 ? Html.T("متوسط", "Average") : Html.T("ضعيف", "Low"))</small>
+        </div>
+    </div>
+</div>
+
+<!-- Performance Visualization -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="course-analytics-card">
+            <h5 class="mb-4">
+                <i class="feather-trending-up text-primary me-2"></i>
+                @Html.T("تطور الأداء خلال الوقت", "Performance Over Time")
+            </h5>
+            <div style="height: 350px;">
+                <canvas id="performanceChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="course-analytics-card text-center">
+            <h5 class="mb-4">@Html.T("مؤشر التفاعل الإجمالي", "Overall Engagement Score")</h5>
+            <div class="engagement-ring">
+                <div class="engagement-value">@Math.Round(engagementScore * 100, 0)%</div>
+            </div>
+            <div class="mt-4">
+                @{
+                    var lessonAttendance = performance != null && performance.ProgressPercentage > 0 ? performance.ProgressPercentage : 0;
+                    var assignmentCompletion = performance != null && performance.AssignmentsTotal > 0 ? 
+                        (decimal)performance.AssignmentsCompleted / performance.AssignmentsTotal * 100 : 0;
+                    var avgSessionDuration = performance?.AverageSessionDuration ?? 0;
+                    var watchTimePercent = Math.Min(avgSessionDuration / 60 * 100, 100); // Assuming 1 hour target
+                }
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small>@Html.T("إنجاز الدروس", "Lesson completion")</small>
+                    <strong class="text-primary">@Math.Round(lessonAttendance, 0)%</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small>@Html.T("إنجاز الواجبات", "Assignment completion")</small>
+                    <strong class="text-success">@Math.Round(assignmentCompletion, 0)%</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small>@Html.T("درجة الاختبارات", "Quiz score")</small>
+                    <strong class="text-warning">@Math.Round(performance?.QuizAverageScore ?? 0, 0)%</strong>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small>@Html.T("الوقت المستثمر", "Time invested")</small>
+                    <strong class="text-info">@Math.Round((decimal)watchTimePercent, 0)%</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Strengths & Weaknesses -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="course-analytics-card">
+            <h5 class="mb-4">
+                <i class="feather-thumbs-up text-success me-2"></i>
+                @Html.T("نقاط القوة", "Strengths")
+            </h5>
+            @if (strengths?.Strengths != null && strengths.Strengths.Any())
+            {
+                foreach (var strength in strengths.Strengths)
+                {
+                    <div class="strength-item">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">@strength.Name</h6>
+                            <span class="badge bg-success">@Math.Round(strength.Score, 0)%</span>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-success" style="width: @strength.Score%"></div>
+                        </div>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="feather-check-circle me-1"></i>
+                            @Html.T("أداء متميز في هذا الموضوع", "Strong performance in this topic")
+                        </small>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="feather-info" style="font-size: 48px; color: #d1d5db;"></i>
+                    <p class="text-muted mt-3">@Html.T("استمر في التعلم لتحديد نقاط قوتك", "Keep learning to identify your strengths")</p>
+                </div>
+            }
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="course-analytics-card">
+            <h5 class="mb-4">
+                <i class="feather-alert-circle text-danger me-2"></i>
+                @Html.T("نقاط تحتاج تحسين", "Areas to Improve")
+            </h5>
+            @if (strengths?.Weaknesses != null && strengths.Weaknesses.Any())
+            {
+                foreach (var weakness in strengths.Weaknesses)
+                {
+                    <div class="weakness-item">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">@weakness.Name</h6>
+                            <span class="badge bg-danger">@Math.Round(weakness.Score, 0)%</span>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-danger" style="width: @weakness.Score%"></div>
+                        </div>
+                        <div class="mt-2">
+                            <a href="#" class="btn btn-sm btn-outline-danger">
+                                <i class="feather-book-open me-1"></i>
+                                @Html.T("مراجعة الموضوع", "Review topic")
+                            </a>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="feather-check-circle" style="font-size: 48px; color: #22c55e;"></i>
+                    <p class="text-muted mt-3">@Html.T("رائع! لا توجد نقاط ضعف واضحة", "Great! No clear weaknesses")</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Peer Comparison -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="course-analytics-card">
+            <h5 class="mb-4">
+                <i class="feather-users text-primary me-2"></i>
+                @Html.T("مقارنة مع الزملاء", "Peer Comparison")
+            </h5>
+            <p class="text-muted mb-4">@Html.T("تعرف على أدائك مقارنة بمتوسط الطلاب في هذه الدورة", "See how you compare to the class average")</p>
+            
+            @{
+                var yourProgress = peerComparison?.YourProgress ?? 0;
+                var avgPeerProgress = peerComparison?.AveragePeerProgress ?? 0;
+                var yourScore = peerComparison?.YourAverageScore ?? 0;
+                var avgPeerScore = peerComparison?.AveragePeerScore ?? 0;
+                var ranking = peerComparison?.YourRanking ?? 0;
+                var totalStudents = peerComparison?.TotalStudents ?? 1;
+                var percentile = totalStudents > 0 ? (1 - (decimal)ranking / totalStudents) * 100 : 0;
+            }
+            
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="mb-2 fw-semibold">@Html.T("التقدم في الدورة", "Course progress")</label>
+                    <div class="comparison-bar">
+                        <div class="comparison-fill" style="width: @yourProgress%">
+                            @Math.Round(yourProgress, 0)%
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between small text-muted">
+                        <span>@Html.T("أنت", "You")</span>
+                        <span>@Html.T("متوسط الطلاب:", "Class avg:") @Math.Round(avgPeerProgress, 0)%</span>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <label class="mb-2 fw-semibold">@Html.T("متوسط التقييم", "Average grade")</label>
+                    <div class="comparison-bar">
+                        <div class="comparison-fill" style="width: @yourScore%">
+                            @Math.Round(yourScore, 0)%
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between small text-muted">
+                        <span>@Html.T("أنت", "You")</span>
+                        <span>@Html.T("متوسط الطلاب:", "Class avg:") @Math.Round(avgPeerScore, 0)%</span>
+                    </div>
+                </div>
+            </div>
+            
+            @if (percentile > 50)
+            {
+                <div class="alert alert-info mt-4 mb-0" style="border-radius: 12px;">
+                    <div class="d-flex align-items-center">
+                        <i class="feather-trending-up me-3" style="font-size: 24px;"></i>
+                        <div>
+                            <strong>@(peerComparison?.PerformanceLevel ?? Html.T("أداء جيد", "Good performance"))!</strong>
+                            <p class="mb-0">@Html.T("أنت تتفوق على", "You're ahead of") @Math.Round(percentile, 0)% @Html.T("من الطلاب في هذه الدورة", "of students in this course")</p>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-warning mt-4 mb-0" style="border-radius: 12px;">
+                    <div class="d-flex align-items-center">
+                        <i class="feather-alert-triangle me-3" style="font-size: 24px;"></i>
+                        <div>
+                            <strong>@Html.T("يمكنك التحسين!", "You can improve!")</strong>
+                            <p class="mb-0">@Html.T("ترتيبك", "Your rank") @ranking @Html.T("من", "of") @totalStudents @Html.T("طالب - استمر في التعلم لتحسين ترتيبك", "students - keep learning to improve your rank")</p>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Quiz Performance -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="course-analytics-card">
+            <h5 class="mb-4">@Html.T("أداء الاختبارات", "Quiz Performance")</h5>
+            <div style="height: 300px;">
+                <canvas id="quizPerformanceChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="course-analytics-card">
+            <h5 class="mb-4">@Html.T("توزيع الأداء حسب الموضوع", "Performance by Topic")</h5>
+            <div style="height: 300px;">
+                <canvas id="topicPerformanceChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Recommendations -->
+<div class="row g-4">
+    <div class="col-12">
+        <div class="course-analytics-card">
+            <h5 class="mb-4">
+                <i class="feather-lightbulb text-warning me-2"></i>
+                @Html.T("توصيات لتحسين الأداء", "Performance Recommendations")
+            </h5>
+            <div class="row g-3">
+                @if (strengths?.ImprovementSuggestions != null && strengths.ImprovementSuggestions.Any())
+                {
+                    foreach (var suggestion in strengths.ImprovementSuggestions.Take(3))
+                    {
+                        <div class="col-md-4">
+                            <div class="p-4 bg-primary-subtle rounded text-center">
+                                <i class="feather-book-open text-primary mb-3" style="font-size: 32px;"></i>
+                                <h6>@suggestion</h6>
+                                <p class="small text-muted mb-3">@Html.T("اتبع هذه التوصية لتحسين أدائك", "Follow this recommendation to improve your performance")</p>
+                                <button class="btn btn-sm btn-primary">@Html.T("ابدأ الآن", "Start Now")</button>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="col-md-4">
+                        <div class="p-4 bg-primary-subtle rounded text-center">
+                            <i class="feather-book-open text-primary mb-3" style="font-size: 32px;"></i>
+                            <h6>@Html.T("راجع المواضيع الصعبة", "Review difficult topics")</h6>
+                            <p class="small text-muted mb-3">@Html.T("خصص 30 دقيقة يومياً لمراجعة نقاط الضعف", "Set aside 30 minutes daily to review weak points")</p>
+                            <a asp-controller="Learning" asp-action="Index" asp-route-enrollmentId="@enrollment?.Id" class="btn btn-sm btn-primary">@Html.T("ابدأ المراجعة", "Start Review")</a>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="p-4 bg-success-subtle rounded text-center">
+                            <i class="feather-users text-success mb-3" style="font-size: 32px;"></i>
+                            <h6>@Html.T("انضم للنقاشات", "Join discussions")</h6>
+                            <p class="small text-muted mb-3">@Html.T("تعلم من تجارب الطلاب الآخرين", "Learn from other students' experiences")</p>
+                            <a asp-controller="Discussions" asp-action="Index" class="btn btn-sm btn-success">@Html.T("استعرض النقاشات", "Browse discussions")</a>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="p-4 bg-warning-subtle rounded text-center">
+                            <i class="feather-target text-warning mb-3" style="font-size: 32px;"></i>
+                            <h6>@Html.T("حدد أهدافاً يومية", "Set daily goals")</h6>
+                            <p class="small text-muted mb-3">@Html.T("خطط لإنجاز درس واحد على الأقل يومياً", "Plan to complete at least one lesson daily")</p>
+                            <a asp-controller="LearningGoals" asp-action="Index" class="btn btn-sm btn-warning">@Html.T("ضع خطة", "Set plan")</a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Prepare chart data from performance analytics
+    var weeklyLabels = @Html.Raw(Json.Serialize(performance?.WeeklyActivityData?.Select(w => w.Week) ?? new List<string>()));
+    var weeklyMinutes = @Html.Raw(Json.Serialize(performance?.WeeklyActivityData?.Select(w => w.MinutesStudied) ?? new List<int>()));
+    
+    var topicLabels = @Html.Raw(Json.Serialize(performance?.TopicPerformances?.Select(t => t.TopicName) ?? new List<string>()));
+    var topicScores = @Html.Raw(Json.Serialize(performance?.TopicPerformances?.Select(t => t.Score) ?? new List<decimal>()));
+    
+    // Performance Over Time Chart
+    const perfCtx = document.getElementById('performanceChart').getContext('2d');
+    new Chart(perfCtx, {
+        type: 'line',
+        data: {
+            labels: weeklyLabels.length > 0 ? weeklyLabels : ['@Html.T("الأسبوع 1", "Week 1")', '@Html.T("الأسبوع 2", "Week 2")', '@Html.T("الأسبوع 3", "Week 3")', '@Html.T("الأسبوع 4", "Week 4")'],
+            datasets: [{
+                label: '@Html.Raw(Html.T("وقت الدراسة (دقيقة)", "Study time (min)").Replace("'", "\\'"))',
+                data: weeklyMinutes.length > 0 ? weeklyMinutes : [0, 0, 0, 0],
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 6,
+                pointHoverRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, position: 'top' }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+    
+    // Quiz Performance Chart (using topic performance data)
+    const quizCtx = document.getElementById('quizPerformanceChart').getContext('2d');
+    new Chart(quizCtx, {
+        type: 'bar',
+        data: {
+            labels: topicLabels.length > 0 ? topicLabels.slice(0, 5) : ['@Html.Raw(Html.T("لا توجد بيانات", "No data").Replace("'", "\\'"))'],
+            datasets: [{
+                label: '@Html.Raw(Html.T("النتيجة", "Score").Replace("'", "\\'"))',
+                data: topicScores.length > 0 ? topicScores.slice(0, 5) : [0],
+                backgroundColor: ['#667eea', '#4ade80', '#fbbf24', '#3b82f6', '#ec4899'],
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, max: 100 } }
+        }
+    });
+    
+    // Topic Performance Chart
+    const topicCtx = document.getElementById('topicPerformanceChart').getContext('2d');
+    new Chart(topicCtx, {
+        type: 'radar',
+        data: {
+            labels: topicLabels.length > 0 ? topicLabels : ['@Html.Raw(Html.T("لا توجد بيانات", "No data").Replace("'", "\\'"))'],
+            datasets: [{
+                label: '@Html.Raw(Html.T("أدائك", "Your performance").Replace("'", "\\'"))',
+                data: topicScores.length > 0 ? topicScores : [0],
+                backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                borderColor: '#667eea',
+                pointBackgroundColor: '#667eea'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            }
+        }
+    });
+</script>
+}

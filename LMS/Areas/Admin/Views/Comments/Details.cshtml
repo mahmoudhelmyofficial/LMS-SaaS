@@ -1,0 +1,474 @@
+@model LMS.Domain.Entities.Social.Comment
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل التعليق", "Comment details");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التواصل الاجتماعي", "Social"), null),
+        (Html.T("التعليقات", "Comments"), Url.Action("Index", "Comments")),
+        (Html.T("تفاصيل التعليق", "Comment details"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var replies = ViewBag.Replies as List<LMS.Domain.Entities.Social.Comment> ?? new List<LMS.Domain.Entities.Social.Comment>();
+}
+
+@section Styles {
+    <style>
+        .comment-card {
+            background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%));
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+        .comment-content {
+            background: #f9fafb;
+            padding: 25px;
+            border-radius: 12px;
+            border-right: 4px solid #3b82f6;
+            line-height: 1.8;
+        }
+        .reply-card {
+            border-right: 3px solid #e5e7eb;
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+        .reply-card:hover {
+            background: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            border-right-color: #3b82f6;
+        }
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Comment Header -->
+    <div class="comment-card">
+        <div class="d-flex align-items-start justify-content-between mb-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="user-avatar bg-white text-primary">
+                    @if (Model.User != null)
+                    {
+                        @Model.User.FirstName?.Substring(0, 1)
+                    }
+                    else
+                    {
+                        <i class="feather-user"></i>
+                    }
+                </div>
+                <div>
+                    <h5 class="text-white mb-1">
+                        @if (Model.User != null)
+                        {
+                            @Model.User.FirstName @Model.User.LastName
+                        }
+                        else
+                        {
+                            <span>مستخدم محذوف</span>
+                        }
+                    </h5>
+                    <small class="text-white-50">
+                        <i class="feather-clock me-1"></i>
+                        @Model.CreatedAt.ToString("dd/MM/yyyy - HH:mm")
+                    </small>
+                </div>
+            </div>
+            @if (Model.IsApproved)
+            {
+                <span class="badge bg-white text-success">
+                    <i class="feather-check-circle me-1"></i>
+                    معتمد
+                </span>
+            }
+            else
+            {
+                <span class="badge bg-white text-warning">
+                    <i class="feather-clock me-1"></i>
+                    في الانتظار
+                </span>
+            }
+        </div>
+        <div class="d-flex gap-2">
+            <span class="badge bg-white bg-opacity-25">
+                <i class="feather-tag me-1"></i>
+                @Model.EntityType
+            </span>
+            <span class="badge bg-white bg-opacity-25">
+                <i class="feather-hash me-1"></i>
+                @Model.EntityId
+            </span>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Comment Content -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-message-circle me-2"></i>
+                        محتوى التعليق
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="comment-content">
+                        @Html.Raw(Model.Content)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Parent Comment -->
+            @if (Model.ParentComment != null)
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-corner-down-left me-2"></i>
+                            رداً على
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex align-items-start gap-3">
+                            <div class="user-avatar bg-soft-secondary text-secondary">
+                                @if (Model.ParentComment.User != null)
+                                {
+                                    @Model.ParentComment.User.FirstName?.Substring(0, 1)
+                                }
+                                else
+                                {
+                                    <i class="feather-user"></i>
+                                }
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <h6 class="fw-bold mb-0">
+                                        @if (Model.ParentComment.User != null)
+                                        {
+                                            @Model.ParentComment.User.FirstName @Model.ParentComment.User.LastName
+                                        }
+                                    </h6>
+                                    <small class="text-muted">@Model.ParentComment.CreatedAt.ToString("dd/MM/yyyy")</small>
+                                </div>
+                                <p class="text-muted mb-0">@Model.ParentComment.Content</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Replies -->
+            @if (replies.Any())
+            {
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-corner-down-right me-2"></i>
+                            الردود (@replies.Count)
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="vstack gap-3">
+                            @foreach (var reply in replies)
+                            {
+                                <div class="reply-card">
+                                    <div class="d-flex align-items-start gap-3">
+                                        <div class="user-avatar bg-soft-primary text-primary">
+                                            @if (reply.User != null)
+                                            {
+                                                @reply.User.FirstName?.Substring(0, 1)
+                                            }
+                                            else
+                                            {
+                                                <i class="feather-user"></i>
+                                            }
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <div>
+                                                    <h6 class="fw-bold mb-1">
+                                                        @if (reply.User != null)
+                                                        {
+                                                            @reply.User.FirstName @reply.User.LastName
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>مستخدم محذوف</span>
+                                                        }
+                                                    </h6>
+                                                    <small class="text-muted">
+                                                        <i class="feather-clock me-1"></i>
+                                                        @reply.CreatedAt.ToString("dd/MM/yyyy - HH:mm")
+                                                    </small>
+                                                </div>
+                                                <div class="dropdown">
+                                                    <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                        <i class="feather-more-vertical"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        @if (!reply.IsApproved)
+                                                        {
+                                                            <li>
+                                                                <form asp-action="Approve" asp-route-id="@reply.Id" method="post" class="d-inline">
+                                                                    @Html.AntiForgeryToken()
+                                                                    <button type="submit" class="dropdown-item">
+                                                                        <i class="feather-check me-2"></i>
+                                                                        اعتماد
+                                                                    </button>
+                                                                </form>
+                                                            </li>
+                                                        }
+                                                        else
+                                                        {
+                                                            <li>
+                                                                <form asp-action="Reject" asp-route-id="@reply.Id" method="post" class="d-inline">
+                                                                    @Html.AntiForgeryToken()
+                                                                    <button type="submit" class="dropdown-item">
+                                                                        <i class="feather-x me-2"></i>
+                                                                        إلغاء الاعتماد
+                                                                    </button>
+                                                                </form>
+                                                            </li>
+                                                        }
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <button type="button" class="dropdown-item text-danger" onclick="deleteComment(@reply.Id)">
+                                                                <i class="feather-trash-2 me-2"></i>
+                                                                حذف
+                                                            </button>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                            <p class="mb-2">@reply.Content</p>
+                                            @if (reply.IsApproved)
+                                            {
+                                                <span class="badge bg-soft-success text-success">معتمد</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-warning text-warning">في الانتظار</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Status Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-info me-2"></i>
+                        معلومات التعليق
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="vstack gap-3">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">الحالة:</span>
+                            @if (Model.IsApproved)
+                            {
+                                <span class="badge bg-soft-success text-success">معتمد</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-soft-warning text-warning">في الانتظار</span>
+                            }
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">المعرف:</span>
+                            <span class="fw-semibold">#@Model.Id</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">النوع:</span>
+                            <span class="fw-semibold">@Model.EntityType</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">تاريخ الإنشاء:</span>
+                            <span class="fw-semibold">@Model.CreatedAt.ToString("dd/MM/yyyy")</span>
+                        </div>
+                        @if (Model.UpdatedAt.HasValue)
+                        {
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">آخر تحديث:</span>
+                                <span class="fw-semibold">@Model.UpdatedAt.Value.ToString("dd/MM/yyyy")</span>
+                            </div>
+                        }
+                        <hr class="my-2">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">عدد الردود:</span>
+                            <span class="fw-bold text-primary">@replies.Count</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Info -->
+            @if (Model.User != null)
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-user me-2"></i>
+                            معلومات المستخدم
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <div class="user-avatar bg-soft-primary text-primary mx-auto mb-2" style="width: 80px; height: 80px; font-size: 2rem;">
+                                @Model.User.FirstName?.Substring(0, 1)
+                            </div>
+                            <h6 class="fw-bold mb-1">@Model.User.FirstName @Model.User.LastName</h6>
+                            <small class="text-muted">@Model.User.Email</small>
+                        </div>
+                        <div class="d-grid">
+                            <a asp-area="Admin" asp-controller="Users" asp-action="Details" asp-route-id="@Model.UserId" class="btn btn-light-brand btn-sm">
+                                <i class="feather-external-link me-2"></i>
+                                عرض الملف الشخصي
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Actions Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-zap me-2"></i>
+                        إجراءات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        @if (!Model.IsApproved)
+                        {
+                            <form asp-action="Approve" asp-route-id="@Model.Id" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-success w-100">
+                                    <i class="feather-check me-2"></i>
+                                    اعتماد التعليق
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form asp-action="Reject" asp-route-id="@Model.Id" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-warning w-100">
+                                    <i class="feather-x me-2"></i>
+                                    إلغاء الاعتماد
+                                </button>
+                            </form>
+                        }
+                        <button type="button" class="btn btn-light-brand" onclick="viewEntity()">
+                            <i class="feather-external-link me-2"></i>
+                            عرض المحتوى المرتبط
+                        </button>
+                        <hr class="my-2">
+                        <button type="button" class="btn btn-danger" onclick="deleteComment(@Model.Id)">
+                            <i class="feather-trash-2 me-2"></i>
+                            حذف التعليق
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-bar-chart me-2"></i>
+                        إحصائيات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">عدد الردود</span>
+                            <span class="fw-bold text-primary">@replies.Count</span>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-primary" style="width: @(Math.Min(100, replies.Count * 10))%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">الردود المعتمدة</span>
+                            <span class="fw-bold text-success">@replies.Count(r => r.IsApproved)</span>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar bg-success" style="width: @(replies.Any() ? (replies.Count(r => r.IsApproved) * 100 / replies.Count) : 0)%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Form -->
+<form id="deleteForm" method="post" style="display: none;">
+    @Html.AntiForgeryToken()
+</form>
+
+@section Scripts {
+    <script>
+        window.__CommentDetailsT = {
+            confirmDelete: '@(Html.Raw(Html.T("هل أنت متأكد من حذف هذا التعليق؟\n\nسيتم حذف جميع الردود المرتبطة به أيضاً.", "Are you sure you want to delete this comment?\n\nAll related replies will also be deleted.").Replace("'", "\\'").Replace("\n", "\\n")))',
+            viewRelated: '@Html.Raw(Html.T("عرض المحتوى المرتبط:", "View related content:").Replace("'", "\\'"))',
+            typeLabel: '@Html.Raw(Html.T("النوع:", "Type:").Replace("'", "\\'"))',
+            idLabel: '@Html.Raw(Html.T("المعرف:", "ID:").Replace("'", "\\'"))'
+        };
+        function deleteComment(id) {
+            if (confirm(window.__CommentDetailsT.confirmDelete.replace(/\\n/g, '\n'))) {
+                const form = document.getElementById('deleteForm');
+                form.action = '@Url.Action("Delete", "Comments")' + '?id=' + id;
+                form.submit();
+            }
+        }
+
+        function viewEntity() {
+            const entityType = '@Model.EntityType';
+            const entityId = @Model.EntityId;
+            
+            // Navigate to related entity based on type
+            let url = '';
+            switch(entityType.toLowerCase()) {
+                case 'course':
+                    url = '@Url.Action("Details", "Courses")' + '/' + entityId;
+                    break;
+                case 'lesson':
+                    url = '@Url.Action("Details", "Lessons")' + '/' + entityId;
+                    break;
+                default:
+                    alert(window.__CommentDetailsT.viewRelated + '\n' + window.__CommentDetailsT.typeLabel + ' ' + entityType + '\n' + window.__CommentDetailsT.idLabel + ' ' + entityId);
+                    return;
+            }
+            window.location.href = url;
+        }
+    </script>
+}
+

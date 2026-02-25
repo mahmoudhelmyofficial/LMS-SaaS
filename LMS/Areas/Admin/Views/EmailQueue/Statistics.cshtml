@@ -1,0 +1,199 @@
+@model LMS.Areas.Admin.ViewModels.EmailQueueStatsViewModel
+
+@{
+    ViewData["Title"] = Html.T("إحصائيات البريد الإلكتروني", "Email statistics");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الاتصالات", "Communications"), null),
+        (Html.T("قائمة البريد", "Email queue"), Url.Action("Index", "EmailQueue")),
+        (Html.T("الإحصائيات", "Statistics"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        ("الرجوع للقائمة", "feather-arrow-right", Url.Action("Index", "EmailQueue"), "btn-light")
+    };
+    ViewData["HeaderActions"] = actions;
+    var from = (DateTime?)ViewBag.From ?? DateTime.UtcNow.AddDays(-30);
+    var to = (DateTime?)ViewBag.To ?? DateTime.UtcNow;
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-5">
+                            <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                            <input type="date" name="from" class="form-control" value="@from.ToString("yyyy-MM-dd")" />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                            <input type="date" name="to" class="form-control" value="@to.ToString("yyyy-MM-dd")" />
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="feather-filter me-2"></i>@Html.T("تصفية", "Filter")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-mail"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">إجمالي الرسائل</span>
+                            <h3 class="fw-bolder">@Model.TotalEmails.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">تم الإرسال</span>
+                            <h3 class="fw-bolder">@Model.SentEmails.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-eye"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">معدل الفتح</span>
+                            <h3 class="fw-bolder">@Model.OpenRate.ToString("F1")%</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-mouse-pointer"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">معدل النقر</span>
+                            <h3 class="fw-bolder">@Model.ClickRate.ToString("F1")%</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header"><h5 class="card-title">@Html.T("الرسائل حسب اليوم", "Messages by day")</h5></div>
+                <div class="card-body">
+                    <canvas id="emailsByDayChart" style="height: 300px;"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header"><h5 class="card-title">@Html.T("أهم أسباب الفشل", "Top failure reasons")</h5></div>
+                <div class="card-body">
+                    @if (Model.TopFailureReasons != null && Model.TopFailureReasons.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var reason in Model.TopFailureReasons.Take(5))
+                            {
+                                <div class="list-group-item px-0">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-truncate" style="max-width: 200px;" title="@reason.Reason">
+                                            @reason.Reason
+                                        </small>
+                                        <span class="badge bg-danger">@reason.Count</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center py-3">لا توجد أخطاء</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        @if (Model.EmailsByDay != null && Model.EmailsByDay.Any())
+        {
+            <text>
+            const ctx = document.getElementById('emailsByDayChart');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [@Html.Raw(string.Join(",", Model.EmailsByDay.Select(e => $"'{e.Date:dd/MM}'")))],
+                    datasets: [
+                        {
+                            label: 'الإجمالي',
+                            data: [@string.Join(",", Model.EmailsByDay.Select(e => e.TotalCount))],
+                            borderColor: '#2196f3',
+                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'المرسلة',
+                            data: [@string.Join(",", Model.EmailsByDay.Select(e => e.SentCount))],
+                            borderColor: '#66bb6a',
+                            backgroundColor: 'rgba(102, 187, 106, 0.1)',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'الفاشلة',
+                            data: [@string.Join(",", Model.EmailsByDay.Select(e => e.FailedCount))],
+                            borderColor: '#ef5350',
+                            backgroundColor: 'rgba(239, 83, 80, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    }
+                }
+            });
+            </text>
+        }
+    </script>
+}
+

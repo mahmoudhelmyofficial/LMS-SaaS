@@ -1,0 +1,574 @@
+@model LMS.Areas.Admin.ViewModels.LearningPathCreateViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء مسار تعليمي", "Create Learning Path");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("المسارات التعليمية", "Learning paths"), Url.Action("Index", "LearningPaths")),
+        (Html.T("إنشاء مسار", "Create path"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.css" rel="stylesheet" />
+    <style>
+        .note-editor.note-frame {
+            direction: rtl;
+            text-align: right;
+        }
+        .course-item {
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: move;
+            transition: all 0.3s;
+        }
+        .course-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .course-item.sortable-ghost {
+            opacity: 0.4;
+            background: #f8f9fa;
+        }
+        .course-item.sortable-chosen {
+            background: #f8f9fa;
+        }
+        .drag-handle {
+            cursor: grab;
+            color: #6c757d;
+        }
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+        .available-courses {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .course-card {
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .course-card:hover {
+            background: #f8f9fa;
+            border-color: #667eea;
+        }
+        .course-card.selected {
+            background: #e7f1ff;
+            border-color: #667eea;
+        }
+        .path-preview {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            background: #f8f9fa;
+            min-height: 200px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-map me-2"></i>
+                        معلومات المسار التعليمي
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Create" method="post" id="learningPathForm" enctype="multipart/form-data">
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <!-- Title -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Title" class="form-label">
+                                عنوان المسار <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Title" class="form-control form-control-lg" placeholder="@Html.T("مثال: مسار تطوير الويب الكامل", "e.g. Complete Web Development Path")" />
+                            <span asp-validation-for="Title" class="text-danger"></span>
+                        </div>
+
+                        <!-- Slug -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Slug" class="form-label">
+                                الرابط المخصص <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">/learning-paths/</span>
+                                <input asp-for="Slug" class="form-control" placeholder="web-development-path" />
+                            </div>
+                            <span asp-validation-for="Slug" class="text-danger"></span>
+                            <small class="form-text text-muted">
+                                <i class="feather-info"></i>
+                                سيتم إنشاؤه تلقائياً من العنوان إذا تركته فارغاً
+                            </small>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Description" class="form-label">
+                                الوصف <span class="text-danger">*</span>
+                            </label>
+                            <textarea asp-for="Description" id="descriptionEditor" class="form-control" rows="8"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <!-- Category and Level -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="CategoryId" class="form-label">
+                                        التصنيف <span class="text-danger">*</span>
+                                    </label>
+                                    <select asp-for="CategoryId" class="form-select" id="categorySelect">
+                                        <option value="">@Html.T("اختر التصنيف", "Select category")</option>
+                                        @if (Model.AvailableCategories != null)
+                                        {
+                                            @foreach (var category in Model.AvailableCategories)
+                                            {
+                                                <option value="@category.Value">@category.Text</option>
+                                            }
+                                        }
+                                    </select>
+                                    <span asp-validation-for="CategoryId" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="Level" class="form-label">
+                                        المستوى <span class="text-danger">*</span>
+                                    </label>
+                                    <select asp-for="Level" class="form-select">
+                                        <option value="">@Html.T("اختر المستوى", "Select level")</option>
+                                        <option value="Beginner">@Html.T("مبتدئ", "Beginner")</option>
+                                        <option value="Intermediate">@Html.T("متوسط", "Intermediate")</option>
+                                        <option value="Advanced">@Html.T("متقدم", "Advanced")</option>
+                                        <option value="AllLevels">@Html.T("جميع المستويات", "All levels")</option>
+                                    </select>
+                                    <span asp-validation-for="Level" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Duration and Price -->
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label asp-for="EstimatedDuration" class="form-label">
+                                        المدة التقديرية (ساعات) <span class="text-danger">*</span>
+                                    </label>
+                                    <input asp-for="EstimatedDuration" type="number" class="form-control" min="1" />
+                                    <span asp-validation-for="EstimatedDuration" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label asp-for="Price" class="form-label">
+                                        السعر (ريال)
+                                    </label>
+                                    <input asp-for="Price" type="number" class="form-control" min="0" step="0.01" />
+                                    <span asp-validation-for="Price" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label asp-for="DiscountPrice" class="form-label">
+                                        السعر بعد الخصم (ريال)
+                                    </label>
+                                    <input asp-for="DiscountPrice" type="number" class="form-control" min="0" step="0.01" />
+                                    <span asp-validation-for="DiscountPrice" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Image -->
+                        <div class="form-group mb-4">
+                            <label asp-for="ImageFile" class="form-label">
+                                صورة المسار
+                            </label>
+                            <input asp-for="ImageFile" type="file" class="form-control" accept="image/*" id="imageInput" />
+                            <span asp-validation-for="ImageFile" class="text-danger"></span>
+                            <small class="form-text text-muted">
+                                الحجم الموصى به: 1200 × 600 بكسل
+                            </small>
+                            <div id="imagePreview" class="mt-2" style="display: none;">
+                                <img src="" alt="معاينة" class="img-thumbnail" style="max-width: 300px;">
+                            </div>
+                        </div>
+
+                        <!-- Courses in Path -->
+                        <div class="form-group mb-4">
+                            <label class="form-label">
+                                الدورات في المسار <span class="text-danger">*</span>
+                            </label>
+                            <div id="selectedCourses" class="mb-3">
+                                <!-- Selected courses will be added here -->
+                                <div class="alert alert-info" id="noCoursesMessage">
+                                    <i class="feather-info me-2"></i>
+                                    لم يتم إضافة أي دورات بعد. اختر الدورات من القائمة على اليمين
+                                </div>
+                            </div>
+                            <div id="courseIdsContainer">
+                                <!-- Hidden inputs for CourseIds will be added here dynamically -->
+                            </div>
+                            <input type="hidden" name="CourseIdsCsv" id="courseIdsCsv" value="" />
+                        </div>
+
+                        <!-- Prerequisites -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Prerequisites" class="form-label">
+                                المتطلبات الأساسية
+                            </label>
+                            <textarea asp-for="Prerequisites" class="form-control" rows="3" placeholder="@Html.T("أدخل المتطلبات الأساسية للمسار...", "Enter the path prerequisites...")"></textarea>
+                            <span asp-validation-for="Prerequisites" class="text-danger"></span>
+                        </div>
+
+                        <!-- What You Will Learn -->
+                        <div class="form-group mb-4">
+                            <label asp-for="WhatYouWillLearn" class="form-label">
+                                ماذا ستتعلم
+                            </label>
+                            <textarea asp-for="WhatYouWillLearn" class="form-control" rows="4" placeholder="@Html.T("أدخل ما سيتعلمه الطالب من هذا المسار...", "Enter what the student will learn from this path...")"></textarea>
+                            <span asp-validation-for="WhatYouWillLearn" class="text-danger"></span>
+                        </div>
+
+                        <!-- Options -->
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title mb-3">
+                                    <i class="feather-settings me-2"></i>
+                                    خيارات إضافية
+                                </h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActiveSwitch" checked />
+                                            <label class="form-check-label" for="isActiveSwitch">
+                                                <i class="feather-check-circle me-2"></i>
+                                                مسار نشط
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsFeatured" class="form-check-input" type="checkbox" id="isFeaturedSwitch" />
+                                            <label class="form-check-label" for="isFeaturedSwitch">
+                                                <i class="feather-star me-2"></i>
+                                                مسار مميز
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="RequireSequentialCompletion" class="form-check-input" type="checkbox" id="sequentialSwitch" checked />
+                                            <label class="form-check-label" for="sequentialSwitch">
+                                                <i class="feather-arrow-right me-2"></i>
+                                                يتطلب إتمام تسلسلي
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IssueCertificate" class="form-check-input" type="checkbox" id="certificateSwitch" checked />
+                                            <label class="form-check-label" for="certificateSwitch">
+                                                <i class="feather-award me-2"></i>
+                                                إصدار شهادة عند الإتمام
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="Index" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <button type="button" class="btn btn-secondary" id="previewBtn">
+                                <i class="feather-eye me-2"></i>
+                                معاينة
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-2"></i>
+                                حفظ المسار
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Available Courses -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-book me-2"></i>
+                        الدورات المتاحة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <input type="text" class="form-control mb-3" id="searchCourses" placeholder="@Html.T("البحث عن دورة...", "Search for a course...")">
+                    <div class="available-courses" id="availableCoursesList">
+                        @if (Model.AvailableCourses != null && Model.AvailableCourses.Any())
+                        {
+                            @foreach (var course in Model.AvailableCourses)
+                            {
+                                <div class="course-card" data-course-id="@course.Value" data-course-title="@course.Text">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">@course.Text</h6>
+                                            <small class="text-muted">
+                                                <i class="feather-clock me-1"></i>
+                                                @(course.Value) دقيقة
+                                            </small>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-primary add-course-btn">
+                                            <i class="feather-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-3">
+                                <i class="feather-inbox fs-3 mb-2"></i>
+                                <p class="mb-0">@Html.T("لا توجد دورات متاحة", "No courses available")</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-eye me-2"></i>
+                        معاينة المسار
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="path-preview">
+                        <h6 class="mb-2" id="previewTitle">@Html.T("عنوان المسار", "Path title")</h6>
+                        <p class="text-muted small mb-3" id="previewDescription">وصف المسار سيظهر هنا...</p>
+                        <div class="d-flex gap-2 flex-wrap mb-3">
+                            <span class="badge bg-soft-primary text-primary" id="previewLevel">@Html.T("المستوى", "Level")</span>
+                            <span class="badge bg-soft-success text-success" id="previewDuration">@Html.T("المدة", "Duration")</span>
+                            <span class="badge bg-soft-warning text-warning" id="previewCourseCount">0 دورات</span>
+                        </div>
+                        <small class="text-muted" id="previewPrice">@Html.T("مجاني", "Free")</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            let selectedCourses = [];
+
+            // Initialize Summernote
+            $('#descriptionEditor').summernote({
+                height: 200,
+                direction: 'rtl',
+                placeholder: 'اكتب وصف المسار هنا...',
+                toolbar: [
+                    ['style', ['style', 'bold', 'italic', 'underline', 'clear']],
+                    ['para', ['ul', 'ol', 'paragraph']],
+                    ['insert', ['link']],
+                    ['view', ['fullscreen', 'codeview', 'help']]
+                ]
+            });
+
+            // Initialize Select2
+            $('#categorySelect').select2({ dir: 'rtl' });
+
+            // Image preview
+            $('#imageInput').change(function() {
+                const file = this.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        $('#imagePreview').show().find('img').attr('src', e.target.result);
+                    }
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            // Auto-generate slug
+            $('#Title').on('blur', function() {
+                if (!$('#Slug').val()) {
+                    const slug = $(this).val()
+                        .toLowerCase()
+                        .replace(/\s+/g, '-')
+                        .replace(/[^\w\-]+/g, '')
+                        .replace(/\-\-+/g, '-');
+                    $('#Slug').val(slug);
+                }
+            });
+
+            // Add course to path
+            $(document).on('click', '.add-course-btn', function() {
+                const card = $(this).closest('.course-card');
+                const courseId = card.data('course-id');
+                const courseTitle = card.data('course-title');
+
+                if (!selectedCourses.includes(courseId)) {
+                    selectedCourses.push(courseId);
+                    addCourseToPath(courseId, courseTitle, selectedCourses.length);
+                    card.addClass('selected').find('.add-course-btn').html('<i class="feather-check"></i>');
+                    updateCourseIds();
+                    updatePreview();
+                }
+            });
+
+            // Remove course from path
+            $(document).on('click', '.remove-course-btn', function() {
+                const courseId = $(this).data('course-id');
+                selectedCourses = selectedCourses.filter(id => id !== courseId);
+                $(this).closest('.course-item').remove();
+                $('.course-card[data-course-id="' + courseId + '"]')
+                    .removeClass('selected')
+                    .find('.add-course-btn').html('<i class="feather-plus"></i>');
+                
+                if (selectedCourses.length === 0) {
+                    $('#noCoursesMessage').show();
+                }
+                updateOrder();
+                updateCourseIds();
+                updatePreview();
+            });
+
+            // Initialize Sortable
+            new Sortable(document.getElementById('selectedCourses'), {
+                animation: 150,
+                handle: '.drag-handle',
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                onEnd: function() {
+                    updateOrder();
+                    updateCourseIds();
+                }
+            });
+
+            function addCourseToPath(courseId, courseTitle, order) {
+                $('#noCoursesMessage').hide();
+                const courseHtml = `
+                    <div class="course-item" data-course-id="${courseId}">
+                        <div class="d-flex align-items-center">
+                            <i class="feather-menu drag-handle me-2"></i>
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-soft-primary text-primary order-badge">${order}</span>
+                                    <h6 class="mb-0">${courseTitle}</h6>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-danger remove-course-btn" data-course-id="${courseId}">
+                                <i class="feather-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                $('#selectedCourses').append(courseHtml);
+            }
+
+            function updateOrder() {
+                $('#selectedCourses .course-item').each(function(index) {
+                    $(this).find('.order-badge').text(index + 1);
+                });
+            }
+
+            function updateCourseIds() {
+                // Clear existing hidden inputs
+                $('#courseIdsContainer').empty();
+                var ids = [];
+                $('#selectedCourses .course-item').each(function() {
+                    var courseId = $(this).data('course-id');
+                    $('#courseIdsContainer').append(
+                        '<input type="hidden" name="CourseIds" value="' + courseId + '" />'
+                    );
+                    ids.push(courseId);
+                });
+                $('#courseIdsCsv').val(ids.join(','));
+            }
+
+            // Search courses
+            $('#searchCourses').on('input', function() {
+                const searchTerm = $(this).val().toLowerCase();
+                $('.course-card').each(function() {
+                    const title = $(this).data('course-title').toLowerCase();
+                    $(this).toggle(title.includes(searchTerm));
+                });
+            });
+
+            // Live preview
+            function updatePreview() {
+                const title = $('#Title').val() || 'عنوان المسار';
+                const description = $('#descriptionEditor').summernote('code').replace(/<[^>]*>/g, '').substring(0, 100) + '...';
+                const level = $('#Level option:selected').text() || 'المستوى';
+                const duration = $('#EstimatedDuration').val() || '0';
+                const price = $('#Price').val();
+                const discountPrice = $('#DiscountPrice').val();
+
+                $('#previewTitle').text(title);
+                $('#previewDescription').text(description || 'وصف المسار سيظهر هنا...');
+                $('#previewLevel').text(level);
+                $('#previewDuration').text(duration + ' ساعة');
+                $('#previewCourseCount').text(selectedCourses.length + ' دورات');
+
+                if (price && parseFloat(price) > 0) {
+                    if (discountPrice && parseFloat(discountPrice) < parseFloat(price)) {
+                        $('#previewPrice').html(`<span class="text-decoration-line-through">${price} ريال</span> ${discountPrice} ريال`);
+                    } else {
+                        $('#previewPrice').text(price + ' ريال');
+                    }
+                } else {
+                    $('#previewPrice').text('مجاني');
+                }
+            }
+
+            $('#Title, #Level, #EstimatedDuration, #Price, #DiscountPrice').on('change keyup', updatePreview);
+            $('#descriptionEditor').on('summernote.change', updatePreview);
+
+            // Initial preview
+            updatePreview();
+
+            // Form validation and ensure CourseIds/CourseIdsCsv are synced before submit
+            $('#learningPathForm').on('submit', function(e) {
+                updateCourseIds();
+                if (selectedCourses.length === 0) {
+                    e.preventDefault();
+                    alert('@Html.Raw(Html.T("يرجى إضافة دورة واحدة على الأقل إلى المسار", "Please add at least one course to the path").Replace("'", "\\'"))');
+                    return false;
+                }
+            });
+        });
+    </script>
+}
+

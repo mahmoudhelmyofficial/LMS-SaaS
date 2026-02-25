@@ -1,0 +1,281 @@
+@model LMS.Domain.Entities.Payments.Invoice
+@{
+    ViewData["Title"] = Html.T("عرض الفاتورة", "View Invoice");
+}
+
+@section Styles {
+<style>
+    .invoice-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    
+    .invoice-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 40px;
+        border-radius: 12px 12px 0 0;
+    }
+    
+    .invoice-body {
+        background: white;
+        padding: 40px;
+        border: 1px solid #e5e7eb;
+        border-top: none;
+    }
+    
+    .invoice-info-box {
+        background: #f9fafb;
+        padding: 20px;
+        border-radius: 8px;
+        border-right: 4px solid #667eea;
+    }
+    
+    .invoice-table th {
+        background: #f3f4f6;
+        font-weight: 600;
+        color: #374151;
+    }
+    
+    .invoice-total-section {
+        background: #f9fafb;
+        padding: 20px;
+        border-radius: 8px;
+    }
+    
+    .total-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+    }
+    
+    .total-row.grand-total {
+        border-top: 2px solid #667eea;
+        padding-top: 15px;
+        margin-top: 10px;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #667eea;
+    }
+    
+    @@media print {
+        .no-print {
+            display: none !important;
+        }
+        
+        .invoice-container {
+            max-width: 100%;
+        }
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<div class="invoice-container">
+    <!-- Action Buttons -->
+    <div class="card stretch stretch-full mb-3 no-print">
+        <div class="card-body py-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <a asp-action="Index" class="btn btn-sm btn-light">
+                    <i class="feather-arrow-right me-2"></i>
+                    @Html.T("العودة للفواتير", "Back to invoices")
+                </a>
+                <div class="d-flex gap-2">
+                    <button onclick="window.print()" class="btn btn-sm btn-primary">
+                        <i class="feather-printer me-2"></i>
+                        @Html.T("طباعة", "Print")
+                    </button>
+                    <a asp-action="Download" asp-route-id="@Model.Id" class="btn btn-sm btn-success">
+                        <i class="feather-download me-2"></i>
+                        @Html.T("تحميل PDF", "Download PDF")
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Invoice -->
+    <div class="card stretch stretch-full">
+        <div class="invoice-header">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h1 class="mb-2">@Html.T("فـــاتــورة", "Invoice")</h1>
+                    <p class="opacity-75 mb-0">@Html.T("منصة LMS التعليمية", "LMS Learning Platform")</p>
+                </div>
+                <div class="col-md-6 text-md-start">
+                    <div class="bg-white bg-opacity-10 rounded p-3 d-inline-block">
+                        <h4 class="mb-1">@Model.InvoiceNumber</h4>
+                        <p class="small opacity-75 mb-0">@Html.T("رقم الفاتورة", "Invoice number")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="invoice-body">
+            <!-- Invoice Details -->
+            <div class="row mb-4">
+                <div class="col-md-6 mb-3">
+                    <div class="invoice-info-box">
+                        <h6 class="fw-bold mb-3">@Html.T("معلومات الطالب:", "Student information:")</h6>
+                        <p class="mb-1"><strong>@Model.Student.FullName</strong></p>
+                        <p class="text-muted mb-1">@Model.Student.Email</p>
+                        @if (!string.IsNullOrEmpty(Model.Student.PhoneNumber))
+                        {
+                            <p class="text-muted mb-0">@Model.Student.PhoneNumber</p>
+                        }
+                    </div>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <div class="invoice-info-box">
+                        <h6 class="fw-bold mb-3">@Html.T("تفاصيل الفاتورة:", "Invoice details:")</h6>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">@Html.T("تاريخ الإصدار:", "Issue date:")</span>
+                            <strong>@Model.IssuedDate</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">@Html.T("تاريخ الاستحقاق:", "Due date:")</span>
+                            <strong>@Model.DueDate</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">@Html.T("الحالة:", "Status:")</span>
+                            @if (Model.Status == "Paid")
+                            {
+                                <span class="badge bg-success">@Html.T("مدفوعة", "Paid")</span>
+                            }
+                            else if (Model.Status == "Pending")
+                            {
+                                <span class="badge bg-warning">@Html.T("قيد الانتظار", "Pending")</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger">@Html.T("ملغاة", "Cancelled")</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Course Details -->
+            <div class="mb-4">
+                <h5 class="fw-bold mb-3">@Html.T("تفاصيل الدورة:", "Course details:")</h5>
+                <div class="table-responsive">
+                    <table class="table invoice-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60%">@Html.T("الوصف", "Description")</th>
+                                <th class="text-center">@Html.T("السعر الأصلي", "Original price")</th>
+                                <th class="text-center">@Html.T("الخصم", "Discount")</th>
+                                <th class="text-end">@Html.T("المبلغ", "Amount")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.Payment?.Course != null)
+                            {
+                                <tr>
+                                    <td>
+                                        <strong>@Model.Payment.Course.Title</strong>
+                                        <p class="text-muted small mb-0">@Html.T("دورة تدريبية معتمدة", "Certified training course")</p>
+                                        @if (!string.IsNullOrEmpty(Model.Payment.CouponCode))
+                                        {
+                                            <span class="badge bg-success small mt-1">
+                                                <i class="feather-tag" style="width: 12px; height: 12px;"></i>
+                                                @Html.T("كود الخصم:", "Coupon code:") @Model.Payment.CouponCode
+                                            </span>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        @Model.Payment.OriginalAmount.ToEGP(2)
+                                    </td>
+                                    <td class="text-center">
+                                        @if (Model.Payment.DiscountAmount > 0)
+                                        {
+                                            <span class="text-danger">-@Model.Payment.DiscountAmount.ToString("N2")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <strong>@((Model.Payment.OriginalAmount - Model.Payment.DiscountAmount).ToEGP(2))</strong>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Totals -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="alert alert-info">
+                        <h6 class="fw-bold mb-2">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("ملاحظات", "Notes")
+                        </h6>
+                        <p class="small mb-0">
+                            @Html.T("شكراً لاختيارك منصة LMS التعليمية. هذه الفاتورة صالحة ومعتمدة إلكترونياً. للاستفسارات يرجى التواصل مع الدعم الفني.", "Thank you for choosing the LMS Learning Platform. This invoice is valid and electronically certified. For inquiries please contact support.")
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="invoice-total-section">
+                        <div class="total-row">
+                            <span class="text-muted">@Html.T("المجموع الفرعي:", "Subtotal:")</span>
+                            <strong>@Model.SubTotal.ToEGP(2)</strong>
+                        </div>
+                        
+                        @if (Model.DiscountAmount > 0)
+                        {
+                            <div class="total-row">
+                                <span class="text-muted">@Html.T("الخصم:", "Discount:")</span>
+                                <strong class="text-danger">-@Model.DiscountAmount.ToEGP(2)</strong>
+                            </div>
+                        }
+                        
+                        @if (Model.TaxAmount > 0)
+                        {
+                            <div class="total-row">
+                                <span class="text-muted">@Html.T("الضريبة:", "Tax:")</span>
+                                <strong>+@Model.TaxAmount.ToEGP(2)</strong>
+                            </div>
+                        }
+                        
+                        <div class="total-row grand-total">
+                            <span>@Html.T("الإجمالي:", "Total:")</span>
+                            <span>@Model.TotalAmount.ToEGP(2)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="mt-5 pt-4 border-top text-center">
+                <p class="text-muted small mb-2">
+                    <strong>@Html.T("منصة LMS التعليمية", "LMS Learning Platform")</strong> - @Html.T("نحو تعليم أفضل", "Towards better education")
+                </p>
+                <p class="text-muted small mb-0">
+                    @Html.T("البريد الإلكتروني:", "Email:") support@lms.com | @Html.T("الهاتف:", "Phone:") +966 50 000 0000
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Auto print when query parameter is present
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('print') === 'true') {
+        window.onload = function() {
+            window.print();
+        };
+    }
+</script>
+}
+

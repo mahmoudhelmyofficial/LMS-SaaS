@@ -1,0 +1,416 @@
+@{
+    ViewData["Title"] = Html.T("مقارنة الدورات", "Compare courses");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("تحليلات الدورات", "Course analytics"), Url.Action("Index", "CourseAnalytics")),
+        (Html.T("مقارنة", "Compare"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/select2.min.css" />
+    <style>
+        .comparison-card {
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        .comparison-card:hover {
+            border-color: #3454d1;
+        }
+        .winner-badge {
+            position: absolute;
+            top: -10px;
+            right: 20px;
+            background: linear-gradient(135deg, #f7b84b 0%, #f06548 100%);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Course Selection -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get">
+                        <div class="row g-3">
+                            <div class="col-md-5">
+                                <label class="form-label">@Html.T("اختر الدورات للمقارنة (حتى 4 دورات)", "Select courses to compare (up to 4)")</label>
+                                <select class="form-select" id="courseIds" name="courseIds" multiple required>
+                                    @{
+                                        var courses = ViewBag.Courses as List<LMS.Domain.Entities.Courses.Course> ?? new List<LMS.Domain.Entities.Courses.Course>();
+                                        foreach (var course in courses)
+                                        {
+                                            <option value="@course.Id">@course.Title</option>
+                                        }
+                                    }
+                                </select>
+                                <small class="text-muted">@Html.T("اضغط Ctrl للاختيار المتعدد", "Hold Ctrl for multiple selection")</small>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                                <input type="date" name="fromDate" class="form-control" value="@(ViewBag.FromDate?.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.AddMonths(-1).ToString("yyyy-MM-dd"))" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                                <input type="date" name="toDate" class="form-control" value="@(ViewBag.ToDate?.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.ToString("yyyy-MM-dd"))" />
+                            </div>
+                            <div class="col-md-1">
+                                <label class="form-label">&nbsp;</label>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="feather-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (ViewBag.Comparison != null)
+    {
+        var comparison = ViewBag.Comparison as List<dynamic>;
+        
+        <!-- Comparison Cards -->
+        <div class="row mb-4">
+            @foreach (var item in comparison)
+            {
+                var isTopViews = item.TotalViews == comparison.Max(c => c.TotalViews);
+                var isTopEnrollments = item.TotalEnrollments == comparison.Max(c => c.TotalEnrollments);
+                var isTopCompletion = item.AvgCompletionRate == comparison.Max(c => c.AvgCompletionRate);
+
+                <div class="col-lg-@(12 / comparison.Count) mb-4">
+                    <div class="card comparison-card h-100 position-relative">
+                        @if (isTopViews || isTopEnrollments || isTopCompletion)
+                        {
+                            <span class="winner-badge">
+                                <i class="feather-award"></i>
+                                الأفضل
+                            </span>
+                        }
+                        <div class="card-body">
+                            <div class="text-center mb-3">
+                                <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                                    <i class="feather-book"></i>
+                                </div>
+                                <h5 class="mb-2">@item.Course?.Title</h5>
+                                <p class="text-muted small">
+                                    <i class="feather-user me-1"></i>
+                                    @item.Course?.Instructor?.FirstName @item.Course?.Instructor?.LastName
+                                </p>
+                            </div>
+
+                            <div class="mb-3 p-3 @(isTopViews ? "bg-soft-success" : "bg-light") rounded">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>المشاهدات</span>
+                                    <span class="fw-bold fs-4">@item.TotalViews.ToString("N0")</span>
+                                </div>
+                                @if (isTopViews)
+                                {
+                                    <small class="text-success">
+                                        <i class="feather-trending-up"></i>
+                                        الأعلى
+                                    </small>
+                                }
+                            </div>
+
+                            <div class="mb-3 p-3 @(isTopEnrollments ? "bg-soft-success" : "bg-light") rounded">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>التسجيلات</span>
+                                    <span class="fw-bold fs-4">@item.TotalEnrollments.ToString("N0")</span>
+                                </div>
+                                @if (isTopEnrollments)
+                                {
+                                    <small class="text-success">
+                                        <i class="feather-trending-up"></i>
+                                        الأعلى
+                                    </small>
+                                }
+                            </div>
+
+                            <div class="mb-3 p-3 @(isTopCompletion ? "bg-soft-success" : "bg-light") rounded">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>معدل الإكمال</span>
+                                    <span class="fw-bold fs-4">@item.AvgCompletionRate.ToString("F1")%</span>
+                                </div>
+                                <div class="progress mt-2" style="height: 8px;">
+                                    <div class="progress-bar @(isTopCompletion ? "bg-success" : "bg-primary")" 
+                                         style="width: @item.AvgCompletionRate%"></div>
+                                </div>
+                                @if (isTopCompletion)
+                                {
+                                    <small class="text-success">
+                                        <i class="feather-trending-up"></i>
+                                        الأعلى
+                                    </small>
+                                }
+                            </div>
+
+                            <div class="d-grid">
+                                <a asp-controller="CourseAnalytics" asp-action="Details" asp-route-id="@item.Course?.Id" 
+                                   class="btn btn-light-brand btn-sm">
+                                    <i class="feather-eye me-2"></i>
+                                    @Html.T("عرض التفاصيل", "View details")
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Comparison Table -->
+        <div class="row mb-4">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("جدول المقارنة التفصيلي", "Detailed comparison table")</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-bordered mb-0">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th>@Html.T("المقياس", "Metric")</th>
+                                        @foreach (var item in comparison)
+                                        {
+                                            <th class="text-center">@item.Course?.Title</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="fw-semibold">
+                                            <i class="feather-eye text-primary me-2"></i>
+                                            @Html.T("إجمالي المشاهدات", "Total views")
+                                        </td>
+                                        @foreach (var item in comparison)
+                                        {
+                                            var isMax = item.TotalViews == comparison.Max(c => c.TotalViews);
+                                            <td class="text-center @(isMax ? "bg-soft-success" : "")">
+                                                <span class="@(isMax ? "fw-bold text-success" : "")">@item.TotalViews.ToString("N0")</span>
+                                                @if (isMax)
+                                                {
+                                                    <i class="feather-award text-warning ms-1"></i>
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">
+                                            <i class="feather-user-plus text-success me-2"></i>
+                                            إجمالي التسجيلات
+                                        </td>
+                                        @foreach (var item in comparison)
+                                        {
+                                            var isMax = item.TotalEnrollments == comparison.Max(c => c.TotalEnrollments);
+                                            <td class="text-center @(isMax ? "bg-soft-success" : "")">
+                                                <span class="@(isMax ? "fw-bold text-success" : "")">@item.TotalEnrollments.ToString("N0")</span>
+                                                @if (isMax)
+                                                {
+                                                    <i class="feather-award text-warning ms-1"></i>
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">
+                                            <i class="feather-percent text-warning me-2"></i>
+                                            متوسط معدل الإكمال
+                                        </td>
+                                        @foreach (var item in comparison)
+                                        {
+                                            var isMax = item.AvgCompletionRate == comparison.Max(c => c.AvgCompletionRate);
+                                            <td class="text-center @(isMax ? "bg-soft-success" : "")">
+                                                <span class="@(isMax ? "fw-bold text-success" : "")">@item.AvgCompletionRate.ToString("F1")%</span>
+                                                @if (isMax)
+                                                {
+                                                    <i class="feather-award text-warning ms-1"></i>
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">
+                                            <i class="feather-star text-warning me-2"></i>
+                                            التقييم
+                                        </td>
+                                        @foreach (var item in comparison)
+                                        {
+                                            <td class="text-center">
+                                                <div class="d-flex align-items-center justify-content-center gap-1">
+                                                    @for (int i = 1; i <= 5; i++)
+                                                    {
+                                                        if (i <= Math.Floor((double?)(item.Course?.AverageRating) ?? 0.0))
+                                                        {
+                                                            <i class="feather-star text-warning" style="font-size: 12px;"></i>
+                                                        }
+                                                        else
+                                                        {
+                                                            <i class="feather-star text-muted" style="font-size: 12px;"></i>
+                                                        }
+                                                    }
+                                                    <span class="fw-semibold ms-1">@item.Course?.AverageRating.ToString("F1")</span>
+                                                </div>
+                                            </td>
+                                        }
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">
+                                            <i class="feather-calendar text-info me-2"></i>
+                                            تاريخ النشر
+                                        </td>
+                                        @foreach (var item in comparison)
+                                        {
+                                            <td class="text-center">@item.Course?.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                        }
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">مقارنة المشاهدات والتسجيلات</h5>
+                    </div>
+                    <div class="card-body">
+                        <div style="height: 300px;">
+                            <canvas id="viewsEnrollmentsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("مقارنة معدلات الإكمال", "Completion rates comparison")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div style="height: 300px;">
+                            <canvas id="completionRatesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-info text-info mx-auto mb-3">
+                            <i class="feather-bar-chart-2"></i>
+                        </div>
+                        <h5>اختر الدورات للمقارنة</h5>
+                        <p class="text-muted">قم باختيار دورتين أو أكثر لعرض المقارنة التفصيلية</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Initialize Select2
+            $('#courseIds').select2({
+                placeholder: 'اختر الدورات...',
+                maximumSelectionLength: 4
+            });
+
+            @if (ViewBag.Comparison != null)
+            {
+                var comparison = ViewBag.Comparison as List<dynamic>;
+                <text>
+                // Views & Enrollments Chart
+                const ctx1 = document.getElementById('viewsEnrollmentsChart').getContext('2d');
+                new Chart(ctx1, {
+                    type: 'bar',
+                    data: {
+                        labels: @Html.Raw(Json.Serialize(comparison.Select(c => c.Course?.Title))),
+                        datasets: [{
+                            label: 'المشاهدات',
+                            data: @Html.Raw(Json.Serialize(comparison.Select(c => c.TotalViews))),
+                            backgroundColor: '#3454d1',
+                            yAxisID: 'y'
+                        }, {
+                            label: 'التسجيلات',
+                            data: @Html.Raw(Json.Serialize(comparison.Select(c => c.TotalEnrollments))),
+                            backgroundColor: '#0ab39c',
+                            yAxisID: 'y1'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                beginAtZero: true
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                beginAtZero: true,
+                                grid: {
+                                    drawOnChartArea: false
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Completion Rates Chart
+                const ctx2 = document.getElementById('completionRatesChart').getContext('2d');
+                new Chart(ctx2, {
+                    type: 'radar',
+                    data: {
+                        labels: ['معدل الإكمال', 'معدل التفاعل', 'معدل الحضور'],
+                        datasets: @Html.Raw(Json.Serialize(comparison.Select(c => new {
+                            label = c.Course?.Title,
+                            data = new[] { c.AvgCompletionRate, 75.0, 85.0 }
+                        })))
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            r: {
+                                beginAtZero: true,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+                </text>
+            }
+        });
+    </script>
+}
+

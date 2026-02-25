@@ -1,0 +1,523 @@
+@model dynamic
+
+@{
+    ViewData["Title"] = Html.T("إحصائيات المدفوعات", "Payment statistics");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("المدفوعات", "Payments"), Url.Action("Index", "Payments")),
+        (Html.T("الإحصائيات", "Statistics"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/daterangepicker.min.css" />
+    <style>
+        .stats-card {
+            border-radius: 10px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .chart-container {
+            position: relative;
+            height: 350px;
+        }
+        .stat-icon-large {
+            font-size: 3.5rem;
+            opacity: 0.15;
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full stats-card">
+            <div class="card-body position-relative overflow-hidden">
+                <i class="feather-credit-card stat-icon-large text-primary"></i>
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                        <i class="feather-credit-card"></i>
+                    </div>
+                    <span class="badge bg-soft-success text-success">
+                        <i class="feather-trending-up me-1"></i>
+                        @((Model.SuccessRate).ToString("F1"))%
+                    </span>
+                </div>
+                <div>
+                    <span class="text-muted d-block mb-1">إجمالي المدفوعات</span>
+                    <h2 class="fw-bold mb-0 text-primary">@Model.TotalPayments.ToString("N0")</h2>
+                    <small class="text-muted">في الفترة المحددة</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full stats-card">
+            <div class="card-body position-relative overflow-hidden">
+                <i class="feather-dollar-sign stat-icon-large text-success"></i>
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                        <i class="feather-dollar-sign"></i>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-muted d-block mb-1">إجمالي الإيرادات</span>
+                    <h2 class="fw-bold mb-0 text-success">@Model.TotalRevenue.ToEGP()</h2>
+                    <small class="text-muted">مدفوعات مكتملة</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full stats-card">
+            <div class="card-body position-relative overflow-hidden">
+                <i class="feather-trending-up stat-icon-large text-warning"></i>
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                        <i class="feather-trending-up"></i>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-muted d-block mb-1">متوسط قيمة العملية</span>
+                    <h2 class="fw-bold mb-0 text-warning">@Model.AverageTransactionValue.ToEGP()</h2>
+                    <small class="text-muted">لكل عملية</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full stats-card">
+            <div class="card-body position-relative overflow-hidden">
+                <i class="feather-check-circle stat-icon-large text-info"></i>
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                        <i class="feather-check-circle"></i>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-muted d-block mb-1">معدل النجاح</span>
+                    <h2 class="fw-bold mb-0 text-info">@Model.SuccessRate.ToString("F1")%</h2>
+                    <small class="text-muted">عمليات ناجحة</small>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Date Range Filter -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                            <input type="date" class="form-control" name="fromDate" value="@Model.FromDate.ToString("yyyy-MM-dd")">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                            <input type="date" class="form-control" name="toDate" value="@Model.ToDate.ToString("yyyy-MM-dd")">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="feather-search me-2"></i>
+                                تطبيق الفلتر
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("المدفوعات اليومية", "Daily payments")</h5>
+                    <div class="card-header-action">
+                        <div class="dropdown">
+                            <a href="javascript:void(0);" class="btn btn-sm btn-light-brand" data-bs-toggle="dropdown">
+                                <i class="feather-more-vertical"></i>
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-end">
+                                <a href="javascript:void(0);" class="dropdown-item" onclick="downloadChart('paymentsByDay')">
+                                    <i class="feather-download me-3"></i>
+                                    تحميل الرسم
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="paymentsByDayChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع العملات", "Currency distribution")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="currencyDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Status Breakdown -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تفصيل حالات المدفوعات", "Payment status breakdown")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="p-4 border rounded text-center bg-soft-success">
+                                <div class="avatar-text avatar-lg bg-success text-white mx-auto mb-3">
+                                    <i class="feather-check"></i>
+                                </div>
+                                <h4 class="fw-bold mb-1">@Model.CompletedPayments.ToString("N0")</h4>
+                                <p class="text-muted mb-2">عمليات مكتملة</p>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-success" role="progressbar" 
+                                         style="width: @((Model.TotalPayments > 0 ? (Model.CompletedPayments / (double)Model.TotalPayments * 100) : 0).ToString("F0"))%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="p-4 border rounded text-center bg-soft-warning">
+                                <div class="avatar-text avatar-lg bg-warning text-white mx-auto mb-3">
+                                    <i class="feather-clock"></i>
+                                </div>
+                                <h4 class="fw-bold mb-1">@Model.PendingPayments.ToString("N0")</h4>
+                                <p class="text-muted mb-2">قيد الانتظار</p>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-warning" role="progressbar" 
+                                         style="width: @((Model.TotalPayments > 0 ? (Model.PendingPayments / (double)Model.TotalPayments * 100) : 0).ToString("F0"))%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="p-4 border rounded text-center bg-soft-danger">
+                                <div class="avatar-text avatar-lg bg-danger text-white mx-auto mb-3">
+                                    <i class="feather-x"></i>
+                                </div>
+                                <h4 class="fw-bold mb-1">@Model.FailedPayments.ToString("N0")</h4>
+                                <p class="text-muted mb-2">عمليات فاشلة</p>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-danger" role="progressbar" 
+                                         style="width: @((Model.TotalPayments > 0 ? (Model.FailedPayments / (double)Model.TotalPayments * 100) : 0).ToString("F0"))%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="p-4 border rounded text-center bg-soft-info">
+                                <div class="avatar-text avatar-lg bg-info text-white mx-auto mb-3">
+                                    <i class="feather-percent"></i>
+                                </div>
+                                <h4 class="fw-bold mb-1">@Model.SuccessRate.ToString("F1")%</h4>
+                                <p class="text-muted mb-2">معدل النجاح</p>
+                                <div class="progress" style="height: 6px;">
+                                    <div class="progress-bar bg-info" role="progressbar" style="width: @Model.SuccessRate.ToString("F0")%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Performing Courses -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أفضل 10 دورات من حيث الإيرادات", "Top 10 courses by revenue")</h5>
+                    <div class="card-header-action">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-light-brand dropdown-toggle" data-bs-toggle="dropdown">
+                                <i class="feather-download me-2"></i>تصدير
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="/api/export/payments?format=csv"><i class="feather-file-text me-2"></i>@Html.T("CSV", "CSV")</a></li>
+                                <li><a class="dropdown-item" href="/api/export/payments?format=excel"><i class="feather-file me-2"></i>@Html.T("إكسل", "Excel")</a></li>
+                                <li><a class="dropdown-item" href="/api/export/payments?format=pdf"><i class="feather-file-text me-2"></i>@Html.T("PDF", "PDF")</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="javascript:void(0)" onclick="window.print()"><i class="feather-printer me-2"></i>طباعة</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>@Html.T("الدورة", "Course")</th>
+                                    <th>@Html.T("عدد العمليات", "Transactions")</th>
+                                    <th>@Html.T("الإيرادات", "Revenue")</th>
+                                    <th>@Html.T("النسبة", "Share")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{int index = 1;}
+                                @foreach (var course in Model.TopCourses)
+                                {
+                                    <tr>
+                                        <td><span class="fw-bold">@index</span></td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="avatar-text bg-soft-primary text-primary">
+                                                    <i class="feather-book"></i>
+                                                </div>
+                                                <span class="fw-semibold">@course.Title</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-info text-info">@course.Count عملية</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold text-success">@course.Revenue.ToEGP()</span>
+                                        </td>
+                                        <td>
+                                            <div class="progress" style="width: 100px; height: 8px;">
+                                                <div class="progress-bar bg-primary" role="progressbar" 
+                                                     style="width: @((Model.TotalRevenue > 0 ? (course.Revenue / Model.TotalRevenue * 100) : 0).ToString("F0"))%"></div>
+                                            </div>
+                                            <small class="text-muted">@((Model.TotalRevenue > 0 ? (course.Revenue / Model.TotalRevenue * 100) : 0).ToString("F1"))%</small>
+                                        </td>
+                                    </tr>
+                                    index++;
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Metrics -->
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("مقاييس إضافية", "Additional metrics")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="feather-dollar-sign text-success me-2"></i>
+                                <span>إجمالي الضرائب</span>
+                            </div>
+                            <span class="fw-bold">@Model.TotalTax.ToEGP()</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="feather-tag text-info me-2"></i>
+                                <span>إجمالي الخصومات</span>
+                            </div>
+                            <span class="fw-bold">@Model.TotalDiscount.ToEGP()</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="feather-trending-up text-primary me-2"></i>
+                                <span>متوسط قيمة العملية</span>
+                            </div>
+                            <span class="fw-bold">@Model.AverageTransactionValue.ToEGP()</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("المدفوعات حسب العملة", "Payments by currency")</h5>
+                </div>
+                <div class="card-body">
+                    @foreach (var currency in Model.PaymentsByCurrency)
+                    {
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <span class="fw-semibold">@currency.Currency</span>
+                                    <small class="text-muted ms-2">(@currency.Count عملية)</small>
+                                </div>
+                                <span class="fw-bold text-primary">@currency.Total.ToString("N0")</span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-primary" role="progressbar" 
+                                     style="width: @((Model.TotalRevenue > 0 ? (currency.Total / Model.TotalRevenue * 100) : 0).ToString("F0"))%"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Payments By Day Chart
+        const paymentsByDayCtx = document.getElementById('paymentsByDayChart').getContext('2d');
+        const paymentsByDayChart = new Chart(paymentsByDayCtx, {
+            type: 'line',
+            data: {
+                labels: @Html.Raw(Json.Serialize(Model.PaymentsByDay.Select((Func<dynamic, string>)(x => x.Date.ToString("dd/MM"))))),
+                datasets: [{
+                    label: 'المدفوعات',
+                    data: @Html.Raw(Json.Serialize(Model.PaymentsByDay.Select((Func<dynamic, decimal>)(x => x.Total)))),
+                    borderColor: '#3454d1',
+                    backgroundColor: 'rgba(52, 84, 209, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: 'عدد العمليات',
+                    data: @Html.Raw(Json.Serialize(Model.PaymentsByDay.Select((Func<dynamic, int>)(x => x.Count)))),
+                    borderColor: '#0ab39c',
+                    backgroundColor: 'rgba(10, 179, 156, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    yAxisID: 'y1'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            font: {
+                                family: 'Cairo'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.datasetIndex === 0) {
+                                    label += context.parsed.y.toLocaleString('ar-EG') + ' جنيه';
+                                } else {
+                                    label += context.parsed.y + ' عملية';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'المبلغ'
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'العدد'
+                        },
+                        grid: {
+                            drawOnChartArea: false,
+                        }
+                    }
+                }
+            }
+        });
+
+        // Currency Distribution Chart
+        const currencyCtx = document.getElementById('currencyDistributionChart').getContext('2d');
+        const currencyChart = new Chart(currencyCtx, {
+            type: 'doughnut',
+            data: {
+                labels: @Html.Raw(Json.Serialize(Model.PaymentsByCurrency.Select((Func<dynamic, string>)(x => x.Currency)))),
+                datasets: [{
+                    data: @Html.Raw(Json.Serialize(Model.PaymentsByCurrency.Select((Func<dynamic, decimal>)(x => x.Total)))),
+                    backgroundColor: ['#3454d1', '#0ab39c', '#f7b84b', '#f06548', '#6c757d'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            font: {
+                                family: 'Cairo',
+                                size: 12
+                            },
+                            padding: 15,
+                            usePointStyle: true
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                label += context.parsed.toLocaleString('ar-EG');
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        function downloadChart(chartName) {
+            alert('@Html.Raw(Html.T("ميزة تحميل الرسم قيد التطوير", "Chart download feature is under development").Replace("'", "\\'"))');
+        }
+    </script>
+}
+

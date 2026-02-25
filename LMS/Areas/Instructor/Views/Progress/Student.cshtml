@@ -1,0 +1,311 @@
+@model LMS.Domain.Entities.Learning.Enrollment
+
+@{
+    ViewData["Title"] = Html.T("تقدم الطالب", "Student Progress");
+    ViewData["Subtitle"] = Model.Student?.FullName;
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex gap-2">
+            <a asp-action="Course" asp-route-courseId="@Model.CourseId" class="btn btn-light">
+                <i class="feather-arrow-right me-2"></i>
+                العودة للدورة
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Student Info -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-4">
+                        <div class="avatar-text avatar-xl bg-primary text-white">
+                            @Model.Student?.FirstName?.Substring(0, 1)
+                        </div>
+                        <div class="flex-fill">
+                            <h4 class="fw-bold mb-1">@Model.Student?.FullName</h4>
+                            <div class="text-muted mb-2">@Model.Student?.Email</div>
+                            <div class="d-flex gap-3">
+                                <span class="badge bg-soft-primary text-primary">
+                                    <i class="feather-calendar me-1"></i>
+                                    التسجيل: @Model.EnrolledAt.ToString("dd/MM/yyyy")
+                                </span>
+                                @if (Model.CompletedAt.HasValue)
+                                {
+                                    <span class="badge bg-soft-success text-success">
+                                        <i class="feather-check-circle me-1"></i>
+                                        الإكمال: @Model.CompletedAt.Value.ToString("dd/MM/yyyy")
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Overview -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("نظرة عامة على التقدم", "Progress overview")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="text-center p-4 bg-soft-primary rounded">
+                                <div class="fs-32 fw-bold text-primary mb-2">@Model.ProgressPercentage.ToString("F0")%</div>
+                                <div class="text-muted">نسبة التقدم الكلية</div>
+                                <div class="progress mt-3" style="height: 10px;">
+                                    <div class="progress-bar bg-primary" role="progressbar" style="width: @Model.ProgressPercentage%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-center p-4 bg-soft-success rounded">
+                                <div class="fs-32 fw-bold text-success mb-2">@((Model.TotalTimeSpent / 3600).ToString("F1"))</div>
+                                <div class="text-muted">ساعات التعلم</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lessons Progress -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تقدم الدروس", "Lesson progress")</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.Course?.Modules != null && Model.Course.Modules.Any())
+                    {
+                        @foreach (var module in Model.Course.Modules.OrderBy(m => m.DisplayOrder))
+                        {
+                            <div class="mb-4">
+                                <h6 class="fw-bold mb-3">@module.Title</h6>
+                                @if (module.Lessons != null && module.Lessons.Any())
+                                {
+                                    <div class="list-group">
+                                        @foreach (var lesson in module.Lessons.OrderBy(l => l.DisplayOrder))
+                                        {
+                                            var progress = Model.LessonProgress?.FirstOrDefault(lp => lp.LessonId == lesson.Id);
+                                            var isCompleted = progress?.IsCompleted ?? false;
+                                            var progressPercent = progress?.ProgressPercentage ?? 0;
+                                            
+                                            <div class="list-group-item">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div class="d-flex align-items-center gap-3 flex-fill">
+                                                        <div class="avatar-text avatar-sm @(isCompleted ? "bg-success" : "bg-soft-secondary") @(isCompleted ? "text-white" : "text-secondary")">
+                                                            <i class="feather-@(isCompleted ? "check" : "circle")"></i>
+                                                        </div>
+                                                        <div class="flex-fill">
+                                                            <div class="fw-medium">@lesson.Title</div>
+                                                            @if (progress != null)
+                                                            {
+                                                                <div class="progress mt-1" style="height: 4px;">
+                                                                    <div class="progress-bar bg-@(isCompleted ? "success" : "primary")" style="width: @progressPercent%"></div>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        @if (isCompleted)
+                                                        {
+                                                            <span class="badge bg-soft-success text-success">مكتمل</span>
+                                                            if (progress?.CompletedAt.HasValue == true)
+                                                            {
+                                                                <div class="fs-12 text-muted mt-1">@progress.CompletedAt.Value.ToString("dd/MM/yyyy")</div>
+                                                            }
+                                                        }
+                                                        else if (progressPercent > 0)
+                                                        {
+                                                            <span class="badge bg-soft-warning text-warning">@progressPercent.ToString("F0")%</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-soft-secondary text-secondary">لم يبدأ</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center py-4">@Html.T("لا توجد دروس في هذه الدورة", "No lessons in this course")</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Quiz Attempts -->
+            @if (Model.QuizAttempts != null && Model.QuizAttempts.Any())
+            {
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("محاولات الاختبارات", "Quiz attempts")</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الاختبار", "Quiz")</th>
+                                        <th>@Html.T("التاريخ", "Date")</th>
+                                        <th>@Html.T("الدرجة", "Score")</th>
+                                        <th>@Html.T("النسبة", "Percentage")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var attempt in Model.QuizAttempts.OrderByDescending(qa => qa.StartedAt))
+                                    {
+                                        <tr>
+                                            <td>@attempt.Quiz?.Title</td>
+                                            <td>@attempt.StartedAt.ToString("dd/MM/yyyy")</td>
+                                            <td>@attempt.Score / @attempt.TotalPoints</td>
+                                            <td>
+                                                <span class="badge bg-soft-@(attempt.Percentage >= 50 ? "success" : "danger") text-@(attempt.Percentage >= 50 ? "success" : "danger")">
+                                                    @attempt.Percentage.ToString("F1")%
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @if (attempt.IsPassed)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">ناجح</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger">راسب</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Assignments -->
+            @if (Model.AssignmentSubmissions != null && Model.AssignmentSubmissions.Any())
+            {
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الواجبات المقدمة", "Assignments submitted")</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الواجب", "Assignment")</th>
+                                        <th>@Html.T("تاريخ التقديم", "Submitted")</th>
+                                        <th>@Html.T("الدرجة", "Grade")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var submission in Model.AssignmentSubmissions.OrderByDescending(s => s.SubmittedAt))
+                                    {
+                                        <tr>
+                                            <td>@submission.Assignment?.Title</td>
+                                            <td>@submission.SubmittedAt.ToString("dd/MM/yyyy")</td>
+                                            <td>
+                                                @if (submission.Score.HasValue)
+                                                {
+                                                    <span>@submission.Score / @submission.Assignment?.MaxScore</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">لم يتم التقييم</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (submission.Status)
+                                                {
+                                                    case LMS.Domain.Enums.AssignmentStatus.Submitted:
+                                                        <span class="badge bg-soft-info text-info">تم التقديم</span>
+                                                        break;
+                                                    case LMS.Domain.Enums.AssignmentStatus.Graded:
+                                                        <span class="badge bg-soft-success text-success">تم التقييم</span>
+                                                        break;
+                                                    case LMS.Domain.Enums.AssignmentStatus.Late:
+                                                        <span class="badge bg-soft-warning text-warning">متأخر</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge bg-soft-secondary text-secondary">@submission.Status</span>
+                                                        break;
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Quick Stats -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("إحصائيات سريعة", "Quick stats")</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                            <span class="text-muted">الدروس المكتملة</span>
+                            <span class="fw-bold">@(Model.LessonProgress?.Count(lp => lp.IsCompleted) ?? 0)</span>
+                        </li>
+                        <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                            <span class="text-muted">محاولات الاختبارات</span>
+                            <span class="fw-bold">@(Model.QuizAttempts?.Count ?? 0)</span>
+                        </li>
+                        <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                            <span class="text-muted">الواجبات المقدمة</span>
+                            <span class="fw-bold">@(Model.AssignmentSubmissions?.Count ?? 0)</span>
+                        </li>
+                        <li class="d-flex justify-content-between align-items-center py-2">
+                            <span class="text-muted">آخر نشاط</span>
+                            <span class="fw-bold">@Model.LastAccessedAt?.ToString("dd/MM/yyyy")</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Course Info -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("معلومات الدورة", "Course info")</h6>
+                </div>
+                <div class="card-body">
+                    <h6 class="fw-bold mb-2">@Model.Course?.Title</h6>
+                    <p class="text-muted fs-13 mb-3">@Model.Course?.Description</p>
+                    <a href="@Url.Action("Course", new { courseId = Model.CourseId })" class="btn btn-sm btn-light w-100">
+                        <i class="feather-book me-2"></i>
+                        عرض تقدم جميع الطلاب
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+

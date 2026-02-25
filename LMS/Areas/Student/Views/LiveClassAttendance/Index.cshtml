@@ -1,0 +1,441 @@
+@model List<LMS.Domain.Entities.LiveSessions.LiveClassAttendance>
+@{
+    ViewData["Title"] = Html.T("سجل الحضور", "Attendance History");
+    var courses = ViewBag.Courses as List<LMS.Domain.Entities.Courses.Course> ?? new List<LMS.Domain.Entities.Courses.Course>();
+    var courseId = ViewBag.CourseId as int?;
+}
+
+@section Styles {
+<style>
+    .attendance-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+        border-right: 4px solid;
+    }
+    .attendance-card:hover {
+        transform: translateX(-5px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+    .attendance-card.present {
+        border-right-color: #10b981;
+    }
+    .attendance-card.absent {
+        border-right-color: #ef4444;
+    }
+    .attendance-card.partial {
+        border-right-color: #f59e0b;
+    }
+    .duration-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .class-thumbnail {
+        width: 100px;
+        height: 100px;
+        border-radius: 12px;
+        object-fit: cover;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 36px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Page Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-video text-primary me-2"></i>
+                    @Html.T("سجل حضور الجلسات المباشرة", "Live Session Attendance History")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("تاريخ حضورك في الجلسات المباشرة", "Your attendance history in live sessions")</p>
+            </div>
+            <div class="col-lg-6 text-end">
+                <div class="d-inline-flex align-items-center gap-2">
+                    <span class="badge bg-soft-success text-success px-3 py-2">
+                        <i class="feather-check-circle me-1"></i>
+                        @Model.Count(a => a.IsPresent) @Html.T("حضور", "Present")
+                    </span>
+                    <span class="badge bg-soft-danger text-danger px-3 py-2">
+                        <i class="feather-x-circle me-1"></i>
+                        @Model.Count(a => !a.IsPresent) @Html.T("غياب", "Absent")
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-xl-2 col-lg-4 col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-primary text-primary mx-auto mb-3">
+                    <i class="feather-video"></i>
+                </div>
+                <h3 class="fw-bold mb-1">@Model.Count</h3>
+                <p class="text-muted mb-0">@Html.T("إجمالي الجلسات", "Total Sessions")</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-2 col-lg-4 col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-success text-success mx-auto mb-3">
+                    <i class="feather-check-circle"></i>
+                </div>
+                <h3 class="fw-bold mb-1">@Model.Count(a => a.IsPresent)</h3>
+                <p class="text-muted mb-0">@Html.T("حضور", "Present")</p>
+                @if (Model.Any())
+                {
+                    <small class="text-success">
+                        @((Model.Count(a => a.IsPresent) * 100.0 / Model.Count).ToString("F1"))% @Html.T("نسبة الحضور", "attendance rate")
+                    </small>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-2 col-lg-4 col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-warning text-warning mx-auto mb-3">
+                    <i class="feather-alert-triangle"></i>
+                </div>
+                <h3 class="fw-bold mb-1">@(ViewBag.TotalLate ?? 0)</h3>
+                <p class="text-muted mb-0">@Html.T("تأخير", "Late")</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-2 col-lg-4 col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-danger text-danger mx-auto mb-3">
+                    <i class="feather-x-circle"></i>
+                </div>
+                <h3 class="fw-bold mb-1">@(ViewBag.TotalAbsent ?? 0)</h3>
+                <p class="text-muted mb-0">@Html.T("غياب", "Absent")</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-2 col-lg-4 col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-info text-info mx-auto mb-3">
+                    <i class="feather-clock"></i>
+                </div>
+                <h3 class="fw-bold mb-1">
+                    @{
+                        var totalMinutes = Model.Sum(a => a.DurationMinutes);
+                        var totalHours = totalMinutes / 60.0;
+                    }
+                    @totalHours.ToString("F1")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("ساعة حضور", "attendance hours")</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-2 col-lg-4 col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-primary text-primary mx-auto mb-3">
+                    <i class="feather-star"></i>
+                </div>
+                <h3 class="fw-bold mb-1">
+                    @{
+                        var avgScore = ViewBag.AverageScore ?? 0.0;
+                    }
+                    @(((double)avgScore).ToString("F1"))%
+                </h3>
+                <p class="text-muted mb-0">@Html.T("متوسط الدرجة", "Average Score")</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <form method="get" asp-action="Index" class="row align-items-end g-3">
+            <div class="col-lg-4">
+                <label class="form-label fw-bold">@Html.T("تصفية حسب الدورة", "Filter by Course")</label>
+                <select name="courseId" class="form-select" onchange="this.form.submit()">
+                    <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                    @foreach (var course in courses)
+                    {
+                        <option value="@course.Id" selected="@(courseId == course.Id)">@course.Title</option>
+                    }
+                </select>
+            </div>
+            <div class="col-lg-4">
+                <label class="form-label fw-bold">@Html.T("حالة الحضور", "Attendance Status")</label>
+                <select class="form-select" id="statusFilter" onchange="filterByStatus()">
+                    <option value="all">@Html.T("الكل", "All")</option>
+                    <option value="present">@Html.T("حضور فقط", "Present Only")</option>
+                    <option value="absent">@Html.T("غياب فقط", "Absent Only")</option>
+                </select>
+            </div>
+            <div class="col-lg-4">
+                <button type="button" class="btn btn-outline-secondary w-100" onclick="resetFilters()">
+                    <i class="feather-refresh-cw me-2"></i>
+                    @Html.T("إعادة تعيين", "Reset")
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Attendance List -->
+<div class="row g-4">
+    @if (Model.Any())
+    {
+        foreach (var attendance in Model)
+        {
+            var statusClass = attendance.IsPresent ? "present" : "absent";
+            var statusText = attendance.IsPresent ? Html.T("حضور", "Present") : Html.T("غياب", "Absent");
+            var statusIcon = attendance.IsPresent ? "check-circle" : "x-circle";
+            var statusColor = attendance.IsPresent ? "success" : "danger";
+            
+            <div class="col-12" data-status="@statusClass">
+                <div class="attendance-card @statusClass">
+                    <div class="row align-items-center">
+                        <!-- Class Thumbnail -->
+                        <div class="col-lg-1 col-md-2 text-center mb-3 mb-lg-0">
+                            <div class="class-thumbnail">
+                                <i class="feather-video"></i>
+                            </div>
+                        </div>
+                        
+                        <!-- Class Info -->
+                        <div class="col-lg-6 col-md-6 mb-3 mb-lg-0">
+                            <div class="mb-2">
+                                <span class="badge bg-soft-primary text-primary mb-2">
+                                    <i class="feather-book me-1"></i>
+                                    @attendance.LiveClass.Course.Title
+                                </span>
+                            </div>
+                            <h5 class="fw-bold mb-2">@attendance.LiveClass.Title</h5>
+                            <div class="d-flex flex-wrap gap-3 text-muted small">
+                                <span>
+                                    <i class="feather-user me-1"></i>
+                                    @attendance.LiveClass.Instructor.FullName
+                                </span>
+                                <span>
+                                    <i class="feather-calendar me-1"></i>
+                                    @attendance.LiveClass.ScheduledStartTime.ToString("dd/MM/yyyy")
+                                </span>
+                                <span>
+                                    <i class="feather-clock me-1"></i>
+                                    @attendance.LiveClass.ScheduledStartTime.ToString("HH:mm")
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <!-- Attendance Status -->
+                        <div class="col-lg-3 col-md-6 text-center mb-3 mb-lg-0">
+                            @{
+                                var detailStatus = attendance.AttendanceStatusDetail;
+                                var detailStatusText = detailStatus switch
+                                {
+                                    LMS.Domain.Enums.AttendanceStatus.Present => Html.T("حضور", "Present"),
+                                    LMS.Domain.Enums.AttendanceStatus.Late => Html.T("متأخر", "Late"),
+                                    LMS.Domain.Enums.AttendanceStatus.LeftEarly => Html.T("مغادرة مبكرة", "Left Early"),
+                                    LMS.Domain.Enums.AttendanceStatus.Absent => Html.T("غياب", "Absent"),
+                                    LMS.Domain.Enums.AttendanceStatus.Excused => Html.T("عذر", "Excused"),
+                                    _ => statusText
+                                };
+                                var detailStatusColor = detailStatus switch
+                                {
+                                    LMS.Domain.Enums.AttendanceStatus.Present => "success",
+                                    LMS.Domain.Enums.AttendanceStatus.Late => "warning",
+                                    LMS.Domain.Enums.AttendanceStatus.LeftEarly => "info",
+                                    LMS.Domain.Enums.AttendanceStatus.Absent => "danger",
+                                    LMS.Domain.Enums.AttendanceStatus.Excused => "secondary",
+                                    _ => statusColor
+                                };
+                            }
+                            <span class="badge bg-soft-@detailStatusColor text-@detailStatusColor px-4 py-2 fs-6">
+                                <i class="feather-@statusIcon me-2"></i>
+                                @detailStatusText
+                            </span>
+
+                            @if (attendance.AttendanceScore > 0)
+                            {
+                                <div class="mt-2">
+                                    <span class="badge bg-soft-primary text-primary">
+                                        <i class="feather-star me-1"></i>
+                                        @Html.T("الدرجة:", "Score:") @attendance.AttendanceScore.ToString("F0")%
+                                    </span>
+                                </div>
+                            }
+
+                            @if (attendance.LateMinutes > 0)
+                            {
+                                <div class="mt-1">
+                                    <small class="text-warning">
+                                        <i class="feather-clock me-1"></i>
+                                        @Html.T("تأخير", "Late") @attendance.LateMinutes @Html.T("دقيقة", "minute(s)")
+                                    </small>
+                                </div>
+                            }
+                            
+                            @if (attendance.IsPresent)
+                            {
+                                <div class="mt-3">
+                                    @if (attendance.JoinedAt.HasValue)
+                                    {
+                                        <small class="text-muted d-block">
+                                            <i class="feather-log-in me-1"></i>
+                                            @Html.T("انضم:", "Joined:") @attendance.JoinedAt.Value.ToString("HH:mm")
+                                        </small>
+                                    }
+                                    @if (attendance.LeftAt.HasValue)
+                                    {
+                                        <small class="text-muted d-block">
+                                            <i class="feather-log-out me-1"></i>
+                                            @Html.T("غادر:", "Left:") @attendance.LeftAt.Value.ToString("HH:mm")
+                                        </small>
+                                    }
+                                    <div class="duration-badge bg-soft-info text-info mt-2">
+                                        <i class="feather-clock"></i>
+                                        <span>@attendance.DurationMinutes @Html.T("دقيقة", "minute(s)")</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        
+                        <!-- Actions -->
+                        <div class="col-lg-2 col-md-6 text-center">
+                            <a href="@Url.Action("Details", new { id = attendance.Id })" 
+                               class="btn btn-primary w-100 mb-2">
+                                <i class="feather-eye me-2"></i>
+                                @Html.T("التفاصيل", "Details")
+                            </a>
+                            @{
+                                var publishedRecording = attendance.LiveClass?.Recordings?.FirstOrDefault(r => r.IsPublished);
+                            }
+                            @if (publishedRecording != null)
+                            {
+                                <a href="@Url.Action("WatchRecording", "LiveClasses", new { area = "Student", id = publishedRecording.Id })" class="btn btn-outline-secondary w-100 btn-sm">
+                                    <i class="feather-play me-2"></i>
+                                    @Html.T("التسجيل", "Recording")
+                                </a>
+                            }
+                            else if (attendance.LiveClass != null)
+                            {
+                                <a href="@Url.Action("Details", "LiveClasses", new { area = "Student", id = attendance.LiveClassId })" class="btn btn-outline-secondary w-100 btn-sm">
+                                    <i class="feather-eye me-2"></i>
+                                    @Html.T("تفاصيل الجلسة", "Session Details")
+                                </a>
+                            }
+                        </div>
+                    </div>
+                    
+                    <!-- Additional Info for Present -->
+                    @if (attendance.IsPresent && attendance.Notes != null)
+                    {
+                        <div class="mt-3 pt-3 border-top">
+                            <small class="text-muted">
+                                <i class="feather-file-text me-2"></i>
+                                <strong>@Html.T("ملاحظات:", "Notes:")</strong> @attendance.Notes
+                            </small>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="col-12">
+            @{
+                ViewData["Icon"] = "video";
+                ViewData["Title"] = Html.T("لا توجد سجلات حضور", "No attendance records");
+                ViewData["Message"] = Html.T("لم تحضر أي جلسات مباشرة بعد", "You haven't attended any live sessions yet");
+                ViewData["ActionText"] = Html.T("تصفح الجلسات المباشرة", "Browse Live Sessions");
+                ViewData["ActionUrl"] = Url.Action("Index", "LiveClasses", new { area = "Student" });
+            }
+            @await Html.PartialAsync("_EmptyState")
+        </div>
+    }
+</div>
+
+<!-- Pagination Info -->
+@if (Model.Any())
+{
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center">
+                    <p class="text-muted mb-0">
+                        @Html.T("عرض", "Showing") @Model.Count @Html.T("سجل حضور", "attendance record(s)")
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    function filterByStatus() {
+        const filter = document.getElementById('statusFilter').value;
+        const cards = document.querySelectorAll('[data-status]');
+        
+        cards.forEach(card => {
+            const status = card.dataset.status;
+            let show = false;
+            
+            switch(filter) {
+                case 'all':
+                    show = true;
+                    break;
+                case 'present':
+                    show = status === 'present';
+                    break;
+                case 'absent':
+                    show = status === 'absent';
+                    break;
+            }
+            
+            card.style.display = show ? 'block' : 'none';
+            
+            if (show) {
+                card.style.opacity = '0';
+                setTimeout(() => {
+                    card.style.transition = 'opacity 0.3s';
+                    card.style.opacity = '1';
+                }, 50);
+            }
+        });
+    }
+    
+    function resetFilters() {
+        document.querySelector('select[name="courseId"]').value = '';
+        document.getElementById('statusFilter').value = 'all';
+        filterByStatus();
+    }
+</script>
+}

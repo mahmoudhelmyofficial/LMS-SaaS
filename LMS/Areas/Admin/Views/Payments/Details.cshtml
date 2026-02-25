@@ -1,0 +1,369 @@
+@model LMS.Domain.Entities.Payments.Payment
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل الدفعة", "Payment Details");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("المدفوعات", "Payments"), Url.Action("Index", "Payments")),
+        (Html.T("تفاصيل الدفعة", "Payment details"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .payment-status-badge {
+            font-size: 1rem;
+            padding: 0.5rem 1rem;
+        }
+        .invoice-box {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 30px;
+            background-color: #f9fafb;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <!-- Payment Status -->
+        <div class="col-lg-12 mb-4">
+            <div class="card stretch stretch-full">
+                <div class="card-body text-center py-4">
+                    @switch (Model.Status)
+                    {
+                        case LMS.Domain.Enums.PaymentStatus.Completed:
+                            <i class="feather-check-circle fs-1 text-success mb-3"></i>
+                            <h4 class="mb-2">@Html.T("دفعة ناجحة", "Payment successful")</h4>
+                            <p class="text-muted mb-3">@Html.T("تمت معالجة الدفعة بنجاح", "Payment was processed successfully")</p>
+                            <span class="payment-status-badge badge bg-soft-success text-success">@Html.T("مكتملة", "Completed")</span>
+                            break;
+                        case LMS.Domain.Enums.PaymentStatus.Pending:
+                            <i class="feather-clock fs-1 text-warning mb-3"></i>
+                            <h4 class="mb-2">@Html.T("دفعة قيد الانتظار", "Payment pending")</h4>
+                            <p class="text-muted mb-3">@Html.T("في انتظار تأكيد الدفع", "Awaiting payment confirmation")</p>
+                            <span class="payment-status-badge badge bg-soft-warning text-warning">@Html.T("معلقة", "Pending")</span>
+                            break;
+                        case LMS.Domain.Enums.PaymentStatus.Failed:
+                            <i class="feather-x-circle fs-1 text-danger mb-3"></i>
+                            <h4 class="mb-2">@Html.T("فشلت الدفعة", "Payment failed")</h4>
+                            <p class="text-muted mb-3">@Html.T("حدث خطأ أثناء معالجة الدفع", "An error occurred while processing the payment")</p>
+                            <span class="payment-status-badge badge bg-soft-danger text-danger">@Html.T("فاشلة", "Failed")</span>
+                            break;
+                        case LMS.Domain.Enums.PaymentStatus.Refunded:
+                            <i class="feather-rotate-ccw fs-1 text-info mb-3"></i>
+                            <h4 class="mb-2">@Html.T("تم الاسترداد", "Refunded")</h4>
+                            <p class="text-muted mb-3">@Html.T("تم استرداد المبلغ", "Amount has been refunded")</p>
+                            <span class="payment-status-badge badge bg-soft-info text-info">@Html.T("مستردة", "Refunded")</span>
+                            break;
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Details -->
+        <div class="col-lg-8 mb-4">
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تفاصيل الدفع", "Payment details")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="text-muted">@Html.T("رقم الدفعة", "Payment #")</label>
+                            <p class="fw-semibold font-monospace">#@Model.Id.ToString("D8")</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted">@Html.T("تاريخ الدفع", "Payment date")</label>
+                            <p class="fw-semibold">@Model.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")</p>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="text-muted">@Html.T("المبلغ", "Amount")</label>
+                            <h4 class="text-primary">@Model.TotalAmount.ToString("N2") @Model.Currency</h4>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted">@Html.T("طريقة الدفع", "Payment method")</label>
+                            <p class="fw-semibold">
+                                @switch (Model.PaymentMethod)
+                                {
+                                    case "CreditCard":
+                                        <i class="feather-credit-card me-1"></i>
+                                        <span>@Html.T("بطاقة ائتمان", "Credit card")</span>
+                                        break;
+                                    case "PayPal":
+                                        <i class="feather-dollar-sign me-1"></i>
+                                        <span>PayPal</span>
+                                        break;
+                                    case "BankTransfer":
+                                        <i class="feather-briefcase me-1"></i>
+                                        <span>@Html.T("تحويل بنكي", "Bank transfer")</span>
+                                        break;
+                                    default:
+                                        <span>@Model.PaymentMethod</span>
+                                        break;
+                                }
+                            </p>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="text-muted">@Html.T("رقم المعاملة", "Transaction #")</label>
+                            <p class="fw-semibold font-monospace">@(Model.TransactionId ?? "N/A")</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="text-muted">@Html.T("العملة", "Currency")</label>
+                            <p class="fw-semibold">@Model.Currency</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Course & Student Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات الطلب", "Order information")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label class="text-muted">@Html.T("الدورة", "Course")</label>
+                        @if (Model.Course != null)
+                        {
+                            <div class="d-flex align-items-center gap-3 mt-2">
+                                <img src="@(Model.Course.ThumbnailUrl ?? "/assets/images/course-default.png")" 
+                                     alt="@Model.Course.Title" 
+                                     style="width: 80px; height: 60px; object-fit: cover; border-radius: 8px;">
+                                <div>
+                                    <h6 class="mb-1">@Model.Course.Title</h6>
+                                    <small class="text-muted">@Model.Course.Instructor?.FirstName @Model.Course.Instructor?.LastName</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <div>
+                        <label class="text-muted">@Html.T("الطالب", "Student")</label>
+                        @if (Model.Student != null)
+                        {
+                            <div class="d-flex align-items-center gap-3 mt-2">
+                                <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                                    @Model.Student.FirstName?.Substring(0, 1)
+                                </div>
+                                <div>
+                                    <h6 class="mb-1">@Model.Student.FirstName @Model.Student.LastName</h6>
+                                    <small class="text-muted">@Model.Student.Email</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Invoice -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الفاتورة", "Invoice")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="invoice-box">
+                        <div class="d-flex justify-content-between mb-4">
+                            <div>
+                                <h5>@Html.T("منصة التعليم الإلكتروني", "E-Learning Platform")</h5>
+                                <p class="text-muted mb-0">@Html.T("الرياض، المملكة العربية السعودية", "Riyadh, Kingdom of Saudi Arabia")</p>
+                                <p class="text-muted">info@lms.com</p>
+                            </div>
+                            <div class="text-end">
+                                <h6>@Html.T("فاتورة", "Invoice")</h6>
+                                <p class="mb-0 font-monospace">#INV-@Model.Id.ToString("D8")</p>
+                                <p class="text-muted mb-0">@Model.CreatedAt.ToString("dd/MM/yyyy")</p>
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        <div class="mb-4">
+                            <label class="text-muted small">@Html.T("الفاتورة إلى:", "Invoice to:")</label>
+                            <p class="mb-0 fw-semibold">@Model.Student?.FirstName @Model.Student?.LastName</p>
+                            <p class="mb-0">@Model.Student?.Email</p>
+                        </div>
+
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("البند", "Item")</th>
+                                    <th class="text-end">@Html.T("المبلغ", "Amount")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>@(Model.Course?.Title ?? Model.Book?.Title ?? Html.T("منتج", "Product"))</td>
+                                    <td class="text-end">@Model.OriginalAmount.ToString("N2") @Model.Currency</td>
+                                </tr>
+                                @if (Model.DiscountAmount > 0)
+                                {
+                                    <tr>
+                                        <td class="text-success">@Html.T("الخصم", "Discount")</td>
+                                        <td class="text-end text-success">-@Model.DiscountAmount.ToString("N2") @Model.Currency</td>
+                                    </tr>
+                                }
+                                @if (Model.TaxAmount > 0)
+                                {
+                                    <tr>
+                                        <td>@Html.T("الضريبة", "Tax")</td>
+                                        <td class="text-end">@Model.TaxAmount.ToString("N2") @Model.Currency</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th>@Html.T("المجموع", "Total")</th>
+                                    <th class="text-end text-primary">@Model.TotalAmount.ToString("N2") @Model.Currency</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+
+                        <div class="text-center mt-4">
+                            <p class="text-muted small mb-0">@Html.T("شكراً لك على التسجيل في دوراتنا", "Thank you for enrolling in our courses")</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions & Info -->
+        <div class="col-lg-4">
+            <!-- Actions -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إجراءات", "Actions")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary" onclick="printInvoice()">
+                            <i class="feather-printer me-2"></i>
+                            @Html.T("طباعة الفاتورة", "Print invoice")
+                        </button>
+                        <a href="@Url.Action("Invoice", "Payments", new { id = Model.Id })" class="btn btn-light" target="_blank">
+                            <i class="feather-file-text me-2"></i>
+                            @Html.T("عرض الفاتورة", "View invoice")
+                        </a>
+                        @if (Model.Status == LMS.Domain.Enums.PaymentStatus.Completed)
+                        {
+                            <hr />
+                            <a href="@Url.Action("CreateRefund", "Refunds", new { paymentId = Model.Id })" class="btn btn-warning">
+                                <i class="feather-rotate-ccw me-2"></i>
+                                @Html.T("طلب استرداد", "Request refund")
+                            </a>
+                        }
+                        @if (Model.Status == LMS.Domain.Enums.PaymentStatus.Pending)
+                        {
+                            <hr />
+                            <form asp-action="ConfirmPayment" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@Model.Id" />
+                                <button type="submit" class="btn btn-success w-100" onclick="return confirm('@Html.Raw(Html.T("هل أنت متأكد من تأكيد هذه الدفعة؟", "Are you sure you want to confirm this payment?").Replace("'", "\\'"))');">
+                                    <i class="feather-check-circle me-2"></i>
+                                    @Html.T("تأكيد الدفعة", "Confirm payment")
+                                </button>
+                            </form>
+                            <form asp-action="CancelPayment" method="post" class="mt-2">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@Model.Id" />
+                                <input type="hidden" name="reason" id="cancelReason" />
+                                <button type="button" class="btn btn-danger w-100" onclick="cancelPayment(this.form)">
+                                    <i class="feather-x-circle me-2"></i>
+                                    @Html.T("إلغاء الدفعة", "Cancel payment")
+                                </button>
+                            </form>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Gateway Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات بوابة الدفع", "Payment gateway information")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="text-muted small">@Html.T("بوابة الدفع", "Payment gateway")</label>
+                        <p class="fw-semibold mb-0">@(Model.PaymentGateway ?? "Stripe")</p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="text-muted small">@Html.T("رقم المعاملة", "Transaction #")</label>
+                        <p class="fw-semibold font-monospace small mb-0">@(Model.TransactionId ?? "N/A")</p>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.PaymentGatewayResponse))
+                    {
+                        <div>
+                            <label class="text-muted small">@Html.T("استجابة البوابة", "Gateway response")</label>
+                            <div class="alert alert-light mb-0">
+                                <code class="small">@Model.PaymentGatewayResponse</code>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Timeline -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("السجل الزمني", "Timeline")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item d-flex align-items-start gap-3 ps-0">
+                            <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                <i class="feather-plus"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <p class="mb-0 small">@Html.T("تم إنشاء الدفعة", "Payment created")</p>
+                                <small class="text-muted">@Model.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")</small>
+                            </div>
+                        </div>
+                        @if (Model.Status == LMS.Domain.Enums.PaymentStatus.Completed)
+                        {
+                            <div class="list-group-item d-flex align-items-start gap-3 ps-0">
+                                <div class="avatar-text avatar-sm bg-soft-success text-success">
+                                    <i class="feather-check"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <p class="mb-0 small">@Html.T("تم تأكيد الدفع", "Payment confirmed")</p>
+                                    <small class="text-muted">@(Model.UpdatedAt?.ToString("dd/MM/yyyy hh:mm tt") ?? Model.CreatedAt.ToString("dd/MM/yyyy hh:mm tt"))</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        window.__PaymentT = {
+            promptReason: '@Html.Raw(Html.T("يرجى إدخال سبب إلغاء الدفعة:", "Please enter the reason for cancelling the payment:").Replace("'", "\\'"))',
+            alertReasonRequired: '@Html.Raw(Html.T("يجب إدخال سبب الإلغاء", "You must enter a reason for cancellation").Replace("'", "\\'"))'
+        };
+        function printInvoice() {
+            window.print();
+        }
+
+        function cancelPayment(form) {
+            var reason = prompt(window.__PaymentT.promptReason);
+            if (reason !== null && reason.trim() !== '') {
+                document.getElementById('cancelReason').value = reason;
+                form.submit();
+            } else if (reason !== null) {
+                alert(window.__PaymentT.alertReasonRequired);
+            }
+        }
+    </script>
+}
+

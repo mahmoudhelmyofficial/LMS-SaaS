@@ -1,0 +1,277 @@
+@model LMS.Areas.Student.ViewModels.BundleListViewModel
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("باقات الدورات", "Course Bundles");
+    ViewData["ActiveMenu"] = "Bundles";
+    
+    // UI settings
+    var coursesPreviewLimit = await PlatformSettings.GetIntSettingAsync("UI.CoursesPreview.Limit", 3);
+}
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h1 class="h3 mb-1">
+                        <i class="fas fa-box-open text-primary me-2"></i>
+                        @Html.T("باقات الدورات", "Course bundles")
+                    </h1>
+                    <p class="text-muted mb-0">@Html.T("وفّر أكثر مع باقات الدورات المميزة", "Save more with premium course bundles")</p>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <span class="badge bg-primary fs-6">@Model.TotalCount @Html.T("باقة متاحة", "bundles available")</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <form method="get" class="row g-3 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label small text-muted">@Html.T("البحث", "Search")</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0">
+                                    <i class="fas fa-search text-muted"></i>
+                                </span>
+                                <input type="text" name="search" value="@Model.Search" 
+                                       class="form-control border-start-0" placeholder="@Html.T("ابحث في الباقات...", "Search bundles...")">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">@Html.T("ترتيب حسب", "Sort by")</label>
+                            <select name="sortBy" class="form-select">
+                                <option value="">@Html.T("الافتراضي", "Default")</option>
+                                <option value="price_asc" selected="@(Model.SortBy == "price_asc")">@Html.T("السعر: من الأقل", "Price: low to high")</option>
+                                <option value="price_desc" selected="@(Model.SortBy == "price_desc")">@Html.T("السعر: من الأعلى", "Price: high to low")</option>
+                                <option value="savings" selected="@(Model.SortBy == "savings")">@Html.T("أكبر توفير", "Best savings")</option>
+                                <option value="popular" selected="@(Model.SortBy == "popular")">@Html.T("الأكثر مبيعاً", "Popular")</option>
+                                <option value="newest" selected="@(Model.SortBy == "newest")">@Html.T("الأحدث", "Newest")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-filter me-1"></i> @Html.T("تصفية", "Filter")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bundles Grid -->
+    @if (Model.Bundles.Any())
+    {
+        <div class="row g-4">
+            @foreach (var bundle in Model.Bundles)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 border-0 shadow-sm bundle-card @(bundle.IsFeatured ? "featured" : "") @(bundle.IsFullyOwned ? "owned" : "")">
+                        @if (bundle.IsFeatured)
+                        {
+                            <div class="featured-badge">
+                                <i class="fas fa-star me-1"></i> @Html.T("مميز", "Featured")
+                            </div>
+                        }
+                        @if (bundle.IsFullyOwned)
+                        {
+                            <div class="owned-badge">
+                                <i class="fas fa-check-circle me-1"></i> @Html.T("مملوكة", "Owned")
+                            </div>
+                        }
+                        
+                        <div class="card-img-top position-relative" style="height: 180px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            @if (!string.IsNullOrEmpty(bundle.ThumbnailUrl))
+                            {
+                                <img src="@bundle.ThumbnailUrl" alt="@bundle.Name" class="w-100 h-100 object-fit-cover">
+                            }
+                            <div class="position-absolute bottom-0 start-0 w-100 p-3" 
+                                 style="background: linear-gradient(transparent, rgba(0,0,0,0.7));">
+                                <span class="badge bg-white text-dark">
+                                    <i class="fas fa-graduation-cap me-1"></i> @bundle.CoursesCount @Html.T("دورات", "courses")
+                                </span>
+                                <span class="badge bg-success ms-1">
+                                    @Html.T("وفّر", "Save") @bundle.SavingsPercentage%
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="card-body">
+                            <h5 class="card-title mb-2">
+                                <a asp-action="Details" asp-route-id="@bundle.Id" class="text-decoration-none text-dark stretched-link">
+                                    @bundle.Name
+                                </a>
+                            </h5>
+                            @if (!string.IsNullOrEmpty(bundle.ShortDescription))
+                            {
+                                <p class="card-text text-muted small mb-3">@bundle.ShortDescription</p>
+                            }
+                            
+                            <!-- Courses Preview -->
+                            <div class="d-flex flex-wrap gap-1 mb-3">
+                                @foreach (var course in bundle.Courses.Take(coursesPreviewLimit))
+                                {
+                                    <span class="badge bg-light text-dark border @(course.IsEnrolled ? "border-success" : "")" 
+                                          title="@course.Title">
+                                        @if (course.IsEnrolled)
+                                        {
+                                            <i class="fas fa-check text-success me-1"></i>
+                                        }
+                                        @(course.Title.Length > 20 ? course.Title.Substring(0, 17) + "..." : course.Title)
+                                    </span>
+                                }
+                                @if (bundle.Courses.Count > 3)
+                                {
+                                    <span class="badge bg-secondary">+@(bundle.Courses.Count - 3)</span>
+                                }
+                            </div>
+                            
+                            @if (bundle.EnrolledCoursesCount > 0 && !bundle.IsFullyOwned)
+                            {
+                                <div class="alert alert-info py-2 px-3 small mb-3">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    @Html.T("لديك", "You have") @bundle.EnrolledCoursesCount @Html.T("من", "of") @bundle.CoursesCount @Html.T("دورات", "courses")
+                                </div>
+                            }
+                        </div>
+                        
+                        <div class="card-footer bg-transparent border-0 pt-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="text-decoration-line-through text-muted small">
+                                        @bundle.OriginalPrice.ToEGP(0)
+                                    </span>
+                                    <div class="h5 text-primary mb-0">
+                                        @bundle.Price.ToEGP(0)
+                                    </div>
+                                </div>
+                                @if (!bundle.IsFullyOwned)
+                                {
+                                    <form asp-action="AddToCart" method="post" class="d-inline position-relative" style="z-index: 2;">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="bundleId" value="@bundle.Id" />
+                                        <button type="submit" class="btn btn-primary btn-sm">
+                                            <i class="fas fa-cart-plus me-1"></i> @Html.T("أضف للسلة", "Add to cart")
+                                        </button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check me-1"></i> @Html.T("مملوكة", "Owned")
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Pagination -->
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="mt-4">
+                <ul class="pagination justify-content-center">
+                    @if (Model.Page > 1)
+                    {
+                        <li class="page-item">
+                            <a class="page-link" asp-action="Index" asp-route-page="@(Model.Page - 1)" 
+                               asp-route-search="@Model.Search" asp-route-sortBy="@Model.SortBy">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                    }
+                    @for (int i = 1; i <= Model.TotalPages; i++)
+                    {
+                        <li class="page-item @(i == Model.Page ? "active" : "")">
+                            <a class="page-link" asp-action="Index" asp-route-page="@i" 
+                               asp-route-search="@Model.Search" asp-route-sortBy="@Model.SortBy">@i</a>
+                        </li>
+                    }
+                    @if (Model.Page < Model.TotalPages)
+                    {
+                        <li class="page-item">
+                            <a class="page-link" asp-action="Index" asp-route-page="@(Model.Page + 1)" 
+                               asp-route-search="@Model.Search" asp-route-sortBy="@Model.SortBy">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        }
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-box-open fa-4x text-muted mb-3"></i>
+                        <h4>@Html.T("لا توجد باقات متاحة حالياً", "No bundles available at the moment")</h4>
+                        <p class="text-muted">@Html.T("تحقق لاحقاً للحصول على عروض جديدة", "Check back later for new offers")</p>
+                        <a asp-area="Student" asp-controller="Courses" asp-action="Index" class="btn btn-primary">
+                            <i class="fas fa-graduation-cap me-1"></i> @Html.T("تصفح الدورات", "Browse courses")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Styles {
+<style>
+    .bundle-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        position: relative;
+        overflow: hidden;
+    }
+    .bundle-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 40px rgba(0,0,0,0.15) !important;
+    }
+    .bundle-card.featured {
+        border: 2px solid var(--bs-primary) !important;
+    }
+    .bundle-card.owned {
+        opacity: 0.7;
+    }
+    .featured-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: linear-gradient(135deg, #f5af19 0%, #f12711 100%);
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        z-index: 10;
+    }
+    .owned-badge {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: var(--bs-success);
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        z-index: 10;
+    }
+    .object-fit-cover {
+        object-fit: cover;
+    }
+</style>
+}
+

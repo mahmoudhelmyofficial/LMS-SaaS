@@ -1,0 +1,214 @@
+@model IEnumerable<LMS.Domain.Entities.Social.DirectMessage>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("الرسائل المرسلة", "Sent Messages");
+    ViewData["Subtitle"] = Html.T("عرض جميع الرسائل التي أرسلتها للطلاب", "View all messages you sent to students");
+    
+    // Load platform settings
+    var defaultPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Default", 20);
+}
+
+@{
+    var composeUrl = Url.Action("Compose");
+    var bulkMessageUrl = Url.Action("BulkMessage");
+    var indexUrl = Url.Action("Index");
+    var actionButtonsHtml = "<a href='" + composeUrl + "' class='btn btn-primary'>" +
+        "<i class='feather-send me-2'></i>" +
+        "رسالة جديدة" +
+        "</a>" +
+        "<a href='" + bulkMessageUrl + "' class='btn btn-light'>" +
+            "<i class='feather-users me-2'></i>" +
+            "رسالة جماعية" +
+        "</a>" +
+        "<a href='" + indexUrl + "' class='btn btn-light'>" +
+            "<i class='feather-inbox me-2'></i>" +
+            "صندوق الوارد" +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-4 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "إجمالي المرسلة" },
+                { "Value", Model.Count() },
+                { "Icon", "send" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-4 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "تمت قراءتها" },
+                { "Value", Model.Count(m => m.IsRead) },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-4 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "لم تُقرأ بعد" },
+                { "Value", Model.Count(m => !m.IsRead) },
+                { "Icon", "mail" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Messages List -->
+    <div class="card stretch stretch-full">
+        <div class="card-header">
+            <h5 class="card-title">@Html.T("الرسائل المرسلة", "Sent messages")</h5>
+        </div>
+        <div class="card-body p-0">
+            @if (Model != null && Model.Any())
+            {
+                <div class="list-group list-group-flush">
+                    @foreach (var message in Model)
+                    {
+                        var recipient = message.Recipient ?? message.Receiver;
+                        var recipientName = recipient?.FullName ?? "مستخدم";
+                        var recipientInitial = !string.IsNullOrEmpty(recipient?.FirstName) && recipient.FirstName.Length > 0
+                            ? recipient.FirstName.Substring(0, 1)
+                            : (!string.IsNullOrEmpty(recipientName) && recipientName.Length > 0
+                                ? recipientName.Substring(0, 1)
+                                : "?");
+                        var messageBody = message.Message ?? message.Body ?? string.Empty;
+                        var messagePreview = !string.IsNullOrEmpty(messageBody) && messageBody.Length > 120
+                            ? messageBody.Substring(0, 120) + "..."
+                            : messageBody;
+                        
+                        <div class="list-group-item list-group-item-action">
+                            <div class="d-flex align-items-start gap-3">
+                                <!-- Recipient Avatar -->
+                                <div class="avatar-text avatar-md @(message.IsRead ? "bg-soft-success text-success" : "bg-soft-warning text-warning")">
+                                    @recipientInitial
+                                </div>
+
+                                <!-- Message Content -->
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div>
+                                            <h6 class="fw-bold mb-1">
+                                                إلى: @recipientName
+                                            </h6>
+                                            @if (!string.IsNullOrEmpty(recipient?.Email))
+                                            {
+                                                <p class="text-muted fs-12 mb-0">@recipient.Email</p>
+                                            }
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="text-muted fs-12">
+                                                @message.SentAt.ToString("dd MMM yyyy")
+                                            </span>
+                                            <div class="fs-11 text-muted">
+                                                @message.SentAt.ToString("hh:mm tt")
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <h6 class="fw-bold mb-2">@(message.Subject ?? "بدون موضوع")</h6>
+                                    <p class="text-muted mb-2">
+                                        @messagePreview
+                                    </p>
+
+                                    <div class="d-flex gap-2 align-items-center">
+                                        @if (message.IsRead)
+                                        {
+                                            <span class="badge bg-soft-success text-success">
+                                                <i class="feather-check-circle me-1"></i>
+                                                تمت القراءة
+                                                @if (message.ReadAt.HasValue)
+                                                {
+                                                    <span>- @message.ReadAt.Value.ToString("dd/MM")</span>
+                                                }
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-soft-warning text-warning">
+                                                <i class="feather-mail me-1"></i>
+                                                لم تُقرأ
+                                            </span>
+                                        }
+
+                                        <a href="@Url.Action("Details", new { id = message.Id })" class="btn btn-sm btn-light ms-auto">
+                                            <i class="feather-eye me-2"></i>عرض
+                                        </a>
+
+                                        <form asp-action="Delete" asp-route-id="@message.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل تريد حذف هذه الرسالة؟", "Do you want to delete this message?").Replace("'", "\\'"))')">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-sm btn-light text-danger">
+                                                <i class="feather-trash-2"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @* Pagination *@
+                var totalPages = ViewBag.TotalPages as int? ?? 1;
+                var totalCount = ViewBag.TotalCount as int? ?? 0;
+                var currentPage = ViewBag.Page as int? ?? 1;
+                @if (totalPages > 1)
+                {
+                    <div class="card-footer">
+                        @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                            ViewData,
+                            ("CurrentPage", currentPage),
+                            ("TotalPages", totalPages),
+                            ("TotalItems", totalCount),
+                            ("PageSize", defaultPageSize),
+                            ("Action", "Sent"),
+                            ("Controller", "Messages")
+                        ))
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="card-body text-center py-5">
+                    <div class="avatar-text avatar-xl bg-soft-secondary text-secondary mb-4 mx-auto">
+                        <i class="feather-send"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">@Html.T("لم ترسل أي رسائل بعد", "You haven't sent any messages yet")</h5>
+                    <p class="text-muted mb-4">ابدأ بالتواصل مع طلابك</p>
+                    <a href="@Url.Action("Compose")" class="btn btn-primary">
+                        <i class="feather-send me-2"></i>
+                        إرسال رسالة
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Add hover effect to list items
+            $('.list-group-item-action').hover(
+                function() {
+                    $(this).addClass('bg-soft-primary');
+                },
+                function() {
+                    $(this).removeClass('bg-soft-primary');
+                }
+            );
+        });
+    </script>
+}
+

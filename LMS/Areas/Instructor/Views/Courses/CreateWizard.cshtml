@@ -1,0 +1,771 @@
+@model LMS.Areas.Instructor.ViewModels.CourseWizardViewModel
+
+@{
+    ViewData["Title"] = Model.Id.HasValue ? (Html.T("تعديل", "Edit") + ": " + Model.Title) : Html.T("إنشاء دورة جديدة", "Create New Course");
+    ViewData["Subtitle"] = Html.T("معالج إنشاء الدورة التفاعلي", "Interactive course creation wizard");
+    
+    var steps = new[]
+    {
+        new { Number = 1, Title = Html.T("المعلومات الأساسية", "Basic Information"), Icon = "info", ShortTitle = Html.T("أساسيات", "Basics") },
+        new { Number = 2, Title = Html.T("المحتوى التعليمي", "Learning Content"), Icon = "book-open", ShortTitle = Html.T("محتوى", "Content") },
+        new { Number = 3, Title = Html.T("بناء الدورة", "Course Builder"), Icon = "layers", ShortTitle = Html.T("البناء", "Builder") },
+        new { Number = 4, Title = Html.T("الوسائط", "Media"), Icon = "image", ShortTitle = Html.T("وسائط", "Media") },
+        new { Number = 5, Title = Html.T("التسعير", "Pricing"), Icon = "dollar-sign", ShortTitle = Html.T("التسعير", "Pricing") },
+        new { Number = 6, Title = Html.T("الإعدادات", "Settings"), Icon = "settings", ShortTitle = Html.T("إعدادات", "Settings") },
+        new { Number = 7, Title = Html.T("المراجعة والنشر", "Review & Publish"), Icon = "check-circle", ShortTitle = Html.T("نشر", "Publish") }
+    };
+}
+
+<style>
+    /* Dashboard-consistent styling */
+    .wizard-container {
+        min-height: calc(100vh - 200px);
+    }
+
+    .wizard-header {
+        background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%));
+        padding: 1.5rem 2rem;
+        border-radius: 12px;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+
+    .wizard-header h4 {
+        color: white;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .wizard-header p {
+        color: rgba(255, 255, 255, 0.8);
+        margin-bottom: 0;
+        font-size: 0.9rem;
+    }
+
+    /* Step Indicator - Dashboard Style */
+    .wizard-steps-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+
+    .wizard-steps {
+        display: flex;
+        justify-content: space-between;
+        position: relative;
+        padding: 0 10px;
+    }
+
+    .wizard-steps::before {
+        content: '';
+        position: absolute;
+        top: 24px;
+        left: 40px;
+        right: 40px;
+        height: 3px;
+        background: #e5e7eb;
+        z-index: 0;
+    }
+
+    .wizard-step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+        z-index: 1;
+        flex: 1;
+        max-width: 120px;
+    }
+
+    .step-circle {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: white;
+        border: 2px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1rem;
+        color: #9ca3af;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .step-circle i {
+        font-size: 1.2rem;
+    }
+
+    .wizard-step.active .step-circle {
+        background: var(--gradient-primary, linear-gradient(135deg, #004aad 0%, #0066cc 50%, #3385d6 100%));
+        border-color: #004aad;
+        color: white;
+        transform: scale(1.1);
+        box-shadow: 0 4px 15px rgba(0, 74, 173, 0.3);
+    }
+
+    .wizard-step.completed .step-circle {
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        border-color: #10b981;
+        color: white;
+    }
+
+    .step-label {
+        margin-top: 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #9ca3af;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+
+    .wizard-step.active .step-label {
+        color: #004aad;
+        font-weight: 700;
+    }
+
+    .wizard-step.completed .step-label {
+        color: #10b981;
+    }
+
+    /* Content Area - Dashboard Card Style */
+    .wizard-content {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        padding: 2rem;
+        min-height: 500px;
+    }
+
+    .step-content {
+        animation: fadeIn 0.3s ease;
+    }
+
+    @@keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Navigation - Dashboard Style */
+    .wizard-navigation {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.5rem 2rem;
+        background: white;
+        border-radius: 12px;
+        margin-top: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+
+    .wizard-navigation .btn {
+        padding: 0.75rem 2rem;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .wizard-navigation .btn-primary {
+        background: var(--gradient-primary, linear-gradient(135deg, #004aad 0%, #0066cc 50%, #3385d6 100%));
+        border: none;
+    }
+
+    .wizard-navigation .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 74, 173, 0.3);
+    }
+
+    /* Readiness Panel - Dashboard Style */
+    .readiness-panel {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        padding: 1.5rem;
+        position: sticky;
+        top: 100px;
+    }
+
+    .readiness-score {
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .score-circle {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: conic-gradient(#004aad var(--progress), #e5e7eb var(--progress));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        position: relative;
+    }
+
+    .score-circle::before {
+        content: '';
+        width: 80px;
+        height: 80px;
+        background: white;
+        border-radius: 50%;
+        position: absolute;
+    }
+
+    .score-value {
+        position: relative;
+        z-index: 1;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #004aad;
+    }
+
+    .checklist-item {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f3f4f6;
+    }
+
+    .checklist-item:last-child {
+        border-bottom: none;
+    }
+
+    .checklist-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    .checklist-icon.completed {
+        background: #dcfce7;
+        color: #10b981;
+    }
+
+    .checklist-icon.pending {
+        background: #fef3c7;
+        color: #f59e0b;
+    }
+
+    .checklist-icon.required {
+        background: #fee2e2;
+        color: #ef4444;
+    }
+
+    /* Auto-save indicator */
+    .auto-save-indicator {
+        display: flex;
+        align-items: center;
+        font-size: 0.875rem;
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .auto-save-indicator.saving {
+        color: #fbbf24;
+    }
+
+    .auto-save-indicator.saved {
+        color: #34d399;
+    }
+
+    .auto-save-indicator i {
+        margin-left: 0.5rem;
+    }
+
+    /* Form Enhancements - Dashboard Style */
+    .form-section {
+        margin-bottom: 2rem;
+    }
+
+    .form-section-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #004aad;
+        display: inline-block;
+    }
+
+    .form-section-title i {
+        margin-left: 0.5rem;
+        color: #004aad;
+    }
+
+    .character-count {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        text-align: left;
+        margin-top: 0.25rem;
+    }
+
+    .character-count.warning {
+        color: #f59e0b;
+    }
+
+    .character-count.error {
+        color: #ef4444;
+    }
+
+    /* Tips Card - Dashboard Style */
+    .tips-card {
+        background: #f0f9ff;
+        border-radius: 12px;
+        padding: 1rem;
+        border: 1px solid #bae6fd;
+    }
+
+    .tips-card h6 {
+        color: #0284c7;
+    }
+
+    /* Quick Actions - Dashboard Style */
+    .quick-actions .btn {
+        border-radius: 8px;
+    }
+
+    /* Responsive */
+    @@media (max-width: 768px) {
+        .wizard-steps {
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .wizard-steps::before {
+            display: none;
+        }
+
+        .wizard-step {
+            max-width: calc(25% - 0.5rem);
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            font-size: 0.875rem;
+        }
+
+        .step-label {
+            font-size: 0.65rem;
+        }
+    }
+</style>
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdn.quilljs.com/1.3.6/quill.snow.css" />
+}
+
+<div class="main-content wizard-container">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Wizard Header -->
+    <div class="wizard-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h4>
+                    @if (Model.Id.HasValue)
+                    {
+                        <i class="feather-edit me-2"></i>
+                        @:تعديل الدورة
+                    }
+                    else
+                    {
+                        <i class="feather-plus-circle me-2"></i>
+                        @:إنشاء دورة جديدة
+                    }
+                </h4>
+                <p>اتبع الخطوات لإنشاء دورتك بشكل احترافي</p>
+            </div>
+            <div class="auto-save-indicator" id="autoSaveIndicator">
+                <span id="autoSaveText">الحفظ التلقائي مفعّل</span>
+                <i class="feather-cloud"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step Indicator -->
+    <div class="wizard-steps-card">
+        <div class="wizard-steps" id="wizardSteps">
+            @foreach (var step in steps)
+            {
+                var stepClass = "";
+                if (step.Number < Model.CurrentStep) stepClass = "completed";
+                else if (step.Number == Model.CurrentStep) stepClass = "active";
+
+                <div class="wizard-step @stepClass" data-step="@step.Number">
+                    <a href="@(Model.Id.HasValue ? Url.Action("CreateWizard", new { step = step.Number, id = Model.Id }) : "javascript:void(0)")"
+                       class="step-link @(step.Number > Model.CurrentStep && !Model.Id.HasValue ? "disabled" : "")"
+                       style="text-decoration: none;">
+                        <div class="step-circle">
+                            @if (step.Number < Model.CurrentStep)
+                            {
+                                <i class="feather-check"></i>
+                            }
+                            else
+                            {
+                                <i class="feather-@step.Icon"></i>
+                            }
+                        </div>
+                        <span class="step-label d-none d-md-block">@step.Title</span>
+                        <span class="step-label d-md-none">@step.ShortTitle</span>
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <div class="wizard-content">
+                <form asp-action="SaveWizardStep" method="post" id="wizardForm" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="step" value="@Model.CurrentStep" />
+                    <input type="hidden" asp-for="Id" />
+                    <input type="hidden" asp-for="CurrentStep" />
+
+                    <!-- Step Content -->
+                    <div class="step-content">
+                        @switch (Model.CurrentStep)
+                        {
+                            case 1:
+                                @await Html.PartialAsync("Wizard/_Step1_BasicInfo", Model)
+                                break;
+                            case 2:
+                                @await Html.PartialAsync("Wizard/_Step2_LearningContent", Model)
+                                break;
+                            case 3:
+                                @await Html.PartialAsync("Wizard/_Step3_ContentBuilder", Model)
+                                break;
+                            case 4:
+                                @await Html.PartialAsync("Wizard/_Step4_Media", Model)
+                                break;
+                            case 5:
+                                @await Html.PartialAsync("Wizard/_Step5_Pricing", Model)
+                                break;
+                            case 6:
+                                @await Html.PartialAsync("Wizard/_Step6_Settings", Model)
+                                break;
+                            case 7:
+                                @await Html.PartialAsync("Wizard/_Step7_Review", Model)
+                                break;
+                        }
+                    </div>
+
+                    <!-- Navigation Buttons -->
+                    <div class="wizard-navigation mt-4">
+                        <div>
+                            @if (Model.CurrentStep > 1)
+                            {
+                                <button type="submit" name="action" value="previous" class="btn btn-light">
+                                    <i class="feather-arrow-right me-2"></i>
+                                    الخطوة السابقة
+                                </button>
+                            }
+                            else
+                            {
+                                <a href="@Url.Action("Index")" class="btn btn-light">
+                                    <i class="feather-x me-2"></i>
+                                    إلغاء
+                                </a>
+                            }
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" name="action" value="draft" class="btn btn-outline-secondary">
+                                <i class="feather-save me-2"></i>
+                                حفظ كمسودة
+                            </button>
+
+                            @if (Model.CurrentStep < 7)
+                            {
+                                <button type="submit" name="action" value="next" class="btn btn-primary">
+                                    الخطوة التالية
+                                    <i class="feather-arrow-left ms-2"></i>
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="submit" name="action" value="publish" class="btn btn-success"
+                                        @(Model.CompletionPercentage < 100 ? "disabled" : "")>
+                                    <i class="feather-send me-2"></i>
+                                    إرسال للمراجعة
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Readiness Panel -->
+        <div class="col-lg-4">
+            <div class="readiness-panel">
+                <h6 class="fw-bold mb-3">
+                    <i class="feather-check-circle me-2" style="color: #004aad;"></i>
+                    جاهزية الدورة
+                </h6>
+
+                <div class="readiness-score">
+                    <div class="score-circle" style="--progress: @(Model.CompletionPercentage * 3.6)deg">
+                        <span class="score-value">@Model.CompletionPercentage%</span>
+                    </div>
+                    <p class="text-muted mb-0">
+                        @if (Model.CompletionPercentage == 100)
+                        {
+                            <span class="text-success">
+                                <i class="feather-check-circle me-1"></i>
+                                جاهزة للنشر!
+                            </span>
+                        }
+                        else
+                        {
+                            <span>أكمل العناصر المطلوبة</span>
+                        }
+                    </p>
+                </div>
+
+                <div class="checklist" id="readinessChecklist">
+                    @foreach (var item in Model.ReadinessChecklist)
+                    {
+                        var iconClass = item.IsCompleted ? "completed" : (item.IsRequired ? "required" : "pending");
+                        var icon = item.IsCompleted ? "check" : (item.IsRequired ? "x" : "alert-circle");
+
+                        <div class="checklist-item">
+                            <span class="checklist-icon @iconClass">
+                                <i class="feather-@icon"></i>
+                            </span>
+                            <span class="flex-grow-1 @(item.IsCompleted ? "text-muted text-decoration-line-through" : "")">
+                                @item.NameArabic
+                            </span>
+                            @if (item.IsRequired && !item.IsCompleted)
+                            {
+                                <span class="badge bg-soft-danger text-danger">مطلوب</span>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- Quick Tips -->
+                <div class="tips-card mt-4">
+                    <h6 class="fw-bold mb-2">
+                        <i class="feather-lightbulb me-2"></i>
+                        نصيحة
+                    </h6>
+                    <p class="text-muted fs-12 mb-0" id="stepTip">
+                        @switch (Model.CurrentStep)
+                        {
+                            case 1:
+                                @:اختر عنواناً جذاباً وواضحاً يصف محتوى دورتك بدقة.
+                                break;
+                            case 2:
+                                @:أضف نقاط تعلم محددة وقابلة للقياس تساعد الطلاب على فهم ما سيحققونه.
+                                break;
+                            case 3:
+                                @:قسّم المحتوى إلى وحدات منطقية متسلسلة لتسهيل التعلم.
+                                break;
+                            case 4:
+                                @:استخدم صورة عالية الجودة (1280x720) وفيديو تعريفي قصير لجذب الطلاب.
+                                break;
+                            case 5:
+                                @:حدد سعراً تنافسياً يعكس قيمة المحتوى المقدم.
+                                break;
+                            case 6:
+                                @:فعّل الميزات التي تناسب نوع دورتك وجمهورك المستهدف.
+                                break;
+                            case 7:
+                                @:راجع جميع المعلومات بدقة قبل إرسال الدورة للمراجعة.
+                                break;
+                        }
+                    </p>
+                </div>
+
+                <!-- Quick Actions -->
+                @if (Model.Id.HasValue)
+                {
+                    <div class="quick-actions mt-4">
+                        <h6 class="fw-bold mb-3">
+                            <i class="feather-zap me-2 text-warning"></i>
+                            إجراءات سريعة
+                        </h6>
+                        <div class="d-grid gap-2">
+                            <a href="@Url.Action("Details", new { id = Model.Id })" class="btn btn-sm btn-outline-primary" target="_blank">
+                                <i class="feather-eye me-2"></i>
+                                معاينة الدورة
+                            </a>
+                            <a href="@Url.Action("Index", "Modules", new { courseId = Model.Id })" class="btn btn-sm btn-outline-secondary">
+                                <i class="feather-layers me-2"></i>
+                                إدارة المحتوى التفصيلي
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="~/js/course-wizard.js" asp-append-version="true"></script>
+    
+    <script>
+        Object.assign(window.__T || (window.__T = {}), {
+            FixErrors: '@Html.Raw(Html.T("يرجى إصلاح الأخطاء التالية:", "Please fix the following errors:").Replace("\\", "\\\\").Replace("'", "\\'"))',
+            TitleMin: '@Html.Raw(Html.T("عنوان الدورة يجب أن يكون 10 أحرف على الأقل", "Course title must be at least 10 characters").Replace("\\", "\\\\").Replace("'", "\\'"))',
+            ShortDescMin: '@Html.Raw(Html.T("الوصف المختصر يجب أن يكون 20 حرف على الأقل", "Short description must be at least 20 characters").Replace("\\", "\\\\").Replace("'", "\\'"))',
+            DescMin: '@Html.Raw(Html.T("الوصف التفصيلي يجب أن يكون 100 حرف على الأقل", "Description must be at least 100 characters").Replace("\\", "\\\\").Replace("'", "\\'"))',
+            SelectCategory: '@Html.Raw(Html.T("يجب اختيار التصنيف", "Please select a category").Replace("\\", "\\\\").Replace("'", "\\'"))',
+            AddOneModule: '@Html.Raw(Html.T("يجب إضافة وحدة واحدة على الأقل", "Add at least one module").Replace("\\", "\\\\").Replace("'", "\\'"))',
+            AddThreeLessons: '@Html.Raw(Html.T("يجب إضافة 3 دروس على الأقل", "Add at least 3 lessons").Replace("\\", "\\\\").Replace("'", "\\'"))'
+        });
+        // Initialize wizard
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof CourseWizard !== 'undefined') {
+                window.wizard = new CourseWizard({
+                    courseId: @(Model.Id ?? 0),
+                    currentStep: @Model.CurrentStep,
+                    antiForgeryToken: document.querySelector('[name="__RequestVerificationToken"]').value
+                });
+            }
+
+            // Initialize Quill rich text editor for course description (step 1)
+            if (@Model.CurrentStep === 1) {
+                const editorEl = document.getElementById('descriptionEditor');
+                const descInput = document.getElementById('Description');
+                if (editorEl && typeof Quill !== 'undefined') {
+                    window.descriptionQuill = new Quill('#descriptionEditor', {
+                        theme: 'snow',
+                        placeholder: document.documentElement.lang === 'ar' ? 'وصف شامل للدورة يتضمن الأهداف والمحتوى...' : 'A comprehensive course description including objectives and content...',
+                        modules: {
+                            toolbar: [
+                                ['bold', 'italic', 'underline'],
+                                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                                ['link'],
+                                ['clean']
+                            ]
+                        }
+                    });
+                    if (descInput && descInput.value) {
+                        window.descriptionQuill.root.innerHTML = descInput.value;
+                    }
+                    window.descriptionQuill.on('text-change', function() {
+                        if (descInput) descInput.value = window.descriptionQuill.root.innerHTML;
+                    });
+                }
+            }
+
+            // Client-side validation before form submission
+            const wizardForm = document.getElementById('wizardForm');
+            if (wizardForm) {
+                wizardForm.addEventListener('submit', function(e) {
+                    const currentStep = @Model.CurrentStep;
+                    const action = e.submitter?.value || 'next';
+
+                    // Sync Quill content to hidden input before step 1 validation
+                    if (currentStep === 1 && window.descriptionQuill) {
+                        const descInput = document.getElementById('Description');
+                        if (descInput) descInput.value = window.descriptionQuill.root.innerHTML;
+                    }
+
+                    // Skip validation for draft and previous actions
+                    if (action === 'draft' || action === 'previous') {
+                        return true;
+                    }
+
+                    // Step 1 validation
+                    if (currentStep === 1 && action === 'next') {
+                        if (!validateStep1BeforeSubmit()) {
+                            e.preventDefault();
+                            return false;
+                        }
+                    }
+
+                    // Step 3 validation
+                    if (currentStep === 3 && action === 'next') {
+                        if (!validateStep3BeforeSubmit()) {
+                            e.preventDefault();
+                            return false;
+                        }
+                    }
+                });
+            }
+        });
+
+        // Validate step 1 before form submission
+        function validateStep1BeforeSubmit() {
+            const title = document.getElementById('Title')?.value?.trim() || '';
+            const shortDesc = document.getElementById('ShortDescription')?.value?.trim() || '';
+            const description = document.getElementById('Description')?.value?.trim() || '';
+            const categoryId = parseInt(document.getElementById('categorySelect')?.value || '0');
+
+            const errors = [];
+
+            if (title.length < 10) {
+                errors.push('• ' + (window.__T && window.__T.TitleMin || 'Course title must be at least 10 characters'));
+            }
+
+            if (shortDesc.length < 20) {
+                errors.push('• ' + (window.__T && window.__T.ShortDescMin || 'Short description must be at least 20 characters'));
+            }
+
+            if (description.length < 100) {
+                errors.push('• ' + (window.__T && window.__T.DescMin || 'Description must be at least 100 characters'));
+            }
+
+            if (categoryId <= 0) {
+                errors.push('• ' + (window.__T && window.__T.SelectCategory || 'Please select a category'));
+            }
+
+            if (errors.length > 0) {
+                alert(((window.__T && window.__T.FixErrors) || 'Please fix the following errors:') + '\n\n' + errors.join('\n'));
+                return false;
+            }
+
+            return true;
+        }
+
+        // Validate step 3 before form submission
+        function validateStep3BeforeSubmit() {
+            const courseId = @(Model.Id ?? 0);
+            
+            // If course doesn't exist yet, allow submission (will be created)
+            if (courseId === 0) {
+                return true;
+            }
+
+            // Count modules and lessons from the DOM
+            const moduleCards = document.querySelectorAll('.module-card[data-module-id]');
+            const moduleCount = moduleCards.length;
+
+            // Count lessons (each lesson should have a data-lesson-id or be in a lesson-item)
+            let lessonCount = 0;
+            moduleCards.forEach(moduleCard => {
+                const lessons = moduleCard.querySelectorAll('.lesson-item, [data-lesson-id]');
+                lessonCount += lessons.length;
+            });
+
+            // Validate modules
+            if (moduleCount < 1) {
+                alert((window.__T && window.__T.AddOneModule) || 'Add at least one module');
+                return false;
+            }
+
+            // Validate lessons
+            if (lessonCount < 3) {
+                alert((window.__T && window.__T.AddThreeLessons) || 'Add at least 3 lessons');
+                return false;
+            }
+
+            return true;
+        }
+    </script>
+}

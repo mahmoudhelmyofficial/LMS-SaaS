@@ -1,0 +1,441 @@
+@model LMS.Areas.Admin.ViewModels.EmailTemplateTestViewModel
+
+@{
+    ViewData["Title"] = Html.T("اختبار قالب البريد الإلكتروني", "Test email template");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("قوالب البريد الإلكتروني", "Email templates"), Url.Action("Index", "EmailTemplates")),
+        (Html.T("اختبار القالب", "Test template"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        .test-preview {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            background: #f8f9fa;
+            min-height: 300px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .variable-item {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: all 0.3s;
+        }
+        .variable-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);
+        }
+        .success-animation {
+            animation: successPulse 0.6s ease-in-out;
+        }
+        @@keyframes successPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-send me-2"></i>
+                        إرسال بريد تجريبي
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="SendTest" asp-route-id="@Model.TemplateId" method="post" id="testEmailForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="TemplateId" />
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <!-- Template Info -->
+                        <div class="alert alert-info">
+                            <div class="d-flex align-items-start gap-3">
+                                <i class="feather-info fs-4"></i>
+                                <div>
+                                    <h6 class="mb-1">@Model.TemplateName</h6>
+                                    <p class="mb-0 small">@Model.TemplateDescription</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recipient Emails -->
+                        <div class="form-group mb-4">
+                            <label asp-for="RecipientEmails" class="form-label">
+                                البريد الإلكتروني للمستلم <span class="text-danger">*</span>
+                            </label>
+                            <select asp-for="RecipientEmails" class="form-select" id="recipientEmails" multiple>
+                            </select>
+                            <span asp-validation-for="RecipientEmails" class="text-danger"></span>
+                            <small class="form-text text-muted">
+                                <i class="feather-info"></i>
+                                يمكنك إضافة عدة عناوين بريد إلكتروني مفصولة بفواصل
+                            </small>
+                        </div>
+
+                        <!-- Test Data Variables -->
+                        <div class="form-group mb-4">
+                            <label class="form-label">
+                                <i class="feather-code me-2"></i>
+                                بيانات الاختبار للمتغيرات
+                            </label>
+                            <div id="variablesContainer">
+                                <!-- Variables will be loaded here -->
+                            </div>
+                            <button type="button" class="btn btn-sm btn-light-brand mt-2" id="resetVariablesBtn">
+                                <i class="feather-refresh-cw me-2"></i>
+                                استعادة القيم الافتراضية
+                            </button>
+                        </div>
+
+                        <!-- Send Options -->
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title mb-3">
+                                    <i class="feather-settings me-2"></i>
+                                    خيارات الإرسال
+                                </h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="UseActualLayout" class="form-check-input" type="checkbox" id="useLayoutSwitch" checked />
+                                            <label class="form-check-label" for="useLayoutSwitch">
+                                                استخدام قالب التخطيط الفعلي
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IncludeTracking" class="form-check-input" type="checkbox" id="trackingSwitch" />
+                                            <label class="form-check-label" for="trackingSwitch">
+                                                تضمين كود التتبع
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Notes" class="form-label">
+                                @Html.T("ملاحظات الاختبار (اختياري)", "Test notes (optional)")
+                            </label>
+                            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="@Html.T("أضف أي ملاحظات حول هذا الاختبار...", "Add any notes about this test...")"></textarea>
+                            <span asp-validation-for="Notes" class="text-danger"></span>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="Details" asp-route-id="@Model.TemplateId" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                @Html.T("إلغاء", "Cancel")
+                            </a>
+                            <button type="button" class="btn btn-secondary" id="previewBtn">
+                                <i class="feather-eye me-2"></i>
+                                @Html.T("معاينة قبل الإرسال", "Preview before sending")
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="sendBtn">
+                                <i class="feather-send me-2"></i>
+                                إرسال البريد التجريبي
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Test History -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-clock me-2"></i>
+                        سجل الاختبارات السابقة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("التاريخ", "Date")</th>
+                                    <th>@Html.T("المستلم", "Recipient")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th>@Html.T("الملاحظات", "Notes")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">
+                                        <i class="feather-inbox fs-3 mb-2"></i>
+                                        <p>لا توجد اختبارات سابقة</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Preview Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-eye me-2"></i>
+                        معاينة البريد
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>@Html.T("الموضوع", "Subject"):</strong>
+                        <div class="mt-2 p-2 bg-light rounded small" id="previewSubject">
+                            @Model.TemplateSubject
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="test-preview" id="previewBody">
+                        @Html.Raw(Model.TemplateBody)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Tips -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-help-circle me-2"></i>
+                        نصائح الاختبار
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="vstack gap-3">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="feather-check-circle text-success mt-1"></i>
+                            <small>@Html.T("تأكد من اختبار القالب على أجهزة مختلفة", "Make sure to test the template on different devices")</small>
+                        </div>
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="feather-check-circle text-success mt-1"></i>
+                            <small>@Html.T("تحقق من ظهور الصور والروابط بشكل صحيح", "Verify that images and links display correctly")</small>
+                        </div>
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="feather-check-circle text-success mt-1"></i>
+                            <small>@Html.T("اختبر القالب مع بيانات حقيقية متنوعة", "Test the template with varied real data")</small>
+                        </div>
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="feather-check-circle text-success mt-1"></i>
+                            <small>@Html.T("تحقق من عمل جميع الأزرار والروابط", "Verify all buttons and links work")</small>
+                        </div>
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="feather-check-circle text-success mt-1"></i>
+                            <small>@Html.T("راجع التنسيق في عملاء بريد مختلفين", "Review formatting in different email clients")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Common Variables -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-code me-2"></i>
+                        المتغيرات الشائعة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        <span class="badge bg-soft-primary text-primary">{{UserName}}</span>
+                        <span class="badge bg-soft-primary text-primary">{{Email}}</span>
+                        <span class="badge bg-soft-primary text-primary">{{CourseName}}</span>
+                        <span class="badge bg-soft-primary text-primary">{{CompanyName}}</span>
+                        <span class="badge bg-soft-primary text-primary">{{SiteUrl}}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Initialize Select2 for emails
+            $('#recipientEmails').select2({
+                tags: true,
+                tokenSeparators: [',', ' '],
+                placeholder: 'أدخل عناوين البريد الإلكتروني',
+                dir: 'rtl'
+            });
+
+            // Extract variables from template
+            const subject = @Html.Raw(Json.Serialize(Model.TemplateSubject));
+            const body = @Html.Raw(Json.Serialize(Model.TemplateBody));
+            const content = subject + ' ' + body;
+            const variableRegex = /{{(\w+)}}/g;
+            const variables = new Set();
+            let match;
+            
+            while ((match = variableRegex.exec(content)) !== null) {
+                variables.add(match[1]);
+            }
+
+            // Default values for variables
+            const defaultValues = {
+                'UserName': 'أحمد محمد',
+                'Email': 'user@example.com',
+                'CourseName': 'تطوير تطبيقات الويب',
+                'InstructorName': 'د. محمد علي',
+                'CompanyName': 'منصة التعليم',
+                'SiteUrl': 'https://example.com',
+                'CurrentYear': new Date().getFullYear(),
+                'VerificationLink': 'https://example.com/verify',
+                'ResetLink': 'https://example.com/reset',
+                'OrderNumber': 'ORD-12345',
+                'Amount': '500 ريال',
+                'Date': new Date().toLocaleDateString('ar-SA')
+            };
+
+            // Create inputs for variables
+            const container = $('#variablesContainer');
+            if (variables.size > 0) {
+                variables.forEach(variable => {
+                    const value = defaultValues[variable] || '';
+                    container.append(`
+                        <div class="variable-item">
+                            <label class="form-label mb-2">
+                                <code>{{${variable}}}</code>
+                            </label>
+                            <input type="text" class="form-control variable-input" data-variable="${variable}" value="${value}" />
+                        </div>
+                    `);
+                });
+            } else {
+                container.append('<p class="text-muted">لا توجد متغيرات في هذا القالب</p>');
+            }
+
+            // Update preview on variable change
+            function updatePreview() {
+                let previewSubject = subject;
+                let previewBody = body;
+
+                $('.variable-input').each(function() {
+                    const variable = $(this).data('variable');
+                    const value = $(this).val();
+                    const regex = new RegExp(`{{${variable}}}`, 'g');
+                    previewSubject = previewSubject.replace(regex, value);
+                    previewBody = previewBody.replace(regex, value);
+                });
+
+                $('#previewSubject').text(previewSubject);
+                $('#previewBody').html(previewBody);
+            }
+
+            $('.variable-input').on('input', updatePreview);
+
+            // Reset variables to default
+            $('#resetVariablesBtn').click(function() {
+                $('.variable-input').each(function() {
+                    const variable = $(this).data('variable');
+                    $(this).val(defaultValues[variable] || '');
+                });
+                updatePreview();
+            });
+
+            // Preview button
+            $('#previewBtn').click(function() {
+                updatePreview();
+                $('html, body').animate({
+                    scrollTop: $('#previewBody').closest('.card').offset().top - 100
+                }, 500);
+            });
+
+            // Form submission
+            $('#testEmailForm').on('submit', function(e) {
+                e.preventDefault();
+                
+                const btn = $('#sendBtn');
+                const originalText = btn.html();
+                btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>جاري الإرسال...');
+
+                // Collect variable values
+                const variableValues = {};
+                $('.variable-input').each(function() {
+                    const variable = $(this).data('variable');
+                    variableValues[variable] = $(this).val();
+                });
+
+                // Create form data
+                const formData = new FormData(this);
+                formData.append('VariableValues', JSON.stringify(variableValues));
+
+                // Submit via AJAX
+                $.ajax({
+                    url: $(this).attr('action'),
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        btn.prop('disabled', false).html(originalText);
+                        
+                        // Show success message
+                        const alert = $(`
+                            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                <i class="feather-check-circle me-2"></i>
+                                <strong>تم الإرسال بنجاح!</strong> تم إرسال البريد التجريبي إلى العناوين المحددة.
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        `);
+                        
+                        $('.main-content').prepend(alert);
+                        
+                        // Add success animation
+                        $('.card').first().addClass('success-animation');
+                        setTimeout(() => $('.card').first().removeClass('success-animation'), 600);
+                        
+                        // Scroll to top
+                        $('html, body').animate({ scrollTop: 0 }, 500);
+                    },
+                    error: function(xhr) {
+                        btn.prop('disabled', false).html(originalText);
+                        
+                        // Show error message
+                        const alert = $(`
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                <i class="feather-x-circle me-2"></i>
+                                <strong>حدث خطأ!</strong> فشل إرسال البريد التجريبي. الرجاء المحاولة مرة أخرى.
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        `);
+                        
+                        $('.main-content').prepend(alert);
+                        $('html, body').animate({ scrollTop: 0 }, 500);
+                    }
+                });
+            });
+
+            // Initial preview update
+            updatePreview();
+        });
+    </script>
+}
+

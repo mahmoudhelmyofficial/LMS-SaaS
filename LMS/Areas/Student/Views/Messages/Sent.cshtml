@@ -1,0 +1,225 @@
+@model List<LMS.Domain.Entities.Social.DirectMessage>
+@{
+    ViewData["Title"] = Html.T("الرسائل المرسلة", "Sent Messages");
+    var page = ViewBag.Page ?? 1;
+}
+
+@section Styles {
+<style>
+    .message-item {
+        border-bottom: 1px solid #e5e7eb;
+        padding: 15px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    
+    .message-item:hover {
+        background-color: #f9fafb;
+    }
+    
+    .message-item:last-child {
+        border-bottom: none;
+    }
+    
+    .message-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+    
+    .message-subject {
+        font-weight: 600;
+        color: #111827;
+        margin-bottom: 4px;
+    }
+    
+    .message-preview {
+        color: #6b7280;
+        font-size: 0.875rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .message-time {
+        font-size: 0.75rem;
+        color: #9ca3af;
+    }
+    
+    .read-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #10b981;
+        flex-shrink: 0;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-send text-primary me-2"></i>
+                    @Html.T("الرسائل المرسلة", "Sent Messages")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("الرسائل التي أرسلتها للمدرسين", "Messages you sent to instructors")</p>
+            </div>
+            <a asp-action="Compose" class="btn btn-primary">
+                <i class="feather-edit me-2"></i>
+                @Html.T("رسالة جديدة", "New message")
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Messages Tabs -->
+<div class="card stretch stretch-full mb-3">
+    <div class="card-body py-2">
+        <ul class="nav nav-tabs border-bottom-0" role="tablist">
+            <li class="nav-item">
+                <a asp-action="Index" class="nav-link">
+                    <i class="feather-inbox me-2"></i>
+                    @Html.T("صندوق الوارد", "Inbox")
+                </a>
+            </li>
+            <li class="nav-item">
+                <a asp-action="Sent" class="nav-link active">
+                    <i class="feather-send me-2"></i>
+                    @Html.T("المرسلة", "Sent")
+                </a>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<!-- Messages List -->
+<div class="card stretch stretch-full">
+    @if (Model.Any())
+    {
+        <div class="card-body p-0">
+            @foreach (var message in Model)
+            {
+                <div class="message-item" onclick="location.href='@Url.Action("Details", new { id = message.Id })'">
+                    <div class="d-flex gap-3">
+                        <div class="message-avatar">
+                            @if (!string.IsNullOrEmpty(message.Receiver?.ProfilePictureUrl))
+                            {
+                                <img src="@message.Receiver.ProfilePictureUrl" alt="@message.Receiver.FullName" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;" />
+                            }
+                            else
+                            {
+                                <span>@message.Receiver?.FirstName?.Substring(0, 1)</span>
+                            }
+                        </div>
+                        
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <div class="flex-grow-1 min-w-0">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fw-semibold">@Html.T("إلى:", "To:") @message.Receiver?.FullName</span>
+                                    </div>
+                                </div>
+                                <div class="message-time">
+                                    @{
+                                        var timeAgo = DateTime.UtcNow - message.SentAt;
+                                        if (timeAgo.TotalMinutes < 60)
+                                        {
+                                            <span>@string.Format(Html.T("منذ {0} دقيقة", "{0} min ago").ToString(), (int)timeAgo.TotalMinutes)</span>
+                                        }
+                                        else if (timeAgo.TotalHours < 24)
+                                        {
+                                            <span>@string.Format(Html.T("منذ {0} ساعة", "{0} hours ago").ToString(), (int)timeAgo.TotalHours)</span>
+                                        }
+                                        else if (timeAgo.TotalDays < 7)
+                                        {
+                                            <span>@string.Format(Html.T("منذ {0} يوم", "{0} days ago").ToString(), (int)timeAgo.TotalDays)</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@message.SentAt.ToString("dd/MM/yyyy")</span>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                            
+                            <div class="message-subject">@message.Subject</div>
+                            <div class="message-preview">@message.Body</div>
+                            
+                            @if (message.IsRead && message.ReadAt.HasValue)
+                            {
+                                <div class="d-flex align-items-center gap-1 mt-2">
+                                    <div class="read-indicator"></div>
+                                    <small class="text-muted">@Html.T("تمت قراءته في", "Read at") @message.ReadAt.Value.ToString("dd/MM/yyyy HH:mm")</small>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+        
+        <!-- Pagination -->
+        @if (Model.Count >= 20)
+        {
+            <div class="card-footer">
+                <nav>
+                    <ul class="pagination pagination-sm mb-0 justify-content-center">
+                        <li class="page-item @(page <= 1 ? "disabled" : "")">
+                            <a class="page-link" asp-action="Sent" asp-route-page="@(page - 1)">@Html.T("السابق", "Previous")</a>
+                        </li>
+                        <li class="page-item active">
+                            <span class="page-link">@(page)</span>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" asp-action="Sent" asp-route-page="@(page + 1)">@Html.T("التالي", "Next")</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="card-body">
+            @{
+                ViewData["Icon"] = "send";
+                ViewData["Title"] = Html.T("لا توجد رسائل مرسلة", "No sent messages");
+                ViewData["Message"] = Html.T("لم ترسل أي رسائل بعد. ابدأ بإرسال رسالة لأحد المدرسين.", "You haven't sent any messages yet. Start by sending a message to an instructor.");
+                ViewData["ActionText"] = "إرسال رسالة";
+                ViewData["ActionArea"] = "Student";
+                ViewData["ActionController"] = "Messages";
+                ViewData["ActionAction"] = "Compose";
+            }
+            @await Html.PartialAsync("_EmptyState")
+        </div>
+    }
+</div>
+
+@section Scripts {
+<script>
+    // Add row highlighting on hover
+    document.querySelectorAll('.message-item').forEach(item => {
+        item.addEventListener('mouseenter', function() {
+            this.style.borderRight = '3px solid #667eea';
+        });
+        
+        item.addEventListener('mouseleave', function() {
+            this.style.borderRight = 'none';
+        });
+    });
+</script>
+}
+

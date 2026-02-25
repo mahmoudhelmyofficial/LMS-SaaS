@@ -1,0 +1,384 @@
+@model LMS.Areas.Admin.ViewModels.TaxSettingViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء إعدادات ضريبة جديدة", "Create new tax settings");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("إعدادات المنصة", "Platform settings"), Url.Action("Index", "PlatformSettings")),
+        (Html.T("إعدادات الضرائب", "Tax settings"), Url.Action("Index", "TaxSettings")),
+        (Html.T("إنشاء جديد", "Create new"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .preview-card {
+            position: sticky;
+            top: 20px;
+        }
+        .tax-preview {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            text-align: center;
+        }
+        .tax-rate-display {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 1rem 0;
+        }
+        .help-icon {
+            cursor: help;
+            color: #6c757d;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <form asp-action="CreateTaxSetting" method="post" id="taxSettingForm">
+        @Html.AntiForgeryToken()
+        <div class="row">
+            <!-- Main Form -->
+            <div class="col-lg-8">
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2"></i>@Html.T("معلومات الضريبة الأساسية", "Basic tax information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <div class="row">
+                            <div class="col-md-8 mb-4">
+                                <label asp-for="Name" class="form-label">
+                                    @Html.T("اسم الضريبة", "Tax name") <span class="text-danger">*</span>
+                                    <i class="feather-help-circle help-icon ms-1" title="@Html.T("مثال: ضريبة القيمة المضافة", "e.g. VAT")"></i>
+                                </label>
+                                <input asp-for="Name" class="form-control form-control-lg" placeholder="@Html.T("مثال: ضريبة القيمة المضافة السعودية", "e.g. Saudi VAT")" id="taxName" />
+                                <span asp-validation-for="Name" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-4 mb-4">
+                                <label asp-for="TaxRate" class="form-label">
+                                    @Html.T("نسبة الضريبة (%)", "Tax rate (%)") <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <input asp-for="TaxRate" type="number" step="0.01" min="0" max="100" class="form-control form-control-lg" placeholder="15.00" id="taxRate" />
+                                    <span class="input-group-text">%</span>
+                                </div>
+                                <span asp-validation-for="TaxRate" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <label asp-for="TaxType" class="form-label">
+                                    @Html.T("نوع الضريبة", "Tax type") <span class="text-danger">*</span>
+                                </label>
+                                <select asp-for="TaxType" class="form-select" id="taxType">
+                                    <option value="">-- @Html.T("اختر نوع الضريبة", "Select tax type") --</option>
+                                    <option value="VAT">@Html.T("ضريبة القيمة المضافة (VAT)", "VAT")</option>
+                                    <option value="Sales Tax">@Html.T("ضريبة المبيعات", "Sales tax")</option>
+                                    <option value="Service Tax">@Html.T("ضريبة الخدمة", "Service tax")</option>
+                                    <option value="GST">@Html.T("ضريبة السلع والخدمات (GST)", "GST")</option>
+                                    <option value="Excise Tax">@Html.T("ضريبة انتقائية", "Excise tax")</option>
+                                    <option value="Other">@Html.T("أخرى", "Other")</option>
+                                </select>
+                                <span asp-validation-for="TaxType" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6 mb-4">
+                                <label asp-for="TaxCode" class="form-label">
+                                    @Html.T("رمز الضريبة", "Tax code")
+                                    <i class="feather-help-circle help-icon ms-1" title="@Html.T("الرمز التعريفي للضريبة", "Tax identifier code")"></i>
+                                </label>
+                                <input asp-for="TaxCode" class="form-control" placeholder="@Html.T("مثال: SA-VAT-001", "e.g. SA-VAT-001")" />
+                                <span asp-validation-for="TaxCode" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="Description" class="form-label">@Html.T("وصف الضريبة", "Tax description")</label>
+                            <textarea asp-for="Description" class="form-control" rows="3" placeholder="@Html.T("وصف تفصيلي للضريبة وحالات استخدامها...", "Detailed description of the tax and use cases...")" id="taxDescription"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                            <small class="text-muted">@Html.T("الحد الأقصى 500 حرف", "Maximum 500 characters")</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Geographic Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-map-pin me-2"></i>@Html.T("الإعدادات الجغرافية", "Geographic settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <label asp-for="Country" class="form-label">
+                                    @Html.T("الدولة", "Country")
+                                    <i class="feather-help-circle help-icon ms-1" title="@Html.T("الدولة التي تطبق فيها هذه الضريبة", "Country where this tax applies")"></i>
+                                </label>
+                                <select asp-for="Country" class="form-select" id="countrySelect">
+                                    <option value="">-- @Html.T("اختر الدولة", "Select country") --</option>
+                                    <option value="السعودية">@Html.T("السعودية", "Saudi Arabia")</option>
+                                    <option value="الإمارات">@Html.T("الإمارات", "UAE")</option>
+                                    <option value="الكويت">@Html.T("الكويت", "Kuwait")</option>
+                                    <option value="قطر">@Html.T("قطر", "Qatar")</option>
+                                    <option value="البحرين">@Html.T("البحرين", "Bahrain")</option>
+                                    <option value="عمان">@Html.T("عمان", "Oman")</option>
+                                    <option value="مصر">@Html.T("مصر", "Egypt")</option>
+                                    <option value="الأردن">@Html.T("الأردن", "Jordan")</option>
+                                    <option value="لبنان">@Html.T("لبنان", "Lebanon")</option>
+                                    <option value="المغرب">@Html.T("المغرب", "Morocco")</option>
+                                    <option value="الجزائر">@Html.T("الجزائر", "Algeria")</option>
+                                    <option value="تونس">@Html.T("تونس", "Tunisia")</option>
+                                    <option value="أخرى">@Html.T("أخرى", "Other")</option>
+                                </select>
+                                <span asp-validation-for="Country" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6 mb-4">
+                                <label asp-for="Region" class="form-label">
+                                    @Html.T("المنطقة/الولاية", "Region/State")
+                                    <i class="feather-help-circle help-icon ms-1" title="@Html.T("اختياري - إذا كانت الضريبة خاصة بمنطقة معينة", "Optional - if tax is for a specific region")"></i>
+                                </label>
+                                <input asp-for="Region" class="form-control" placeholder="@Html.T("مثال: الرياض، دبي...", "e.g. Riyadh, Dubai...")" />
+                                <span asp-validation-for="Region" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-settings me-2"></i>@Html.T("إعدادات إضافية", "Additional settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <label asp-for="EffectiveDate" class="form-label">
+                                @Html.T("تاريخ السريان", "Effective date")
+                                <i class="feather-help-circle help-icon ms-1" title="@Html.T("التاريخ الذي تبدأ فيه الضريبة بالتطبيق", "Date when the tax starts to apply")"></i>
+                            </label>
+                            <input asp-for="EffectiveDate" type="date" class="form-control" />
+                            <span asp-validation-for="EffectiveDate" class="text-danger"></span>
+                            <small class="text-muted">@Html.T("اتركه فارغاً للتطبيق الفوري", "Leave empty for immediate application")</small>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="IsEnabled" class="form-check-input" type="checkbox" checked />
+                                    <label class="form-check-label" asp-for="IsEnabled">
+                                        <strong>@Html.T("تفعيل الضريبة", "Enable tax")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("يجب تفعيل الضريبة لتطبيقها على المعاملات", "Tax must be enabled to apply to transactions")</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="ApplyToPrice" class="form-check-input" type="checkbox" checked />
+                                    <label class="form-check-label" asp-for="ApplyToPrice">
+                                        <strong>@Html.T("تطبيق على الأسعار", "Apply to prices")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("تطبق الضريبة تلقائياً على أسعار الدورات", "Tax is applied automatically to course prices")</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <div class="d-flex align-items-start">
+                                <i class="feather-info me-2 mt-1"></i>
+                                <div>
+                                    <strong>@Html.T("ملاحظة:", "Note:")</strong> @Html.T("تأكد من مراجعة القوانين الضريبية المحلية قبل تطبيق الإعدادات. يُنصح باستشارة مختص ضريبي.", "Make sure to review local tax laws before applying settings. Consulting a tax specialist is recommended.")
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-2 justify-content-end mb-4">
+                    <a asp-action="TaxSettings" class="btn btn-light">
+                        <i class="feather-x me-2"></i>@Html.T("إلغاء", "Cancel")
+                    </a>
+                    <button type="reset" class="btn btn-secondary">
+                        <i class="feather-rotate-ccw me-2"></i>@Html.T("إعادة تعيين", "Reset")
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="feather-save me-2"></i>@Html.T("حفظ الإعدادات", "Save settings")
+                    </button>
+                </div>
+            </div>
+
+            <!-- Preview Sidebar -->
+            <div class="col-lg-4">
+                <div class="preview-card">
+                    <div class="card stretch stretch-full mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title">
+                                <i class="feather-eye me-2"></i>@Html.T("معاينة مباشرة", "Live preview")
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="tax-preview mb-3">
+                                <div class="mb-2">
+                                    <i class="feather-percent" style="font-size: 2rem;"></i>
+                                </div>
+                                <h5 id="previewName">@Html.T("اسم الضريبة", "Tax name")</h5>
+                                <div class="tax-rate-display" id="previewRate">0.00%</div>
+                                <span class="badge bg-white bg-opacity-25" id="previewType">@Html.T("نوع الضريبة", "Tax type")</span>
+                            </div>
+
+                            <div class="list-group list-group-flush">
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span class="text-muted">@Html.T("الدولة", "Country")</span>
+                                    <strong id="previewCountry">-</strong>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span class="text-muted">@Html.T("المنطقة", "Region")</span>
+                                    <strong id="previewRegion">-</strong>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span class="text-muted">@Html.T("رمز الضريبة", "Tax code")</span>
+                                    <strong id="previewCode">-</strong>
+                                </div>
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span class="text-muted">@Html.T("الحالة", "Status")</span>
+                                    <span class="badge bg-success" id="previewStatus">@Html.T("مفعلة", "Enabled")</span>
+                                </div>
+                            </div>
+
+                            <div class="mt-3" id="previewDescription" style="display: none;">
+                                <hr>
+                                <p class="text-muted small mb-0" id="previewDescText"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tax Calculation Example -->
+                    <div class="card stretch stretch-full">
+                        <div class="card-header">
+                            <h5 class="card-title">
+                                <i class="feather-calculator me-2"></i>@Html.T("مثال على الحساب", "Calculation example")
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label small">@Html.T("سعر الدورة (مثال)", "Course price (example)")</label>
+                                <input type="number" class="form-control" id="samplePrice" value="100" min="0" step="1">
+                            </div>
+                            <div class="bg-light p-3 rounded">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span>@Html.T("السعر الأساسي:", "Base price:")</span>
+                                    <strong><span id="calcBase">100</span> ريال</strong>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2 text-primary">
+                                    <span>@Html.T("الضريبة", "Tax") (<span id="calcTaxRate">0</span>%):</span>
+                                    <strong><span id="calcTax">0</span> ريال</strong>
+                                </div>
+                                <hr>
+                                <div class="d-flex justify-content-between">
+                                    <span class="fw-bold">الإجمالي:</span>
+                                    <strong class="text-success fs-5"><span id="calcTotal">100</span> ريال</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Live Preview Updates
+            $('#taxName').on('input', function() {
+                const value = $(this).val() || 'اسم الضريبة';
+                $('#previewName').text(value);
+            });
+
+            $('#taxRate').on('input', function() {
+                const value = parseFloat($(this).val()) || 0;
+                $('#previewRate').text(value.toFixed(2) + '%');
+                updateCalculation();
+            });
+
+            $('#taxType').on('change', function() {
+                const value = $(this).val() || 'نوع الضريبة';
+                const text = $(this).find('option:selected').text();
+                $('#previewType').text(text);
+            });
+
+            $('#countrySelect').on('change', function() {
+                const value = $(this).val() || '-';
+                $('#previewCountry').text(value);
+            });
+
+            $('input[name="Region"]').on('input', function() {
+                const value = $(this).val() || '-';
+                $('#previewRegion').text(value);
+            });
+
+            $('input[name="TaxCode"]').on('input', function() {
+                const value = $(this).val() || '-';
+                $('#previewCode').text(value);
+            });
+
+            $('#taxDescription').on('input', function() {
+                const value = $(this).val();
+                if (value) {
+                    $('#previewDescription').show();
+                    $('#previewDescText').text(value);
+                } else {
+                    $('#previewDescription').hide();
+                }
+            });
+
+            $('input[name="IsEnabled"]').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#previewStatus').removeClass('bg-secondary').addClass('bg-success').text('مفعلة');
+                } else {
+                    $('#previewStatus').removeClass('bg-success').addClass('bg-secondary').text('معطلة');
+                }
+            });
+
+            // Tax Calculation
+            $('#samplePrice').on('input', updateCalculation);
+
+            function updateCalculation() {
+                const basePrice = parseFloat($('#samplePrice').val()) || 100;
+                const taxRate = parseFloat($('#taxRate').val()) || 0;
+                const taxAmount = (basePrice * taxRate) / 100;
+                const total = basePrice + taxAmount;
+
+                $('#calcBase').text(basePrice.toFixed(2));
+                $('#calcTaxRate').text(taxRate.toFixed(2));
+                $('#calcTax').text(taxAmount.toFixed(2));
+                $('#calcTotal').text(total.toFixed(2));
+            }
+
+            // Initialize
+            updateCalculation();
+        });
+    </script>
+}
+

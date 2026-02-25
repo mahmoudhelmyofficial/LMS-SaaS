@@ -1,0 +1,386 @@
+@model List<dynamic>
+
+@{
+    ViewData["Title"] = Html.T("تقرير التصنيفات", "Categories report");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("التحليلات", "Analytics"), Url.Action("Index", "Analytics")),
+        (Html.T("تقرير التصنيفات", "Categories report"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+}
+
+@section Styles {
+    <style>
+        .category-card {
+            transition: all 0.3s ease;
+        }
+        .category-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                        <i class="feather-folder"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("إجمالي التصنيفات", "Total categories")</span>
+                        <h3 class="fw-bold mb-0">@Model.Count()</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                        <i class="feather-check-circle"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("تصنيفات نشطة", "Active categories")</span>
+                        <h3 class="fw-bold mb-0">@Model.Count(c => c.IsActive)</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                        <i class="feather-book"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("إجمالي الدورات", "Total courses")</span>
+                        <h3 class="fw-bold mb-0">@Model.Sum(c => c.CoursesCount)</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                        <i class="feather-dollar-sign"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("إجمالي الإيرادات", "Total revenue")</span>
+                        <h3 class="fw-bold mb-0">@Model.Sum(c => c.TotalRevenue).ToEGP()</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Charts -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الإيرادات حسب التصنيف", "Revenue by category")</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 350px;">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع الدورات", "Courses distribution")</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 250px;">
+                        <canvas id="coursesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Categories Table -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تفاصيل التصنيفات", "Category details")</h5>
+                    <div class="card-header-action">
+                        <input type="text" class="form-control form-control-sm" id="searchCategory" placeholder="@Html.T("بحث...", "Search...")">
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="categoriesTable">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>@Html.T("التصنيف", "Category")</th>
+                                    <th>@Html.T("عدد الدورات", "Courses count")</th>
+                                    <th>@Html.T("الدورات المنشورة", "Published courses")</th>
+                                    <th>@Html.T("إجمالي التسجيلات", "Total enrollments")</th>
+                                    <th>@Html.T("إجمالي الإيرادات", "Total revenue")</th>
+                                    <th>@Html.T("متوسط التقييم", "Avg. rating")</th>
+                                    <th>@Html.T("التصنيفات الفرعية", "Subcategories")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var category in Model)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                    <i class="feather-folder"></i>
+                                                </div>
+                                                <div>
+                                                    <span class="fw-semibold d-block">@category.CategoryName</span>
+                                                    <small class="text-muted">ID: @category.CategoryId</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-primary text-primary">@category.CoursesCount</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-success text-success">@category.PublishedCourses</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-info text-info">@category.TotalEnrollments</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold text-success">@category.TotalRevenue.ToEGP()</span>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-1">
+                                                @for (int i = 1; i <= 5; i++)
+                                                {
+                                                    if (i <= Math.Floor((double)category.AverageRating))
+                                                    {
+                                                        <i class="feather-star text-warning" style="font-size: 12px;"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="feather-star text-muted" style="font-size: 12px;"></i>
+                                                    }
+                                                }
+                                                <span class="fw-semibold ms-1">@category.AverageRating.ToString("F1")</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-warning text-warning">@category.SubCategoriesCount</span>
+                                        </td>
+                                        <td>
+                                            @if (category.IsActive)
+                                            {
+                                                <span class="badge bg-soft-success text-success">
+                                                    <i class="feather-check-circle"></i>
+                                                    @Html.T("نشط", "Active")
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">
+                                                    <i class="feather-x-circle"></i>
+                                                    @Html.T("غير نشط", "Inactive")
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a asp-controller="Categories" asp-action="Details" asp-route-id="@category.CategoryId" 
+                                                   class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض التفاصيل", "View details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                <a asp-controller="Categories" asp-action="Statistics" asp-route-id="@category.CategoryId"
+                                                   class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("الإحصائيات", "Statistics")">
+                                                    <i class="feather-bar-chart-2"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                @if (!Model.Any())
+                {
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-warning text-warning mx-auto mb-3">
+                            <i class="feather-inbox"></i>
+                        </div>
+                        <h5>@Html.T("لا توجد تصنيفات", "No categories")</h5>
+                        <p class="text-muted">@Html.T("لم يتم العثور على أي تصنيفات", "No categories found")</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Categories Cards -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أفضل التصنيفات", "Top categories")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        @foreach (var category in Model.OrderByDescending(c => c.TotalRevenue).Take(4))
+                        {
+                            <div class="col-lg-3 col-md-6">
+                                <div class="card category-card border">
+                                    <div class="card-body text-center">
+                                        <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                                            <i class="feather-folder"></i>
+                                        </div>
+                                        <h5 class="mb-2">@category.CategoryName</h5>
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-6">
+                                                <div class="p-2 bg-soft-primary rounded">
+                                                    <h6 class="mb-0">@category.CoursesCount</h6>
+                                                    <small class="text-muted">@Html.T("دورة", "Course")</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="p-2 bg-soft-info rounded">
+                                                    <h6 class="mb-0">@category.TotalEnrollments</h6>
+                                                    <small class="text-muted">@Html.T("تسجيل", "Enrollment")</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <div class="d-flex align-items-center justify-content-center gap-1">
+                                                @for (int i = 1; i <= 5; i++)
+                                                {
+                                                    if (i <= Math.Floor((double)category.AverageRating))
+                                                    {
+                                                        <i class="feather-star text-warning"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="feather-star text-muted"></i>
+                                                    }
+                                                }
+                                            </div>
+                                        </div>
+                                        <div class="p-3 bg-soft-success rounded">
+                                            <h5 class="text-success mb-0">@category.TotalRevenue.ToEGP()</h5>
+                                            <small class="text-muted">@Html.T("إجمالي الإيرادات", "Total revenue")</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Search functionality
+            $('#searchCategory').on('keyup', function() {
+                var value = $(this).val().toLowerCase();
+                $('#categoriesTable tbody tr').filter(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+                });
+            });
+
+            // Revenue Chart
+            const categories = @Html.Raw(Json.Serialize(Model.Select(c => new { 
+                Name = c.CategoryName,
+                Revenue = c.TotalRevenue
+            })));
+
+            const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+            new Chart(revenueCtx, {
+                type: 'bar',
+                data: {
+                    labels: categories.map(c => c.Name),
+                    datasets: [{
+                        label: 'الإيرادات (ر.س)',
+                        data: categories.map(c => c.Revenue),
+                        backgroundColor: '#3454d1',
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString() + ' ر.س';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Courses Distribution Chart
+            const coursesCtx = document.getElementById('coursesChart').getContext('2d');
+            new Chart(coursesCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: categories.slice(0, 6).map(c => c.Name),
+                    datasets: [{
+                        data: @Html.Raw(Json.Serialize(Model.Take(6).Select(c => c.CoursesCount))),
+                        backgroundColor: ['#3454d1', '#0ab39c', '#f7b84b', '#f06548', '#6c757d', '#20c997']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // Initialize tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+

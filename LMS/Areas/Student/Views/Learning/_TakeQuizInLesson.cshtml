@@ -1,0 +1,220 @@
+@using LMS.Areas.Student.Controllers
+@using LMS.Areas.Student.ViewModels
+@model TakeQuizViewModel
+@{
+    var lessonId = (int)ViewBag.LessonId;
+    var questions = Model?.Questions ?? new List<QuizQuestionViewModel>();
+    var attemptId = Model?.AttemptId ?? 0;
+    var timeRemaining = Model?.TimeLimit ?? 0;
+}
+<style>
+    .tutor-quiz .question-card { background: #1e1e2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; border: 1px solid #2d2d2d; }
+    .tutor-quiz .option-card { padding: 12px 16px; border: 2px solid #2d2d2d; border-radius: 8px; cursor: pointer; margin-bottom: 10px; color: #e5e7eb; }
+    .tutor-quiz .option-card:hover, .tutor-quiz .option-card.selected { border-color: #667eea; background: rgba(102,126,234,0.15); }
+    .tutor-quiz .timer { font-size: 20px; font-weight: bold; padding: 8px 16px; border-radius: 8px; }
+    .tutor-quiz .timer.warning { background: #fef3c7; color: #f59e0b; }
+    .tutor-quiz .timer.danger { background: #fee2e2; color: #ef4444; }
+    .tutor-quiz .question-nav { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 8px; }
+    .tutor-quiz .question-nav-btn { width: 42px; height: 42px; border: 2px solid #2d2d2d; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #e5e7eb; }
+    .tutor-quiz .question-nav-btn.answered { background: #22c55e; border-color: #22c55e; color: #fff; }
+    .tutor-quiz .question-nav-btn.current { background: #667eea; border-color: #667eea; color: #fff; }
+</style>
+
+<div class="tutor-panel take-quiz-panel tutor-quiz text-white">
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <h5 class="text-white mb-0">@Model?.QuizTitle</h5>
+        <div class="d-flex align-items-center gap-3">
+            @if (timeRemaining > 0)
+            {
+                <div class="timer" id="tutor-quiz-timer"><i class="feather-clock me-2"></i><span id="tutor-quiz-timeDisplay">@(timeRemaining):00</span></div>
+            }
+            <span class="badge bg-dark text-light"><span id="tutor-quiz-answeredCount">0</span> / @questions.Count @Html.T("مُجاب", "answered")</span>
+            <a asp-action="Lesson" asp-controller="Learning" asp-route-lessonId="@lessonId" class="btn btn-outline-light btn-sm">@Html.T("العودة للدرس", "Back to lesson")</a>
+        </div>
+    </div>
+    <p class="text-muted small mb-3">@Html.T("سؤال", "Question") <span id="tutor-quiz-currentQuestionNumber">1</span> @Html.T("من", "of") @questions.Count</p>
+
+    <div class="row g-3">
+        <div class="col-lg-9">
+            <form id="tutor-quiz-form" asp-action="SubmitQuiz" asp-controller="Quizzes" asp-area="Student" method="post">
+                <input type="hidden" name="attemptId" value="@attemptId" />
+                <input type="hidden" id="requiresProctoring" value="@(Model?.RequiresProctoring == true ? "true" : "false")" />
+                <input type="hidden" id="quizAttemptId" value="@attemptId" />
+                <input type="hidden" id="procPreventTabSwitch" value="@(Model?.ProcPreventTabSwitch == true ? "true" : "false")" />
+                <input type="hidden" id="procPreventCopyPaste" value="@(Model?.ProcPreventCopyPaste == true ? "true" : "false")" />
+                <input type="hidden" id="procDisableRightClick" value="@(Model?.ProcDisableRightClick == true ? "true" : "false")" />
+                <input type="hidden" id="procRequireFullscreen" value="@(Model?.ProcRequireFullscreen == true ? "true" : "false")" />
+                <input type="hidden" id="procRequireWebcam" value="@(Model?.ProcRequireWebcam == true ? "true" : "false")" />
+                <input type="hidden" id="procCaptureScreenshots" value="@(Model?.ProcCaptureScreenshots == true ? "true" : "false")" />
+                <input type="hidden" id="procScreenshotInterval" value="@(Model?.ProcScreenshotInterval ?? 60)" />
+                <input type="hidden" id="procMaxWarnings" value="@(Model?.ProcMaxWarnings ?? 3)" />
+                <input type="hidden" id="procAutoTerminate" value="@(Model?.ProcAutoTerminate == true ? "true" : "false")" />
+                @Html.AntiForgeryToken()
+
+                @for (int i = 0; i < questions.Count; i++)
+                {
+                    var question = questions[i];
+                    var questionNumber = i + 1;
+                    <div class="question-card" id="tutor-quiz-question-@questionNumber" style="@(i > 0 ? "display: none;" : "")">
+                        <div class="d-flex align-items-start justify-content-between mb-3">
+                            <h5 class="text-white">@Html.T("سؤال", "Question") @questionNumber</h5>
+                            <span class="badge bg-primary">@question.Points @Html.T("نقطة", "point(s)")</span>
+                        </div>
+                        <p class="fs-6 text-white mb-3">@question.QuestionText</p>
+
+                        @if ((question.QuestionType == "MultipleChoice" || question.QuestionType == "SingleChoice") && question.Options != null && question.Options.Any())
+                        {
+                            @foreach (var option in question.Options)
+                            {
+                                <div class="option-card" onclick="selectOption(this, @question.Id, @option.Id)">
+                                    <input type="radio" name="answer_@question.Id" value="@option.Id" id="option_@option.Id" style="display: none;" />
+                                    <label for="option_@option.Id" class="mb-0 w-100 cursor-pointer"><i class="feather-circle me-2"></i>@option.Text</label>
+                                </div>
+                            }
+                        }
+                        else if (question.QuestionType == "TrueFalse")
+                        {
+                            <div class="option-card" onclick="selectOption(this, @question.Id, 'true')">
+                                <input type="radio" name="answer_@question.Id" value="true" id="true_@question.Id" style="display: none;" />
+                                <label for="true_@question.Id" class="mb-0"><i class="feather-check-circle me-2 text-success"></i>@Html.T("صحيح", "True")</label>
+                            </div>
+                            <div class="option-card" onclick="selectOption(this, @question.Id, 'false')">
+                                <input type="radio" name="answer_@question.Id" value="false" id="false_@question.Id" style="display: none;" />
+                                <label for="false_@question.Id" class="mb-0"><i class="feather-x-circle me-2 text-danger"></i>@Html.T("خطأ", "False")</label>
+                            </div>
+                        }
+                        else if (question.QuestionType == "ShortAnswer")
+                        {
+                            <textarea class="form-control bg-dark text-white border-secondary" name="answer_@question.Id" rows="4" placeholder="@Html.T("اكتب إجابتك هنا...", "Type your answer here...")" onchange="markAsAnswered(@questionNumber)"></textarea>
+                        }
+                        else if (question.QuestionType == "Essay")
+                        {
+                            <textarea class="form-control bg-dark text-white border-secondary" name="answer_@question.Id" rows="8" placeholder="@Html.T("اكتب إجابتك هنا...", "Type your answer here...")" onchange="markAsAnswered(@questionNumber)"></textarea>
+                        }
+                        else if (question.QuestionType == "FillInTheBlanks" || question.QuestionType == "FillInBlank")
+                        {
+                            <textarea class="form-control bg-dark text-white border-secondary" name="answer_@question.Id" rows="4" placeholder="@Html.T("اكتب إجابتك هنا...", "Type your answer here...")" onchange="markAsAnswered(@questionNumber)"></textarea>
+                        }
+                        else if (question.QuestionType == "FileUpload")
+                        {
+                            <div class="mb-2">
+                                <label class="form-label text-white">@Html.T("رفع ملف", "Upload file")</label>
+                                <input type="file" class="form-control bg-dark text-white border-secondary" name="answerFile_@question.Id" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png" />
+                            </div>
+                            <label class="form-label text-white">@Html.T("أو اكتب إجابتك هنا", "Or type your answer here")</label>
+                            <textarea class="form-control bg-dark text-white border-secondary" name="answer_@question.Id" rows="4" placeholder="@Html.T("اكتب إجابتك هنا...", "Type your answer here...")" onchange="markAsAnswered(@questionNumber)"></textarea>
+                        }
+                        else
+                        {
+                            @* Matching, Ordering, or any other type: show textarea so student can always provide an answer *@
+                            <textarea class="form-control bg-dark text-white border-secondary" name="answer_@question.Id" rows="6" placeholder="@Html.T("اكتب إجابتك هنا...", "Type your answer here...")" onchange="markAsAnswered(@questionNumber)"></textarea>
+                        }
+
+                        <div class="d-flex justify-content-between mt-4 pt-3 border-top border-secondary">
+                            @if (i > 0)
+                            {
+                                <button type="button" class="btn btn-outline-secondary" onclick="previousQuestion()"><i class="feather-arrow-right me-2"></i>@Html.T("السابق", "Previous")</button>
+                            }
+                            else { <div></div> }
+                            @if (i < questions.Count - 1)
+                            {
+                                <button type="button" class="btn btn-primary" onclick="nextQuestion()">@Html.T("التالي", "Next") <i class="feather-arrow-left ms-2"></i></button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-success" onclick="confirmSubmit()"><i class="feather-check-circle me-2"></i>@Html.T("إنهاء وتسليم", "Finish and submit")</button>
+                            }
+                        </div>
+                    </div>
+                }
+            </form>
+        </div>
+        <div class="col-lg-3">
+            <div class="p-3 rounded bg-dark border border-secondary" style="position: sticky; top: 80px;">
+                <h6 class="text-white mb-2">@Html.T("التنقل بين الأسئلة", "Question navigation")</h6>
+                <div class="question-nav" id="tutor-quiz-questionNav">
+                    @for (int i = 1; i <= questions.Count; i++)
+                    {
+                        <div class="question-nav-btn @(i == 1 ? "current" : "")" id="tutor-quiz-nav-btn-@i" onclick="goToQuestion(@i)">@i</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var currentQuestion = 1;
+    var totalQuestions = @questions.Count;
+    var timeRemaining = @(timeRemaining * 60);
+
+    function updateTimerDisplay() {
+        if (timeRemaining <= 0) return;
+        var m = Math.floor(timeRemaining / 60);
+        var s = timeRemaining % 60;
+        var el = document.getElementById('tutor-quiz-timeDisplay');
+        if (el) el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+        var timer = document.getElementById('tutor-quiz-timer');
+        if (timer) {
+            timer.classList.remove('warning', 'danger');
+            if (timeRemaining <= 60) timer.classList.add('danger');
+            else if (timeRemaining <= 300) timer.classList.add('warning');
+        }
+    }
+
+    @if (timeRemaining > 0)
+    {
+        @:var timerInterval = setInterval(function() {
+        @:  timeRemaining--;
+        @:  updateTimerDisplay();
+        @:  if (timeRemaining <= 0) { clearInterval(timerInterval); var f = document.getElementById('tutor-quiz-form'); if (f) f.submit(); }
+        @:}, 1000);
+        @:updateTimerDisplay();
+    }
+
+    window.selectOption = function(element, questionId, optionId) {
+        var siblings = element.parentElement.querySelectorAll('.option-card');
+        siblings.forEach(function(s) { s.classList.remove('selected'); });
+        element.classList.add('selected');
+        var radio = element.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+        markAsAnswered(currentQuestion);
+    };
+
+    window.markAsAnswered = function(questionNum) {
+        var btn = document.getElementById('tutor-quiz-nav-btn-' + questionNum);
+        if (btn && !btn.classList.contains('current')) btn.classList.add('answered');
+        var nav = document.getElementById('tutor-quiz-questionNav');
+        var c = nav ? nav.querySelectorAll('.question-nav-btn.answered').length : 0;
+        var ac = document.getElementById('tutor-quiz-answeredCount');
+        if (ac) ac.textContent = c;
+    };
+
+    window.goToQuestion = function(questionNum) {
+        var prevEl = document.getElementById('tutor-quiz-question-' + currentQuestion);
+        if (prevEl) prevEl.style.display = 'none';
+        var cb = document.getElementById('tutor-quiz-nav-btn-' + currentQuestion);
+        if (cb) cb.classList.remove('current');
+        var nextEl = document.getElementById('tutor-quiz-question-' + questionNum);
+        if (nextEl) nextEl.style.display = 'block';
+        var tb = document.getElementById('tutor-quiz-nav-btn-' + questionNum);
+        if (tb) { tb.classList.add('current'); tb.classList.remove('answered'); }
+        currentQuestion = questionNum;
+        var cn = document.getElementById('tutor-quiz-currentQuestionNumber');
+        if (cn) cn.textContent = currentQuestion;
+    };
+
+    window.nextQuestion = function() { if (currentQuestion < totalQuestions) goToQuestion(currentQuestion + 1); };
+    window.previousQuestion = function() { if (currentQuestion > 1) goToQuestion(currentQuestion - 1); };
+
+    window.confirmSubmit = function() {
+        if (confirm('@Html.Raw(Html.T("هل أنت متأكد من تسليم الاختبار؟", "Are you sure you want to submit the quiz?").ToString().Replace("'", "\\'"))')) {
+            var f = document.getElementById('tutor-quiz-form');
+            if (f) f.submit();
+        }
+    };
+
+    window.addEventListener('beforeunload', function(e) { e.preventDefault(); e.returnValue = ''; });
+})();
+</script>

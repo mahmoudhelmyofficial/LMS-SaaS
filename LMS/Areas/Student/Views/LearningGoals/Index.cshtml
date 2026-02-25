@@ -1,0 +1,253 @@
+@model List<LMS.Areas.Student.Controllers.GoalWithProgress>
+@{
+    ViewData["Title"] = Html.T("أهداف التعلم", "Learning Goals");
+    var activeGoals = ViewBag.ActiveGoals as int? ?? Model?.Count(g => !g.Goal.IsCompleted && !g.Goal.IsCancelled) ?? 0;
+    var completedGoals = ViewBag.CompletedGoals as int? ?? Model?.Count(g => g.Goal.IsCompleted) ?? 0;
+}
+
+@section Styles {
+<style>
+    .goal-card {
+        transition: all 0.3s ease;
+    }
+    .goal-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+</style>
+}
+
+<!-- Anti-forgery token for AJAX requests -->
+@Html.AntiForgeryToken()
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-target text-primary me-2"></i>
+                    @Html.T("أهداف التعلم", "Learning Goals")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("حدد أهدافك وتابع تقدمك", "Set your goals and track your progress")</p>
+            </div>
+            <div class="d-flex gap-3">
+                <div class="text-center px-3">
+                    <h4 class="fw-bold text-primary mb-0">@activeGoals</h4>
+                    <small class="text-muted">@Html.T("أهداف نشطة", "Active goals")</small>
+                </div>
+                <div class="text-center px-3">
+                    <h4 class="fw-bold text-success mb-0">@completedGoals</h4>
+                    <small class="text-muted">@Html.T("أهداف مكتملة", "Completed goals")</small>
+                </div>
+            </div>
+            <a asp-action="Create" class="btn btn-primary">
+                <i class="feather-plus me-2"></i>
+                @Html.T("هدف جديد", "New Goal")
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Goals Grid -->
+<div class="row g-4">
+    @if (Model != null && Model.Any())
+    {
+        @foreach (var item in Model)
+        {
+            var goal = item.Goal;
+            var isCompleted = goal.IsCompleted;
+            var isCancelled = goal.IsCancelled;
+            var progressPercent = (int)item.ProgressPercentage;
+            if (progressPercent > 100) progressPercent = 100;
+            
+            var statusClass = isCompleted ? "success" : (isCancelled ? "secondary" : "warning");
+            var statusText = isCompleted ? Html.T("مكتمل", "Completed").ToString() : (isCancelled ? Html.T("ملغى", "Cancelled").ToString() : Html.T("قيد التنفيذ", "In progress").ToString());
+            var iconClass = isCompleted ? "check-circle" : (isCancelled ? "x-circle" : "target");
+            
+            <div class="col-lg-4 col-md-6">
+                <div class="card goal-card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div class="avatar-text avatar-lg bg-soft-@statusClass text-@statusClass">
+                                <i class="feather-@iconClass"></i>
+                            </div>
+                            <span class="badge bg-soft-@statusClass text-@statusClass">@statusText</span>
+                        </div>
+                        <h5 class="fw-bold mb-2">@goal.Title</h5>
+                        @if (!string.IsNullOrEmpty(goal.Description))
+                        {
+                            <p class="text-muted fs-12 mb-2">@goal.Description</p>
+                        }
+                        <p class="text-muted fs-12 mb-3">
+                            @if (goal.TargetDate.HasValue)
+                            {
+                                <span>@Html.T("الموعد النهائي:", "Deadline:") @goal.TargetDate.Value.ToString("dd MMMM yyyy")</span>
+                                @if (item.DaysRemaining > 0 && !isCompleted)
+                                {
+                                    <span class="text-warning ms-2">(@item.DaysRemaining @Html.T("يوم متبقي", "days left"))</span>
+                                }
+                                else if (item.DaysRemaining < 0 && !isCompleted)
+                                {
+                                    <span class="text-danger ms-2">(@Html.T("متأخر", "Overdue"))</span>
+                                }
+                            }
+                            else
+                            {
+                                <span>@Html.T("بدون موعد نهائي", "No deadline")</span>
+                            }
+                        </p>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted fs-12">@Html.T("التقدم", "Progress")</span>
+                                <span class="fw-semibold fs-12">@item.CurrentProgress / @goal.TargetValue @GetGoalUnitLabel(goal.GoalType)</span>
+                            </div>
+                            <div class="progress ht-8">
+                                <div class="progress-bar bg-@statusClass" style="width: @progressPercent%"></div>
+                            </div>
+                        </div>
+                        
+                        @if (!isCompleted && !isCancelled)
+                        {
+                            <div class="d-flex gap-2">
+                                <a asp-action="Edit" asp-route-id="@goal.Id" class="btn btn-sm btn-outline-primary flex-grow-1">
+                                    <i class="feather-edit me-2"></i>
+                                    @Html.T("تعديل", "Edit")
+                                </a>
+                                <button type="button" class="btn btn-sm btn-icon btn-outline-danger" 
+                                        onclick="removeGoal(@goal.Id, this)"
+                                        data-goal-id="@goal.Id"
+                                        title="@Html.T("حذف الهدف", "Delete Goal")">
+                                    <i class="feather-trash-2"></i>
+                                </button>
+                            </div>
+                        }
+                        else if (isCompleted)
+                        {
+                            <div class="alert alert-success mb-0 py-2">
+                                <small>
+                                    <i class="feather-award me-1"></i>
+                                    @Html.T("أحسنت! لقد حققت هدفك", "Well done! You achieved your goal")
+                                    @if (goal.CompletedAt.HasValue)
+                                    {
+                                        <span>@Html.T("في", "on") @goal.CompletedAt.Value.ToString("dd/MM/yyyy")</span>
+                                    }
+                                </small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="col-12">
+            <div class="text-center py-5">
+                <i class="feather-target fs-1 text-muted mb-3 d-block"></i>
+                <h5 class="text-muted">@Html.T("لا توجد أهداف بعد", "No goals yet")</h5>
+                <p class="text-muted">@Html.T("أنشئ هدفك الأول لتتبع تقدمك", "Create your first goal to track your progress")</p>
+                <a asp-action="Create" class="btn btn-primary">
+                    <i class="feather-plus me-2"></i>
+                    @Html.T("إنشاء هدف جديد", "Create new goal")
+                </a>
+            </div>
+        </div>
+    }
+</div>
+
+@functions {
+    string GetGoalUnitLabel(string goalType)
+    {
+        return goalType switch
+        {
+            "CompleteCourses" => Html.T("دورة", "course").ToString(),
+            "StudyHours" => Html.T("ساعة", "hour").ToString(),
+            "EarnCertificates" => Html.T("شهادة", "certificate").ToString(),
+            "EarnPoints" => Html.T("نقطة", "point").ToString(),
+            "CompleteLessons" => Html.T("درس", "lesson").ToString(),
+            "PassQuizzes" => Html.T("اختبار", "quiz").ToString(),
+            _ => ""
+        };
+    }
+}
+
+@section Scripts {
+<script>
+    var _goalMsgs = {
+        deleteConfirm: @Html.Raw(Json.Serialize(Html.T("هل أنت متأكد من حذف هذا الهدف؟", "Are you sure you want to delete this goal?"))),
+        invalidSession: @Html.Raw(Json.Serialize(Html.T("جلسة غير صالحة. يرجى تحديث الصفحة والمحاولة مرة أخرى.", "Invalid session. Please refresh the page and try again."))),
+        invalidResponse: @Html.Raw(Json.Serialize(Html.T("استجابة غير صالحة", "Invalid response"))),
+        badRequest: @Html.Raw(Json.Serialize(Html.T("طلب غير صالح. حدّث الصفحة وحاول مرة أخرى.", "Invalid request. Please refresh the page and try again."))),
+        serverError: @Html.Raw(Json.Serialize(Html.T("حدث خطأ في الخادم.", "A server error occurred."))),
+        deleteSuccess: @Html.Raw(Json.Serialize(Html.T("تم حذف الهدف بنجاح", "Goal deleted successfully"))),
+        deleteError: @Html.Raw(Json.Serialize(Html.T("حدث خطأ أثناء حذف الهدف", "An error occurred while deleting the goal"))),
+        connectionError: @Html.Raw(Json.Serialize(Html.T("حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.", "Connection error. Please try again."))),
+        close: @Html.Raw(Json.Serialize(Html.T("إغلاق", "Close")))
+    };
+    function getGoalAntiForgeryToken() {
+        var el = document.querySelector('input[name="__RequestVerificationToken"]');
+        return el ? el.value : '';
+    }
+    function showGoalToast(type, message) {
+        var bgClass = type === 'success' ? 'bg-success' : 'bg-danger';
+        var toastEl = document.createElement('div');
+        toastEl.className = 'toast align-items-center text-white ' + bgClass + ' border-0 position-fixed';
+        toastEl.style.cssText = 'top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999;';
+        toastEl.setAttribute('role', 'alert');
+        toastEl.innerHTML = '<div class="d-flex"><div class="toast-body">' + (message || '') + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="' + _goalMsgs.close + '"></button></div>';
+        document.body.appendChild(toastEl);
+        var bsToast = new bootstrap.Toast(toastEl, { delay: 3000 });
+        bsToast.show();
+        toastEl.addEventListener('hidden.bs.toast', function() { toastEl.remove(); });
+    }
+    async function removeGoal(goalId, buttonElement) {
+        if (!confirm(_goalMsgs.deleteConfirm)) return;
+        var token = getGoalAntiForgeryToken();
+        if (!token) {
+            showGoalToast('error', _goalMsgs.invalidSession);
+            return;
+        }
+        var btn = buttonElement;
+        var originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        try {
+            var formData = new FormData();
+            formData.append('__RequestVerificationToken', token);
+            var removeUrl = '@Url.Action("Remove", "LearningGoals", new { area = "Student", id = "__GOAL_ID__" })'.replace('__GOAL_ID__', goalId);
+            var response = await fetch(removeUrl, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': token },
+                body: formData
+            });
+            var result = response.ok ? await response.json().catch(function() { return { success: false, message: _goalMsgs.invalidResponse }; }) : { success: false, message: response.status === 400 ? _goalMsgs.badRequest : _goalMsgs.serverError };
+            if (result && result.success) {
+                var card = btn.closest('.col-lg-4, .col-md-6');
+                if (card) {
+                    card.style.transition = 'opacity 0.3s';
+                    card.style.opacity = '0';
+                    setTimeout(function() {
+                        card.remove();
+                        if (!document.querySelector('.goal-card')) location.reload();
+                    }, 300);
+                } else location.reload();
+                showGoalToast('success', result.message || _goalMsgs.deleteSuccess);
+            } else {
+                showGoalToast('error', (result && result.message) || _goalMsgs.deleteError);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        } catch (e) {
+            console.error('Error removing goal:', e);
+            showGoalToast('error', _goalMsgs.connectionError);
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    }
+</script>
+}

@@ -1,0 +1,294 @@
+@*
+    WEBUILDER LMS - Enterprise Secure Video Player
+    Netflix-quality player with canvas watermark and content protection
+    Works with: Local files, YouTube, Vimeo, HLS
+*@
+
+@{
+    // Extract parameters from ViewData or Model
+    var videoUrl = (string)(ViewData["VideoUrl"] ?? Model?.VideoUrl ?? "");
+    var videoProvider = (string)(ViewData["VideoProvider"] ?? Model?.VideoProvider ?? "");
+    var videoId = (string)(ViewData["VideoId"] ?? Model?.VideoId ?? "");
+    var lessonId = (int)(ViewData["LessonId"] ?? Model?.LessonId ?? 0);
+
+    // Student info for watermark
+    var studentName = (string)(ViewData["StudentName"] ?? Model?.StudentName ?? "");
+    var studentEmail = (string)(ViewData["StudentEmail"] ?? Model?.StudentEmail ?? "");
+    var studentPhone = (string)(ViewData["StudentPhone"] ?? Model?.StudentPhone ?? "");
+    var studentId = (string)(ViewData["StudentId"] ?? "");
+
+    // Generate unique player ID
+    var playerId = "svp" + Guid.NewGuid().ToString("N").Substring(0, 8);
+
+    // Detect video provider from URL if not specified
+    var isYouTube = (!string.IsNullOrEmpty(videoProvider) && videoProvider.ToLower() == "youtube") ||
+                    (!string.IsNullOrEmpty(videoUrl) && (videoUrl.Contains("youtube.com") || videoUrl.Contains("youtu.be")));
+    var isVimeo = (!string.IsNullOrEmpty(videoProvider) && videoProvider.ToLower() == "vimeo") ||
+                  (!string.IsNullOrEmpty(videoUrl) && videoUrl.Contains("vimeo.com"));
+    var isLocal = !isYouTube && !isVimeo;
+
+    // Extract video ID for YouTube
+    if (string.IsNullOrEmpty(videoId) && isYouTube)
+    {
+        if (videoUrl.Contains("youtu.be/"))
+        {
+            var parts = videoUrl.Split("youtu.be/");
+            if (parts.Length > 1)
+                videoId = parts[1].Split('?').FirstOrDefault()?.Split('&').FirstOrDefault() ?? "";
+        }
+        else if (videoUrl.Contains("v="))
+        {
+            var parts = videoUrl.Split("v=");
+            if (parts.Length > 1)
+                videoId = parts[1].Split('&').FirstOrDefault()?.Split('?').FirstOrDefault() ?? "";
+        }
+        else if (videoUrl.Contains("/embed/"))
+        {
+            var parts = videoUrl.Split("/embed/");
+            if (parts.Length > 1)
+                videoId = parts[1].Split('?').FirstOrDefault()?.Split('&').FirstOrDefault() ?? "";
+        }
+    }
+
+    // Extract video ID for Vimeo
+    if (string.IsNullOrEmpty(videoId) && isVimeo)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(videoUrl, @"vimeo\.com\/(?:video\/)?(\d+)");
+        if (match.Success) videoId = match.Groups[1].Value;
+        else
+        {
+            match = System.Text.RegularExpressions.Regex.Match(videoUrl, @"player\.vimeo\.com\/video\/(\d+)");
+            if (match.Success) videoId = match.Groups[1].Value;
+        }
+    }
+
+    var hasValidVideo = !string.IsNullOrEmpty(videoUrl) && ((isYouTube || isVimeo) ? !string.IsNullOrEmpty(videoId) : true);
+
+    // Build watermark text (never show password; use name, email, phone only with fallback so watermark always shows)
+    var watermarkParts = new List<string>();
+    if (!string.IsNullOrEmpty(studentName)) watermarkParts.Add(studentName.Trim());
+    if (!string.IsNullOrEmpty(studentEmail)) watermarkParts.Add(studentEmail);
+    if (!string.IsNullOrEmpty(studentPhone)) watermarkParts.Add(studentPhone);
+    var watermarkText = watermarkParts.Count > 0 ? string.Join(" | ", watermarkParts) : (!string.IsNullOrEmpty(studentId) ? studentId : "LMS");
+    if (string.IsNullOrWhiteSpace(watermarkText)) watermarkText = "LMS";
+
+    // Ensure local video URL is absolute so the browser can load it
+    if (isLocal && !string.IsNullOrEmpty(videoUrl) && !videoUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !videoUrl.StartsWith("//"))
+    {
+        if (videoUrl.StartsWith("/", StringComparison.Ordinal))
+            videoUrl = $"{Context.Request.Scheme}://{Context.Request.Host}{videoUrl}";
+    }
+
+    // Provider string for JS
+    var providerStr = isYouTube ? "youtube" : isVimeo ? "vimeo" : "local";
+
+    // Progress URL
+    var progressUrl = Url.Action("UpdateProgress", "Learning", new { area = "Student" });
+
+    // Encode for safe HTML attribute (prevents broken URLs when videoUrl contains & or ")
+    var videoUrlEnc = System.Net.WebUtility.HtmlEncode(videoUrl ?? "");
+    var videoIdEnc = System.Net.WebUtility.HtmlEncode(videoId ?? "");
+
+    // Local video MIME type (default mp4; detect webm from URL for production-ready playback)
+    var videoMimeType = "video/mp4";
+    if (isLocal && !string.IsNullOrEmpty(videoUrl))
+    {
+        var urlLower = videoUrl.ToLowerInvariant();
+        if (urlLower.Contains(".webm")) videoMimeType = "video/webm";
+        else if (urlLower.Contains(".ogg") || urlLower.Contains(".ogv")) videoMimeType = "video/ogg";
+    }
+}
+
+<link rel="stylesheet" href="~/css/secure-video-player.css" asp-append-version="true" />
+
+<div id="@playerId" 
+     class="svp-container"
+     data-player-id="@playerId"
+     data-provider="@providerStr"
+     data-video-url="@videoUrlEnc"
+     data-video-id="@videoIdEnc"
+     data-video-type="@videoMimeType"
+     data-lesson-id="@lessonId"
+     data-student-name="@studentName"
+     data-student-email="@studentEmail"
+     data-student-phone="@studentPhone"
+     data-watermark-text="@watermarkText"
+     data-progress-url="@progressUrl">
+
+    @if (hasValidVideo)
+    {
+        <!-- Video Frame Container -->
+        <div class="svp-video-frame" id="@(playerId)_frame">
+            @if (isYouTube)
+            {
+                <div id="@(playerId)_ytplayer" class="svp-yt-target"></div>
+            }
+            else if (isVimeo)
+            {
+                <iframe id="@(playerId)_vimeo" class="svp-vimeo-iframe"
+                        src="https://player.vimeo.com/video/@(videoId)?dnt=1&title=0&byline=0&portrait=0&controls=0&pip=0&background=0&quality=auto"
+                        allow="autoplay; fullscreen" allowfullscreen></iframe>
+            }
+            else
+            {
+                <video id="@(playerId)_video" class="svp-video-element"
+                       playsinline controlsList="nodownload" disablePictureInPicture
+                       oncontextmenu="return false;">
+                    <source src="@videoUrlEnc" type="@videoMimeType">
+                </video>
+            }
+        </div>
+
+        <!-- Branding covers - for YouTube and Vimeo -->
+        @if (isYouTube || isVimeo)
+        {
+            <div class="svp-cover-top"></div>
+            <div class="svp-cover-top-left"></div>
+            <div class="svp-cover-top-right"></div>
+            <div class="svp-cover-bottom-right"></div>
+            <div class="svp-cover-bottom-left"></div>
+
+            <!-- LMS Badge -->
+            <div class="svp-lms-badge">
+                <div class="svp-badge-icon">
+                    <svg viewBox="0 0 24 24"><path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9zM17 15.99l-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z"/></svg>
+                </div>
+                <span class="svp-badge-text">@Html.T("منصة التعلم", "WEBUILDER LMS")</span>
+            </div>
+        }
+
+        <!-- Canvas Watermark (anti-inspection - cannot be removed via DevTools) -->
+        <canvas id="@(playerId)_watermark" class="svp-watermark-canvas"></canvas>
+
+        <!-- Protection Overlay (blocks element inspection of video) -->
+        <div class="svp-protection-overlay"></div>
+
+        <!-- Loading Spinner -->
+        <div id="@(playerId)_loader" class="svp-loader show">
+            <div class="svp-spinner"></div>
+        </div>
+
+        <!-- Pause/End Overlay -->
+        <div id="@(playerId)_overlay" class="svp-overlay">
+            <div class="svp-play-btn-large">
+                <svg width="36" height="36" viewBox="0 0 24 24">
+                    <polygon points="5,3 19,12 5,21" fill="#fff"></polygon>
+                </svg>
+            </div>
+            <div class="svp-overlay-text" id="@(playerId)_overlayText">@Html.T("انقر للمشاهدة", "Click to Watch")</div>
+            <div class="svp-overlay-subtext" id="@(playerId)_overlaySubtext"></div>
+        </div>
+
+        <!-- Custom Controls Bar -->
+        <div id="@(playerId)_controls" class="svp-controls">
+            <!-- Progress Bar Row -->
+            <div class="svp-progress-row">
+                <div class="svp-progress-bar" id="@(playerId)_progressBar">
+                    <div class="svp-progress-buffered" id="@(playerId)_progressBuffered"></div>
+                    <div class="svp-progress-filled" id="@(playerId)_progressFill"></div>
+                    <div class="svp-progress-handle"></div>
+                    <div class="svp-progress-tooltip" id="@(playerId)_progressTooltip">0:00</div>
+                </div>
+            </div>
+            <!-- Controls Row -->
+            <div class="svp-controls-row">
+                <div class="svp-controls-left">
+                    <button class="svp-btn" id="@(playerId)_playBtn" title="@Html.T("تشغيل/إيقاف", "Play/Pause")">
+                        <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" id="@(playerId)_playIcon">
+                            <polygon points="5,3 19,12 5,21"></polygon>
+                        </svg>
+                    </button>
+                    <div class="svp-volume-group">
+                        <button class="svp-btn" id="@(playerId)_muteBtn" title="@Html.T("كتم الصوت", "Mute")">
+                            <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" id="@(playerId)_volumeIcon">
+                                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                            </svg>
+                        </button>
+                        <div class="svp-volume-slider-wrap">
+                            <input type="range" class="svp-volume-slider" id="@(playerId)_volumeSlider" min="0" max="100" value="100">
+                        </div>
+                    </div>
+                    <div class="svp-time-display" id="@(playerId)_timeDisplay">0:00 / 0:00</div>
+                </div>
+                <div class="svp-controls-right">
+                    <!-- Speed Selector -->
+                    <div class="svp-dropdown-wrap">
+                        <button class="svp-btn svp-speed-btn" id="@(playerId)_speedBtn" title="@Html.T("سرعة التشغيل", "Playback Speed")">
+                            <span id="@(playerId)_speedLabel">1x</span>
+                        </button>
+                        <div class="svp-dropdown" id="@(playerId)_speedMenu">
+                            <div class="svp-dropdown-item" data-speed="0.5">0.5x</div>
+                            <div class="svp-dropdown-item" data-speed="0.75">0.75x</div>
+                            <div class="svp-dropdown-item active" data-speed="1">@Html.T("عادي", "Normal")</div>
+                            <div class="svp-dropdown-item" data-speed="1.25">1.25x</div>
+                            <div class="svp-dropdown-item" data-speed="1.5">1.5x</div>
+                            <div class="svp-dropdown-item" data-speed="2">2x</div>
+                        </div>
+                    </div>
+                    <!-- Fullscreen -->
+                    <button class="svp-btn" id="@(playerId)_fullscreenBtn" title="@Html.T("ملء الشاشة", "Fullscreen")">
+                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" id="@(playerId)_fsIcon">
+                            <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Overlay -->
+        <div id="@(playerId)_error" class="svp-error hidden">
+            <div class="svp-error-icon">
+                <svg width="48" height="48" fill="none" stroke="#ef4444" stroke-width="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+            </div>
+            <p class="svp-error-message" id="@(playerId)_errorMsg">@Html.T("حدث خطأ في تحميل الفيديو", "An error occurred loading the video")</p>
+            <button class="svp-retry-btn" id="@(playerId)_retryBtn">@Html.T("إعادة المحاولة", "Retry")</button>
+        </div>
+
+        <!-- Screen Recording Warning -->
+        <div id="@(playerId)_recordingWarning" class="svp-recording-warning hidden">
+            <div class="svp-recording-warning-icon">
+                <svg width="64" height="64" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+            </div>
+            <h3>@Html.T("⚠️ تم اكتشاف تسجيل الشاشة", "⚠️ Screen Recording Detected")</h3>
+            <p>@Html.T("تسجيل الشاشة محظور على هذه المنصة", "Screen recording is not allowed on this platform")</p>
+            <p class="svp-recording-sub">@Html.T("سيتم استئناف الفيديو عند إيقاف التسجيل", "Video will resume when recording stops")</p>
+        </div>
+    }
+    else
+    {
+        <!-- No Video Message -->
+        <div class="svp-no-video">
+            <div class="svp-no-video-content">
+                <svg width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                    <polygon points="10,8 16,12 10,16"></polygon>
+                    <line x1="2" y1="2" x2="22" y2="22" stroke-width="2"></line>
+                </svg>
+                <h5>@Html.T("لم يتم تحديد فيديو لهذا الدرس", "No video specified for this lesson")</h5>
+                <p>@Html.T("يرجى التواصل مع المدرس", "Please contact the instructor")</p>
+            </div>
+        </div>
+    }
+</div>
+
+@* Script loaded once in layout; inline init only *@
+@if (hasValidVideo)
+{
+    <script>
+        (function() {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() { SecureVideoPlayer.init('@playerId'); });
+            } else {
+                setTimeout(function() { SecureVideoPlayer.init('@playerId'); }, 50);
+            }
+        })();
+    </script>
+}

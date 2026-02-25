@@ -1,0 +1,624 @@
+@model LMS.Areas.Admin.ViewModels.VideoSettingViewModel
+@using System.Web
+
+@{
+    ViewData["Title"] = Html.T("إعدادات الفيديو", "Video Settings");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("إعدادات المنصة", "Platform Settings"), Url.Action("Index", "PlatformSettings")),
+        (Html.T("إعدادات الفيديو", "Video Settings"), Url.Action("Index", "VideoSettings"))
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .provider-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid #e9ecef;
+        }
+        .provider-card:hover {
+            border-color: var(--bs-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .provider-card.active {
+            border-color: var(--bs-primary);
+            background-color: #f0f7ff;
+        }
+        .video-preview {
+            aspect-ratio: 16/9;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .watermark-preview {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .watermark-text {
+            position: absolute;
+            font-weight: bold;
+            font-size: 1.5rem;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <form asp-action="SaveVideoSetting" method="post" id="videoSettingsForm">
+        <input type="hidden" asp-for="Id" />
+        
+        <div class="row">
+            <!-- Main Settings -->
+            <div class="col-lg-8">
+                <!-- Provider Selection -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-video me-2"></i>@Html.T("مزود استضافة الفيديو", "Video hosting provider")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <div class="provider-card card text-center p-3 h-100 @(Model.DefaultProvider == LMS.Domain.Enums.VideoProvider.YouTube ? "active" : "")" 
+                                     onclick="selectProvider('YouTube')">
+                                    <div class="card-body">
+                                        <i class="feather-youtube" style="font-size: 2.5rem; color: #FF0000;"></i>
+                                        <h6 class="fw-bold mt-3 mb-0">YouTube</h6>
+                                        <small class="text-muted">@Html.T("مجاني", "Free")</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="provider-card card text-center p-3 h-100 @(Model.DefaultProvider == LMS.Domain.Enums.VideoProvider.Vimeo ? "active" : "")" 
+                                     onclick="selectProvider('Vimeo')">
+                                    <div class="card-body">
+                                        <i class="feather-video" style="font-size: 2.5rem; color: #1AB7EA;"></i>
+                                        <h6 class="fw-bold mt-3 mb-0">Vimeo</h6>
+                                        <small class="text-muted">@Html.T("احترافي", "Professional")</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="provider-card card text-center p-3 h-100 @(Model.DefaultProvider == LMS.Domain.Enums.VideoProvider.BunnyStream ? "active" : "")" 
+                                     onclick="selectProvider('BunnyStream')">
+                                    <div class="card-body">
+                                        <i class="feather-play-circle" style="font-size: 2.5rem; color: #FF6B35;"></i>
+                                        <h6 class="fw-bold mt-3 mb-0">Bunny Stream</h6>
+                                        <small class="text-muted">@Html.T("سريع", "Fast")</small>
+                                        <span class="badge bg-soft-success text-success d-block mt-1">@Html.T("موصى به", "Recommended")</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="provider-card card text-center p-3 h-100 @(Model.DefaultProvider == LMS.Domain.Enums.VideoProvider.Cloudflare ? "active" : "")" 
+                                     onclick="selectProvider('Cloudflare')">
+                                    <div class="card-body">
+                                        <i class="feather-cloud" style="font-size: 2.5rem; color: #F38020;"></i>
+                                        <h6 class="fw-bold mt-3 mb-0">Cloudflare</h6>
+                                        <small class="text-muted">@Html.T("آمن", "Secure")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" asp-for="DefaultProvider" id="providerInput" />
+                        <span asp-validation-for="DefaultProvider" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- API Credentials -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-key me-2"></i>@Html.T("بيانات الاعتماد (API Keys)", "API credentials")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <!-- YouTube Settings -->
+                        <div class="provider-settings" id="youtubeSettings" style="display: none;">
+                            <div class="alert alert-info">
+                                <i class="feather-info me-2"></i>
+                                <strong>YouTube:</strong> @Html.T("يمكنك تضمين فيديوهات YouTube مباشرة باستخدام الروابط", "You can embed YouTube videos directly using links")
+                            </div>
+                            <div class="mb-4">
+                                <label asp-for="YouTubeApiKey" class="form-label">@Html.T("مفتاح YouTube API", "YouTube API key")</label>
+                                <input asp-for="YouTubeApiKey" type="password" class="form-control" placeholder="@Html.T("مثال: AIzaSy...", "e.g. AIzaSy...")" />
+                                <span asp-validation-for="YouTubeApiKey" class="text-danger"></span>
+                                <small class="text-muted">@Html.T("اختياري - للوصول إلى معلومات إضافية", "Optional - for additional info access")</small>
+                            </div>
+                        </div>
+
+                        <!-- Vimeo Settings -->
+                        <div class="provider-settings" id="vimeoSettings" style="display: none;">
+                            <div class="mb-4">
+                                <label asp-for="VimeoAccessToken" class="form-label">
+                                    @Html.T("رمز الوصول لـ Vimeo", "Vimeo access token") <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <input asp-for="VimeoAccessToken" type="password" class="form-control" placeholder="@Html.T("أدخل Access Token", "Enter Access Token")" id="vimeoTokenInput" />
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('vimeoTokenInput', this)">
+                                        <i class="feather-eye"></i>
+                                    </button>
+                                </div>
+                                <span asp-validation-for="VimeoAccessToken" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Bunny Stream Settings -->
+                        <div class="provider-settings" id="bunnySettings" style="display: none;">
+                            <div class="mb-4">
+                                <label asp-for="BunnyStreamApiKey" class="form-label">
+                                    @Html.T("مفتاح Bunny Stream API", "Bunny Stream API key") <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <input asp-for="BunnyStreamApiKey" type="password" class="form-control" placeholder="@Html.T("أدخل API Key", "Enter API Key")" id="bunnyApiInput" />
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('bunnyApiInput', this)">
+                                        <i class="feather-eye"></i>
+                                    </button>
+                                </div>
+                                <span asp-validation-for="BunnyStreamApiKey" class="text-danger"></span>
+                            </div>
+                            <div class="mb-4">
+                                <label asp-for="BunnyStreamLibraryId" class="form-label">
+                                    @Html.T("معرف المكتبة (Library ID)", "Library ID") <span class="text-danger">*</span>
+                                </label>
+                                <input asp-for="BunnyStreamLibraryId" class="form-control" placeholder="@Html.T("مثال: 12345", "e.g. 12345")" />
+                                <span asp-validation-for="BunnyStreamLibraryId" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <!-- Cloudflare Settings -->
+                        <div class="provider-settings" id="cloudflareSettings" style="display: none;">
+                            <div class="mb-4">
+                                <label asp-for="CloudflareAccountId" class="form-label">
+                                    @Html.T("معرف حساب Cloudflare", "Cloudflare account ID") <span class="text-danger">*</span>
+                                </label>
+                                <input asp-for="CloudflareAccountId" class="form-control" placeholder="@Html.T("أدخل Account ID", "Enter Account ID")" />
+                                <span asp-validation-for="CloudflareAccountId" class="text-danger"></span>
+                            </div>
+                            <div class="mb-4">
+                                <label asp-for="CloudflareApiToken" class="form-label">
+                                    @Html.T("رمز Cloudflare API", "Cloudflare API token") <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group">
+                                    <input asp-for="CloudflareApiToken" type="password" class="form-control" placeholder="@Html.T("أدخل API Token", "Enter API Token")" id="cloudflareTokenInput" />
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('cloudflareTokenInput', this)">
+                                        <i class="feather-eye"></i>
+                                    </button>
+                                </div>
+                                <span asp-validation-for="CloudflareApiToken" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="CDNUrl" class="form-label">@Html.T("رابط CDN", "CDN URL")</label>
+                            <input asp-for="CDNUrl" type="url" class="form-control" placeholder="@Html.T("مثال: https://cdn.example.com", "e.g. https://cdn.example.com")" />
+                            <span asp-validation-for="CDNUrl" class="text-danger"></span>
+                            <small class="text-muted">@Html.T("اختياري - لتحسين سرعة التحميل", "Optional - to improve load speed")</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quality & Encoding Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-settings me-2"></i>@Html.T("إعدادات الجودة والتشفير", "Quality and encoding settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <label asp-for="DefaultQuality" class="form-label">@Html.T("الجودة الافتراضية", "Default quality")</label>
+                                <select asp-for="DefaultQuality" class="form-select">
+                                    <option value="auto">@Html.T("تلقائي (Auto)", "Auto")</option>
+                                    <option value="2160p">4K (2160p)</option>
+                                    <option value="1080p">Full HD (1080p)</option>
+                                    <option value="720p">HD (720p)</option>
+                                    <option value="480p">SD (480p)</option>
+                                    <option value="360p">Low (360p)</option>
+                                </select>
+                                <span asp-validation-for="DefaultQuality" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6 mb-4">
+                                <label asp-for="MaxFileSizeMB" class="form-label">@Html.T("الحد الأقصى لحجم الملف (MB)", "Max file size (MB)")</label>
+                                <input asp-for="MaxFileSizeMB" type="number" class="form-control" min="1" max="10000" />
+                                <span asp-validation-for="MaxFileSizeMB" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableAutoQuality" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableAutoQuality">
+                                        <strong>@Html.T("جودة تلقائية", "Auto quality")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("تتكيف حسب سرعة الإنترنت", "Adapts to internet speed")</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableTranscoding" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableTranscoding">
+                                        <strong>@Html.T("تحويل تلقائي", "Auto transcoding")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("تحويل لصيغ متعددة", "Convert to multiple formats")</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableAdaptiveBitrate" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableAdaptiveBitrate">
+                                        <strong>@Html.T("Adaptive Bitrate (ABR)", "Adaptive Bitrate (ABR)")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("للبث المتكيف", "For adaptive streaming")</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security & Protection -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-shield me-2"></i>@Html.T("الأمان والحماية", "Security and protection")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableEncryption" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableEncryption">
+                                        <strong>@Html.T("تشفير الفيديو", "Video encryption")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("حماية المحتوى من السرقة", "Protect content from theft")</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableDRM" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableDRM">
+                                        <strong>@Html.T("حماية DRM", "DRM Protection")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("حماية متقدمة للمحتوى", "Advanced content protection")</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3" id="watermarkSwitch">
+                                    <input asp-for="EnableWatermark" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableWatermark">
+                                        <strong>@Html.T("علامة مائية", "Watermark")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("إضافة شعار أو نص", "Add logo or text")</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableDownload" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableDownload">
+                                        <strong>@Html.T("السماح بالتحميل", "Allow download")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("تنزيل الفيديوهات", "Download videos")</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Watermark Settings -->
+                        <div id="watermarkSettings" style="display: none;">
+                            <hr>
+                            <h6 class="fw-bold mb-3">@Html.T("إعدادات العلامة المائية", "Watermark settings")</h6>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="WatermarkText" class="form-label">@Html.T("نص العلامة المائية", "Watermark text")</label>
+                                    <input asp-for="WatermarkText" class="form-control" placeholder="@Html.T("LMS Platform", "LMS Platform")" id="watermarkTextInput" />
+                                    <span asp-validation-for="WatermarkText" class="text-danger"></span>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="WatermarkImageUrl" class="form-label">@Html.T("صورة العلامة المائية", "Watermark image URL")</label>
+                                    <input asp-for="WatermarkImageUrl" type="url" class="form-control" placeholder="@Html.T("مثال: https://...", "e.g. https://...")" />
+                                    <span asp-validation-for="WatermarkImageUrl" class="text-danger"></span>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="WatermarkPosition" class="form-label">@Html.T("موضع العلامة", "Watermark position")</label>
+                                    <select asp-for="WatermarkPosition" class="form-select" id="watermarkPosSelect">
+                                        <option value="TopLeft">@Html.T("أعلى اليسار", "Top left")</option>
+                                        <option value="TopRight">@Html.T("أعلى اليمين", "Top right")</option>
+                                        <option value="BottomLeft">@Html.T("أسفل اليسار", "Bottom left")</option>
+                                        <option value="BottomRight">@Html.T("أسفل اليمين", "Bottom right")</option>
+                                        <option value="Center">@Html.T("المنتصف", "Center")</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label asp-for="WatermarkOpacity" class="form-label">@Html.T("الشفافية (%)", "Opacity (%)")</label>
+                                    <input asp-for="WatermarkOpacity" type="range" class="form-range" min="0" max="100" id="opacityRange" />
+                                    <div class="text-center"><span id="opacityValue">50</span>%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Features -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-plus-circle me-2"></i>@Html.T("ميزات إضافية", "Additional features")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableSubtitles" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableSubtitles">
+                                        <strong>@Html.T("دعم الترجمة", "Subtitles support")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("إضافة ملفات ترجمة", "Add subtitle files")</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableThumbnailGeneration" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="EnableThumbnailGeneration">
+                                        <strong>@Html.T("توليد صور مصغرة", "Thumbnail generation")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("معاينة الفيديو", "Video preview")</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-2 justify-content-end mb-4">
+                    <a asp-action="Index" class="btn btn-light">
+                        <i class="feather-arrow-right me-2"></i>@Html.T("العودة", "Back")
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="feather-save me-2"></i>@Html.T("حفظ الإعدادات", "Save settings")
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Video Preview -->
+                <div class="card stretch stretch-full mb-4" style="position: sticky; top: 20px;">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-eye me-2"></i>@Html.T("معاينة", "Preview")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="video-preview mb-3">
+                            <div class="text-center">
+                                <i class="feather-play-circle" style="font-size: 4rem;"></i>
+                                <p class="mt-2 mb-0">@Html.T("مشغل الفيديو", "Video player")</p>
+                                <small id="previewProvider">YouTube</small>
+                            </div>
+                        </div>
+
+                        <!-- Watermark Preview -->
+                        <div class="watermark-preview" id="watermarkPreview" style="display: none;">
+                            <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center;">
+                                <i class="feather-play-circle text-white" style="font-size: 64px; opacity: 0.8;"></i>
+                            </div>
+                            <div class="watermark-text" id="watermarkPreviewText" style="bottom: 10px; right: 10px; opacity: 0.5;">
+                                @(ViewBag.PlatformName ?? "LMS Platform")
+                            </div>
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-muted small">@Html.T("الجودة:", "Quality:")</span>
+                                <strong class="small" id="previewQuality">720p</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-muted small">@Html.T("الحد الأقصى:", "Max size:")</span>
+                                <strong class="small" id="previewSize">500 MB</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Provider Info -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2"></i>@Html.T("معلومات المزود", "Provider information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="providerInfo">
+                            <p class="small text-muted">@Html.T("اختر مزود استضافة لعرض المعلومات", "Select a hosting provider to view information")</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        const providerInfo = {
+            'YouTube': {
+                description: '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("أكبر منصة فيديو في العالم", "World's largest video platform").ToString()))',
+                pros: ['@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("مجاني", "Free").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("تغطية عالمية", "Global coverage").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("دعم جميع الصيغ", "All formats supported").ToString()))'],
+                cons: ['@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("إعلانات", "Ads").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("محتوى علني", "Public content").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("تحكم محدود", "Limited control").ToString()))']
+            },
+            'Vimeo': {
+                description: '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("منصة احترافية للفيديو", "Professional video platform").ToString()))',
+                pros: ['@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("جودة عالية", "High quality").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("بدون إعلانات", "No ads").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("خصوصية أفضل", "Better privacy").ToString()))'],
+                cons: ['@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("مدفوع", "Paid").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("حدود التحميل", "Upload limits").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("أقل انتشاراً", "Less widespread").ToString()))']
+            },
+            'BunnyStream': {
+                description: '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("حل سريع وموثوق للبث", "Fast and reliable streaming solution").ToString()))',
+                pros: ['@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("سرعة عالية", "High speed").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("أسعار منافسة", "Competitive pricing").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("حماية قوية", "Strong protection").ToString()))'],
+                cons: ['@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("جديد نسبياً", "Relatively new").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("يحتاج تكوين", "Requires setup").ToString()))']
+            },
+            'Cloudflare': {
+                description: '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("شبكة توصيل محتوى عالمية", "Global CDN").ToString()))',
+                pros: ['@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("أمان عالي", "High security").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("سرعة ممتازة", "Excellent speed").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("موثوقية", "Reliability").ToString()))'],
+                cons: ['@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("مدفوع", "Paid").ToString()))', '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("تكوين معقد", "Complex setup").ToString()))']
+            }
+        };
+        const labelPros = '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("المزايا:", "Pros:").ToString()))';
+        const labelCons = '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("العيوب:", "Cons:").ToString()))';
+
+        function selectProvider(provider) {
+            $('.provider-card').removeClass('active');
+            event.currentTarget.classList.add('active');
+            $('#providerInput').val(provider);
+            $('#previewProvider').text(provider);
+
+            // Hide all provider settings
+            $('.provider-settings').hide();
+            
+            // Show selected provider settings
+            if (provider === 'YouTube') $('#youtubeSettings').show();
+            else if (provider === 'Vimeo') $('#vimeoSettings').show();
+            else if (provider === 'BunnyStream') $('#bunnySettings').show();
+            else if (provider === 'Cloudflare') $('#cloudflareSettings').show();
+
+            // Update provider info
+            const info = providerInfo[provider];
+            if (info) {
+                $('#providerInfo').html(`
+                    <p class="small mb-3">${info.description}</p>
+                    <div class="mb-3">
+                        <strong class="small text-success d-block mb-2">${labelPros}</strong>
+                        <ul class="small mb-0">${info.pros.map(p => `<li>${p}</li>`).join('')}</ul>
+                    </div>
+                    <div>
+                        <strong class="small text-warning d-block mb-2">${labelCons}</strong>
+                        <ul class="small mb-0">${info.cons.map(c => `<li>${c}</li>`).join('')}</ul>
+                    </div>
+                `);
+            }
+        }
+
+        function togglePassword(inputId, button) {
+            const input = document.getElementById(inputId);
+            const icon = button.querySelector('i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('feather-eye');
+                icon.classList.add('feather-eye-off');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('feather-eye-off');
+                icon.classList.add('feather-eye');
+            }
+        }
+
+        $(document).ready(function() {
+            // Initialize current provider
+            const currentProvider = $('#providerInput').val();
+            if (currentProvider) {
+                selectProvider(currentProvider);
+            }
+
+            // Watermark toggle
+            $('input[name="EnableWatermark"]').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#watermarkSettings').slideDown();
+                    $('#watermarkPreview').show();
+                } else {
+                    $('#watermarkSettings').slideUp();
+                    $('#watermarkPreview').hide();
+                }
+            });
+
+            // Watermark text preview
+            $('#watermarkTextInput').on('input', function() {
+                $('#watermarkPreviewText').text($(this).val() || 'LMS Platform');
+            });
+
+            // Watermark position preview
+            $('#watermarkPosSelect').on('change', function() {
+                const $preview = $('#watermarkPreviewText');
+                $preview.css({top: 'auto', bottom: 'auto', left: 'auto', right: 'auto'});
+                
+                const pos = $(this).val();
+                if (pos === 'TopLeft') {
+                    $preview.css({top: '10px', left: '10px'});
+                } else if (pos === 'TopRight') {
+                    $preview.css({top: '10px', right: '10px'});
+                } else if (pos === 'BottomLeft') {
+                    $preview.css({bottom: '10px', left: '10px'});
+                } else if (pos === 'BottomRight') {
+                    $preview.css({bottom: '10px', right: '10px'});
+                } else if (pos === 'Center') {
+                    $preview.css({top: '50%', left: '50%', transform: 'translate(-50%, -50%)'});
+                }
+            });
+
+            // Opacity slider
+            $('#opacityRange').on('input', function() {
+                const value = $(this).val();
+                $('#opacityValue').text(value);
+                $('#watermarkPreviewText').css('opacity', value / 100);
+            });
+
+            // Quality preview
+            $('select[name="DefaultQuality"]').on('change', function() {
+                $('#previewQuality').text($(this).val());
+            });
+
+            // Size preview
+            $('input[name="MaxFileSizeMB"]').on('input', function() {
+                $('#previewSize').text($(this).val() + ' MB');
+            });
+
+            // Initialize watermark if enabled
+            if ($('input[name="EnableWatermark"]').is(':checked')) {
+                $('#watermarkSettings').show();
+                $('#watermarkPreview').show();
+            }
+        });
+    </script>
+}
+

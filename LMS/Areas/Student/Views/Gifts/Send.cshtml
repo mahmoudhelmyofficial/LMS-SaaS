@@ -1,0 +1,187 @@
+@model LMS.Areas.Student.Controllers.SendGiftViewModel
+@using LMS.Domain.Enums
+@{
+    ViewData["Title"] = Html.T("إهداء منتج", "Gift a Product");
+    ViewData["ActiveMenu"] = "Gifts";
+}
+
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Header -->
+            <div class="text-center mb-4">
+                <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" 
+                     style="width: 80px; height: 80px;">
+                    <i class="fas fa-gift fa-2x"></i>
+                </div>
+                <h2>@Html.T("أهدِ شخصاً مميزاً", "Gift someone special")</h2>
+                <p class="text-muted">@Html.T("شارك المعرفة مع من تحب", "Share knowledge with those you love")</p>
+            </div>
+
+            <form asp-action="Send" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="ProductType" />
+                <input type="hidden" asp-for="ProductId" />
+                <input type="hidden" asp-for="Currency" />
+                <input type="hidden" asp-for="Price" />
+
+                <div class="row g-4">
+                    <!-- Product Info -->
+                    <div class="col-12">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-auto">
+                                        @if (!string.IsNullOrEmpty(Model.ProductThumbnail))
+                                        {
+                                            <img src="@Model.ProductThumbnail" alt="@Model.ProductTitle" 
+                                                 class="rounded" style="width: 100px; height: 75px; object-fit: cover;">
+                                        }
+                                        else
+                                        {
+                                            <div class="bg-primary rounded d-flex align-items-center justify-content-center" 
+                                                 style="width: 100px; height: 75px;">
+                                                <i class="fas fa-@(Model.ProductType == ProductType.Book ? "book" : "graduation-cap") fa-2x text-white"></i>
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="col">
+                                        <span class="badge bg-primary mb-1">
+                                            @(Model.ProductType == ProductType.Book ? Html.T("كتاب", "Book") : Html.T("دورة", "Course"))
+                                        </span>
+                                        <h5 class="mb-1">@Model.ProductTitle</h5>
+                                        @if (!string.IsNullOrEmpty(Model.InstructorName))
+                                        {
+                                            <small class="text-muted">
+                                                <i class="fas fa-user me-1"></i> @Model.InstructorName
+                                            </small>
+                                        }
+                                    </div>
+                                    <div class="col-auto text-end">
+                                        @if (Model.OriginalPrice != Model.Price)
+                                        {
+                                            <div class="text-decoration-line-through text-muted small">
+                                                @Model.OriginalPrice.ToEGP(0)
+                                            </div>
+                                        }
+                                        <div class="h4 text-primary mb-0">@Model.FormattedPrice</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recipient Info -->
+                    <div class="col-12">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-transparent">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-user-friends text-primary me-2"></i>
+                                    @Html.T("معلومات المستلم", "Recipient information")
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label asp-for="RecipientName" class="form-label">@Html.T("اسم المستلم (اختياري)", "Recipient name (optional)")</label>
+                                        <input asp-for="RecipientName" class="form-control" placeholder="@Html.T("أحمد", "Name")" />
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label asp-for="RecipientEmail" class="form-label">
+                                            @Html.T("البريد الإلكتروني", "Email") <span class="text-danger">*</span>
+                                        </label>
+                                        <input asp-for="RecipientEmail" class="form-control" 
+                                               placeholder="@Html.T("example@email.com", "example@email.com")" />
+                                        <span asp-validation-for="RecipientEmail" class="text-danger small"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Personal Message -->
+                    <div class="col-12">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-transparent">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-envelope-open-text text-primary me-2"></i>
+                                    @Html.T("رسالة شخصية (اختياري)", "Personal message (optional)")
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <textarea asp-for="PersonalMessage" class="form-control" rows="3" 
+                                          placeholder="@Html.T("اكتب رسالة شخصية للمستلم...", "Write a personal message for the recipient...")"></textarea>
+                                <small class="text-muted">
+                                    <span id="charCount">0</span>/500 @Html.T("حرف", "characters")
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Delivery Options -->
+                    <div class="col-12">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-transparent">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-clock text-primary me-2"></i>
+                                    @Html.T("موعد الإرسال", "Delivery timing")
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="radio" name="SendNow" id="sendNow" 
+                                           value="true" checked onchange="toggleDeliveryDate()">
+                                    <label class="form-check-label" for="sendNow">
+                                        <strong>@Html.T("إرسال فوري", "Send now")</strong>
+                                        <span class="text-muted d-block small">@Html.T("سيتم إرسال الهدية فور إتمام الدفع", "The gift will be sent immediately after payment")</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="SendNow" id="sendLater" 
+                                           value="false" onchange="toggleDeliveryDate()">
+                                    <label class="form-check-label" for="sendLater">
+                                        <strong>@Html.T("جدولة الإرسال", "Schedule delivery")</strong>
+                                        <span class="text-muted d-block small">@Html.T("اختر تاريخ محدد لإرسال الهدية", "Choose a specific date to send the gift")</span>
+                                    </label>
+                                </div>
+                                <div id="deliveryDateContainer" class="mt-3" style="display: none;">
+                                    <label asp-for="DeliveryDate" class="form-label">@Html.T("تاريخ الإرسال", "Delivery date")</label>
+                                    <input asp-for="DeliveryDate" type="date" class="form-control" 
+                                           min="@DateTime.Now.AddDays(1).ToString("yyyy-MM-dd")" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit -->
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a asp-area="Student" asp-controller="Courses" asp-action="Index" 
+                               class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-right me-1"></i> @Html.T("رجوع", "Back")
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-gift me-2"></i>
+                                @Html.T("متابعة للدفع", "Proceed to payment") - @Model.FormattedPrice
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function toggleDeliveryDate() {
+        var sendLater = document.getElementById('sendLater').checked;
+        document.getElementById('deliveryDateContainer').style.display = sendLater ? 'block' : 'none';
+    }
+
+    document.getElementById('@nameof(Model.PersonalMessage)').addEventListener('input', function() {
+        document.getElementById('charCount').textContent = this.value.length;
+    });
+</script>
+}
+

@@ -1,0 +1,209 @@
+@model List<LMS.Domain.Entities.Assessments.AssignmentSubmission>
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("واجباتي", "My Assignments");
+    var filter = ViewBag.Filter?.ToString() ?? "all";
+    
+    // Threshold settings
+    var urgentDeadlineDays = await PlatformSettings.GetIntSettingAsync("Threshold.Deadline.UrgentDays", 2);
+}
+
+@section Styles {
+<style>
+    .assignment-card {
+        transition: all 0.3s ease;
+        border-right: 4px solid transparent;
+    }
+    .assignment-card:hover {
+        transform: translateX(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .assignment-card.overdue {
+        border-right-color: #ef4444;
+    }
+    .assignment-card.pending {
+        border-right-color: #fbbf24;
+    }
+    .assignment-card.submitted {
+        border-right-color: #3b82f6;
+    }
+    .assignment-card.graded {
+        border-right-color: #22c55e;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header & Stats -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-3 col-md-6">
+        @{
+            ViewData["Label"] = Html.T("إجمالي الواجبات", "Total Assignments");
+            ViewData["Value"] = Model.Count.ToString();
+            ViewData["Icon"] = "file-text";
+            ViewData["ColorClass"] = "primary";
+        }
+        @await Html.PartialAsync("_StatsCard")
+    </div>
+    <div class="col-xl-3 col-md-6">
+        @{
+            ViewData["Label"] = Html.T("قيد الانتظار", "Pending");
+            ViewData["Value"] = Model.Count(a => a.Status == LMS.Domain.Enums.AssignmentStatus.Pending).ToString();
+            ViewData["Icon"] = "clock";
+            ViewData["ColorClass"] = "warning";
+        }
+        @await Html.PartialAsync("_StatsCard")
+    </div>
+    <div class="col-xl-3 col-md-6">
+        @{
+            ViewData["Label"] = Html.T("مُقدّمة", "Submitted");
+            ViewData["Value"] = Model.Count(a => a.Status == LMS.Domain.Enums.AssignmentStatus.Submitted).ToString();
+            ViewData["Icon"] = "send";
+            ViewData["ColorClass"] = "info";
+        }
+        @await Html.PartialAsync("_StatsCard")
+    </div>
+    <div class="col-xl-3 col-md-6">
+        @{
+            ViewData["Label"] = Html.T("مُقيّمة", "Graded");
+            ViewData["Value"] = Model.Count(a => a.Status == LMS.Domain.Enums.AssignmentStatus.Graded).ToString();
+            ViewData["Icon"] = "check-circle";
+            ViewData["ColorClass"] = "success";
+        }
+        @await Html.PartialAsync("_StatsCard")
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div>
+                <h5 class="fw-bold mb-1">@Html.T("واجباتي", "My Assignments")</h5>
+                <p class="text-muted mb-0">@Html.T("تتبع واجباتك وقدمها في الوقت المحدد", "Track and submit your assignments on time")</p>
+            </div>
+            <div class="btn-group" role="group">
+                <a asp-action="Index" asp-route-filter="all" class="btn @(filter == "all" ? "btn-primary" : "btn-outline-primary")">
+                    @Html.T("الكل", "All")
+                </a>
+                <a asp-action="Index" asp-route-filter="pending" class="btn @(filter == "pending" ? "btn-primary" : "btn-outline-primary")">
+                    @Html.T("قيد الانتظار", "Pending")
+                </a>
+                <a asp-action="Index" asp-route-filter="submitted" class="btn @(filter == "submitted" ? "btn-primary" : "btn-outline-primary")">
+                    @Html.T("مُقدّمة", "Submitted")
+                </a>
+                <a asp-action="Index" asp-route-filter="graded" class="btn @(filter == "graded" ? "btn-primary" : "btn-outline-primary")">
+                    @Html.T("مُقيّمة", "Graded")
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assignments List -->
+@if (Model.Any())
+{
+    <div class="row g-4">
+        @foreach (var submission in Model)
+        {
+            var assignment = submission.Assignment;
+            if (assignment?.Lesson?.Module?.Course == null) { continue; }
+            var isOverdue = assignment.DueDate.HasValue && assignment.DueDate.Value < DateTime.UtcNow && submission.Status == LMS.Domain.Enums.AssignmentStatus.Pending;
+            var daysRemaining = assignment.DueDate.HasValue ? (assignment.DueDate.Value - DateTime.UtcNow).Days : 0;
+            
+            <div class="col-12">
+                <div class="card assignment-card stretch stretch-full @(isOverdue ? "overdue" : submission.Status.ToString().ToLower())">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-lg-7">
+                                <div class="d-flex align-items-start">
+                                    <div class="avatar-text avatar-lg @(isOverdue ? "bg-soft-danger text-danger" : submission.Status == LMS.Domain.Enums.AssignmentStatus.Pending ? "bg-soft-warning text-warning" : submission.Status == LMS.Domain.Enums.AssignmentStatus.Graded ? "bg-soft-success text-success" : "bg-soft-info text-info") me-3">
+                                        <i class="feather-file-text"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h5 class="fw-bold mb-2">@assignment.Title</h5>
+                                        <p class="text-muted fs-12 mb-2">
+                                            <i class="feather-book-open me-1"></i>
+                                            @assignment.Lesson.Module.Course.Title • @assignment.Lesson.Title
+                                        </p>
+                                        @if (!string.IsNullOrEmpty(assignment.Description))
+                                        {
+                                            <p class="text-muted fs-13 mb-0 text-truncate-2-line">@assignment.Description</p>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-lg-3">
+                                @if (assignment.DueDate.HasValue)
+                                {
+                                    <div class="mb-2">
+                                        <small class="text-muted d-block">@Html.T("الموعد النهائي", "Deadline")</small>
+                                        <strong class="@(isOverdue ? "text-danger" : daysRemaining <= urgentDeadlineDays ? "text-warning" : "")">
+                                            @assignment.DueDate.Value.ToString("dd/MM/yyyy")
+                                        </strong>
+                                        @if (isOverdue)
+                                        {
+                                            <span class="badge bg-danger ms-2">@Html.T("متأخر", "Late")</span>
+                                        }
+                                        else if (daysRemaining <= urgentDeadlineDays)
+                                        {
+                                            <span class="badge bg-warning ms-2">@Html.T("عاجل", "Urgent")</span>
+                                        }
+                                    </div>
+                                }
+                                
+                                @if (submission.Status == LMS.Domain.Enums.AssignmentStatus.Graded)
+                                {
+                                    <div>
+                                        <small class="text-muted d-block">@Html.T("الدرجة", "Score")</small>
+                                        <strong class="text-success fs-5">
+                                            @submission.Grade / @assignment.MaxScore
+                                        </strong>
+                                    </div>
+                                }
+                            </div>
+                            
+                            <div class="col-lg-2 text-end">
+                                @if (submission.Status == LMS.Domain.Enums.AssignmentStatus.Pending)
+                                {
+                                    <a asp-action="Details" asp-route-id="@submission.AssignmentId" class="btn btn-primary w-100 mb-2">
+                                        <i class="feather-upload me-2"></i>
+                                        @Html.T("تقديم", "Submit")
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a asp-action="Details" asp-route-id="@submission.AssignmentId" class="btn btn-outline-primary w-100 mb-2">
+                                        <i class="feather-eye me-2"></i>
+                                        @Html.T("عرض", "View")
+                                    </a>
+                                }
+                                <span class="badge bg-soft-@(submission.Status == LMS.Domain.Enums.AssignmentStatus.Pending ? "warning" : submission.Status == LMS.Domain.Enums.AssignmentStatus.Submitted ? "info" : "success") text-@(submission.Status == LMS.Domain.Enums.AssignmentStatus.Pending ? "warning" : submission.Status == LMS.Domain.Enums.AssignmentStatus.Submitted ? "info" : "success") w-100">
+                                    @(submission.Status == LMS.Domain.Enums.AssignmentStatus.Pending ? Html.T("قيد الانتظار", "Pending") : submission.Status == LMS.Domain.Enums.AssignmentStatus.Submitted ? Html.T("مُقدّمة", "Submitted") : Html.T("مُقيّمة", "Graded"))
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            @{
+                ViewData["Icon"] = "file-text";
+                ViewData["Title"] = Html.T("لا توجد واجبات", "No Assignments");
+                ViewData["Message"] = Html.T("لا توجد واجبات متاحة حالياً.", "No assignments available at the moment.");
+            }
+            @await Html.PartialAsync("_EmptyState")
+        </div>
+    </div>
+}
+

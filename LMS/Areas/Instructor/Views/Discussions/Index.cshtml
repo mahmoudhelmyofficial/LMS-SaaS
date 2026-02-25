@@ -1,0 +1,274 @@
+@model IEnumerable<LMS.Domain.Entities.Social.Discussion>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("مناقشات الطلاب", "Student Discussions");
+    ViewData["Subtitle"] = Html.T("عرض والرد على مناقشات واستفسارات الطلاب", "View and reply to student discussions and questions");
+    var courses = ViewBag.Courses as IEnumerable<dynamic>;
+    var courseId = ViewBag.CourseId as int?;
+    var resolved = ViewBag.Resolved as bool?;
+    var indexUrl = Url.Action("Index");
+    var unresolvedUrl = Url.Action("Index", new { resolved = false });
+    var resolvedUrl = Url.Action("Index", new { resolved = true });
+    
+    // Load platform settings
+    var defaultPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Default", 20);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<div class='dropdown'><button class='btn btn-light dropdown-toggle' type='button' data-bs-toggle='dropdown'><i class='feather-filter me-2'></i>" + Html.T("تصفية", "Filter") + "</button><ul class='dropdown-menu dropdown-menu-end'><li><h6 class='dropdown-header'>" + Html.T("حسب الحالة", "By status") + "</h6></li><li><a class='dropdown-item' href='" + indexUrl + "'>" + Html.T("جميع المناقشات", "All discussions") + "</a></li><li><a class='dropdown-item' href='" + unresolvedUrl + "'>" + Html.T("غير محلولة", "Unresolved") + "</a></li><li><a class='dropdown-item' href='" + resolvedUrl + "'>" + Html.T("محلولة", "Resolved") + "</a></li></ul></div><button class='btn btn-primary' onclick='window.location.reload()'><i class='feather-refresh-cw me-2'></i>" + Html.T("تحديث", "Refresh") + "</button>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي المناقشات", "Total discussions") },
+                { "Value", Model.Count() },
+                { "Icon", "message-circle" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("غير محلولة", "Unresolved") },
+                { "Value", Model.Count(d => !d.IsResolved) },
+                { "Icon", "alert-circle" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("محلولة", "Resolved") },
+                { "Value", Model.Count(d => d.IsResolved) },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الردود", "Total Replies") },
+                { "Value", Model.Sum(d => d.RepliesCount) },
+                { "Icon", "message-square" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    <!-- Discussions List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة المناقشات", "Discussions List")</h5>
+                    <div class="card-header-action">
+                        <div class="card-header-btn">
+                            <div data-bs-toggle="tooltip" title="@Html.T("تحديث", "Refresh")">
+                                <a href="@Url.Action("Index")" class="avatar-text avatar-xs bg-warning">
+                                    <i class="feather-refresh-cw"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    <!-- Filter Bar -->
+                    <div class="p-4 border-bottom">
+                        <form method="get" class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">@Html.T("الدورة", "Course")</label>
+                                <select name="courseId" class="form-select" onchange="this.form.submit()">
+                                    <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                    @if (courses != null)
+                                    {
+                                        foreach (var course in courses)
+                                        {
+                                            <option value="@course.Id" selected="@(courseId == course.Id)">@course.Title</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">@Html.T("الحالة", "Status")</label>
+                                <select name="resolved" class="form-select" onchange="this.form.submit()">
+                                    <option value="">@Html.T("جميع الحالات", "All statuses")</option>
+                                    <option value="false" selected="@(resolved == false)">@Html.T("غير محلولة", "Unresolved")</option>
+                                    <option value="true" selected="@(resolved == true)">@Html.T("محلولة", "Resolved")</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var discussion in Model)
+                            {
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <a href="@Url.Action("Details", new { id = discussion.Id })" class="fw-bold text-dark text-break d-block">@discussion.Title</a>
+                                        <p class="fs-12 text-muted mb-1">@discussion.Course?.Title</p>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="fs-12">@discussion.Author?.FullName · @discussion.RepliesCount @Html.T("رد", "replies")</span>
+                                            <span class="badge @(discussion.IsResolved ? "bg-soft-success text-success" : "bg-soft-warning text-warning")">@(discussion.IsResolved ? Html.T("محلولة", "Resolved") : Html.T("مفتوحة", "Open"))</span>
+                                        </div>
+                                        <a href="@Url.Action("Details", new { id = discussion.Id })" class="btn btn-sm btn-primary mt-2 w-100"><i class="feather-eye me-1"></i>@Html.T("عرض", "View")</a>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("المناقشة", "Discussion")</th>
+                                            <th>@Html.T("الدورة", "Course")</th>
+                                            <th>@Html.T("الطالب", "Student")</th>
+                                            <th>@Html.T("الردود", "Replies")</th>
+                                            <th>@Html.T("آخر رد", "Last Reply")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var discussion in Model)
+                                    {
+                                        <tr class="@(!discussion.IsResolved ? "table-warning-subtle" : "")">
+                                            <td>
+                                                <div>
+                                                    <a href="@Url.Action("Details", new { id = discussion.Id })" class="fw-bold text-dark text-truncate d-block" style="max-width: 300px;">
+                                                        @discussion.Title
+                                                    </a>
+                                                    @if (discussion.IsPinned)
+                                                    {
+                                                        <span class="badge bg-soft-info text-info fs-10">
+                                                            <i class="feather-bookmark"></i> @Html.T("مثبت", "Pinned")
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <span class="fw-medium">@discussion.Course?.Title</span>
+                                                    @if (discussion.Lesson != null)
+                                                    {
+                                                        <p class="fs-11 text-muted mb-0">@discussion.Lesson.Title</p>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-text avatar-sm bg-primary text-white">
+                                                        @(discussion.Author?.FirstName?.Substring(0, 1).ToUpper() ?? "S")
+                                                    </div>
+                                                    <div>
+                                                        <span class="fw-medium d-block">@discussion.Author?.FullName</span>
+                                                        <span class="fs-11 text-muted">@discussion.Author?.Email</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="feather-message-square text-primary"></i>
+                                                    <span class="fw-bold">@discussion.RepliesCount</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (discussion.LastReplyAt.HasValue)
+                                                {
+                                                    <span class="fs-12">@discussion.LastReplyAt.Value.ToString("dd/MM/yyyy")</span>
+                                                    <span class="d-block fs-11 text-muted">@discussion.LastReplyAt.Value.ToString("hh:mm tt")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted fs-11">@Html.T("لا يوجد", "None")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (discussion.IsResolved)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-check-circle me-1"></i> @Html.T("محلولة", "Resolved")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning">
+                                                        <i class="feather-clock me-1"></i> @Html.T("قيد الانتظار", "Pending")
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { id = discussion.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض التفاصيل", "View details")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    @if (!discussion.IsResolved)
+                                                    {
+                                                        <form asp-action="MarkResolved" asp-route-id="@discussion.Id" method="post" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="avatar-text avatar-md border-0 bg-transparent text-success" data-bs-toggle="tooltip" title="@Html.T("تحديد كمحلولة", "Mark as resolved")">
+                                                                <i class="feather-check-circle"></i>
+                                                            </button>
+                                                        </form>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+
+                        <!-- Pagination -->
+                        @if (ViewBag.TotalPages > 1)
+                        {
+                            @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                                ViewData,
+                                ("CurrentPage", ViewBag.CurrentPage ?? ViewBag.Page ?? 1),
+                                ("TotalPages", ViewBag.TotalPages ?? 1),
+                                ("TotalItems", ViewBag.TotalItems ?? 0),
+                                ("PageSize", ViewBag.PageSize ?? defaultPageSize),
+                                ("Action", "Index"),
+                                ("Controller", "Discussions")
+                            ))
+                        }
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-message-circle"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد مناقشات بعد", "No discussions yet")</h5>
+                            <p class="text-muted mb-0">@Html.T("لم يقم الطلاب ببدء أي مناقشات في دوراتك حتى الآن", "Students have not started any discussions in your courses yet")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

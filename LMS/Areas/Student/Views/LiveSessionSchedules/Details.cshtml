@@ -1,0 +1,295 @@
+@model LMS.Areas.Student.ViewModels.ScheduleDetailsViewModel
+@{
+    ViewData["Title"] = Html.T("تفاصيل جدول الحصص", "Schedule Details");
+}
+
+@section Styles {
+<style>
+    .schedule-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 40px;
+    }
+    .session-timeline {
+        position: relative;
+        padding-right: 30px;
+    }
+    .session-timeline::before {
+        content: '';
+        position: absolute;
+        right: 8px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e5e7eb;
+    }
+    .session-item {
+        position: relative;
+        margin-bottom: 24px;
+    }
+    .session-item::before {
+        content: '';
+        position: absolute;
+        right: -26px;
+        top: 6px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #667eea;
+        border: 2px solid white;
+        box-shadow: 0 0 0 2px #667eea;
+    }
+    .session-item.completed::before {
+        background: #10b981;
+        box-shadow: 0 0 0 2px #10b981;
+    }
+    .session-item.live::before {
+        background: #ef4444;
+        box-shadow: 0 0 0 2px #ef4444;
+        animation: pulse 2s infinite;
+    }
+    @@keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Schedule Header -->
+<div class="schedule-header mb-4">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <div class="mb-3">
+                <a asp-action="Index" class="text-white opacity-75 text-decoration-none">
+                    <i class="feather-arrow-right me-1"></i>
+                    @Html.T("جداول الحصص", "Session Schedules")
+                </a>
+            </div>
+            <h2 class="text-white fw-bold mb-2">@Model.Title</h2>
+            <p class="text-white opacity-75 mb-3">@Model.Description</p>
+
+            <div class="d-flex align-items-center gap-4 flex-wrap">
+                <div class="text-white">
+                    <i class="feather-user me-2"></i>
+                    @Model.InstructorName
+                </div>
+                <div class="text-white">
+                    <i class="feather-layers me-2"></i>
+                    @Model.TotalSessions @Html.T("جلسة", "session(s)")
+                </div>
+                <div class="text-white">
+                    <i class="feather-calendar me-2"></i>
+                    @Model.StartDate.ToString("dd/MM/yyyy") - @Model.EndDate.ToString("dd/MM/yyyy")
+                </div>
+                <div class="text-white">
+                    <i class="feather-users me-2"></i>
+                    @Model.EnrolledCount @Html.T("مشترك", "subscriber(s)")
+                    @if (Model.MaxStudents.HasValue)
+                    {
+                        <text>/ @Model.MaxStudents</text>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 text-center mt-3 mt-lg-0">
+            @if (Model.IsEnrolled)
+            {
+                <div class="alert alert-light mb-0">
+                    <i class="feather-check-circle me-2 text-success"></i>
+                    @Html.T("أنت مشترك في هذا الجدول", "You are enrolled in this schedule")
+                </div>
+            }
+            else
+            {
+                <div class="bg-white bg-opacity-10 rounded p-3">
+                    @if (Model.Price == 0)
+                    {
+                        <h3 class="text-white mb-2">@Html.T("مجاني", "Free")</h3>
+                    }
+                    else
+                    {
+                        @if (Model.OriginalPrice.HasValue && Model.OriginalPrice > Model.Price)
+                        {
+                            <p class="text-white opacity-75 text-decoration-line-through mb-1">@Model.OriginalPrice?.ToEGP(0)</p>
+                        }
+                        <h3 class="text-white mb-2">@Model.Price.ToEGP(0)</h3>
+                    }
+                    <a asp-action="Purchase" asp-route-id="@Model.Id" class="btn btn-light btn-lg w-100">
+                        <i class="feather-shopping-cart me-2"></i>
+                        @Html.T("اشترك الآن", "Subscribe Now")
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Sessions Timeline -->
+    <div class="col-lg-8">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-list me-2"></i>
+                    @Html.T("جلسات الجدول", "Schedule Sessions") (@Model.Sessions.Count @Html.T("جلسة", "session(s)"))
+                </h5>
+            </div>
+            <div class="card-body">
+                @if (Model.Sessions.Any())
+                {
+                    <div class="session-timeline">
+                        @foreach (var session in Model.Sessions)
+                        {
+                            var isSessionLive = session.Status == LMS.Domain.Enums.LiveClassStatus.Live;
+                            var isSessionCompleted = session.Status == LMS.Domain.Enums.LiveClassStatus.Completed;
+                            var itemClass = isSessionLive ? "live" : isSessionCompleted ? "completed" : "";
+
+                            <div class="session-item @itemClass">
+                                <div class="card mb-0">
+                                    <div class="card-body py-3">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <span class="badge bg-soft-primary text-primary me-2">@Html.T("جلسة", "Session") @session.ScheduleOrder</span>
+                                                <h6 class="d-inline fw-bold mb-0">@session.Title</h6>
+                                                @if (!string.IsNullOrEmpty(session.Subject))
+                                                {
+                                                    <small class="text-muted d-block mt-1">@session.Subject</small>
+                                                }
+                                            </div>
+                                            <div class="text-end">
+                                                @if (isSessionLive)
+                                                {
+                                                    <span class="badge bg-danger">@Html.T("مباشر الآن", "Live Now")</span>
+                                                }
+                                                else if (isSessionCompleted)
+                                                {
+                                                    <span class="badge bg-success">@Html.T("مكتملة", "Completed")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning">@Html.T("مجدولة", "Scheduled")</span>
+                                                }
+                                            </div>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-3 mt-2 text-muted small">
+                                            <span>
+                                                <i class="feather-calendar me-1"></i>
+                                                @session.ScheduledStartTime.ToString("dd/MM/yyyy")
+                                            </span>
+                                            <span>
+                                                <i class="feather-clock me-1"></i>
+                                                @session.ScheduledStartTime.ToString("HH:mm") - @session.ScheduledEndTime.ToString("HH:mm")
+                                            </span>
+                                            <span>
+                                                <i class="feather-monitor me-1"></i>
+                                                @session.Platform
+                                            </span>
+                                        </div>
+                                        <div class="mt-2">
+                                            @if (Model.IsEnrolled && isSessionLive)
+                                            {
+                                                <a asp-area="Student" asp-controller="LiveClasses" asp-action="Join" asp-route-id="@session.Id" class="btn btn-danger btn-sm me-1">
+                                                    <i class="feather-video me-1"></i>
+                                                    @Html.T("انضم الآن", "Join Now")
+                                                </a>
+                                            }
+                                            <a asp-area="Student" asp-controller="LiveClasses" asp-action="Details" asp-route-id="@session.Id" class="btn btn-outline-primary btn-sm">
+                                                <i class="feather-eye me-1"></i>
+                                                @Html.T("عرض التفاصيل", "View Details")
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-4">
+                        <i class="feather-calendar text-muted" style="font-size: 48px;"></i>
+                        <p class="text-muted mt-2">@Html.T("لم تتم إضافة جلسات بعد", "No sessions added yet")</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Schedule Info -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">@Html.T("معلومات الجدول", "Schedule Information")</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <i class="feather-user text-primary me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("المدرب", "Instructor")</small>
+                        <strong>@Model.InstructorName</strong>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center mb-3">
+                    <i class="feather-layers text-info me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("عدد الجلسات", "Number of Sessions")</small>
+                        <strong>@Model.TotalSessions @Html.T("جلسة", "session(s)")</strong>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center mb-3">
+                    <i class="feather-calendar text-warning me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("الفترة", "Period")</small>
+                        <strong>@Model.StartDate.ToString("dd/MM") - @Model.EndDate.ToString("dd/MM/yyyy")</strong>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center">
+                    <i class="feather-users text-success me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("المشتركون", "Subscribers")</small>
+                        <strong>
+                            @Model.EnrolledCount
+                            @if (Model.MaxStudents.HasValue)
+                            {
+                                <text>/ @Model.MaxStudents</text>
+                            }
+                        </strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pricing Card -->
+        @if (!Model.IsEnrolled)
+        {
+            <div class="card stretch stretch-full border-primary">
+                <div class="card-body text-center">
+                    @if (Model.Price == 0)
+                    {
+                        <h3 class="text-success fw-bold mb-3">@Html.T("مجاني", "Free")</h3>
+                    }
+                    else
+                    {
+                        @if (Model.OriginalPrice.HasValue && Model.OriginalPrice > Model.Price)
+                        {
+                            <p class="text-muted text-decoration-line-through mb-1">@Model.OriginalPrice?.ToEGP(0)</p>
+                            var discountPercent = (int)(((Model.OriginalPrice.Value - Model.Price) / Model.OriginalPrice.Value) * 100);
+                            <span class="badge bg-danger mb-2">@Html.T("خصم", "Discount") @discountPercent%</span>
+                        }
+                        <h3 class="text-primary fw-bold mb-3">@Model.Price.ToEGP(0)</h3>
+                    }
+                    <a asp-action="Purchase" asp-route-id="@Model.Id" class="btn btn-primary btn-lg w-100">
+                        <i class="feather-shopping-cart me-2"></i>
+                        @Html.T("اشترك الآن", "Subscribe Now")
+                    </a>
+                    <small class="text-muted d-block mt-2">@Html.T("الاشتراك يمنحك الوصول لجميع الجلسات", "Subscription gives you access to all sessions")</small>
+                </div>
+            </div>
+        }
+    </div>
+</div>

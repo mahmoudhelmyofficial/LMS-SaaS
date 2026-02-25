@@ -1,0 +1,265 @@
+@using LMS.Domain.Enums
+@model LMS.Services.Interfaces.ShoppingCartInfo
+@{
+    ViewData["Title"] = Html.T("سلة التسوق", "Shopping Cart");
+    var validationErrors = ViewBag.ValidationErrors as List<string>;
+    var courseItems = Model.Items.Where(i => i.ItemType == ProductType.Course).ToList();
+    var bookItems = Model.Items.Where(i => i.ItemType == ProductType.Book).ToList();
+}
+
+@section Styles {
+<style>
+    .cart-item {
+        transition: all 0.2s ease;
+    }
+    .cart-item:hover {
+        background-color: #f9fafb;
+    }
+    .coupon-input {
+        max-width: 300px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+@if (validationErrors != null && validationErrors.Any())
+{
+    <div class="alert alert-warning mb-4">
+        <i class="feather-alert-triangle me-2"></i>
+        <strong>@Html.T("تنبيه:", "Warning:")</strong>
+        <ul class="mb-0 mt-2">
+            @foreach (var error in validationErrors)
+            {
+                <li>@error</li>
+            }
+        </ul>
+    </div>
+}
+
+<div class="row g-4">
+    <!-- Cart Items -->
+    <div class="col-lg-8">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-shopping-cart me-2"></i>
+                    @Html.T("سلة التسوق", "Shopping Cart") (@Model.Items.Count @Html.T("عنصر", "items"))
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.Items.Any())
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var item in Model.Items)
+                        {
+                            var isBook = item.ItemType == ProductType.Book;
+                            var itemIcon = isBook ? "feather-book" : "feather-play-circle";
+                            var itemBadge = isBook ? Html.T("كتاب", "Book") : Html.T("دورة", "Course");
+                            var badgeClass = isBook ? "bg-info" : "bg-primary";
+                            
+                            <div class="list-group-item cart-item @(!item.IsAvailable ? "bg-light" : "")">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center">
+                                            @if (!string.IsNullOrEmpty(item.ThumbnailUrl))
+                                            {
+                                                <img src="@item.ThumbnailUrl" alt="@item.Title" class="rounded me-3" style="width: 80px; height: 80px; object-fit: cover;" />
+                                            }
+                                            else
+                                            {
+                                                <div class="avatar-text avatar-lg bg-soft-primary text-primary me-3">
+                                                    <i class="@itemIcon"></i>
+                                                </div>
+                                            }
+                                            <div>
+                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                    <span class="badge @badgeClass fs-10">@itemBadge</span>
+                                                    <h6 class="fw-bold mb-0">@item.Title</h6>
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(item.InstructorName ?? item.Author))
+                                                {
+                                                    <p class="text-muted fs-12 mb-0">
+                                                        <i class="feather-user me-1"></i>
+                                                        @(item.InstructorName ?? item.Author)
+                                                    </p>
+                                                }
+                                                @if (!item.IsAvailable)
+                                                {
+                                                    <span class="badge bg-danger mt-1">@(item.UnavailableReason ?? Html.T("غير متاح", "Unavailable"))</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 text-center">
+                                        @if (item.DiscountPrice.HasValue && item.DiscountPrice < item.Price)
+                                        {
+                                            <div>
+                                                <span class="text-muted text-decoration-line-through fs-12">@item.Price.ToEGP(0)</span>
+                                                <h5 class="fw-bold text-primary mb-0">@item.DiscountPrice.Value.ToEGP(0)</h5>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <h5 class="fw-bold text-primary mb-0">@item.Price.ToEGP(0)</h5>
+                                        }
+                                    </div>
+                                    <div class="col-md-3 text-end">
+                                        @if (isBook)
+                                        {
+                                            <form asp-action="RemoveBookFromCart" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="bookId" value="@item.BookId" />
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    <i class="feather-trash-2"></i>
+                                                    @Html.T("حذف", "Remove")
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <form asp-action="RemoveFromCart" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="courseId" value="@item.CourseId" />
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    <i class="feather-trash-2"></i>
+                                                    @Html.T("حذف", "Remove")
+                                                </button>
+                                            </form>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="p-5 text-center">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-4">
+                            <i class="feather-shopping-cart"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">@Html.T("سلة التسوق فارغة", "Your cart is empty")</h5>
+                        <p class="text-muted mb-4">@Html.T("لم تقم بإضافة أي دورات أو كتب إلى السلة بعد.", "You haven't added any courses or books to the cart yet.")</p>
+                        <div class="d-flex gap-2 justify-content-center">
+                            <a asp-controller="Courses" asp-action="Browse" class="btn btn-primary">
+                                <i class="feather-play-circle me-2"></i>
+                                @Html.T("تصفح الدورات", "Browse courses")
+                            </a>
+                            <a asp-controller="Books" asp-action="Index" class="btn btn-outline-primary">
+                                <i class="feather-book me-2"></i>
+                                @Html.T("تصفح الكتب", "Browse books")
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (Model.Items.Any())
+        {
+            <!-- Coupon Code -->
+            <div class="card stretch stretch-full mt-4">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">@Html.T("لديك كود خصم؟", "Have a discount code?")</h6>
+                    @if (!string.IsNullOrEmpty(Model.CouponCode))
+                    {
+                        <div class="alert alert-success d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="feather-tag me-2"></i>
+                                @Html.T("كود الخصم:", "Discount code:") <strong>@Model.CouponCode</strong>
+                                <span class="ms-2">(@Html.T("خصم", "Discount") @Model.DiscountAmount.ToEGP(0))</span>
+                            </div>
+                            <form asp-action="RemoveCoupon" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="feather-x"></i>
+                                </button>
+                            </form>
+                        </div>
+                    }
+                    else
+                    {
+                        <form asp-action="ApplyCoupon" method="post">
+                            @Html.AntiForgeryToken()
+                            <div class="input-group coupon-input">
+                                <input type="text" name="couponCode" class="form-control" placeholder="@Html.T("أدخل كود الخصم", "Enter discount code")" />
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="feather-tag me-2"></i>
+                                    @Html.T("تطبيق", "Apply")
+                                </button>
+                            </div>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Order Summary -->
+    @if (Model.Items.Any())
+    {
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full" style="position: sticky; top: 20px;">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">@Html.T("ملخص الطلب", "Order summary")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("المجموع الفرعي", "Subtotal")</span>
+                        <strong>@Model.Totals.SubTotal.ToEGP(0)</strong>
+                    </div>
+                    
+                    @if (Model.Totals.DiscountAmount > 0)
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                            <span class="text-success">
+                                <i class="feather-tag me-1"></i>
+                                @Html.T("الخصم", "Discount")
+                            </span>
+                            <strong class="text-success">-@Model.Totals.DiscountAmount.ToEGP(0)</strong>
+                        </div>
+                    }
+
+                    @if (Model.Totals.TaxAmount > 0)
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                            <span class="text-muted">@Html.T("الضريبة", "Tax") (@Model.Totals.TaxRate%)</span>
+                            <strong>@Model.Totals.TaxAmount.ToEGP(0)</strong>
+                        </div>
+                    }
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <strong class="fs-5">@Html.T("الإجمالي", "Total")</strong>
+                        <strong class="fs-4 text-primary">@Model.Totals.Total.ToEGP(0)</strong>
+                    </div>
+                    
+                    <a asp-action="Index" class="btn btn-primary w-100 mb-2">
+                        <i class="feather-credit-card me-2"></i>
+                        @Html.T("متابعة للدفع", "Proceed to payment")
+                    </a>
+                    <div class="d-flex gap-2">
+                        <a asp-controller="Courses" asp-action="Browse" class="btn btn-outline-secondary flex-fill">
+                            <i class="feather-play-circle me-1"></i>
+                            @Html.T("الدورات", "Courses")
+                        </a>
+                        <a asp-controller="Books" asp-action="Index" class="btn btn-outline-secondary flex-fill">
+                            <i class="feather-book me-1"></i>
+                            @Html.T("الكتب", "Books")
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="card-footer bg-soft-info">
+                    <div class="d-flex align-items-start">
+                        <i class="feather-info text-info me-2 mt-1"></i>
+                        <small class="text-muted">
+                            @Html.T("ستحصل على وصول فوري لجميع الدورات والكتب بعد إتمام عملية الدفع", "You'll get instant access to all courses and books after completing payment")
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>

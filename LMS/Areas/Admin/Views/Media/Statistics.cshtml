@@ -1,0 +1,529 @@
+@model LMS.Areas.Admin.ViewModels.MediaStatisticsViewModel
+
+@{
+    ViewData["Title"] = Html.T("إحصائيات مكتبة الوسائط", "Media library statistics");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("مكتبة الوسائط", "Media library"), Url.Action("Index", "Media")),
+        (Html.T("الإحصائيات", "Statistics"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+    <style>
+        .stats-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .stats-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        .file-type-badge {
+            padding: 8px 16px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        .file-type-badge:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .top-file-item {
+            padding: 15px;
+            border-radius: 8px;
+            background: #f8f9fa;
+            margin-bottom: 10px;
+            transition: all 0.3s;
+        }
+        .top-file-item:hover {
+            background: #e9ecef;
+            transform: translateX(-5px);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Statistics Overview -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card">
+                <div class="d-flex align-items-center">
+                    <div class="stats-icon bg-soft-primary text-primary">
+                        <i class="feather-file"></i>
+                    </div>
+                    <div class="ms-3 flex-grow-1">
+                        <h3 class="mb-1">@Model.TotalFiles</h3>
+                        <p class="text-muted mb-0">@Html.T("إجمالي الملفات", "Total files")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card">
+                <div class="d-flex align-items-center">
+                    <div class="stats-icon bg-soft-success text-success">
+                        <i class="feather-hard-drive"></i>
+                    </div>
+                    <div class="ms-3 flex-grow-1">
+                        <h3 class="mb-1">@((Model.TotalSize / 1024.0 / 1024.0 / 1024.0).ToString("F2")) GB</h3>
+                        <p class="text-muted mb-0">@Html.T("المساحة المستخدمة", "Storage used")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card">
+                <div class="d-flex align-items-center">
+                    <div class="stats-icon bg-soft-info text-info">
+                        <i class="feather-eye"></i>
+                    </div>
+                    <div class="ms-3 flex-grow-1">
+                        <h3 class="mb-1">@Model.TotalViews</h3>
+                        <p class="text-muted mb-0">@Html.T("إجمالي المشاهدات", "Total views")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card">
+                <div class="d-flex align-items-center">
+                    <div class="stats-icon bg-soft-warning text-warning">
+                        <i class="feather-download"></i>
+                    </div>
+                    <div class="ms-3 flex-grow-1">
+                        <h3 class="mb-1">@Model.TotalDownloads</h3>
+                        <p class="text-muted mb-0">@Html.T("إجمالي التحميلات", "Total downloads")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Charts Section -->
+        <div class="col-lg-8">
+            <!-- File Types Distribution -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-pie-chart me-2"></i>
+                        توزيع أنواع الملفات
+                    </h5>
+                    <div class="card-header-action">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <input type="radio" class="btn-check" name="chartType" id="chartTypeCount" value="count" checked>
+                            <label class="btn btn-outline-primary" for="chartTypeCount">@Html.T("العدد", "Count")</label>
+                            <input type="radio" class="btn-check" name="chartType" id="chartTypeSize" value="size">
+                            <label class="btn btn-outline-primary" for="chartTypeSize">@Html.T("الحجم", "Size")</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="fileTypesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload Timeline -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-trending-up me-2"></i>
+                        @Html.T("الملفات المرفوعة خلال الفترة", "Files uploaded in period")
+                    </h5>
+                    <div class="card-header-action">
+                        <input type="text" class="form-control form-control-sm" id="dateRange" placeholder="@Html.T("اختر الفترة", "Select period")">
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="uploadTimelineChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Chart -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-activity me-2"></i>
+                        نشاط المشاهدات والتحميلات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- File Types Summary -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-file-text me-2"></i>
+                        ملخص أنواع الملفات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap">
+                        @foreach (var fileType in Model.FileTypeStats)
+                        {
+                            <div class="file-type-badge bg-soft-primary text-primary">
+                                <i class="feather-file"></i>
+                                <div>
+                                    <strong>@fileType.Type</strong>
+                                    <span class="d-block small">@fileType.Count ملف</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Downloaded Files -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-download me-2"></i>
+                        الأكثر تحميلاً
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.TopDownloadedFiles != null && Model.TopDownloadedFiles.Any())
+                    {
+                        @foreach (var file in Model.TopDownloadedFiles)
+                        {
+                            <div class="top-file-item">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="flex-grow-1 me-2">
+                                        <h6 class="mb-1 text-truncate">@file.FileName</h6>
+                                        <small class="text-muted">
+                                            <i class="feather-download me-1"></i>
+                                            @file.DownloadCount تحميل
+                                        </small>
+                                    </div>
+                                    <a asp-action="Details" asp-route-id="@file.Id" class="btn btn-sm btn-light-brand">
+                                        <i class="feather-eye"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-3">
+                            <i class="feather-inbox fs-3 mb-2"></i>
+                            <p class="mb-0">لا توجد بيانات</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Top Viewed Files -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-eye me-2"></i>
+                        الأكثر مشاهدة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.TopViewedFiles != null && Model.TopViewedFiles.Any())
+                    {
+                        @foreach (var file in Model.TopViewedFiles)
+                        {
+                            <div class="top-file-item">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="flex-grow-1 me-2">
+                                        <h6 class="mb-1 text-truncate">@file.FileName</h6>
+                                        <small class="text-muted">
+                                            <i class="feather-eye me-1"></i>
+                                            @file.ViewCount مشاهدة
+                                        </small>
+                                    </div>
+                                    <a asp-action="Details" asp-route-id="@file.Id" class="btn btn-sm btn-light-brand">
+                                        <i class="feather-eye"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-3">
+                            <i class="feather-inbox fs-3 mb-2"></i>
+                            <p class="mb-0">لا توجد بيانات</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Storage Usage -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-database me-2"></i>
+                        استخدام المساحة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">@Html.T("المستخدم", "User")</span>
+                            <span class="fw-semibold">@((Model.TotalSize / 1024.0 / 1024.0 / 1024.0).ToString("F2")) GB</span>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar bg-primary" role="progressbar" style="width: @Model.StoragePercentage%"></div>
+                        </div>
+                    </div>
+                    <div class="vstack gap-2">
+                        @foreach (var stat in Model.FileTypeStats)
+                        {
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted">@stat.Type</span>
+                                <span class="badge bg-soft-primary text-primary">
+                                    @((stat.TotalSize / 1024.0 / 1024.0).ToString("F2")) MB
+                                </span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Uploads -->
+    <div class="card stretch stretch-full">
+        <div class="card-header">
+            <h5 class="card-title">
+                <i class="feather-upload me-2"></i>
+                آخر الملفات المرفوعة
+            </h5>
+            <div class="card-header-action">
+                <a asp-action="Index" class="btn btn-sm btn-light-brand">
+                    <i class="feather-list me-2"></i>
+                    عرض الكل
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>@Html.T("الملف", "File")</th>
+                            <th>@Html.T("النوع", "Type")</th>
+                            <th>@Html.T("الحجم", "Size")</th>
+                            <th>@Html.T("المشاهدات", "Views")</th>
+                            <th>@Html.T("التحميلات", "Downloads")</th>
+                            <th>@Html.T("التاريخ", "Date")</th>
+                            <th>@Html.T("الإجراءات", "Actions")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.RecentFiles != null && Model.RecentFiles.Any())
+                        {
+                            @foreach (var file in Model.RecentFiles)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar-text bg-soft-primary text-primary me-2">
+                                                <i class="feather-file"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-0">@file.FileName</h6>
+                                                <small class="text-muted">@file.Extension</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-soft-primary text-primary">@file.FileType</span>
+                                    </td>
+                                    <td>@((file.FileSize / 1024.0 / 1024.0).ToString("F2")) MB</td>
+                                    <td>@file.ViewCount</td>
+                                    <td>@file.DownloadCount</td>
+                                    <td>@file.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        <a asp-action="Details" asp-route-id="@file.Id" class="btn btn-sm btn-light-brand">
+                                            <i class="feather-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">
+                                    <i class="feather-inbox fs-3 mb-2"></i>
+                                    <p>لا توجد ملفات</p>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // File Types Chart
+            const fileTypesCtx = document.getElementById('fileTypesChart').getContext('2d');
+            const fileTypeStats = @Html.Raw(Json.Serialize(Model.FileTypeStats));
+            
+            let fileTypesChart = new Chart(fileTypesCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: fileTypeStats.map(s => s.type),
+                    datasets: [{
+                        data: fileTypeStats.map(s => s.count),
+                        backgroundColor: [
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(255, 206, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)',
+                            'rgba(153, 102, 255, 0.8)',
+                            'rgba(255, 159, 64, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        }
+                    }
+                }
+            });
+
+            // Chart type toggle
+            $('input[name="chartType"]').change(function() {
+                const type = $(this).val();
+                fileTypesChart.data.datasets[0].data = type === 'count' 
+                    ? fileTypeStats.map(s => s.count)
+                    : fileTypeStats.map(s => s.totalSize / 1024 / 1024);
+                fileTypesChart.update();
+            });
+
+            // Upload Timeline Chart
+            const uploadTimelineCtx = document.getElementById('uploadTimelineChart').getContext('2d');
+            const uploadTimelineData = @Html.Raw(Json.Serialize(Model.UploadTimeline));
+            
+            new Chart(uploadTimelineCtx, {
+                type: 'line',
+                data: {
+                    labels: uploadTimelineData.map(d => d.date),
+                    datasets: [{
+                        label: 'عدد الملفات المرفوعة',
+                        data: uploadTimelineData.map(d => d.count),
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Activity Chart
+            const activityCtx = document.getElementById('activityChart').getContext('2d');
+            const activityData = @Html.Raw(Json.Serialize(Model.ActivityData));
+            
+            new Chart(activityCtx, {
+                type: 'bar',
+                data: {
+                    labels: activityData.map(d => d.date),
+                    datasets: [{
+                        label: 'المشاهدات',
+                        data: activityData.map(d => d.views),
+                        backgroundColor: 'rgba(75, 192, 192, 0.6)'
+                    }, {
+                        label: 'التحميلات',
+                        data: activityData.map(d => d.downloads),
+                        backgroundColor: 'rgba(255, 206, 86, 0.6)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Date Range Picker
+            $('#dateRange').daterangepicker({
+                locale: {
+                    format: 'DD/MM/YYYY',
+                    applyLabel: 'تطبيق',
+                    cancelLabel: 'إلغاء',
+                    customRangeLabel: 'فترة مخصصة',
+                    daysOfWeek: ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'],
+                    monthNames: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+                },
+                ranges: {
+                    'آخر 7 أيام': [moment().subtract(6, 'days'), moment()],
+                    'آخر 30 يوم': [moment().subtract(29, 'days'), moment()],
+                    'هذا الشهر': [moment().startOf('month'), moment().endOf('month')],
+                    'الشهر الماضي': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+                }
+            });
+        });
+    </script>
+}
+

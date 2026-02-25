@@ -1,0 +1,240 @@
+@model StudyStatsViewModel
+@{
+    ViewData["Title"] = Html.T("إحصائيات الدراسة", "Study Statistics");
+}
+
+@section Styles {
+<style>
+    .stats-card {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        height: 100%;
+    }
+    .streak-card {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 30px;
+        text-align: center;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-bar-chart text-primary me-2"></i>
+                    @Html.T("إحصائيات الدراسة", "Study Statistics")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("تحليل نشاطك الدراسي لآخر", "Analysis of your study activity for the last") @Model.Days @Html.T("يوم", "days")</p>
+            </div>
+            <div class="btn-group">
+                <a asp-action="StudyStats" asp-route-days="7" class="btn @(Model.Days == 7 ? "btn-primary" : "btn-outline-primary")">
+                    @Html.T("7 أيام", "7 Days")
+                </a>
+                <a asp-action="StudyStats" asp-route-days="30" class="btn @(Model.Days == 30 ? "btn-primary" : "btn-outline-primary")">
+                    @Html.T("30 يوم", "30 Days")
+                </a>
+                <a asp-action="StudyStats" asp-route-days="90" class="btn @(Model.Days == 90 ? "btn-primary" : "btn-outline-primary")">
+                    @Html.T("90 يوم", "90 Days")
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="stats-card">
+            <div class="text-center">
+                <div style="font-size: 48px; margin-bottom: 12px;">⏱️</div>
+                <h3 class="fw-bold mb-1">@Model.TotalMinutes</h3>
+                <p class="text-muted mb-0">@Html.T("دقيقة إجمالية", "Total Minutes")</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="stats-card">
+            <div class="text-center">
+                <div style="font-size: 48px; margin-bottom: 12px;">📊</div>
+                <h3 class="fw-bold mb-1">@(Model.AverageMinutesPerDay.ToString("F1"))</h3>
+                <p class="text-muted mb-0">@Html.T("متوسط دقيقة/يوم", "Average Min/Day")</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="streak-card">
+            <div style="font-size: 48px; margin-bottom: 12px;">🔥</div>
+            <h3 class="text-white mb-1">@Model.CurrentStreak</h3>
+            <p class="mb-0 opacity-75">@Html.T("أيام متواصلة", "Consecutive Days")</p>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="stats-card">
+            <div class="text-center">
+                <div style="font-size: 48px; margin-bottom: 12px;">⭐</div>
+                <h3 class="fw-bold mb-1">@Model.LongestStreak</h3>
+                <p class="text-muted mb-0">@Html.T("أطول سلسلة", "Longest Streak")</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <h5 class="fw-bold mb-4">
+                    <i class="feather-activity text-primary me-2"></i>
+                    @Html.T("النشاط اليومي", "Daily Activity")
+                </h5>
+                <canvas id="dailyActivityChart" height="80"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <h5 class="fw-bold mb-4">
+                    <i class="feather-pie-chart text-success me-2"></i>
+                    @Html.T("التوزيع حسب الدورة", "Distribution by Course")
+                </h5>
+                <canvas id="byCourseChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- By Course Table -->
+<div class="card stretch stretch-full">
+    <div class="card-body">
+        <h5 class="fw-bold mb-4">
+            <i class="feather-book-open text-info me-2"></i>
+                    @Html.T("التفاصيل حسب الدورة", "Details by Course")
+        </h5>
+        
+        @if (Model.ByCourse.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>@Html.T("الدورة", "Course")</th>
+                            <th class="text-center">@Html.T("الدروس المكتملة", "Completed Lessons")</th>
+                            <th class="text-center">@Html.T("إجمالي الوقت", "Total Time")</th>
+                            <th class="text-center">@Html.T("التقدم", "Progress")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var course in Model.ByCourse)
+                        {
+                            <tr>
+                                <td>
+                                    <strong>@course.CourseName</strong>
+                                </td>
+                                <td class="text-center">
+                                    @course.LessonsCompleted / @course.TotalLessons
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-soft-primary text-primary">
+                                        @(course.TotalMinutes) @Html.T("دقيقة", "min")
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    @{
+                                        var progress = course.TotalLessons > 0 ? (decimal)course.LessonsCompleted / course.TotalLessons * 100 : 0;
+                                    }
+                                    <div class="progress" style="width: 100px; height: 8px; margin: 0 auto;">
+                                        <div class="progress-bar bg-primary" style="width: @(progress)%"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            ViewData["Icon"] = "book-open";
+            ViewData["Title"] = Html.T("لا توجد بيانات دراسية", "No study data available");
+            ViewData["Message"] = Html.T("ابدأ الدراسة لرؤية الإحصائيات", "Start studying to see statistics");
+            @await Html.PartialAsync("_EmptyState")
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Daily Activity Chart
+    const dailyCtx = document.getElementById('dailyActivityChart').getContext('2d');
+    new Chart(dailyCtx, {
+        type: 'bar',
+        data: {
+            labels: @Html.Raw(Json.Serialize(Model.DailyStats.Select(ds => ds.Date.ToString("MM/dd")))),
+            datasets: [{
+                label: '@Html.Raw(Html.T("دقائق الدراسة", "Study Minutes"))',
+                data: @Html.Raw(Json.Serialize(Model.DailyStats.Select(ds => ds.MinutesStudied))),
+                backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return value + ' @Html.Raw(Html.T("دقيقة", "min"))';
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // By Course Chart
+    const byCourseCtx = document.getElementById('byCourseChart').getContext('2d');
+    new Chart(byCourseCtx, {
+        type: 'doughnut',
+        data: {
+            labels: @Html.Raw(Json.Serialize(Model.ByCourse.Select(c => c.CourseName))),
+            datasets: [{
+                data: @Html.Raw(Json.Serialize(Model.ByCourse.Select(c => c.TotalMinutes))),
+                backgroundColor: ['#667eea', '#22c55e', '#fbbf24', '#ef4444', '#3b82f6', '#a855f7']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+</script>
+}

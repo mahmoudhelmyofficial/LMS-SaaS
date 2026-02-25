@@ -1,0 +1,401 @@
+@model LMS.Areas.Student.ViewModels.CommentEditViewModel
+@{
+    ViewData["Title"] = Html.T("تعديل التعليق", "Edit Comment");
+}
+
+@section Styles {
+<style>
+    .edit-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+    }
+    .char-counter {
+        position: absolute;
+        bottom: 10px;
+        left: 15px;
+        font-size: 12px;
+        color: #6b7280;
+    }
+    .char-counter.warning {
+        color: #f59e0b;
+    }
+    .char-counter.danger {
+        color: #ef4444;
+    }
+    .preview-section {
+        background: #f9fafb;
+        border-radius: 8px;
+        padding: 20px;
+        border: 2px dashed #e5e7eb;
+    }
+    .editor-toolbar {
+        background: #f3f4f6;
+        padding: 10px 15px;
+        border-radius: 8px 8px 0 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .editor-toolbar button {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 6px 12px;
+        margin-left: 5px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .editor-toolbar button:hover {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Page Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center">
+            <a href="@Url.Action("Index")" class="btn btn-sm btn-light me-3">
+                <i class="feather-arrow-right me-1"></i>
+                @Html.T("رجوع", "Back")
+            </a>
+            <div>
+                <h3 class="fw-bold mb-1">
+                    <i class="feather-edit text-primary me-2"></i>
+                    @Html.T("تعديل التعليق", "Edit comment")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("قم بتحديث محتوى تعليقك", "Update your comment content")</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Edit Form -->
+    <div class="col-lg-7">
+        <div class="edit-card">
+            <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="editCommentForm">
+                @Html.AntiForgeryToken()
+                @Html.HiddenFor(m => m.Id)
+                
+                <!-- Info Alert -->
+                <div class="alert alert-info mb-4">
+                    <div class="d-flex align-items-start">
+                        <i class="feather-info fs-4 me-3"></i>
+                        <div>
+                            <h6 class="fw-bold mb-1">@Html.T("ملاحظة مهمة", "Important note")</h6>
+                            <p class="mb-0 small">
+                                @Html.T("بعد التعديل، سيتم مراجعة تعليقك من قبل الإدارة قبل نشره مرة أخرى. يرجى التأكد من أن تعليقك يلتزم بقواعد المجتمع.", "After editing, your comment will be reviewed by moderators before being published again. Please ensure your comment follows community guidelines.")
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Content Editor -->
+                <div class="mb-4">
+                    <label asp-for="Content" class="form-label fw-bold">
+                        @Html.T("محتوى التعليق", "Comment content")
+                        <span class="text-danger">*</span>
+                    </label>
+                    
+                    <!-- Editor Toolbar -->
+                    <div class="editor-toolbar">
+                        <button type="button" onclick="formatText('bold')" title="@Html.T("عريض", "Bold")">
+                            <i class="feather-bold"></i>
+                        </button>
+                        <button type="button" onclick="formatText('italic')" title="@Html.T("مائل", "Italic")">
+                            <i class="feather-italic"></i>
+                        </button>
+                        <button type="button" onclick="formatText('underline')" title="@Html.T("تسطير", "Underline")">
+                            <i class="feather-underline"></i>
+                        </button>
+                        <span class="mx-2">|</span>
+                        <button type="button" onclick="insertText('• ')" title="@Html.T("قائمة", "List")">
+                            <i class="feather-list"></i>
+                        </button>
+                        <button type="button" onclick="insertText('> ')" title="@Html.T("اقتباس", "Quote")">
+                            <i class="feather-message-square"></i>
+                        </button>
+                    </div>
+                    
+                    <div style="position: relative;">
+                        <textarea asp-for="Content" 
+                                  class="form-control" 
+                                  rows="8" 
+                                  id="commentContent"
+                                  placeholder="@Html.T("اكتب تعليقك هنا... (10 أحرف على الأقل)", "Write your comment here... (at least 10 characters)")"
+                                  maxlength="2000"
+                                  style="border-radius: 0 0 8px 8px; resize: vertical;"
+                                  oninput="updateCharCount()"></textarea>
+                        <span class="char-counter" id="charCounter">
+                            <span id="charCount">@(Model.Content?.Length ?? 0)</span> / 2000
+                        </span>
+                    </div>
+                    <span asp-validation-for="Content" class="text-danger"></span>
+                    
+                    <div class="form-text mt-2">
+                        <i class="feather-info me-1"></i>
+                        @Html.T("يجب أن يكون التعليق 10 أحرف على الأقل و 2000 حرف كحد أقصى", "Comment must be at least 10 characters and max 2000 characters")
+                    </div>
+                </div>
+                
+                <!-- Guidelines -->
+                <div class="alert alert-light border mb-4">
+                    <h6 class="fw-bold mb-2">
+                        <i class="feather-check-circle text-success me-2"></i>
+                        @Html.T("إرشادات التعليقات", "Comment guidelines")
+                    </h6>
+                    <ul class="mb-0 small">
+                        <li>@Html.T("كن محترماً ومهذباً مع الآخرين", "Be respectful and polite")</li>
+                        <li>@Html.T("ركز على محتوى الدرس أو الموضوع", "Focus on lesson or topic content")</li>
+                        <li>@Html.T("لا تنشر معلومات شخصية أو روابط خارجية", "Do not share personal info or external links")</li>
+                        <li>@Html.T("تجنب الإساءة أو المحتوى غير اللائق", "Avoid abuse or inappropriate content")</li>
+                        <li>@Html.T("استخدم لغة واضحة ومفهومة", "Use clear and understandable language")</li>
+                    </ul>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="d-flex gap-3">
+                    <button type="submit" class="btn btn-primary flex-grow-1">
+                        <i class="feather-save me-2"></i>
+                        @Html.T("حفظ التعديلات", "Save changes")
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="togglePreview()">
+                        <i class="feather-eye me-2"></i>
+                        @Html.T("معاينة", "Preview")
+                    </button>
+                    <a href="@Url.Action("Index")" class="btn btn-outline-danger">
+                        <i class="feather-x me-2"></i>
+                        @Html.T("إلغاء", "Cancel")
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Preview & Tips -->
+    <div class="col-lg-5">
+        <!-- Preview Section -->
+        <div class="card mb-4" id="previewCard" style="display: none;">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="feather-eye text-info me-2"></i>
+                    @Html.T("معاينة التعليق", "Comment preview")
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="preview-section" id="previewContent">
+                    <p class="text-muted text-center mb-0">
+                        <i class="feather-file-text fs-3 mb-2 d-block"></i>
+                        @Html.T("اكتب شيئاً لرؤية المعاينة", "Type something to see preview")
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Quick Tips -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="feather-lightbulb text-warning me-2"></i>
+                    @Html.T("نصائح سريعة", "Quick tips")
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-start mb-3">
+                    <div class="avatar-text avatar-sm bg-soft-primary text-primary me-3 mt-1">
+                        <i class="feather-message-square"></i>
+                    </div>
+                    <div>
+                        <h6 class="fw-bold mb-1">@Html.T("كن محدداً", "Be specific")</h6>
+                        <p class="small text-muted mb-0">@Html.T("اشرح نقطتك بوضوح وبالتفصيل", "Explain your point clearly and in detail")</p>
+                    </div>
+                </div>
+                
+                <div class="d-flex align-items-start mb-3">
+                    <div class="avatar-text avatar-sm bg-soft-success text-success me-3 mt-1">
+                        <i class="feather-users"></i>
+                    </div>
+                    <div>
+                        <h6 class="fw-bold mb-1">@Html.T("كن محترماً", "Be respectful")</h6>
+                        <p class="small text-muted mb-0">@Html.T("احترم آراء الآخرين حتى لو اختلفت", "Respect others' opinions even if you disagree")</p>
+                    </div>
+                </div>
+                
+                <div class="d-flex align-items-start mb-3">
+                    <div class="avatar-text avatar-sm bg-soft-warning text-warning me-3 mt-1">
+                        <i class="feather-target"></i>
+                    </div>
+                    <div>
+                        <h6 class="fw-bold mb-1">@Html.T("ركز على الموضوع", "Focus on topic")</h6>
+                        <p class="small text-muted mb-0">@Html.T("التزم بموضوع الدرس أو المناقشة", "Stick to the lesson or discussion topic")</p>
+                    </div>
+                </div>
+                
+                <div class="d-flex align-items-start">
+                    <div class="avatar-text avatar-sm bg-soft-info text-info me-3 mt-1">
+                        <i class="feather-edit"></i>
+                    </div>
+                    <div>
+                        <h6 class="fw-bold mb-1">@Html.T("راجع قبل النشر", "Review before posting")</h6>
+                        <p class="small text-muted mb-0">@Html.T("تحقق من الإملاء والنحو", "Check spelling and grammar")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Stats Card -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="feather-bar-chart text-primary me-2"></i>
+                    @Html.T("إحصائيات تعليقاتك", "Your comment stats")
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="text-center p-3 bg-soft-primary rounded">
+                            <div class="avatar-text avatar-sm bg-primary text-white mx-auto mb-2">
+                                <i class="feather-message-circle"></i>
+                            </div>
+                            <h5 class="fw-bold mb-0">--</h5>
+                            <small class="text-muted">@Html.T("إجمالي", "Total")</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center p-3 bg-soft-success rounded">
+                            <div class="avatar-text avatar-sm bg-success text-white mx-auto mb-2">
+                                <i class="feather-thumbs-up"></i>
+                            </div>
+                            <h5 class="fw-bold mb-0">--</h5>
+                            <small class="text-muted">@Html.T("إعجاب", "Likes")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+@{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+<script>
+    window.__T = window.__T || {};
+    Object.assign(window.__T, {
+        WriteToPreview: '@Html.Raw(Html.T("اكتب شيئاً لرؤية المعاينة", "Write something to see preview").ToString().Replace("'", "\\'"))',
+        CommentMinLength: '@Html.Raw(Html.T("يجب أن يكون التعليق 10 أحرف على الأقل", "Comment must be at least 10 characters").ToString().Replace("'", "\\'"))',
+        CommentMaxLength: '@Html.Raw(Html.T("يجب أن يكون التعليق أقل من 2000 حرف", "Comment must be less than 2000 characters").ToString().Replace("'", "\\'"))'
+    });
+    // Character counter
+    function updateCharCount() {
+        const textarea = document.getElementById('commentContent');
+        const counter = document.getElementById('charCount');
+        const counterContainer = document.getElementById('charCounter');
+        const length = textarea.value.length;
+        
+        counter.textContent = length;
+        
+        // Update color based on length
+        counterContainer.classList.remove('warning', 'danger');
+        if (length > 1800) {
+            counterContainer.classList.add('danger');
+        } else if (length > 1500) {
+            counterContainer.classList.add('warning');
+        }
+        
+        // Update preview
+        updatePreview();
+    }
+    
+    // Preview toggle
+    function togglePreview() {
+        const previewCard = document.getElementById('previewCard');
+        previewCard.style.display = previewCard.style.display === 'none' ? 'block' : 'none';
+        updatePreview();
+    }
+    
+    // Update preview content
+    function updatePreview() {
+        const content = document.getElementById('commentContent').value;
+        const preview = document.getElementById('previewContent');
+        
+        if (content.trim()) {
+            // Convert simple markdown-like formatting
+            let formatted = content
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/\n/g, '<br>')
+                .replace(/^> (.+)$/gm, '<blockquote class="border-right p-2 mb-2">$1</blockquote>');
+            
+            preview.innerHTML = '<div>' + formatted + '</div>';
+        } else {
+            preview.innerHTML = '<p class="text-muted text-center mb-0"><i class="feather-file-text fs-3 mb-2 d-block"></i>' + (window.__T && window.__T.WriteToPreview ? window.__T.WriteToPreview : 'Write something to see preview') + '</p>';
+        }
+    }
+    
+    // Text formatting
+    function formatText(format) {
+        const textarea = document.getElementById('commentContent');
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = textarea.value.substring(start, end);
+        
+        let formattedText = '';
+        switch(format) {
+            case 'bold':
+                formattedText = '**' + selectedText + '**';
+                break;
+            case 'italic':
+                formattedText = '*' + selectedText + '*';
+                break;
+            case 'underline':
+                formattedText = '__' + selectedText + '__';
+                break;
+        }
+        
+        textarea.value = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
+        textarea.focus();
+        textarea.setSelectionRange(start + formattedText.length, start + formattedText.length);
+        updateCharCount();
+    }
+    
+    // Insert text
+    function insertText(text) {
+        const textarea = document.getElementById('commentContent');
+        const start = textarea.selectionStart;
+        
+        textarea.value = textarea.value.substring(0, start) + text + textarea.value.substring(start);
+        textarea.focus();
+        textarea.setSelectionRange(start + text.length, start + text.length);
+        updateCharCount();
+    }
+    
+    // Form validation
+    document.getElementById('editCommentForm').addEventListener('submit', function(e) {
+        const content = document.getElementById('commentContent').value.trim();
+        
+        if (content.length < 10) {
+            e.preventDefault();
+            alert((window.__T && window.__T.CommentMinLength) || 'Comment must be at least 10 characters');
+            return false;
+        }
+        
+        if (content.length > 2000) {
+            e.preventDefault();
+            alert((window.__T && window.__T.CommentMaxLength) || 'Comment must be less than 2000 characters');
+            return false;
+        }
+        
+        return true;
+    });
+    
+    // Initialize
+    updateCharCount();
+</script>
+}

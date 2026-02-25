@@ -1,0 +1,174 @@
+@model QuickChallengeViewModel
+@{
+    ViewData["Title"] = Html.T("تحدي سريع", "Quick Challenge");
+}
+
+@section Styles {
+<style>
+    .challenge-header {
+        background: linear-gradient(135deg, #ec4899 0%, #be185d 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 40px;
+        text-align: center;
+        margin-bottom: 24px;
+    }
+    .timer {
+        font-size: 48px;
+        font-weight: bold;
+        color: #ef4444;
+        text-align: center;
+        margin-bottom: 24px;
+    }
+    .challenge-question {
+        background: white;
+        border-radius: 12px;
+        padding: 32px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        margin-bottom: 24px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Challenge Header -->
+<div class="challenge-header">
+    <div style="font-size: 64px; margin-bottom: 16px;">⚡</div>
+    <h2 class="text-white mb-2">@Html.T("تحدي سريع", "Quick challenge") - @Model.Quiz.Title</h2>
+    <p class="mb-0 opacity-75">@string.Format(Html.T("أجب على {0} أسئلة في أسرع وقت ممكن!", "Answer {0} questions as fast as you can!"), Model.TotalQuestions)</p>
+</div>
+
+<!-- Timer -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="timer" id="timer">
+            <i class="feather-clock me-2"></i>
+            <span id="minutes">00</span>:<span id="seconds">00</span>
+        </div>
+        <div class="progress" style="height: 8px;">
+            <div class="progress-bar bg-danger" id="timerProgress" style="width: 100%; transition: width 1s linear;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">@string.Format(Html.T("السؤال {0} من {1}", "Question {0} of {1}"), Model.CurrentQuestionIndex, Model.TotalQuestions)</span>
+            <span class="fw-bold">@((Model.CurrentQuestionIndex * 100.0 / Model.TotalQuestions).ToString("F0"))%</span>
+        </div>
+        <div class="progress" style="height: 10px;">
+            <div class="progress-bar bg-success" 
+                 style="width: @((Model.CurrentQuestionIndex * 100.0 / Model.TotalQuestions))%">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Question -->
+<div class="challenge-question">
+    <h5 class="fw-bold mb-4">@Model.CurrentQuestion.QuestionText</h5>
+
+    @if (!string.IsNullOrEmpty(Model.CurrentQuestion.ImageUrl))
+    {
+        <div class="mb-4">
+            <img src="@Model.CurrentQuestion.ImageUrl" alt="@Html.T("صورة السؤال", "Question image")" 
+                 class="img-fluid rounded" style="max-height: 300px;" />
+        </div>
+    }
+
+    <form asp-action="QuickChallenge" method="post" id="challengeForm">
+        <input type="hidden" name="quizId" value="@Model.Quiz.Id" />
+        <input type="hidden" name="questionId" value="@Model.CurrentQuestion.Id" />
+        <input type="hidden" name="questionIndex" value="@Model.CurrentQuestionIndex" />
+        <input type="hidden" name="elapsedSeconds" id="elapsedSeconds" value="0" />
+
+        @foreach (var answer in Model.CurrentQuestion.Answers)
+        {
+            <div class="form-check mb-3 p-3 rounded" style="background: #f9fafb; border: 2px solid #e5e7eb; cursor: pointer;" 
+                 onclick="selectAndSubmit(this)">
+                <input class="form-check-input" type="radio" name="selectedAnswerId" 
+                       value="@answer.Id" id="answer_@answer.Id">
+                <label class="form-check-label flex-grow-1" for="answer_@answer.Id" style="cursor: pointer;">
+                    @answer.AnswerText
+                </label>
+            </div>
+        }
+    </form>
+</div>
+
+<!-- Stats -->
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div style="font-size: 32px; margin-bottom: 8px;">✅</div>
+                <h4 class="fw-bold text-success mb-1" id="correctCount">@Model.Stats.CorrectAnswers</h4>
+                <small class="text-muted">@Html.T("صحيح", "Correct")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div style="font-size: 32px; margin-bottom: 8px;">❌</div>
+                <h4 class="fw-bold text-danger mb-1" id="incorrectCount">@Model.Stats.IncorrectAnswers</h4>
+                <small class="text-muted">@Html.T("خاطئ", "Incorrect")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div style="font-size: 32px; margin-bottom: 8px;">⚡</div>
+                <h4 class="fw-bold text-warning mb-1" id="speedScore">@Model.Stats.SpeedScore</h4>
+                <small class="text-muted">@Html.T("نقاط السرعة", "Speed points")</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    let startTime = Date.now();
+    let timerInterval;
+
+    // Start timer
+    timerInterval = setInterval(updateTimer, 1000);
+
+    function updateTimer() {
+        const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+        const minutes = Math.floor(elapsedSeconds / 60);
+        const seconds = elapsedSeconds % 60;
+
+        document.getElementById('minutes').textContent = String(minutes).padStart(2, '0');
+        document.getElementById('seconds').textContent = String(seconds).padStart(2, '0');
+        document.getElementById('elapsedSeconds').value = elapsedSeconds;
+
+        // Update progress bar
+        const maxTime = @Model.Quiz.TimeLimit * 60;
+        const progress = 100 - (elapsedSeconds / maxTime * 100);
+        document.getElementById('timerProgress').style.width = Math.max(0, progress) + '%';
+    }
+
+    function selectAndSubmit(element) {
+        // Select the radio button
+        const radio = element.querySelector('input[type="radio"]');
+        radio.checked = true;
+
+        // Submit form after brief delay for visual feedback
+        setTimeout(() => {
+            document.getElementById('challengeForm').submit();
+        }, 200);
+    }
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+        clearInterval(timerInterval);
+    });
+</script>
+}

@@ -1,0 +1,234 @@
+@using LMS.Services.Interfaces
+@model List<LMS.Domain.Entities.Settings.PlatformSetting>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إعدادات الدفع", "Payment settings");
+    ViewData["Breadcrumbs"] = new List<(string Name, string Url)>
+    {
+        (Html.T("الإعدادات", "Settings"), Url.Action("Index", "Settings")),
+        (Html.T("الدفع", "Payment"), "")
+    };
+    
+    // Load payment settings (keys match PaymentSettingsController.Save)
+    var paymentMinAmount = await PlatformSettings.GetIntSettingAsync("PaymentMinAmount", 10);
+    var paymentMaxAmount = await PlatformSettings.GetIntSettingAsync("PaymentMaxAmount", 100000);
+    var refundWindowDays = await PlatformSettings.GetIntSettingAsync("PaymentRefundPolicy", 14);
+}
+
+<div class="main-content">
+    <!-- Stats Cards -->
+    @{
+        var totalPayments = ViewBag.TotalPayments ?? 0;
+        var totalRevenue = ViewBag.TotalRevenue != null ? (decimal)ViewBag.TotalRevenue : 0m;
+        var monthlyRevenue = ViewBag.MonthlyRevenue != null ? (decimal)ViewBag.MonthlyRevenue : 0m;
+        var pendingPayments = ViewBag.PendingPayments ?? 0;
+    }
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar avatar-lg bg-soft-primary rounded">
+                                <i class="feather-credit-card fs-4 text-primary"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0">@totalPayments</h3>
+                            <span class="text-muted fs-12">@Html.T("إجمالي المدفوعات", "Total payments")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar avatar-lg bg-soft-success rounded">
+                                <i class="feather-dollar-sign fs-4 text-success"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0">@totalRevenue.ToString("N0")</h3>
+                            <span class="text-muted fs-12">@Html.T("إجمالي الإيرادات", "Total revenue")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar avatar-lg bg-soft-info rounded">
+                                <i class="feather-trending-up fs-4 text-info"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0">@monthlyRevenue.ToString("N0")</h3>
+                            <span class="text-muted fs-12">@Html.T("إيرادات الشهر", "Monthly revenue")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar avatar-lg bg-soft-warning rounded">
+                                <i class="feather-clock fs-4 text-warning"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0">@pendingPayments</h3>
+                            <span class="text-muted fs-12">@Html.T("مدفوعات معلقة", "Pending payments")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0"><i class="feather-settings me-2"></i>@Html.T("إعدادات الدفع العامة", "General payment settings")</h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Save" method="post">
+                        @Html.AntiForgeryToken()
+                        @{
+                            var failed = ViewBag.FailedPaymentModel as LMS.Areas.Admin.Controllers.PaymentSettingsViewModel;
+                            var selectedCurrency = failed?.DefaultCurrency ?? Model?.FirstOrDefault(s => s.Key == "PaymentCurrency")?.Value ?? "EGP";
+                            var minAmount = failed != null ? failed.MinimumAmount.ToString() : (Model?.FirstOrDefault(s => s.Key == "PaymentMinAmount")?.Value ?? paymentMinAmount.ToString());
+                            var maxAmount = failed != null ? failed.MaximumAmount.ToString() : (Model?.FirstOrDefault(s => s.Key == "PaymentMaxAmount")?.Value ?? paymentMaxAmount.ToString());
+                            var refundDays = failed != null ? failed.RefundPolicyDays.ToString() : (Model?.FirstOrDefault(s => s.Key == "PaymentRefundPolicy")?.Value ?? refundWindowDays.ToString());
+                            var installMonths = failed?.InstallmentMonths ?? Model?.FirstOrDefault(s => s.Key == "PaymentInstallmentMonths")?.Value ?? "3,6,12";
+                            var isEnabled = failed?.IsEnabled ?? (Model?.FirstOrDefault(s => s.Key == "PaymentEnabled")?.Value != "false");
+                            var allowInstall = failed?.AllowInstallments ?? (Model?.FirstOrDefault(s => s.Key == "PaymentAllowInstallments")?.Value == "true");
+                            var autoCapture = failed?.AutoCapture ?? (Model?.FirstOrDefault(s => s.Key == "PaymentAutoCapture")?.Value != "false");
+                            var requireVerif = failed?.RequireVerification ?? (Model?.FirstOrDefault(s => s.Key == "PaymentRequireVerification")?.Value == "true");
+                        }
+                        @if (failed != null)
+                        {
+                            <div class="alert alert-danger" role="alert">
+                                <i class="feather-alert-circle me-2"></i>@Html.T("يرجى تصحيح الأخطاء في النموذج", "Please correct the errors in the form.")
+                            </div>
+                        }
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("العملة الافتراضية", "Default currency")</label>
+                                <select name="DefaultCurrency" class="form-select">
+                                    <option value="EGP" selected="@(selectedCurrency == "EGP")">@Html.T("جنيه مصري (EGP)", "Egyptian Pound (EGP)")</option>
+                                    <option value="USD" selected="@(selectedCurrency == "USD")">@Html.T("دولار أمريكي (USD)", "US Dollar (USD)")</option>
+                                    <option value="SAR" selected="@(selectedCurrency == "SAR")">@Html.T("ريال سعودي (SAR)", "Saudi Riyal (SAR)")</option>
+                                    <option value="AED" selected="@(selectedCurrency == "AED")">@Html.T("درهم إماراتي (AED)", "UAE Dirham (AED)")</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("الحد الأدنى للمبلغ", "Minimum amount")</label>
+                                <input type="number" name="MinimumAmount" class="form-control" value="@minAmount">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("الحد الأقصى للمبلغ", "Maximum amount")</label>
+                                <input type="number" name="MaximumAmount" class="form-control" value="@maxAmount">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("مدة سياسة الاسترداد (أيام)", "Refund policy period (days)")</label>
+                                <input type="number" name="RefundPolicyDays" class="form-control" value="@refundDays">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("فترات التقسيط المتاحة", "Available installment periods")</label>
+                                <input type="text" name="InstallmentMonths" class="form-control" value="@installMonths"
+                                       placeholder="@Html.T("مثال: 3,6,12", "e.g. 3,6,12")">
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mt-4">
+                                    <div class="form-check form-switch mb-2">
+                                        <input type="hidden" name="IsEnabled" value="false" />
+                                        <input type="checkbox" name="IsEnabled" value="true" class="form-check-input" @(isEnabled ? "checked" : "")>
+                                        <label class="form-check-label">@Html.T("تفعيل الدفع", "Enable payment")</label>
+                                    </div>
+                                    <div class="form-check form-switch mb-2">
+                                        <input type="hidden" name="AllowInstallments" value="false" />
+                                        <input type="checkbox" name="AllowInstallments" value="true" class="form-check-input" @(allowInstall ? "checked" : "")>
+                                        <label class="form-check-label">@Html.T("السماح بالتقسيط", "Allow installments")</label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input type="hidden" name="AutoCapture" value="false" />
+                                        <input type="checkbox" name="AutoCapture" value="true" class="form-check-input" @(autoCapture ? "checked" : "")>
+                                        <label class="form-check-label">@Html.T("التقاط تلقائي للمدفوعات", "Auto-capture payments")</label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input type="hidden" name="RequireVerification" value="false" />
+                                        <input type="checkbox" name="RequireVerification" value="true" class="form-check-input" @(requireVerif ? "checked" : "")>
+                                        <label class="form-check-label">@Html.T("يتطلب التحقق من الدفع", "Require payment verification")</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-2"></i>@Html.T("حفظ الإعدادات", "Save settings")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0"><i class="feather-credit-card me-2"></i>@Html.T("بوابات الدفع", "Payment gateways")</h5>
+                </div>
+                <div class="card-body">
+                    @{
+                        var enabledGatewaysList = ViewBag.EnabledGateways as IEnumerable<string>;
+                        var hasEnabledGateways = enabledGatewaysList != null && enabledGatewaysList.Any();
+                    }
+                    @if (hasEnabledGateways)
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var gateway in enabledGatewaysList!)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                    <span>@gateway</span>
+                                    <span class="badge bg-success">@Html.T("مفعّل", "Enabled")</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">@Html.T("لا توجد بوابات دفع مفعّلة", "No payment gateways enabled")</p>
+                    }
+                    <div class="mt-3">
+                        <a asp-controller="PaymentGatewaySettings" asp-action="Index" class="btn btn-outline-primary btn-sm w-100">
+                            <i class="feather-settings me-2"></i>@Html.T("إدارة البوابات", "Manage gateways")
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card border-0 shadow-sm mt-4">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0"><i class="feather-globe me-2"></i>@Html.T("العملات", "Currencies")</h5>
+                </div>
+                <div class="card-body">
+                    <a asp-area="Admin" asp-controller="Currencies" asp-action="Index" class="btn btn-outline-secondary btn-sm w-100">
+                        <i class="feather-settings me-2"></i>@Html.T("إدارة العملات", "Manage currencies")
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+

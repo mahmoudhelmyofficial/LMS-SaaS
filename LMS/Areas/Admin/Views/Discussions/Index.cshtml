@@ -1,0 +1,270 @@
+@model IEnumerable<LMS.Domain.Entities.Social.Discussion>
+
+@{
+    ViewData["Title"] = Html.T("منتدى النقاشات", "Discussions forum");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التواصل", "Communications"), null),
+        (Html.T("النقاشات", "Discussions"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إضافة نقاش", "Add discussion"), "feather-plus", Url.Action("Create", "Discussions"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .discussion-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .discussion-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-3px);
+        }
+        .stats-badge {
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: #f3f4f6;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@{
+    var discussionsList = Model?.ToList() ?? new List<LMS.Domain.Entities.Social.Discussion>();
+    var totalDiscussions = discussionsList.Count;
+    var uniqueAuthors = discussionsList.Select(d => d.AuthorId).Distinct().Count();
+    var today = DateTime.UtcNow.Date;
+    var repliesToday = discussionsList.Sum(d => d.Replies?.Count(r => r.CreatedAt >= today) ?? 0);
+    var pinnedCount = discussionsList.Count(d => d.IsPinned);
+}
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-message-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">إجمالي النقاشات</span>
+                            <h3 class="fw-bolder d-block">@totalDiscussions.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-users"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">مشاركون</span>
+                            <h3 class="fw-bolder d-block">@uniqueAuthors.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-message-square"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">ردود اليوم</span>
+                            <h3 class="fw-bolder d-block">@repliesToday.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-bookmark"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">نقاشات مثبتة</span>
+                            <h3 class="fw-bolder d-block">@pinnedCount.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        @if (Model != null && Model.Any())
+        {
+            @foreach (var discussion in Model.OrderByDescending(d => d.IsPinned).ThenByDescending(d => d.LastActivityAt))
+            {
+                <div class="col-lg-12 mb-3">
+                    <div class="card discussion-card" onclick="window.location='@Url.Action("Details", "Discussions", new { id = discussion.Id })'">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <div class="d-flex align-items-start gap-3">
+                                        <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                                            @discussion.Author?.FirstName?.Substring(0, 1)
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex align-items-center gap-2 mb-2">
+                                                <h6 class="mb-0">@discussion.Title</h6>
+                                                @if (discussion.IsPinned)
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning">
+                                                        <i class="feather-bookmark me-1"></i>
+                                                        مثبت
+                                                    </span>
+                                                }
+                                                @if (discussion.IsLocked)
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">
+                                                        <i class="feather-lock me-1"></i>
+                                                        مقفل
+                                                    </span>
+                                                }
+                                            </div>
+                                            <p class="text-muted mb-2">@discussion.Content?.Substring(0, Math.Min(150, discussion.Content.Length))...</p>
+                                            <div class="d-flex align-items-center gap-3">
+                                                <small class="text-muted">
+                                                    <i class="feather-user me-1"></i>
+                                                    @discussion.Author?.FirstName @discussion.Author?.LastName
+                                                </small>
+                                                <small class="text-muted">
+                                                    <i class="feather-clock me-1"></i>
+                                                    @discussion.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-center justify-content-end gap-3">
+                                        <div class="stats-badge text-center">
+                                            <div class="fw-bold">@discussion.ViewCount</div>
+                                            <small class="text-muted">مشاهدة</small>
+                                        </div>
+                                        <div class="stats-badge text-center">
+                                            <div class="fw-bold">@(discussion.Replies?.Count() ?? 0)</div>
+                                            <small class="text-muted">رد</small>
+                                        </div>
+                                        <div class="dropdown" onclick="event.stopPropagation()">
+                                            <button class="btn btn-sm btn-light" data-bs-toggle="dropdown">
+                                                <i class="feather-more-vertical"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action("Edit", "Discussions", new { id = discussion.Id })">
+                                                        <i class="feather-edit me-3"></i>
+                                                        تعديل
+                                                    </a>
+                                                </li>
+                                                @if (!discussion.IsPinned)
+                                                {
+                                                    <li>
+                                                        <a class="dropdown-item" href="@Url.Action("Pin", "Discussions", new { id = discussion.Id })">
+                                                            <i class="feather-bookmark me-3"></i>
+                                                            تثبيت
+                                                        </a>
+                                                    </li>
+                                                }
+                                                else
+                                                {
+                                                    <li>
+                                                        <a class="dropdown-item" href="@Url.Action("Unpin", "Discussions", new { id = discussion.Id })">
+                                                            <i class="feather-bookmark me-3"></i>
+                                                            إلغاء التثبيت
+                                                        </a>
+                                                    </li>
+                                                }
+                                                @if (!discussion.IsLocked)
+                                                {
+                                                    <li>
+                                                        <a class="dropdown-item" href="@Url.Action("Lock", "Discussions", new { id = discussion.Id })">
+                                                            <i class="feather-lock me-3"></i>
+                                                            قفل
+                                                        </a>
+                                                    </li>
+                                                }
+                                                else
+                                                {
+                                                    <li>
+                                                        <a class="dropdown-item" href="@Url.Action("Unlock", "Discussions", new { id = discussion.Id })">
+                                                            <i class="feather-unlock me-3"></i>
+                                                            فتح
+                                                        </a>
+                                                    </li>
+                                                }
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li>
+                                                    <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@discussion.Id'); event.stopPropagation()">
+                                                        <i class="feather-trash-2 me-3"></i>
+                                                        حذف
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="feather-message-circle fs-1 text-muted mb-3"></i>
+                        <h5>لا توجد نقاشات بعد</h5>
+                        <p class="text-muted mb-4">ابدأ بإنشاء نقاش جديد للتفاعل مع الطلاب</p>
+                        <a href="@Url.Action("Create", "Discussions")" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            إضافة نقاش جديد
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        window.__DiscussionsIndexT = { deleteConfirm: '@Html.Raw(Html.T("هل أنت متأكد من حذف هذا النقاش؟", "Are you sure you want to delete this discussion?").Replace("'", "\\'"))' };
+        function confirmDelete(discussionId) {
+            if (confirm(window.__DiscussionsIndexT.deleteConfirm)) {
+                window.location.href = '@Url.Action("Delete", "Discussions")?id=' + discussionId;
+            }
+        }
+    </script>
+}
+

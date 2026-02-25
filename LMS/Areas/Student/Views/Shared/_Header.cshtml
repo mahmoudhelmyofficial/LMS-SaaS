@@ -1,0 +1,231 @@
+@using Microsoft.AspNetCore.Identity
+@using LMS.Services.Interfaces
+@inject SignInManager<LMS.Domain.Entities.Users.ApplicationUser> SignInManager
+@inject UserManager<LMS.Domain.Entities.Users.ApplicationUser> UserManager
+@inject LMS.Data.ApplicationDbContext DbContext
+@inject ICurrentUserService CurrentUserService
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    var user = await UserManager.GetUserAsync(User);
+    var userName = user != null ? $"{user.FirstName} {user.LastName}" : Html.T("الطالب", "Student");
+    var userId = CurrentUserService.UserId;
+    
+    // UI Settings
+    var notificationsPreviewLimit = await PlatformSettings.GetIntSettingAsync("UI.NotificationsPreview.Limit", 5);
+    var badgeMaxDisplay = await PlatformSettings.GetIntSettingAsync("UI.BadgeMaxDisplay", 99);
+    
+    // Get notifications
+    var unreadNotifications = new List<LMS.Domain.Entities.Notifications.Notification>();
+    var unreadCount = 0;
+    if (!string.IsNullOrEmpty(userId))
+    {
+        unreadNotifications = DbContext.Notifications
+            .Where(n => n.UserId == userId && !n.IsRead)
+            .OrderByDescending(n => n.CreatedAt)
+            .Take(notificationsPreviewLimit)
+            .ToList();
+        unreadCount = unreadNotifications.Count;
+    }
+}
+
+<header class="nxl-header">
+    <div class="header-wrapper">
+        <!--! [Start] Header Left - Menu Toggle (appears on right in RTL) !-->
+        <div class="header-left d-flex align-items-center gap-4">
+            <!--! [Start] Mobile Toggler !-->
+            <a href="javascript:void(0);" class="nxl-head-mobile-toggler" id="mobile-collapse">
+                <div class="hamburger hamburger--arrowturn">
+                    <div class="hamburger-box">
+                        <div class="hamburger-inner"></div>
+                    </div>
+                </div>
+            </a>
+            <!--! [End] Mobile Toggler !-->
+            <!--! [Start] Navigation Toggle - Hidden on large screens, sidebar always open !-->
+            <div class="nxl-navigation-toggle d-none">
+                <a href="javascript:void(0);" id="menu-mini-button">
+                    <i class="feather-align-right"></i>
+                </a>
+                <a href="javascript:void(0);" id="menu-expend-button" style="display: none">
+                    <i class="feather-arrow-left"></i>
+                </a>
+            </div>
+            <!--! [End] Navigation Toggle !-->
+        </div>
+        <!--! [End] Header Left !-->
+        
+        <!--! [Start] Header Right - Icons at the end (appears on left in RTL) !-->
+        <div class="header-right d-flex align-items-center">
+            <div class="d-flex align-items-center">
+                <!--! [Start] Search Dropdown !-->
+                <div class="dropdown nxl-h-item nxl-header-search">
+                    <a href="javascript:void(0);" class="header-dropdown-toggle" id="searchDropdownToggle">
+                        <i class="feather-search"></i>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-start nxl-h-dropdown nxl-search-dropdown">
+                        <div class="input-group search-form">
+                            <span class="input-group-text">
+                                <i class="feather-search fs-6 text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control search-input-field" placeholder="@Html.T("بحث...", "Search...")">
+                            <span class="input-group-text">
+                                <button type="button" class="btn-close"></button>
+                            </span>
+                        </div>
+                        <div class="dropdown-divider mt-0"></div>
+                        <div class="search-items-wrapper">
+                            <div class="searching-for px-4 py-2">
+                                <p class="fs-11 fw-medium text-muted">@Html.T("البحث السريع عن...", "Quick search for...")</p>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <a asp-area="Student" asp-controller="Courses" asp-action="Browse" class="flex-fill border rounded py-1 px-2 text-center fs-11 fw-semibold">@Html.T("الدورات", "Courses")</a>
+                                    <a asp-area="Student" asp-controller="Courses" asp-action="Index" class="flex-fill border rounded py-1 px-2 text-center fs-11 fw-semibold">@Html.T("دوراتي", "My Courses")</a>
+                                    <a asp-area="Student" asp-controller="Certificates" asp-action="Index" class="flex-fill border rounded py-1 px-2 text-center fs-11 fw-semibold">@Html.T("الشهادات", "Certificates")</a>
+                                    <a asp-area="Student" asp-controller="Messages" asp-action="Index" class="flex-fill border rounded py-1 px-2 text-center fs-11 fw-semibold">@Html.T("الرسائل", "Messages")</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!--! [End] Search Dropdown !-->
+                
+                <!--! [Start] Shopping Cart !-->
+                <div class="nxl-h-item">
+                    @await Component.InvokeAsync("CartCount")
+                </div>
+                <!--! [End] Shopping Cart !-->
+                
+                <!--! [Start] Notifications Dropdown !-->
+                <div class="dropdown nxl-h-item">
+                    <a href="javascript:void(0);" class="header-dropdown-toggle" id="notificationsDropdownToggle">
+                        <i class="feather-bell"></i>
+                        @if (unreadCount > 0)
+                        {
+                            <span class="badge bg-danger nxl-h-badge">@(unreadCount > badgeMaxDisplay ? $"{badgeMaxDisplay}+" : unreadCount.ToString())</span>
+                        }
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-start nxl-h-dropdown nxl-notifications-menu">
+                        <div class="d-flex justify-content-between align-items-center notifications-head">
+                            <h6 class="fw-bold text-dark mb-0">@Html.T("الإشعارات", "Notifications") (@unreadCount)</h6>
+                            @if (unreadCount > 0)
+                            {
+                                <form asp-area="Student" asp-controller="Notifications" asp-action="MarkAllAsRead" method="post" style="display: inline;">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-link fs-11 text-success text-end p-0">
+                                        <i class="feather-check me-1"></i>
+                                        <span>@Html.T("تمييز الكل كمقروء", "Mark All as Read")</span>
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                        @if (unreadNotifications.Any())
+                        {
+                            @foreach (var notification in unreadNotifications)
+                            {
+                                <div class="notifications-item">
+                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                        <i class="feather-bell"></i>
+                                    </div>
+                                    <div class="notifications-desc">
+                                        <a href="@(notification.ActionUrl ?? Url.Action("Index", "Notifications", new { area = "Student" }))" class="font-body text-truncate-2-line">
+                                            <span class="fw-semibold text-dark">@notification.Title</span>
+                                            @notification.Message
+                                        </a>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div class="notifications-date text-muted border-bottom border-bottom-dashed">
+                                                @{
+                                                    var timeAgo = DateTime.UtcNow - notification.CreatedAt;
+                                                    var timeDisplay = timeAgo.TotalMinutes < 60 ? $"{Html.T("منذ", "ago")} {(int)timeAgo.TotalMinutes} {Html.T("دقيقة", "min")}" :
+                                                                     timeAgo.TotalHours < 24 ? $"{Html.T("منذ", "ago")} {(int)timeAgo.TotalHours} {Html.T("ساعة", "hr")}" :
+                                                                     timeAgo.TotalDays < 7 ? $"{Html.T("منذ", "ago")} {(int)timeAgo.TotalDays} {Html.T("يوم", "day(s)")}" :
+                                                                     notification.CreatedAt.ToString("dd/MM/yyyy");
+                                                }
+                                                @timeDisplay
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="p-4 text-center text-muted">
+                                <i class="feather-bell-off fs-24 mb-2"></i>
+                                <p class="mb-0">@Html.T("لا توجد إشعارات جديدة", "No new notifications")</p>
+                            </div>
+                        }
+                        <div class="text-center notifications-footer">
+                            <a asp-area="Student" asp-controller="Notifications" asp-action="Index" class="fs-13 fw-semibold text-dark">@Html.T("عرض جميع الإشعارات", "View All Notifications")</a>
+                        </div>
+                    </div>
+                </div>
+                <!--! [End] Notifications Dropdown !-->
+                
+                <!--! [Start] User Profile Dropdown !-->
+                <div class="dropdown nxl-h-item">
+                    <a href="javascript:void(0);" class="header-dropdown-toggle" id="profileDropdownToggle">
+                        <div class="avatar-text avatar-md bg-info text-white">
+                            @if (!string.IsNullOrEmpty(user?.FirstName))
+                            {
+                                <span>@user.FirstName.Substring(0, 1)@user.LastName?.Substring(0, 1)</span>
+                            }
+                            else
+                            {
+                                <i class="feather-user"></i>
+                            }
+                        </div>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-start nxl-h-dropdown nxl-user-dropdown">
+                        <div class="dropdown-header p-3 border-bottom">
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-text avatar-md bg-info text-white">
+                                    @if (!string.IsNullOrEmpty(user?.FirstName))
+                                    {
+                                        <span>@user.FirstName.Substring(0, 1)@user.LastName?.Substring(0, 1)</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="feather-user"></i>
+                                    }
+                                </div>
+                                <div class="ms-3">
+                                    <h6 class="text-dark mb-0">@userName</h6>
+                                    <span class="fs-12 fw-medium text-muted">@Html.T("طالب", "Student")</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="dropdown-body">
+                            <a asp-area="Student" asp-controller="Profile" asp-action="Index" class="dropdown-item d-flex align-items-center gap-2 py-2">
+                                <i class="feather-user"></i>
+                                <span>@Html.T("الملف الشخصي", "Profile")</span>
+                            </a>
+                            <a asp-area="Student" asp-controller="Courses" asp-action="Index" class="dropdown-item d-flex align-items-center gap-2 py-2">
+                                <i class="feather-book-open"></i>
+                                <span>@Html.T("دوراتي", "My Courses")</span>
+                            </a>
+                            <a asp-area="Student" asp-controller="Settings" asp-action="Index" class="dropdown-item d-flex align-items-center gap-2 py-2">
+                                <i class="feather-settings"></i>
+                                <span>@Html.T("الإعدادات", "Settings")</span>
+                            </a>
+                            <a asp-area="Student" asp-controller="Help" asp-action="Index" class="dropdown-item d-flex align-items-center gap-2 py-2">
+                                <i class="feather-help-circle"></i>
+                                <span>@Html.T("مركز المساعدة", "Help Center")</span>
+                            </a>
+                            <partial name="~/Views/Shared/_LanguageSwitcher.cshtml" />
+                            <div class="dropdown-divider"></div>
+                            <form asp-area="" asp-controller="Account" asp-action="Logout" method="post" id="logoutForm">
+                                <button type="submit" class="dropdown-item d-flex align-items-center gap-2 py-2 text-danger">
+                                    <i class="feather-log-out"></i>
+                                    <span>@Html.T("تسجيل الخروج", "Logout")</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <!--! [End] User Profile Dropdown !-->
+            </div>
+        </div>
+        <!--! [End] Header Right !-->
+    </div>
+</header>
+

@@ -1,0 +1,462 @@
+@model LMS.Areas.Instructor.ViewModels.ModuleEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل الوحدة", "Edit Module");
+    ViewData["Subtitle"] = (Html.T("تحديث معلومات الوحدة", "Update module info") + ": " + Model.Title);
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="moduleForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="CourseId" />
+        <input type="hidden" asp-for="OrderIndex" />
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            معلومات الوحدة
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("عنوان الوحدة", "Module title") <span class="text-danger">*</span></label>
+                                <input asp-for="Title" class="form-control" placeholder="@Html.T("مثال: مقدمة في البرمجة", "e.g. Introduction to programming")" required autofocus>
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("وصف الوحدة", "Module description")</label>
+                                <textarea asp-for="Description" class="form-control" rows="6" placeholder="@Html.T("وصف تفصيلي عن محتوى الوحدة وأهدافها", "Detailed description of module content and objectives")"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lessons List -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-list me-2 text-primary"></i>
+                            @Html.T("الدروس", "Lessons") (@ViewBag.Lessons?.Count ?? 0)
+                        </h5>
+                        <div class="card-header-action">
+                            <a href="@Url.Action("Create", "Lessons", new { moduleId = Model.Id })" class="btn btn-sm btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إضافة درس جديد", "Add new lesson")
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if (ViewBag.Lessons != null && ViewBag.Lessons.Count > 0)
+                        {
+                            <div class="list-group list-group-flush" id="lessonsList">
+                                @foreach (var lesson in ViewBag.Lessons as List<LMS.Domain.Entities.Courses.Lesson>)
+                                {
+                                    <div class="list-group-item px-0 border-bottom" data-lesson-id="@lesson.Id">
+                                        <div class="d-flex align-items-center">
+                                            <div class="drag-handle me-3" style="cursor: move;">
+                                                <i class="feather-menu text-muted"></i>
+                                            </div>
+                                            
+                                            <div class="avatar-text avatar-sm me-3 
+                                                @(lesson.Type == LMS.Domain.Enums.LessonType.Video ? "bg-soft-primary text-primary" :
+                                                  lesson.Type == LMS.Domain.Enums.LessonType.Article ? "bg-soft-info text-info" :
+                                                  lesson.Type == LMS.Domain.Enums.LessonType.Quiz ? "bg-soft-warning text-warning" :
+                                                  "bg-soft-success text-success")">
+                                                <i class="feather-@(lesson.Type == LMS.Domain.Enums.LessonType.Video ? "video" :
+                                                                    lesson.Type == LMS.Domain.Enums.LessonType.Article ? "file-text" :
+                                                                    lesson.Type == LMS.Domain.Enums.LessonType.Quiz ? "help-circle" :
+                                                                    "file")"></i>
+                                            </div>
+                                            
+                                            <div class="flex-1">
+                                                <h6 class="mb-1">@lesson.Title</h6>
+                                                <div class="d-flex align-items-center text-muted small">
+                                                    <span class="badge bg-soft-secondary text-secondary me-2">
+                                                        @lesson.Type.ToString()
+                                                    </span>
+                                                    <i class="feather-clock me-1"></i>
+                                                    <span class="me-3">@((int)lesson.Duration.TotalMinutes) @Html.T("دقيقة", "min")</span>
+                                                    @if (lesson.IsFree)
+                                                    {
+                                                        <span class="badge bg-soft-success text-success me-2">
+                                                            <i class="feather-unlock"></i> @Html.T("مجاني", "Free")
+                                                        </span>
+                                                    }
+                                                    @if (lesson.IsPublished)
+                                                    {
+                                                        <span class="badge bg-soft-success text-success">
+                                                            <i class="feather-check-circle"></i> منشور
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-soft-secondary text-secondary">
+                                                            <i class="feather-edit"></i> مسودة
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="btn-group">
+                                                <a href="@Url.Action("Edit", "Lessons", new { id = lesson.Id })" 
+                                                   class="btn btn-sm btn-light" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                    <i class="feather-edit"></i>
+                                                </a>
+                                                <button type="button" class="btn btn-sm btn-light" 
+                                                        onclick="deleteLesson(@lesson.Id, '@lesson.Title')" 
+                                                        data-bs-toggle="tooltip" title="@Html.T("حذف", "Delete")">
+                                                    <i class="feather-trash-2 text-danger"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            
+                            <div class="alert alert-light-info border-0 mt-3 mb-0">
+                                <div class="d-flex">
+                                    <i class="feather-info fs-5 me-2"></i>
+                                    <small>يمكنك سحب الدروس وإفلاتها لإعادة ترتيبها</small>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <div class="avatar-text avatar-xl bg-soft-secondary text-secondary mb-3 mx-auto">
+                                    <i class="feather-video fs-1"></i>
+                                </div>
+                                <h5 class="text-muted mb-2">@Html.T("لا توجد دروس في هذه الوحدة", "No lessons in this module")</h5>
+                                <p class="text-muted mb-3">ابدأ بإضافة الدروس لهذه الوحدة</p>
+                                <a href="@Url.Action("Create", "Lessons", new { moduleId = Model.Id })" class="btn btn-primary">
+                                    <i class="feather-plus me-2"></i>
+                                    إضافة درس جديد
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Course Context -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-book-open me-2 text-primary"></i>
+                            معلومات الدورة
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex align-items-center p-3 bg-soft-primary rounded">
+                            <div class="avatar-text avatar-lg bg-primary text-white me-3">
+                                <i class="feather-book-open fs-4"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h6 class="mb-1">@ViewBag.Course?.Title</h6>
+                                <p class="text-muted small mb-0">
+                                    <i class="feather-layers me-1"></i>
+                                    @ViewBag.Course?.Modules?.Count وحدات
+                                </p>
+                            </div>
+                            <a href="@Url.Action("CreateWizard", "Courses", new { id = Model.CourseId, step = 3 })" class="btn btn-sm btn-light">
+                                <i class="feather-eye me-2"></i>
+                                عرض الدورة
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Publishing Options -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-settings me-2 text-primary"></i>
+                            إعدادات النشر
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input asp-for="IsPublished" class="form-check-input" type="checkbox" id="publishSwitch">
+                                <label class="form-check-label" for="publishSwitch">
+                                    <strong>نشر الوحدة</strong>
+                                    <p class="text-muted small mb-0">الوحدة مرئية للطلاب</p>
+                                </label>
+                            </div>
+                        </div>
+
+                        @if (ViewBag.Lessons == null || ViewBag.Lessons.Count == 0)
+                        {
+                            <div class="alert alert-light-warning border-0">
+                                <div class="d-flex">
+                                    <i class="feather-alert-circle fs-5 me-2"></i>
+                                    <div>
+                                        <small class="d-block mb-1"><strong>تنبيه:</strong></small>
+                                        <small>يجب إضافة درس واحد على الأقل قبل نشر الوحدة</small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="d-flex align-items-center justify-content-between p-3 bg-soft-info rounded">
+                            <div class="d-flex align-items-center">
+                                <i class="feather-hash fs-4 text-info me-3"></i>
+                                <div>
+                                    <strong class="d-block">الترتيب</strong>
+                                    <small class="text-muted">الوحدة رقم @Model.OrderIndex</small>
+                                </div>
+                            </div>
+                            <span class="badge bg-soft-info text-info">
+                                #@Model.OrderIndex
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Module Statistics -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-bar-chart-2 me-2 text-primary"></i>
+                            إحصائيات الوحدة
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <div class="text-center p-3 bg-soft-primary rounded">
+                                    <i class="feather-video fs-3 text-primary mb-2"></i>
+                                    <h4 class="mb-1">@(ViewBag.Lessons?.Count ?? 0)</h4>
+                                    <small class="text-muted">الدروس</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center p-3 bg-soft-success rounded">
+                                    <i class="feather-check-circle fs-3 text-success mb-2"></i>
+                                    <h4 class="mb-1">@(((IEnumerable<dynamic>)ViewBag.Lessons)?.Count(l => l.IsPublished) ?? 0)</h4>
+                                    <small class="text-muted">منشورة</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center p-3 bg-soft-warning rounded">
+                                    <i class="feather-clock fs-3 text-warning mb-2"></i>
+                                    <h4 class="mb-1">
+                                        @{
+                                            var lessons = ViewBag.Lessons as IEnumerable<dynamic>;
+                                            var totalMinutes = lessons?.Sum(l => (int)l.DurationMinutes) ?? 0;
+                                        }
+                                        @totalMinutes
+                                    </h4>
+                                    <small class="text-muted">دقيقة</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center p-3 bg-soft-info rounded">
+                                    <i class="feather-unlock fs-3 text-info mb-2"></i>
+                                    <h4 class="mb-1">
+                                        @{
+                                            var freeLessons = lessons?.Count(l => (bool)l.IsFree) ?? 0;
+                                        }
+                                        @freeLessons
+                                    </h4>
+                                    <small class="text-muted">مجانية</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-save me-2"></i>
+                            حفظ التعديلات
+                        </button>
+                        <a href="@Url.Action("CreateWizard", "Courses", new { id = Model.CourseId, step = 3 })" class="btn btn-light w-100 mb-2">
+                            <i class="feather-arrow-right me-2"></i>
+                            العودة للدورة
+                        </a>
+                        
+                        <hr class="my-3">
+                        
+                        <button type="button" class="btn btn-danger w-100" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                            <i class="feather-trash-2 me-2"></i>
+                            حذف الوحدة
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-zap me-2 text-warning"></i>
+                            @Html.T("إجراءات سريعة", "Quick actions")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="@Url.Action("Create", "Lessons", new { moduleId = Model.Id })" class="btn btn-light-brand">
+                                <i class="feather-plus me-2"></i>
+                                إضافة درس
+                            </a>
+                            <form asp-action="TogglePublish" asp-route-id="@Model.Id" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-light-@(Model.IsPublished ? "warning" : "success") w-100">
+                                    <i class="feather-@(Model.IsPublished ? "eye-off" : "eye") me-2"></i>
+                                    @(Model.IsPublished ? "إلغاء النشر" : "نشر الوحدة")
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Delete Module Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="feather-alert-triangle text-danger me-2"></i>
+                    تأكيد حذف الوحدة
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">هل أنت متأكد من حذف هذه الوحدة؟</p>
+                <div class="alert alert-danger mb-0">
+                    <strong>تحذير:</strong> سيتم حذف جميع الدروس والمحتوى المرتبط بهذه الوحدة. لا يمكن التراجع عن هذا الإجراء.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">إلغاء</button>
+                <form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-danger">
+                        <i class="feather-trash-2 me-2"></i>
+                        حذف نهائي
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Lesson Modal -->
+<div class="modal fade" id="deleteLessonModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="feather-alert-triangle text-danger me-2"></i>
+                    تأكيد حذف الدرس
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">هل أنت متأكد من حذف الدرس "<span id="lessonTitleToDelete"></span>"؟</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">إلغاء</button>
+                <form id="deleteLessonForm" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-danger">
+                        <i class="feather-trash-2 me-2"></i>
+                        حذف
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    
+    <script>
+        // Form validation
+        document.getElementById('moduleForm').addEventListener('submit', function(e) {
+            const title = document.getElementById('Title').value.trim();
+
+            if (!title || title.length < 3) {
+                e.preventDefault();
+                alert('يرجى إدخال عنوان صحيح (3 أحرف على الأقل)');
+                return false;
+            }
+
+            return true;
+        });
+
+        // Sortable lessons
+        const lessonsList = document.getElementById('lessonsList');
+        if (lessonsList) {
+            new Sortable(lessonsList, {
+                animation: 150,
+                handle: '.drag-handle',
+                onEnd: function(evt) {
+                    // Get new order
+                    const items = Array.from(lessonsList.children).map((item, index) => ({
+                        id: parseInt(item.dataset.lessonId),
+                        order: index + 1
+                    }));
+
+                    // Send to server
+                    fetch('@Url.Action("UpdateLessonsOrder", "Modules")', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('input[name="__RequestVerificationToken"]').value
+                        },
+                        body: JSON.stringify(items)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Show success message
+                            console.log('Order updated successfully');
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
+                }
+            });
+        }
+
+        // Delete lesson function
+        function deleteLesson(lessonId, lessonTitle) {
+            document.getElementById('lessonTitleToDelete').textContent = lessonTitle;
+            document.getElementById('deleteLessonForm').action = '@Url.Action("Delete", "Lessons")/' + lessonId;
+            
+            const modal = new bootstrap.Modal(document.getElementById('deleteLessonModal'));
+            modal.show();
+        }
+
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    </script>
+    
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

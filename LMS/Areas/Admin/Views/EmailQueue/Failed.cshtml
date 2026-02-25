@@ -1,0 +1,126 @@
+@model List<LMS.Areas.Admin.ViewModels.EmailQueueListViewModel>
+
+@{
+    ViewData["Title"] = Html.T("رسائل البريد الفاشلة", "Failed email messages");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الاتصالات", "Communications"), null),
+        (Html.T("قائمة البريد", "Email queue"), Url.Action("Index", "EmailQueue")),
+        (Html.T("الرسائل الفاشلة", "Failed messages"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("الرجوع للقائمة", "Back to list"), "feather-arrow-right", Url.Action("Index", "EmailQueue"), "btn-light")
+    };
+    ViewData["HeaderActions"] = actions;
+    var page = (int?)ViewBag.Page ?? 1;
+    var totalCount = (int?)ViewBag.TotalCount ?? 0;
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">@Html.T("الرسائل الفاشلة", "Failed messages") (@totalCount.ToString("N0"))</h5>
+            <div>
+                <form method="post" asp-action="BulkRetry" asp-route-status="Failed" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إعادة إرسال جميع الرسائل الفاشلة؟", "Are you sure you want to retry all failed messages?").Replace("'", "\\'"))');">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-warning btn-sm">
+                        <i class="feather-refresh-cw me-1"></i>@Html.T("إعادة إرسال الكل", "Retry all")
+                    </button>
+                </form>
+            </div>
+        </div>
+        <div class="card-body">
+            @if (!Model.Any())
+            {
+                <div class="text-center py-5">
+                    <i class="feather-check-circle text-success" style="font-size: 3rem;"></i>
+                    <p class="mt-3">@Html.T("لا توجد رسائل فاشلة", "No failed messages")</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>@Html.T("البريد الإلكتروني", "Email")</th>
+                                <th>@Html.T("الموضوع", "Subject")</th>
+                                <th>@Html.T("تاريخ الإنشاء", "Created")</th>
+                                <th>@Html.T("المحاولات", "Attempts")</th>
+                                <th>@Html.T("سبب الفشل", "Failure reason")</th>
+                                <th>@Html.T("الإجراءات", "Actions")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var email in Model)
+                            {
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <strong>@email.ToEmail</strong>
+                                            @if (!string.IsNullOrEmpty(email.ToName))
+                                            {
+                                                <br/><small class="text-muted">@email.ToName</small>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>@email.Subject</td>
+                                    <td>@email.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>
+                                        <span class="badge bg-warning">@email.RetryCount / @email.MaxRetries</span>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(email.FailureReason))
+                                        {
+                                            <small class="text-danger" title="@email.FailureReason">
+                                                @(email.FailureReason.Length > 50 ? email.FailureReason.Substring(0, 50) + "..." : email.FailureReason)
+                                            </small>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="@Url.Action("Details", new { id = email.Id })" class="btn btn-info" title="@Html.T("التفاصيل", "Details")">
+                                                <i class="feather-eye"></i>
+                                            </a>
+                                            <a href="@Url.Action("Retry", new { id = email.Id })" class="btn btn-warning" title="@Html.T("إعادة الإرسال", "Resend")">
+                                                <i class="feather-refresh-cw"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (totalCount > 50)
+                {
+                    <nav class="mt-3">
+                        <ul class="pagination justify-content-center">
+                            @if (page > 1)
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" href="@Url.Action("Failed", new { page = page - 1 })">السابق</a>
+                                </li>
+                            }
+                            <li class="page-item active">
+                                <span class="page-link">@(page)</span>
+                            </li>
+                            @if (page * 50 < totalCount)
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" href="@Url.Action("Failed", new { page = page + 1 })">التالي</a>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                }
+            }
+        </div>
+    </div>
+</div>
+

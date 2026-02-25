@@ -1,0 +1,303 @@
+@model List<LMS.Domain.Entities.LiveSessions.LiveClass>
+@{
+    ViewData["Title"] = Html.T("الجلسات المباشرة", "Live Sessions");
+    var purchasedSessionIds = ViewBag.PurchasedSessionIds as List<int> ?? new List<int>();
+    var enrolledScheduleIds = ViewBag.EnrolledScheduleIds as List<int> ?? new List<int>();
+    var enrolledCourseIds = ViewBag.EnrolledCourseIds as List<int> ?? new List<int>();
+    var accessibleLiveClassIds = ViewBag.AccessibleLiveClassIds as HashSet<int> ?? new HashSet<int>();
+    var pricingFilter = ViewBag.PricingFilter as string;
+}
+
+@section Styles {
+<style>
+    .live-class-card {
+        transition: all 0.3s ease;
+    }
+    .live-class-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .live-badge {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        z-index: 10;
+        animation: pulse 2s infinite;
+    }
+    @@keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    .price-badge {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        z-index: 10;
+    }
+    .price-tag {
+        font-size: 1.1rem;
+        font-weight: 700;
+    }
+    .original-price {
+        text-decoration: line-through;
+        color: #999;
+        font-size: 0.85rem;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-video text-danger me-2"></i>
+                    @Html.T("الجلسات المباشرة", "Live Sessions")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("حضر جلسات تفاعلية مع المدربين", "Attend interactive sessions with instructors")</p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <a asp-area="Student" asp-controller="LiveSessionSchedules" asp-action="Index" class="btn btn-outline-info">
+                    <i class="feather-calendar me-2"></i>
+                    @Html.T("جداول الحصص", "Session Schedules")
+                </a>
+                <a asp-area="Student" asp-controller="LiveClasses" asp-action="Recordings" class="btn btn-outline-success">
+                    <i class="feather-play me-2"></i>
+                    @Html.T("التسجيلات", "Recordings")
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Tabs -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <a asp-area="Student" asp-controller="LiveClasses" asp-action="Index" class="btn btn-sm @(string.IsNullOrEmpty(pricingFilter) ? "btn-primary" : "btn-outline-primary")">
+                <i class="feather-list me-1"></i>
+                @Html.T("الكل", "All")
+            </a>
+            <a asp-area="Student" asp-controller="LiveClasses" asp-action="Index" asp-route-pricingFilter="Free" class="btn btn-sm @(pricingFilter == "Free" ? "btn-success" : "btn-outline-success")">
+                <i class="feather-gift me-1"></i>
+                @Html.T("مجاني", "Free")
+            </a>
+            <a asp-area="Student" asp-controller="LiveClasses" asp-action="Index" asp-route-pricingFilter="Paid" class="btn btn-sm @(pricingFilter == "Paid" ? "btn-warning" : "btn-outline-warning")">
+                <i class="feather-dollar-sign me-1"></i>
+                @Html.T("مدفوع", "Paid")
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Live Classes Grid -->
+<div class="row g-4">
+    @if (Model != null && Model.Any())
+    {
+        @foreach (var liveClass in Model)
+        {
+            var isLive = liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Live;
+            var isScheduled = liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Scheduled;
+            var isCompleted = liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Completed;
+            var hasRecording = isCompleted && liveClass.Recordings != null && liveClass.Recordings.Any(r => r.IsPublished);
+            var attendanceRecords = ViewBag.AttendanceRecords as List<LMS.Domain.Entities.LiveSessions.LiveClassAttendance> ?? new List<LMS.Domain.Entities.LiveSessions.LiveClassAttendance>();
+            var participantCount = liveClass.AttendedCount > 0 ? liveClass.AttendedCount : liveClass.RegisteredCount;
+            var instructorName = liveClass.Instructor?.FullName ?? liveClass.Instructor?.UserName ?? Html.T("مدرب", "Instructor");
+            var isFree = liveClass.IsFreeForAll || liveClass.PricingType == LMS.Domain.Enums.LiveSessionPricingType.Free;
+            var isPurchased = purchasedSessionIds.Contains(liveClass.Id);
+            var isScheduleEnrolled = liveClass.LiveSessionScheduleId.HasValue && enrolledScheduleIds.Contains(liveClass.LiveSessionScheduleId.Value);
+            var isCourseEnrolled = enrolledCourseIds.Contains(liveClass.CourseId);
+            var hasAccess = accessibleLiveClassIds.Contains(liveClass.Id);
+
+            <div class="col-lg-4 col-md-6">
+                <div class="card live-class-card stretch stretch-full position-relative">
+                    @if (isLive)
+                    {
+                        <span class="live-badge badge bg-danger">
+                            <i class="feather-circle me-1" style="font-size: 8px;"></i>
+                            @Html.T("مباشر الآن", "Live Now")
+                        </span>
+                    }
+
+                    <!-- Price Badge -->
+                    @if (isFree)
+                    {
+                        <span class="price-badge badge bg-success px-3 py-2">
+                            @Html.T("مجاني", "Free")
+                        </span>
+                    }
+                    else if (liveClass.Price > 0)
+                    {
+                        <span class="price-badge badge bg-warning text-dark px-3 py-2">
+                            @liveClass.Price.ToEGP(0)
+                        </span>
+                    }
+
+                    <div class="card-body">
+                        <div class="avatar-text avatar-lg @(isLive ? "bg-soft-danger text-danger" : isScheduled ? "bg-soft-warning text-warning" : "bg-soft-success text-success") mb-3">
+                            <i class="feather-@(isLive ? "video" : isScheduled ? "calendar" : "video")"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">@liveClass.Title</h5>
+                        <p class="text-muted fs-12 mb-2">@instructorName</p>
+
+                        @if (!string.IsNullOrEmpty(liveClass.Subject))
+                        {
+                            <span class="badge bg-soft-info text-info mb-2">@liveClass.Subject</span>
+                        }
+
+                        @if (liveClass.Schedule != null)
+                        {
+                            <span class="badge bg-soft-primary text-primary mb-2">
+                                <i class="feather-layers me-1"></i>
+                                @(liveClass.Schedule.TitleAr ?? liveClass.Schedule.Title)
+                            </span>
+                        }
+
+                        <div class="d-flex align-items-center gap-3 mb-3 fs-12 text-muted">
+                            @if (isLive)
+                            {
+                                <span>
+                                    <i class="feather-users me-1"></i>
+                                    @participantCount @Html.T("مشارك", "participant(s)")
+                                </span>
+                                <span>
+                                    <i class="feather-clock me-1"></i>
+                                    @if (liveClass.ScheduledStartTime != default)
+                                    {
+                                        var minutesAgo = (int)(DateTime.UtcNow - liveClass.ScheduledStartTime).TotalMinutes;
+                                        <text>@Html.T("بدأت منذ", "Started") @minutesAgo @Html.T("دقيقة", "minute(s) ago")</text>
+                                    }
+                                </span>
+                            }
+                            else if (isScheduled && liveClass.ScheduledStartTime != default)
+                            {
+                                <span>
+                                    <i class="feather-calendar me-1"></i>
+                                    @if (liveClass.ScheduledStartTime.Date == DateTime.UtcNow.Date.AddDays(1))
+                                    {
+                                        <text>@Html.T("غداً", "Tomorrow") • @liveClass.ScheduledStartTime.ToString("h:mm tt")</text>
+                                    }
+                                    else
+                                    {
+                                        <text>@liveClass.ScheduledStartTime.ToString("dd MMM yyyy • h:mm tt")</text>
+                                    }
+                                </span>
+                                <span>
+                                    <i class="feather-clock me-1"></i>
+                                    @if (liveClass.DurationMinutes > 0)
+                                    {
+                                        var hours = liveClass.DurationMinutes / 60;
+                                        var minutes = liveClass.DurationMinutes % 60;
+                                        if (hours > 0 && minutes > 0)
+                                        {
+                                            <text>@hours @Html.T("ساعة و", "hr") @minutes @Html.T("دقيقة", "min")</text>
+                                        }
+                                        else if (hours > 0)
+                                        {
+                                            <text>@hours @Html.T("ساعة", "hour(s)")</text>
+                                        }
+                                        else
+                                        {
+                                            <text>@minutes @Html.T("دقيقة", "minute(s)")</text>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <text>@Html.T("ساعتان", "2 hours")</text>
+                                    }
+                                </span>
+                            }
+                            else if (isCompleted)
+                            {
+                                <span>
+                                    <i class="feather-calendar me-1"></i>
+                                    @liveClass.ScheduledStartTime.ToString("dd MMM yyyy")
+                                </span>
+                                <span>
+                                    <i class="feather-users me-1"></i>
+                                    @participantCount @Html.T("مشارك", "participant(s)")
+                                </span>
+                            }
+                        </div>
+
+                        @if (isPurchased || isScheduleEnrolled)
+                        {
+                            <span class="badge bg-soft-success text-success mb-3">
+                                <i class="feather-check-circle me-1"></i>
+                                @Html.T("تم الشراء", "Purchased")
+                            </span>
+                        }
+
+                        @if (hasRecording)
+                        {
+                            <span class="badge bg-soft-success text-success mb-3">
+                                <i class="feather-video me-1"></i>
+                                @Html.T("التسجيل متاح", "Recording Available")
+                            </span>
+                        }
+
+                        @{
+                            var detailsUrl = Url.Action("Details", "LiveClasses", new { area = "Student", id = liveClass.Id });
+                        }
+                        @if (isLive && hasAccess)
+                        {
+                            <a asp-area="Student" asp-controller="LiveClasses" asp-action="Join" asp-route-id="@liveClass.Id" class="btn btn-danger w-100 mb-2">
+                                <i class="feather-video me-2"></i>
+                                @Html.T("انضم الآن", "Join Now")
+                            </a>
+                        }
+                        else if (isLive && !hasAccess && liveClass.Price > 0)
+                        {
+                            <a asp-area="Student" asp-controller="SessionCheckout" asp-action="Checkout" asp-route-id="@liveClass.Id" class="btn btn-warning w-100 mb-2">
+                                <i class="feather-shopping-cart me-2"></i>
+                                @Html.T("اشتري وانضم", "Buy & Join") • @liveClass.Price.ToEGP(0)
+                            </a>
+                        }
+                        else if (isScheduled && !hasAccess && liveClass.Price > 0)
+                        {
+                            <a asp-area="Student" asp-controller="SessionCheckout" asp-action="Checkout" asp-route-id="@liveClass.Id" class="btn btn-warning w-100 mb-2">
+                                <i class="feather-shopping-cart me-2"></i>
+                                @Html.T("اشتري الآن", "Buy Now") • @liveClass.Price.ToEGP(0)
+                            </a>
+                        }
+                        else if (hasRecording)
+                        {
+                            var recording = liveClass.Recordings?.FirstOrDefault(r => r.IsPublished);
+                            @if (recording != null)
+                            {
+                                <a asp-area="Student" asp-controller="LiveClasses" asp-action="WatchRecording" asp-route-id="@recording.Id" class="btn btn-success w-100 mb-2">
+                                    <i class="feather-play me-2"></i>
+                                    @Html.T("مشاهدة التسجيل", "Watch Recording")
+                                </a>
+                            }
+                        }
+                        <a href="@detailsUrl" class="btn btn-outline-secondary w-100 @(isLive || isScheduled || hasRecording ? "btn-sm" : "")">
+                            <i class="feather-eye me-1"></i>
+                            @Html.T("عرض التفاصيل", "View Details")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="col-12">
+            <div class="card stretch stretch-full">
+                <div class="card-body text-center py-5">
+                    <i class="feather-video" style="font-size: 64px; color: #ddd;"></i>
+                    <h5 class="mt-3 text-muted">@Html.T("لا توجد جلسات مباشرة متاحة", "No live sessions available")</h5>
+                    <p class="text-muted">@Html.T("لا توجد جلسات مباشرة متاحة حالياً. تحقق مرة أخرى لاحقاً.", "No live sessions are currently available. Check back later.")</p>
+                    <a asp-area="Student" asp-controller="LiveSessionSchedules" asp-action="Index" class="btn btn-primary mt-2">
+                        <i class="feather-calendar me-2"></i>
+                        @Html.T("تصفح جداول الحصص", "Browse Session Schedules")
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+</div>

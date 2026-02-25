@@ -1,0 +1,246 @@
+@model LMS.Areas.Student.ViewModels.ScheduleCheckoutViewModel
+@{
+    ViewData["Title"] = Html.T("اشتراك في جدول الحصص", "Subscribe to Session Schedule");
+    var gateways = ViewBag.PaymentGateways as List<LMS.Domain.Entities.Settings.PaymentGatewaySetting> ?? new List<LMS.Domain.Entities.Settings.PaymentGatewaySetting>();
+}
+
+@section Styles {
+<style>
+    .checkout-summary {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 24px;
+    }
+    .payment-method-card {
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .payment-method-card:hover, .payment-method-card.selected {
+        border-color: #667eea;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+    .payment-method-card.selected {
+        background: #f0f4ff;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Breadcrumb -->
+<div class="mb-4">
+    <a asp-action="Index" class="text-decoration-none text-muted">
+        <i class="feather-arrow-right me-1"></i>
+        @Html.T("جداول الحصص", "Session Schedules")
+    </a>
+    <span class="text-muted mx-2">/</span>
+    <span class="text-primary">@Html.T("اشتراك", "Subscribe")</span>
+</div>
+
+<div class="row g-4">
+    <!-- Order Summary -->
+    <div class="col-lg-5 order-lg-2">
+        <div class="card stretch stretch-full sticky-top" style="top: 20px;">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-shopping-bag me-2"></i>
+                    @Html.T("ملخص الطلب", "Order Summary")
+                </h5>
+            </div>
+            <div class="card-body">
+                <h5 class="fw-bold mb-2">@Model.ScheduleTitle</h5>
+                <p class="text-muted small mb-3">
+                    <i class="feather-user me-1"></i>
+                    @Model.InstructorName
+                </p>
+
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">@Html.T("عدد الجلسات", "Number of Sessions")</span>
+                    <strong>@Model.TotalSessions @Html.T("جلسة", "session(s)")</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">@Html.T("الفترة", "Period")</span>
+                    <strong>@Model.StartDate.ToString("dd/MM") - @Model.EndDate.ToString("dd/MM")</strong>
+                </div>
+
+                <hr />
+
+                @if (Model.OriginalPrice.HasValue && Model.OriginalPrice > Model.Price)
+                {
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">@Html.T("السعر الأصلي", "Original Price")</span>
+                        <span class="text-decoration-line-through text-muted">@Model.OriginalPrice?.ToEGP(0)</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-success">@Html.T("الخصم", "Discount")</span>
+                        <span class="text-success">-@((Model.OriginalPrice.Value - Model.Price).ToEGP(0))</span>
+                    </div>
+                }
+
+                <div class="d-flex justify-content-between mb-0 pt-2 border-top">
+                    <h5 class="fw-bold">@Html.T("الإجمالي", "Total")</h5>
+                    <h5 class="fw-bold text-primary">@Model.Price.ToEGP(0)</h5>
+                </div>
+
+                <!-- Sessions Preview -->
+                @if (Model.Sessions.Any())
+                {
+                    <hr />
+                    <h6 class="fw-bold mb-2">@Html.T("الجلسات المتضمنة:", "Included Sessions:")</h6>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        @foreach (var session in Model.Sessions.Take(5))
+                        {
+                            <div class="d-flex align-items-center gap-2 mb-2 small">
+                                <span class="badge bg-soft-primary text-primary">@session.ScheduleOrder</span>
+                                <span>@session.Title</span>
+                            </div>
+                        }
+                        @if (Model.Sessions.Count > 5)
+                        {
+                            <small class="text-muted">... @Html.T("و", "and") @(Model.Sessions.Count - 5) @Html.T("جلسات أخرى", "more session(s)")</small>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Form -->
+    <div class="col-lg-7 order-lg-1">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-credit-card me-2"></i>
+                    @Html.T("اختر طريقة الدفع", "Choose Payment Method")
+                </h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="ProcessPurchase" method="post" id="purchaseForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="scheduleId" value="@Model.ScheduleId" />
+
+                    @if (Model.Price == 0)
+                    {
+                        <div class="text-center py-4">
+                            <div class="avatar-text avatar-xl bg-soft-success text-success mx-auto mb-3">
+                                <i class="feather-gift fs-3"></i>
+                            </div>
+                            <h5 class="fw-bold">@Html.T("هذا الجدول مجاني!", "This schedule is free!")</h5>
+                            <p class="text-muted">@Html.T("اضغط على الزر أدناه للاشتراك مباشرة", "Click the button below to subscribe directly")</p>
+                            <input type="hidden" name="paymentMethod" value="Free" />
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="feather-check-circle me-2"></i>
+                                @Html.T("اشترك مجاناً", "Subscribe for Free")
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row g-3 mb-4">
+                            @if (gateways.Any())
+                            {
+                                @foreach (var gateway in gateways)
+                                {
+                                    <div class="col-md-6">
+                                        <label class="payment-method-card d-block" onclick="selectPayment('@gateway.GatewayType', this)">
+                                            <input type="radio" name="paymentMethod" value="@gateway.GatewayType" class="d-none" />
+                                            <div class="d-flex align-items-center gap-3">
+                                                @if (!string.IsNullOrEmpty(gateway.IconUrl))
+                                                {
+                                                    <img src="@gateway.IconUrl" alt="@gateway.Name" style="height: 32px;" />
+                                                }
+                                                else
+                                                {
+                                                    <i class="feather-credit-card fs-4 text-primary"></i>
+                                                }
+                                                <div>
+                                                    <strong>@(gateway.DisplayNameAr ?? gateway.DisplayName ?? gateway.Name)</strong>
+                                                    @if (!string.IsNullOrEmpty(gateway.DescriptionAr ?? gateway.Description))
+                                                    {
+                                                        <small class="text-muted d-block">@(gateway.DescriptionAr ?? gateway.Description)</small>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <!-- Default payment options -->
+                                <div class="col-md-6">
+                                    <label class="payment-method-card d-block selected" onclick="selectPayment('Paymob', this)">
+                                        <input type="radio" name="paymentMethod" value="Paymob" class="d-none" checked />
+                                        <div class="d-flex align-items-center gap-3">
+                                            <i class="feather-credit-card fs-4 text-primary"></i>
+                                            <div>
+                                                <strong>@Html.T("بطاقة ائتمان / خصم", "Credit / Debit Card")</strong>
+                                                <small class="text-muted d-block">@Html.T("فيزا، ماستركارد", "Visa, Mastercard")</small>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="payment-method-card d-block" onclick="selectPayment('Fawry', this)">
+                                        <input type="radio" name="paymentMethod" value="Fawry" class="d-none" />
+                                        <div class="d-flex align-items-center gap-3">
+                                            <i class="feather-smartphone fs-4 text-warning"></i>
+                                            <div>
+                                                <strong>@Html.T("فوري", "Fawry")</strong>
+                                                <small class="text-muted d-block">@Html.T("ادفع من أقرب منفذ فوري", "Pay at the nearest Fawry outlet")</small>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="payment-method-card d-block" onclick="selectPayment('VodafoneCash', this)">
+                                        <input type="radio" name="paymentMethod" value="VodafoneCash" class="d-none" />
+                                        <div class="d-flex align-items-center gap-3">
+                                            <i class="feather-smartphone fs-4 text-danger"></i>
+                                            <div>
+                                                <strong>@Html.T("فودافون كاش", "Vodafone Cash")</strong>
+                                                <small class="text-muted d-block">@Html.T("محفظة إلكترونية", "E-Wallet")</small>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                            }
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100" id="submitBtn">
+                            <i class="feather-lock me-2"></i>
+                            @Html.T("ادفع", "Pay") @Model.Price.ToEGP(0)
+                        </button>
+
+                        <p class="text-muted text-center small mt-3">
+                            <i class="feather-shield me-1"></i>
+                            @Html.T("جميع المعاملات مشفرة وآمنة", "All transactions are encrypted and secure")
+                        </p>
+                    }
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function selectPayment(method, element) {
+        document.querySelectorAll('.payment-method-card').forEach(c => c.classList.remove('selected'));
+        element.classList.add('selected');
+        element.querySelector('input[type="radio"]').checked = true;
+    }
+
+    document.getElementById('purchaseForm').addEventListener('submit', function(e) {
+        var btn = document.getElementById('submitBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="feather-loader me-2" style="animation: spin 1s linear infinite;"></i>@Html.T("جاري المعالجة...", "Processing...")';
+        }
+    });
+</script>
+}

@@ -1,0 +1,913 @@
+@model LMS.Areas.Instructor.ViewModels.LessonCreateViewModel
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إضافة درس جديد", "Add New Lesson");
+    ViewData["Subtitle"] = Html.T("أضف محتوى تعليمي جديد", "Add new lesson content");
+    
+    // Load platform settings
+    var defaultDurationMinutes = await PlatformSettings.GetIntSettingAsync("Lesson.DefaultDurationMinutes", 15);
+    var defaultQuestions = await PlatformSettings.GetIntSettingAsync("Lesson.DefaultQuestions", 10);
+    var defaultPassingScore = await PlatformSettings.GetIntSettingAsync("Quiz.DefaultPassingScore", 70);
+    var minWatchPercent = await PlatformSettings.GetIntSettingAsync("Lesson.MinWatchPercent", 80);
+    var maxResourceSizeMB = await PlatformSettings.GetIntSettingAsync("Media.MaxResourceSizeMB", 50);
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Create" method="post" enctype="multipart/form-data" id="lessonForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="ModuleId" />
+
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Lesson Type Selection -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("نوع الدرس", "Lesson Type")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="Type" id="typeVideo" value="Video" checked onchange="toggleLessonType('Video')">
+                                <label class="btn btn-outline-primary w-100 py-3" for="typeVideo">
+                                    <i class="feather-video fs-2 d-block mb-2"></i>
+                                    <span class="fw-bold fs-12">@Html.T("درس فيديو", "Video lesson")</span>
+                                </label>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="Type" id="typeText" value="Text" onchange="toggleLessonType('Text')">
+                                <label class="btn btn-outline-info w-100 py-3" for="typeText">
+                                    <i class="feather-file-text fs-2 d-block mb-2"></i>
+                                    <span class="fw-bold fs-12">@Html.T("درس نصي", "Text lesson")</span>
+                                </label>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="Type" id="typeArticle" value="Article" onchange="toggleLessonType('Article')">
+                                <label class="btn btn-outline-success w-100 py-3" for="typeArticle">
+                                    <i class="feather-book-open fs-2 d-block mb-2"></i>
+                                    <span class="fw-bold fs-12">@Html.T("مقال", "Article")</span>
+                                </label>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="Type" id="typePDF" value="PDF" onchange="toggleLessonType('PDF')">
+                                <label class="btn btn-outline-danger w-100 py-3" for="typePDF">
+                                    <i class="feather-file fs-2 d-block mb-2"></i>
+                                    <span class="fw-bold fs-12">@Html.T("ملف PDF", "PDF file")</span>
+                                </label>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="Type" id="typeAudio" value="Audio" onchange="toggleLessonType('Audio')">
+                                <label class="btn btn-outline-secondary w-100 py-3" for="typeAudio">
+                                    <i class="feather-headphones fs-2 d-block mb-2"></i>
+                                    <span class="fw-bold fs-12">@Html.T("صوتي", "Audio")</span>
+                                </label>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="Type" id="typeQuiz" value="Quiz" onchange="toggleLessonType('Quiz')">
+                                <label class="btn btn-outline-warning w-100 py-3" for="typeQuiz">
+                                    <i class="feather-help-circle fs-2 d-block mb-2"></i>
+                                    <span class="fw-bold fs-12">@Html.T("اختبار", "Quiz")</span>
+                                </label>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="Type" id="typeAssignment" value="Assignment" onchange="toggleLessonType('Assignment')">
+                                <label class="btn btn-outline-dark w-100 py-3" for="typeAssignment">
+                                    <i class="feather-edit-3 fs-2 d-block mb-2"></i>
+                                    <span class="fw-bold fs-12">@Html.T("تكليف", "Assignment")</span>
+                                </label>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <input type="radio" class="btn-check" name="Type" id="typeDownload" value="Download" onchange="toggleLessonType('Download')">
+                                <label class="btn btn-outline-primary w-100 py-3" for="typeDownload">
+                                    <i class="feather-download fs-2 d-block mb-2"></i>
+                                    <span class="fw-bold fs-12">@Html.T("تحميل", "Download")</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("المعلومات الأساسية", "Basic Information")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("عنوان الدرس", "Lesson title") <span class="text-danger">*</span></label>
+                                <input asp-for="Title" class="form-control" placeholder="@Html.T("مثال: مقدمة في البرمجة", "e.g. Introduction to Programming")" required>
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("الوصف", "Description") <span class="text-danger">*</span></label>
+                                <textarea asp-for="Description" class="form-control" rows="4" placeholder="@Html.T("وصف مختصر عن محتوى الدرس", "Brief description of lesson content")" required></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("المدة (بالدقائق)", "Duration (minutes)") <span class="text-danger">*</span></label>
+                                <input asp-for="DurationMinutes" type="number" class="form-control" min="1" placeholder="@defaultDurationMinutes" required>
+                                <span asp-validation-for="DurationMinutes" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("ترتيب الدرس", "Lesson order")</label>
+                                <input asp-for="OrderIndex" type="number" class="form-control" min="1" value="1">
+                                <span asp-validation-for="OrderIndex" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Video Content -->
+                <div id="videoContent" class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("محتوى الفيديو", "Video content")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("نوع الفيديو", "Video type")</label>
+                                <select class="form-select" id="videoSourceType" onchange="toggleVideoSource()">
+                                    <option value="library">@Html.T("من مكتبة الوسائط", "From media library")</option>
+                                    <option value="youtube">@Html.T("رابط YouTube", "YouTube link")</option>
+                                    <option value="vimeo">@Html.T("رابط Vimeo", "Vimeo link")</option>
+                                    <option value="url">@Html.T("رابط مباشر", "Direct link")</option>
+                                </select>
+                            </div>
+
+                            <div class="col-lg-12" id="videoLibrary">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "VideoUrlLibrary" },
+                                    { "FieldId", "videoUrlPicker" },
+                                    { "Label", Html.T("فيديو الدرس", "Lesson video") },
+                                    { "MediaType", "Video" },
+                                    { "CurrentValue", "" },
+                                    { "Required", false },
+                                    { "HelpText", Html.T("اختر فيديو من مكتبتك أو ارفع فيديو جديد", "Choose a video from your library or upload a new one") },
+                                    { "AspectRatio", "16/9" }
+                                })
+                            </div>
+
+                            <div class="col-lg-12" id="videoUrl" style="display: none;">
+                                <label class="form-label">@Html.T("رابط الفيديو", "Video URL")</label>
+                                <input class="form-control" placeholder="https://..." id="videoUrlInput">
+                                <span asp-validation-for="VideoUrl" class="text-danger"></span>
+                                <div class="form-text" id="videoUrlHelp">@Html.T("أدخل رابط الفيديو", "Enter video URL")</div>
+                            </div>
+                            
+                            <input type="hidden" name="VideoUrl" id="finalVideoUrl" value="" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Text Content (for Text & Article types) -->
+                <div id="textContent" class="card stretch stretch-full mb-4 lesson-type-content" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("المحتوى النصي", "Text content")</h5>
+                    </div>
+                    <div class="card-body">
+                        <label class="form-label">@Html.T("محتوى الدرس", "Lesson content") <span class="text-danger">*</span></label>
+                        <textarea asp-for="HtmlContent" id="textContentEditor" class="form-control" rows="10"></textarea>
+                        <span asp-validation-for="HtmlContent" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- PDF Content -->
+                <div id="pdfContent" class="card stretch stretch-full mb-4 lesson-type-content" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("ملف PDF", "PDF file")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("نوع المصدر", "Source type")</label>
+                                <select class="form-select" id="pdfSourceType" onchange="togglePdfSource()">
+                                    <option value="library">@Html.T("من مكتبة الوسائط", "From media library")</option>
+                                    <option value="url">@Html.T("رابط مباشر", "Direct link")</option>
+                                </select>
+                            </div>
+                            <div class="col-lg-12" id="pdfLibrary">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "PdfUrlLibrary" },
+                                    { "FieldId", "pdfUrlPicker" },
+                                    { "Label", Html.T("ملف PDF", "PDF file") },
+                                    { "MediaType", "Document" },
+                                    { "CurrentValue", "" },
+                                    { "Required", false },
+                                    { "HelpText", Html.T("اختر ملف PDF من مكتبتك", "Choose a PDF file from your library") }
+                                })
+                            </div>
+                            <div class="col-lg-12" id="pdfUrl" style="display: none;">
+                                <label class="form-label">@Html.T("رابط ملف PDF", "PDF file URL")</label>
+                                <input class="form-control" placeholder="https://..." id="pdfUrlInput">
+                                <div class="form-text">@Html.T("أدخل رابط مباشر لملف PDF", "Enter direct link to PDF file")</div>
+                            </div>
+                            <input type="hidden" name="FileUrl" id="finalPdfUrl" value="" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Audio Content -->
+                <div id="audioContent" class="card stretch stretch-full mb-4 lesson-type-content" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("محتوى صوتي", "Audio content")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("نوع المصدر", "Source type")</label>
+                                <select class="form-select" id="audioSourceType" onchange="toggleAudioSource()">
+                                    <option value="library">@Html.T("من مكتبة الوسائط", "From media library")</option>
+                                    <option value="url">@Html.T("رابط مباشر", "Direct link")</option>
+                                </select>
+                            </div>
+                            <div class="col-lg-12" id="audioLibrary">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "AudioUrlLibrary" },
+                                    { "FieldId", "audioUrlPicker" },
+                                    { "Label", Html.T("ملف صوتي", "Audio file") },
+                                    { "MediaType", "Audio" },
+                                    { "CurrentValue", "" },
+                                    { "Required", false },
+                                    { "HelpText", Html.T("اختر ملف صوتي من مكتبتك", "Choose an audio file from your library") }
+                                })
+                            </div>
+                            <div class="col-lg-12" id="audioUrl" style="display: none;">
+                                <label class="form-label">@Html.T("رابط الملف الصوتي", "Audio file URL")</label>
+                                <input class="form-control" placeholder="https://..." id="audioUrlInput">
+                                <div class="form-text">@Html.T("أدخل رابط مباشر للملف الصوتي (MP3, WAV, etc.)", "Enter direct link to audio file (MP3, WAV, etc.)")</div>
+                            </div>
+                            <input type="hidden" name="AudioUrl" id="finalAudioUrl" value="" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quiz Content -->
+                <div id="quizContent" class="card stretch stretch-full mb-4 lesson-type-content" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إعدادات الاختبار", "Quiz settings")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-soft-info">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("سيتم توجيهك لإنشاء الأسئلة بعد حفظ الدرس", "You will be directed to create questions after saving the lesson")
+                        </div>
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("عدد الأسئلة", "Number of questions")</label>
+                                <input asp-for="QuizQuestionsCount" type="number" class="form-control" min="1" value="@defaultQuestions">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("درجة النجاح (%)", "Passing score (%)")</label>
+                                <input asp-for="QuizPassingScore" type="number" class="form-control" min="0" max="100" value="@defaultPassingScore">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assignment Content -->
+                <div id="assignmentContent" class="card stretch stretch-full mb-4 lesson-type-content" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إعدادات التكليف", "Assignment settings")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-soft-info mb-4">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("سيتم توجيهك لإعداد تفاصيل التكليف بعد حفظ الدرس", "You will be directed to set up assignment details after saving the lesson")
+                        </div>
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label class="form-label">@Html.T("وصف التكليف", "Assignment description")</label>
+                                <textarea class="form-control" name="AssignmentDescription" rows="4" placeholder="@Html.T("اكتب وصفاً تفصيلياً للتكليف المطلوب من الطالب", "Write a detailed description of the assignment required from the student")"></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("الدرجة القصوى", "Maximum grade")</label>
+                                <input type="number" class="form-control" name="AssignmentMaxPoints" min="1" max="100" value="100">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("مهلة التسليم (أيام)", "Submission deadline (days)")</label>
+                                <input type="number" class="form-control" name="AssignmentDeadlineDays" min="1" value="7">
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="AssignmentAllowLate" id="allowLate">
+                                    <label class="form-check-label" for="allowLate">
+                                        @Html.T("السماح بالتسليم المتأخر", "Allow late submission")
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Download Content -->
+                <div id="downloadContent" class="card stretch stretch-full mb-4 lesson-type-content" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("ملف للتحميل", "Downloadable file")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("نوع المصدر", "Source type")</label>
+                                <select class="form-select" id="downloadSourceType" onchange="toggleDownloadSource()">
+                                    <option value="library">@Html.T("من مكتبة الوسائط", "From media library")</option>
+                                    <option value="url">@Html.T("رابط مباشر", "Direct link")</option>
+                                </select>
+                            </div>
+                            <div class="col-lg-12" id="downloadLibrary">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "DownloadUrlLibrary" },
+                                    { "FieldId", "downloadUrlPicker" },
+                                    { "Label", Html.T("ملف للتحميل", "Downloadable file") },
+                                    { "MediaType", "All" },
+                                    { "CurrentValue", "" },
+                                    { "Required", false },
+                                    { "HelpText", Html.T("اختر ملف من مكتبتك (PDF, ZIP, DOC, etc.)", "Choose a file from your library (PDF, ZIP, DOC, etc.)") }
+                                })
+                            </div>
+                            <div class="col-lg-12" id="downloadUrl" style="display: none;">
+                                <label class="form-label">@Html.T("رابط الملف", "File URL")</label>
+                                <input class="form-control" placeholder="https://..." id="downloadUrlInput">
+                                <div class="form-text">@Html.T("أدخل رابط مباشر للملف", "Enter direct link to file")</div>
+                            </div>
+                            <input type="hidden" name="DownloadFileUrl" id="finalDownloadUrl" value="" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resources -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-paperclip me-2 text-primary"></i>
+                            @Html.T("المرفقات والموارد", "Attachments & resources")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-soft-info mb-4">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("يمكنك إضافة ملفات PDF، مستندات Word، ملفات مضغوطة، أو أي موارد إضافية للدرس", "You can add PDF files, Word documents, zip files, or any additional resources for the lesson")
+                        </div>
+                        <div id="resourcesContainer">
+                            <!-- Resource rows will be added here -->
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="addResource()">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إضافة مورد جديد", "Add new resource")
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Publishing Options -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("خيارات النشر", "Publishing options")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input asp-for="IsFree" class="form-check-input" type="checkbox" id="isFree">
+                            <label class="form-check-label" for="isFree">@Html.T("درس مجاني (معاينة)", "Free lesson (preview)")</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input asp-for="IsPublished" class="form-check-input" type="checkbox" id="isPublished" checked>
+                            <label class="form-check-label" for="isPublished">@Html.T("نشر الدرس", "Publish lesson")</label>
+                        </div>
+
+                        <div class="form-check form-switch">
+                            <input asp-for="AllowDownload" class="form-check-input" type="checkbox" id="allowDownload">
+                            <label class="form-check-label" for="allowDownload">@Html.T("السماح بالتحميل", "Allow download")</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إعدادات إضافية", "Additional settings")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("المدة المطلوبة للمشاهدة (%)", "Required watch percentage (%)")</label>
+                            <input asp-for="MinimumWatchPercentage" type="number" class="form-control" min="0" max="100" value="@minWatchPercent">
+                            <div class="form-text">@Html.T("النسبة المطلوبة لإكمال الدرس", "Percentage required to complete the lesson")</div>
+                        </div>
+
+                        <div class="form-check">
+                            <input asp-for="PreventSkipping" class="form-check-input" type="checkbox" id="preventSkipping">
+                            <label class="form-check-label" for="preventSkipping">
+                                @Html.T("منع تخطي الفيديو", "Prevent video skipping")
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Content Scheduling -->
+                <div class="card stretch stretch-full mb-4" id="contentDripCard">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-clock me-2 text-info"></i>
+                            @Html.T("جدولة المحتوى", "Content scheduling")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("نوع الجدولة", "Schedule type")</label>
+                            <select class="form-select" name="ContentDripType" id="contentDripType" onchange="toggleDripFields()">
+                                <option value="Immediate">@Html.T("متاح فوراً", "Available immediately")</option>
+                                <option value="DaysAfterEnrollment">@Html.T("بعد أيام من التسجيل", "Days after enrollment")</option>
+                                <option value="AfterPreviousCompletion">@Html.T("بعد إكمال الدرس السابق", "After previous lesson completion")</option>
+                                <option value="SpecificDate">@Html.T("في تاريخ محدد", "On a specific date")</option>
+                            </select>
+                        </div>
+                        <div id="dripDaysField" style="display: none;" class="mb-3">
+                            <label class="form-label">@Html.T("عدد الأيام بعد التسجيل", "Days after enrollment")</label>
+                            <input type="number" class="form-control" name="AvailableAfterDays" min="1" placeholder="@Html.T("مثال: 7", "e.g. 7")">
+                        </div>
+                        <div id="dripPrerequisiteField" style="display: none;" class="mb-3">
+                            <label class="form-label">@Html.T("الدرس المتطلب", "Prerequisite lesson")</label>
+                            <select class="form-select" name="PrerequisiteLessonId">
+                                <option value="">@Html.T("اختر الدرس السابق", "Select previous lesson")</option>
+                            </select>
+                            <div class="form-text">@Html.T("سيتم إتاحة هذا الدرس بعد إكمال الدرس المحدد", "This lesson will be available after completing the specified lesson")</div>
+                        </div>
+                        <div id="dripDateField" style="display: none;" class="mb-3">
+                            <label class="form-label">@Html.T("تاريخ الإتاحة", "Availability date")</label>
+                            <input type="datetime-local" class="form-control" name="AvailableFrom">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help -->
+                <div class="card stretch stretch-full">
+                    <div class="card-body bg-soft-info">
+                        <h6 class="fw-bold mb-3">💡 @Html.T("نصيحة", "Tip")</h6>
+                        <p class="fs-13 mb-0">
+                            @Html.T("اجعل عنوان الدرس واضحاً ومختصراً. تأكد من جودة الفيديو ووضوح الصوت.", "Keep the lesson title clear and concise. Ensure video quality and clear audio.")
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between gap-3">
+                            <a href="@Url.Action("Index", new { moduleId = Model.ModuleId })" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                @Html.T("إلغاء", "Cancel")
+                            </a>
+                            <div class="d-flex gap-2">
+                                <button type="submit" name="saveAction" value="draft" class="btn btn-light">
+                                    <i class="feather-save me-2"></i>
+                                    @Html.T("حفظ كمسودة", "Save as draft")
+                                </button>
+                                <button type="submit" name="saveAction" value="publish" class="btn btn-primary">
+                                    <i class="feather-check me-2"></i>
+                                    @Html.T("حفظ ونشر", "Save and publish")
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    @await Html.PartialAsync("_TinyMCEScripts")
+    <script>
+        window.__lessonCreateI18n = {
+            videoHelpYoutube: @Html.Raw(Json.Serialize(Html.T("مثال: https://youtube.com/watch?v=dQw4w9WgXcQ", "e.g. https://youtube.com/watch?v=...").ToString())),
+            videoHelpVimeo: @Html.Raw(Json.Serialize(Html.T("مثال: https://vimeo.com/123456789", "e.g. https://vimeo.com/123456789").ToString())),
+            videoHelpUrl: @Html.Raw(Json.Serialize(Html.T("أدخل رابط الفيديو المباشر", "Enter direct video URL").ToString())),
+            resourceTitlePlaceholder: @Html.Raw(Json.Serialize(Html.T("مثال: ملف PDF للدرس", "e.g. PDF file for lesson").ToString())),
+            resourceLibraryPlaceholder: @Html.Raw(Json.Serialize(Html.T("اضغط لاختيار ملف من المكتبة", "Click to select file from library").ToString())),
+            resourceChoose: @Html.Raw(Json.Serialize(Html.T("اختيار", "Choose").ToString())),
+            resourceLabel: @Html.Raw(Json.Serialize(Html.T("مورد", "Resource").ToString())),
+            resourceTitleLabel: @Html.Raw(Json.Serialize(Html.T("عنوان المورد", "Resource title").ToString())),
+            resourceTypeLabel: @Html.Raw(Json.Serialize(Html.T("نوع الملف", "File type").ToString())),
+            resourceLibraryOption: @Html.Raw(Json.Serialize(Html.T("اختيار من مكتبة الوسائط", "Select from media library").ToString())),
+            resourceUploadOption: @Html.Raw(Json.Serialize(Html.T("رفع ملف جديد", "Upload new file").ToString())),
+            resourceUrlOption: @Html.Raw(Json.Serialize(Html.T("رابط خارجي", "External link").ToString())),
+            maxSizeLabel: @Html.Raw(Json.Serialize(Html.T("الحد الأقصى", "Max").ToString())),
+            directLinkLabel: @Html.Raw(Json.Serialize(Html.T("رابط مباشر للملف (Google Drive, Dropbox, إلخ)", "Direct link to file (Google Drive, Dropbox, etc.)").ToString()))
+        };
+        // Initialize TinyMCE for text content
+        initTinyMCE('#textContentEditor', { height: 500, plugins: 'lists link image code table' });
+
+        // Toggle lesson type content - show/hide based on selected type
+        function toggleLessonType(type) {
+            // Hide all content sections first
+            document.querySelectorAll('.lesson-type-content').forEach(el => el.style.display = 'none');
+            document.getElementById('videoContent').style.display = 'none';
+            
+            // Show relevant content section based on type
+            switch(type) {
+                case 'Video':
+                    document.getElementById('videoContent').style.display = 'block';
+                    break;
+                case 'Text':
+                case 'Article':
+                    document.getElementById('textContent').style.display = 'block';
+                    break;
+                case 'PDF':
+                    document.getElementById('pdfContent').style.display = 'block';
+                    break;
+                case 'Audio':
+                    document.getElementById('audioContent').style.display = 'block';
+                    break;
+                case 'Quiz':
+                    document.getElementById('quizContent').style.display = 'block';
+                    break;
+                case 'Assignment':
+                    document.getElementById('assignmentContent').style.display = 'block';
+                    break;
+                case 'Download':
+                    document.getElementById('downloadContent').style.display = 'block';
+                    break;
+            }
+        }
+        
+        // Toggle PDF source (library vs URL)
+        function togglePdfSource() {
+            const sourceType = document.getElementById('pdfSourceType').value;
+            document.getElementById('pdfLibrary').style.display = sourceType === 'library' ? 'block' : 'none';
+            document.getElementById('pdfUrl').style.display = sourceType === 'url' ? 'block' : 'none';
+            syncPdfUrl();
+        }
+        
+        function syncPdfUrl() {
+            const sourceType = document.getElementById('pdfSourceType').value;
+            const pdfPicker = document.getElementById('pdfUrlPicker');
+            const pdfInput = document.getElementById('pdfUrlInput');
+            const finalPdf = document.getElementById('finalPdfUrl');
+            
+            if (finalPdf) {
+                finalPdf.value = sourceType === 'library' ? (pdfPicker?.value || '') : (pdfInput?.value || '');
+            }
+        }
+        
+        // Toggle Audio source (library vs URL)
+        function toggleAudioSource() {
+            const sourceType = document.getElementById('audioSourceType').value;
+            document.getElementById('audioLibrary').style.display = sourceType === 'library' ? 'block' : 'none';
+            document.getElementById('audioUrl').style.display = sourceType === 'url' ? 'block' : 'none';
+            syncAudioUrl();
+        }
+        
+        function syncAudioUrl() {
+            const sourceType = document.getElementById('audioSourceType').value;
+            const audioPicker = document.getElementById('audioUrlPicker');
+            const audioInput = document.getElementById('audioUrlInput');
+            const finalAudio = document.getElementById('finalAudioUrl');
+            
+            if (finalAudio) {
+                finalAudio.value = sourceType === 'library' ? (audioPicker?.value || '') : (audioInput?.value || '');
+            }
+        }
+        
+        // Toggle Download source (library vs URL)
+        function toggleDownloadSource() {
+            const sourceType = document.getElementById('downloadSourceType').value;
+            document.getElementById('downloadLibrary').style.display = sourceType === 'library' ? 'block' : 'none';
+            document.getElementById('downloadUrl').style.display = sourceType === 'url' ? 'block' : 'none';
+            syncDownloadUrl();
+        }
+        
+        function syncDownloadUrl() {
+            const sourceType = document.getElementById('downloadSourceType').value;
+            const downloadPicker = document.getElementById('downloadUrlPicker');
+            const downloadInput = document.getElementById('downloadUrlInput');
+            const finalDownload = document.getElementById('finalDownloadUrl');
+            
+            if (finalDownload) {
+                finalDownload.value = sourceType === 'library' ? (downloadPicker?.value || '') : (downloadInput?.value || '');
+            }
+        }
+
+        // Toggle video source
+        function toggleVideoSource() {
+            const sourceType = document.getElementById('videoSourceType').value;
+            const videoLibrary = document.getElementById('videoLibrary');
+            const videoUrl = document.getElementById('videoUrl');
+            const videoUrlHelp = document.getElementById('videoUrlHelp');
+            const videoUrlInput = document.getElementById('videoUrlInput');
+            const videoPickerInput = document.getElementById('videoUrlPicker');
+            
+            if (sourceType === 'library') {
+                videoLibrary.style.display = 'block';
+                videoUrl.style.display = 'none';
+                if (videoUrlInput) videoUrlInput.value = '';
+            } else {
+                videoLibrary.style.display = 'none';
+                videoUrl.style.display = 'block';
+                if (videoPickerInput) videoPickerInput.value = '';
+                
+                const input = document.getElementById('videoUrlInput');
+                var i18n = window.__lessonCreateI18n || {};
+                if (sourceType === 'youtube') {
+                    input.placeholder = 'https://youtube.com/watch?v=...';
+                    videoUrlHelp.textContent = i18n.videoHelpYoutube || 'e.g. https://youtube.com/watch?v=...';
+                } else if (sourceType === 'vimeo') {
+                    input.placeholder = 'https://vimeo.com/...';
+                    videoUrlHelp.textContent = i18n.videoHelpVimeo || 'e.g. https://vimeo.com/123456789';
+                } else {
+                    input.placeholder = 'https://...';
+                    videoUrlHelp.textContent = i18n.videoHelpUrl || 'Enter direct video URL';
+                }
+            }
+            
+            syncVideoUrl();
+        }
+        
+        function syncVideoUrl() {
+            const sourceType = document.getElementById('videoSourceType').value;
+            const videoPickerInput = document.getElementById('videoUrlPicker');
+            const videoUrlInput = document.getElementById('videoUrlInput');
+            const finalVideoUrl = document.getElementById('finalVideoUrl');
+            
+            if (finalVideoUrl) {
+                if (sourceType === 'library') {
+                    finalVideoUrl.value = videoPickerInput ? videoPickerInput.value : '';
+                } else {
+                    finalVideoUrl.value = videoUrlInput ? videoUrlInput.value : '';
+                }
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const videoUrlInput = document.getElementById('videoUrlInput');
+            const videoPickerInput = document.getElementById('videoUrlPicker');
+            
+            if (videoUrlInput) {
+                videoUrlInput.addEventListener('input', syncVideoUrl);
+                videoUrlInput.addEventListener('change', syncVideoUrl);
+            }
+            
+            if (videoPickerInput) {
+                const observer = new MutationObserver(syncVideoUrl);
+                observer.observe(videoPickerInput, { attributes: true, attributeFilter: ['value'] });
+                videoPickerInput.addEventListener('change', syncVideoUrl);
+            }
+            
+            // Add event listeners for PDF inputs
+            const pdfUrlInput = document.getElementById('pdfUrlInput');
+            const pdfPickerInput = document.getElementById('pdfUrlPicker');
+            if (pdfUrlInput) {
+                pdfUrlInput.addEventListener('input', syncPdfUrl);
+                pdfUrlInput.addEventListener('change', syncPdfUrl);
+            }
+            if (pdfPickerInput) {
+                pdfPickerInput.addEventListener('change', syncPdfUrl);
+            }
+            
+            // Add event listeners for Audio inputs
+            const audioUrlInput = document.getElementById('audioUrlInput');
+            const audioPickerInput = document.getElementById('audioUrlPicker');
+            if (audioUrlInput) {
+                audioUrlInput.addEventListener('input', syncAudioUrl);
+                audioUrlInput.addEventListener('change', syncAudioUrl);
+            }
+            if (audioPickerInput) {
+                audioPickerInput.addEventListener('change', syncAudioUrl);
+            }
+            
+            // Add event listeners for Download inputs
+            const downloadUrlInput = document.getElementById('downloadUrlInput');
+            const downloadPickerInput = document.getElementById('downloadUrlPicker');
+            if (downloadUrlInput) {
+                downloadUrlInput.addEventListener('input', syncDownloadUrl);
+                downloadUrlInput.addEventListener('change', syncDownloadUrl);
+            }
+            if (downloadPickerInput) {
+                downloadPickerInput.addEventListener('change', syncDownloadUrl);
+            }
+            
+            const form = document.getElementById('lessonForm');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    syncVideoUrl();
+                    syncPdfUrl();
+                    syncAudioUrl();
+                    syncDownloadUrl();
+                });
+            }
+        });
+
+        // Resources management
+        let resourceIndex = 0;
+        
+        function addResource() {
+            const container = document.getElementById('resourcesContainer');
+            const uniqueId = 'resource_' + resourceIndex + '_' + Date.now();
+            const i18n = window.__lessonCreateI18n || {};
+            const resourceLabel = i18n.resourceLabel || 'Resource';
+            const resourceTitleLabel = i18n.resourceTitleLabel || 'Resource title';
+            const resourceTitlePh = i18n.resourceTitlePlaceholder || 'e.g. PDF file for lesson';
+            const resourceTypeLabel = i18n.resourceTypeLabel || 'File type';
+            const libOpt = i18n.resourceLibraryOption || 'Select from media library';
+            const uploadOpt = i18n.resourceUploadOption || 'Upload new file';
+            const urlOpt = i18n.resourceUrlOption || 'External link';
+            const libraryPh = i18n.resourceLibraryPlaceholder || 'Click to select file from library';
+            const chooseBtn = i18n.resourceChoose || 'Choose';
+            const maxSizeLabel = i18n.maxSizeLabel || 'Max';
+            const directLinkLabel = i18n.directLinkLabel || 'Direct link to file (Google Drive, Dropbox, etc.)';
+            
+            const html = `
+                <div class="resource-item card bg-light mb-3" data-index="${resourceIndex}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <h6 class="mb-0">
+                                <i class="feather-file me-2"></i>
+                                ${resourceLabel} #${resourceIndex + 1}
+                            </h6>
+                            <button class="btn btn-sm btn-outline-danger" type="button" onclick="removeResource(this)">
+                                <i class="feather-trash-2"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">${resourceTitleLabel}</label>
+                                <input type="text" class="form-control" name="Resources[${resourceIndex}].Title" 
+                                       placeholder="${resourceTitlePh.replace(/"/g, '&quot;')}" id="${uniqueId}_title">
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label">${resourceTypeLabel}</label>
+                                <select class="form-select" id="${uniqueId}_type" onchange="toggleResourceSource('${uniqueId}')">
+                                    <option value="library">${libOpt}</option>
+                                    <option value="upload">${uploadOpt}</option>
+                                    <option value="url">${urlOpt}</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Library Selection -->
+                            <div class="col-12" id="${uniqueId}_library">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="${uniqueId}_libraryDisplay" 
+                                           placeholder="${libraryPh.replace(/"/g, '&quot;')}" readonly>
+                                    <input type="hidden" name="Resources[${resourceIndex}].FileUrl" id="${uniqueId}_fileUrl">
+                                    <button type="button" class="btn btn-outline-primary" onclick="openResourceMediaPicker('${uniqueId}', ${resourceIndex})">
+                                        <i class="feather-folder me-1"></i>
+                                        ${chooseBtn}
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="clearResourceMedia('${uniqueId}')" 
+                                            id="${uniqueId}_clearBtn" style="display: none;">
+                                        <i class="feather-x"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- File Upload -->
+                            <div class="col-12" id="${uniqueId}_upload" style="display: none;">
+                                <input type="file" class="form-control" name="Resources[${resourceIndex}].File" 
+                                       accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar,.txt,.mp3,.mp4">
+                                <div class="form-text">${maxSizeLabel}: @(maxResourceSizeMB)MB</div>
+                            </div>
+                            
+                            <!-- External URL -->
+                            <div class="col-12" id="${uniqueId}_url" style="display: none;">
+                                <input type="url" class="form-control" name="Resources[${resourceIndex}].ExternalUrl" 
+                                       placeholder="https://example.com/file.pdf">
+                                <div class="form-text">${directLinkLabel}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', html);
+            resourceIndex++;
+        }
+
+        function removeResource(btn) {
+            btn.closest('.resource-item').remove();
+            updateResourceNumbers();
+        }
+        
+        function updateResourceNumbers() {
+            const items = document.querySelectorAll('.resource-item');
+            items.forEach((item, index) => {
+                item.querySelector('h6').innerHTML = `<i class="feather-file me-2"></i>مورد #${index + 1}`;
+            });
+        }
+        
+        function toggleResourceSource(uniqueId) {
+            const type = document.getElementById(uniqueId + '_type').value;
+            const library = document.getElementById(uniqueId + '_library');
+            const upload = document.getElementById(uniqueId + '_upload');
+            const url = document.getElementById(uniqueId + '_url');
+            
+            library.style.display = type === 'library' ? 'block' : 'none';
+            upload.style.display = type === 'upload' ? 'block' : 'none';
+            url.style.display = type === 'url' ? 'block' : 'none';
+        }
+        
+        // Store current resource picker context
+        let currentResourcePickerId = null;
+        let currentResourceIndex = null;
+        
+        function openResourceMediaPicker(uniqueId, index) {
+            currentResourcePickerId = uniqueId;
+            currentResourceIndex = index;
+            
+            // Create a temporary picker element for MediaPicker integration
+            const tempPickerId = 'resourcePicker_' + uniqueId;
+            let tempPicker = document.getElementById('mediaPicker_' + tempPickerId);
+            
+            if (!tempPicker) {
+                tempPicker = document.createElement('div');
+                tempPicker.id = 'mediaPicker_' + tempPickerId;
+                tempPicker.className = 'media-picker-wrapper d-none';
+                tempPicker.setAttribute('data-field-id', uniqueId + '_fileUrl');
+                tempPicker.setAttribute('data-media-type', 'All');
+                document.body.appendChild(tempPicker);
+            }
+            
+            // Store original select handler
+            const originalConfirmSelection = MediaPicker.confirmSelection;
+            
+            // Override selection to handle resource picker
+            MediaPicker.confirmSelection = function() {
+                if (currentResourcePickerId && window.MediaPicker) {
+                    // Get selected media from MediaPicker's internal state
+                    const selectedUrl = document.querySelector('.media-item.selected')?.dataset?.url;
+                    const selectedTitle = document.querySelector('.media-item.selected .card-title')?.textContent;
+                    
+                    if (selectedUrl) {
+                        document.getElementById(currentResourcePickerId + '_libraryDisplay').value = selectedTitle || selectedUrl;
+                        document.getElementById(currentResourcePickerId + '_fileUrl').value = selectedUrl;
+                        document.getElementById(currentResourcePickerId + '_clearBtn').style.display = 'inline-block';
+                        
+                        const titleInput = document.getElementById(currentResourcePickerId + '_title');
+                        if (titleInput && !titleInput.value) {
+                            titleInput.value = selectedTitle || '';
+                        }
+                    }
+                    
+                    currentResourcePickerId = null;
+                    currentResourceIndex = null;
+                }
+                
+                // Call original handler
+                originalConfirmSelection.call(MediaPicker);
+                
+                // Restore original handler
+                MediaPicker.confirmSelection = originalConfirmSelection;
+            };
+            
+            // Use MediaPicker's singleton modal
+            MediaPicker.openLibrary(tempPickerId);
+        }
+        
+        function clearResourceMedia(uniqueId) {
+            document.getElementById(uniqueId + '_libraryDisplay').value = '';
+            document.getElementById(uniqueId + '_fileUrl').value = '';
+            document.getElementById(uniqueId + '_clearBtn').style.display = 'none';
+        }
+
+        // Content Drip toggle
+        function toggleDripFields() {
+            const dripType = document.getElementById('contentDripType').value;
+            const dripDaysField = document.getElementById('dripDaysField');
+            const dripPrerequisiteField = document.getElementById('dripPrerequisiteField');
+            const dripDateField = document.getElementById('dripDateField');
+
+            dripDaysField.style.display = 'none';
+            dripPrerequisiteField.style.display = 'none';
+            dripDateField.style.display = 'none';
+
+            switch (dripType) {
+                case 'DaysAfterEnrollment':
+                    dripDaysField.style.display = 'block';
+                    break;
+                case 'AfterPreviousCompletion':
+                    dripPrerequisiteField.style.display = 'block';
+                    break;
+                case 'SpecificDate':
+                    dripDateField.style.display = 'block';
+                    break;
+            }
+        }
+    </script>
+
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

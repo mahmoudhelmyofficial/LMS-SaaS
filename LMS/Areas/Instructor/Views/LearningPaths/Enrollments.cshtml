@@ -1,0 +1,295 @@
+@model IEnumerable<LMS.Domain.Entities.Learning.LearningPathEnrollment>
+
+@{
+    ViewData["Title"] = Html.T("المسجلين في المسار", "Path Enrollments");
+    ViewData["Subtitle"] = ViewBag.PathName;
+    var pathId = ViewBag.PathId;
+    var detailsUrl = Url.Action("Details", new { id = pathId });
+    var indexUrl = Url.Action("Index");
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + detailsUrl + "' class='btn btn-light'><i class='feather-eye me-2'></i>" + Html.T("عرض المسار", "View path") + "</a><a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة", "Back") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي المسجلين", "Total enrollments") },
+                { "Value", Model.Count() },
+                { "Icon", "users" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("مسجلون نشطون", "Active enrollments") },
+                { "Value", Model.Count(e => !e.IsCompleted) },
+                { "Icon", "activity" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("أكملوا المسار", "Completed path") },
+                { "Value", Model.Count(e => e.IsCompleted) },
+                { "Icon", "check-circle" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("متوسط التقدم", "Average progress") },
+                { "Value", (Model.Any() ? Model.Average(e => e.ProgressPercentage).ToString("F0") + "%" : "0%") },
+                { "Icon", "trending-up" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card stretch stretch-full mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-lg-3 col-md-4">
+                    <label class="form-label">@Html.T("البحث", "Search")</label>
+                    <input type="text" name="search" class="form-control" placeholder="@Html.T("البحث بالاسم أو البريد", "Search by name or email")">
+                </div>
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label">@Html.T("الحالة", "Status")</label>
+                    <select name="status" class="form-select">
+                        <option value="">@Html.T("الكل", "All")</option>
+                        <option value="active">@Html.T("نشط", "Active")</option>
+                        <option value="completed">@Html.T("مكتمل", "Completed")</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label">@Html.T("التقدم", "Progress")</label>
+                    <select name="progress" class="form-select">
+                        <option value="">@Html.T("الكل", "All")</option>
+                        <option value="0-25">0% - 25%</option>
+                        <option value="26-50">26% - 50%</option>
+                        <option value="51-75">51% - 75%</option>
+                        <option value="76-100">76% - 100%</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label">@Html.T("الترتيب", "Sort")</label>
+                    <select name="sort" class="form-select">
+                        <option value="recent">@Html.T("الأحدث", "Most recent")</option>
+                        <option value="progress">@Html.T("التقدم", "Progress")</option>
+                        <option value="name">@Html.T("الاسم", "Name")</option>
+                    </select>
+                </div>
+                <div class="col-lg-3 col-md-3">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="feather-filter me-2"></i>@Html.T("تطبيق", "Apply")
+                    </button>
+                    <a href="@Url.Action("Enrollments", new { id = pathId })" class="btn btn-light">
+                        <i class="feather-x me-2"></i>@Html.T("إعادة تعيين", "Reset")
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Enrollments Table -->
+    <div class="card stretch stretch-full">
+        <div class="card-header">
+            <h5 class="card-title">@Html.T("قائمة المسجلين", "Enrollments list")</h5>
+            <div class="card-header-action">
+                <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="feather-download me-2"></i>@Html.T("تصدير", "Export")
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="/api/export/enrollments?format=csv">CSV</a></li>
+                        <li><a class="dropdown-item" href="/api/export/enrollments?format=excel">@Html.T("Excel", "Excel")</a></li>
+                        <li><a class="dropdown-item" href="/api/export/enrollments?format=pdf">PDF</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            @if (Model != null && Model.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>@Html.T("الطالب", "Student")</th>
+                                <th>@Html.T("تاريخ التسجيل", "Enrollment date")</th>
+                                <th>@Html.T("التقدم", "Progress")</th>
+                                <th>@Html.T("الحالة", "Status")</th>
+                                <th>@Html.T("المبلغ المدفوع", "Amount paid")</th>
+                                <th>@Html.T("آخر نشاط", "Last activity")</th>
+                                <th>@Html.T("الإجراءات", "Actions")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var index = ((ViewBag.Page ?? 1) - 1) * 20;
+                            }
+                            @foreach (var enrollment in Model)
+                            {
+                                index++;
+                                <tr>
+                                    <td>@index</td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="avatar-text avatar-sm @(enrollment.IsCompleted ? "bg-soft-success text-success" : "bg-soft-primary text-primary")">
+                                                @enrollment.User?.FirstName?.Substring(0, 1)
+                                            </div>
+                                            <div>
+                                                <h6 class="fw-bold mb-0">@enrollment.User?.FullName</h6>
+                                                <p class="text-muted fs-12 mb-0">@enrollment.User?.Email</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="text-muted fs-13">
+                                            @enrollment.EnrolledAt.ToString("dd MMM yyyy")
+                                        </span>
+                                        <div class="fs-11 text-muted">
+                                            @enrollment.EnrolledAt.ToString("hh:mm tt")
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="width: 120px;">
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar @(enrollment.ProgressPercentage >= 75 ? "bg-success" : enrollment.ProgressPercentage >= 50 ? "bg-info" : enrollment.ProgressPercentage >= 25 ? "bg-warning" : "bg-danger")" 
+                                                     role="progressbar" 
+                                                     style="width: @enrollment.ProgressPercentage%" 
+                                                     aria-valuenow="@enrollment.ProgressPercentage" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                    @enrollment.ProgressPercentage.ToString("F0")%
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (enrollment.IsCompleted)
+                                        {
+                                            <span class="badge bg-soft-success text-success">
+                                                <i class="feather-check-circle me-1"></i>
+                                                @Html.T("مكتمل", "Completed")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-soft-primary text-primary">
+                                                <i class="feather-activity me-1"></i>
+                                                @Html.T("نشط", "Active")
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-success">
+                                            @enrollment.PaidAmount.ToEGP()
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @if (enrollment.LastAccessedAt.HasValue)
+                                        {
+                                            <span class="text-muted fs-13">
+                                                @enrollment.LastAccessedAt.Value.ToString("dd MMM yyyy")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted fs-13">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                <i class="feather-more-vertical"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li>
+                                                    <a class="dropdown-item" href="#">
+                                                        <i class="feather-user me-2"></i>
+                                                        @Html.T("عرض الملف الشخصي", "View profile")
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="#">
+                                                        <i class="feather-activity me-2"></i>
+                                                        @Html.T("عرض التقدم", "View progress")
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action("Compose", "Messages", new { receiverId = enrollment.UserId })">
+                                                        <i class="feather-mail me-2"></i>
+                                                        @Html.T("إرسال رسالة", "Send message")
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @* Pagination *@
+                @if (ViewBag.TotalPages > 1)
+                {
+                    <div class="card-footer">
+                        @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                            ViewData,
+                            ("CurrentPage", ViewBag.Page ?? 1),
+                            ("TotalPages", ViewBag.TotalPages ?? 1),
+                            ("TotalItems", ViewBag.TotalItems ?? ViewBag.TotalCount ?? 0),
+                            ("PageSize", ViewBag.PageSize ?? 20),
+                            ("Action", "Enrollments"),
+                            ("Controller", "LearningPaths"),
+                            ("RouteValues", new RouteValueDictionary(new { id = pathId }))
+                        ))
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="card-body text-center py-5">
+                    <div class="avatar-text avatar-xl bg-soft-secondary text-secondary mb-4 mx-auto">
+                        <i class="feather-users"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">@Html.T("لا يوجد مسجلون بعد", "No enrollments yet")</h5>
+                    <p class="text-muted mb-4">@Html.T("لم يسجل أي طالب في هذا المسار حتى الآن", "No student has enrolled in this path yet")</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Export to Excel function
+            window.exportToExcel = function() {
+                alert('@Html.Raw(Html.T("جاري تصدير البيانات...", "Exporting data...").Replace("'", "\\'"))');
+                // Implement export functionality here
+            };
+
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

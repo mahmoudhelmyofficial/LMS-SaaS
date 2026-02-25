@@ -1,0 +1,508 @@
+@model IEnumerable<LMS.Domain.Entities.Assessments.QuizAttempt>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("نتائج الاختبار", "Quiz Results");
+    var quiz = ViewBag.Quiz as LMS.Domain.Entities.Assessments.Quiz;
+    ViewData["Subtitle"] = quiz?.Title;
+    
+    var totalAttempts = Model.Count();
+    var passedAttempts = Model.Count(a => a.IsPassed);
+    var failedAttempts = totalAttempts - passedAttempts;
+    var avgScore = Model.Any() ? Model.Average(a => a.Score) : 0;
+    var uniqueStudents = Model.Select(a => a.StudentId).Distinct().Count();
+    
+    var editUrl = Url.Action("Edit", new { id = quiz?.Id });
+    var indexUrl = Url.Action("Index");
+    
+    // Load platform settings
+    var topStudentsLimit = await PlatformSettings.GetIntSettingAsync("UI.TopItems.Limit", 10);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + editUrl + "' class='btn btn-primary'><i class='feather-edit me-2'></i>" + Html.T("تعديل الاختبار", "Edit Quiz") + "</a><a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة", "Back") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Quiz Info -->
+    @if (quiz != null)
+    {
+        <div class="alert alert-info mb-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-md bg-primary text-white">
+                            <i class="feather-file-text"></i>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">@quiz.Title</h6>
+                            <p class="mb-0 fs-13">@quiz.Lesson?.Title - @quiz.Lesson?.Module?.Course?.Title</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="d-flex justify-content-end gap-2">
+                        <span class="badge bg-soft-primary text-primary">
+                            @quiz.Questions?.Count() @Html.T("سؤال", "questions")
+                        </span>
+                        <span class="badge bg-soft-success text-success">
+                            @Html.T("نجاح:", "Pass:") @quiz.PassingScore%
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي المحاولات", "Total attempts") },
+                { "Value", totalAttempts },
+                { "Icon", "file-text" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("محاولات ناجحة", "Passed attempts") },
+                { "Value", passedAttempts },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("محاولات فاشلة", "Failed attempts") },
+                { "Value", failedAttempts },
+                { "Icon", "x-circle" },
+                { "Color", "danger" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("متوسط الدرجات", "Average score") },
+                { "Value", avgScore.ToString("F1") + "%" },
+                { "Icon", "trending-up" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Performance Chart -->
+        <div class="col-lg-8 mb-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع الدرجات", "Score distribution")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="scoresChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pass Rate -->
+        <div class="col-lg-4 mb-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معدل النجاح", "Pass rate")</h5>
+                </div>
+                <div class="card-body text-center">
+                    <canvas id="passRateChart" height="200"></canvas>
+                    <div class="mt-3">
+                        <h3 class="fw-bold text-success mb-2">
+                            @((totalAttempts > 0 ? (passedAttempts * 100.0 / totalAttempts) : 0).ToString("F1"))%
+                        </h3>
+                        <p class="text-muted mb-0">@Html.T("من المحاولات ناجحة", "of attempts passed")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card stretch stretch-full mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-lg-3 col-md-4">
+                    <label class="form-label">@Html.T("البحث", "Search")</label>
+                    <input type="text" name="search" class="form-control" placeholder="@Html.T("اسم الطالب", "Student name")">
+                </div>
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label">@Html.T("النتيجة", "Result")</label>
+                    <select name="result" class="form-select">
+                        <option value="">@Html.T("الكل", "All")</option>
+                        <option value="passed">@Html.T("ناجح", "Passed")</option>
+                        <option value="failed">@Html.T("راسب", "Failed")</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label">@Html.T("الدرجة", "Score")</label>
+                    <select name="scoreRange" class="form-select">
+                        <option value="">@Html.T("الكل", "All")</option>
+                        <option value="90-100">90% - 100%</option>
+                        <option value="80-89">80% - 89%</option>
+                        <option value="70-79">70% - 79%</option>
+                        <option value="60-69">60% - 69%</option>
+                        <option value="0-59">@Html.T("أقل من 60%", "Below 60%")</option>
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label">@Html.T("الترتيب", "Sort")</label>
+                    <select name="sort" class="form-select">
+                        <option value="recent">@Html.T("الأحدث", "Most recent")</option>
+                        <option value="score-desc">@Html.T("الأعلى درجة", "Highest score")</option>
+                        <option value="score-asc">@Html.T("الأقل درجة", "Lowest score")</option>
+                    </select>
+                </div>
+                <div class="col-lg-3 col-md-3">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="feather-filter me-2"></i>@Html.T("تطبيق", "Apply")
+                    </button>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="feather-download me-2"></i>@Html.T("تصدير", "Export")
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="/api/export/quiz-results?format=csv&quizId=@quiz?.Id">CSV</a></li>
+                            <li><a class="dropdown-item" href="/api/export/quiz-results?format=excel&quizId=@quiz?.Id">@Html.T("Excel", "Excel")</a></li>
+                            <li><a class="dropdown-item" href="/api/export/quiz-results?format=pdf&quizId=@quiz?.Id">PDF</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="card stretch stretch-full">
+        <div class="card-header">
+            <h5 class="card-title">@Html.T("جميع المحاولات", "All attempts")</h5>
+        </div>
+        <div class="card-body p-0">
+            @if (Model != null && Model.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>@Html.T("الطالب", "Student")</th>
+                                <th>@Html.T("تاريخ المحاولة", "Attempt date")</th>
+                                <th>@Html.T("الوقت المستغرق", "Time spent")</th>
+                                <th>@Html.T("الدرجة", "Score")</th>
+                                <th>@Html.T("النتيجة", "Result")</th>
+                                <th>@Html.T("الحالة", "Status")</th>
+                                <th>@Html.T("الإجراءات", "Actions")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var index = 0;
+                            }
+                            @foreach (var attempt in Model.OrderByDescending(a => a.StartedAt))
+                            {
+                                index++;
+                                var duration = attempt.FinishedAt.HasValue 
+                                    ? (attempt.FinishedAt.Value - attempt.StartedAt).TotalMinutes 
+                                    : 0;
+                                
+                                <tr>
+                                    <td>@index</td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="avatar-text avatar-sm @(attempt.IsPassed ? "bg-soft-success text-success" : "bg-soft-danger text-danger")">
+                                                @attempt.Student?.FirstName?.Substring(0, 1)
+                                            </div>
+                                            <div>
+                                                <h6 class="fw-bold mb-0">@attempt.Student?.FullName</h6>
+                                                <p class="text-muted fs-12 mb-0">@attempt.Student?.Email</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="text-muted fs-13">
+                                            @attempt.StartedAt.ToString("dd MMM yyyy")
+                                        </span>
+                                        <div class="fs-11 text-muted">
+                                            @attempt.StartedAt.ToString("hh:mm tt")
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-soft-info text-info">
+                                            <i class="feather-clock me-1"></i>
+                                            @duration.ToString("F0") @Html.T("دقيقة", "min")
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="progress" style="width: 60px; height: 20px;">
+                                                <div class="progress-bar @(attempt.Score >= quiz?.PassingScore ? "bg-success" : "bg-danger")" 
+                                                     role="progressbar" 
+                                                     style="width: @attempt.Score%" 
+                                                     aria-valuenow="@attempt.Score" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                </div>
+                                            </div>
+                                            <span class="fw-bold">@attempt.Score.ToString("F1")%</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold @(attempt.IsPassed ? "text-success" : "text-danger")">
+                                            @attempt.Grade / @quiz?.Questions?.Sum(q => q.Points)
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @if (attempt.IsPassed)
+                                        {
+                                            <span class="badge bg-soft-success text-success">
+                                                <i class="feather-check-circle me-1"></i>
+                                                @Html.T("ناجح", "Passed")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-soft-danger text-danger">
+                                                <i class="feather-x-circle me-1"></i>
+                                                @Html.T("راسب", "Failed")
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (attempt.Status == LMS.Domain.Enums.QuizAttemptStatus.Completed)
+                                        {
+                                            <span class="badge bg-soft-primary text-primary">@Html.T("مكتمل", "Completed")</span>
+                                        }
+                                        else if (attempt.Status == LMS.Domain.Enums.QuizAttemptStatus.InProgress)
+                                        {
+                                            <span class="badge bg-soft-warning text-warning">@Html.T("جاري", "In progress")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-soft-secondary text-secondary">@attempt.Status</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                <i class="feather-more-vertical"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action("Details", "QuizAttempts", new { id = attempt.Id })">
+                                                        <i class="feather-eye me-2"></i>
+                                                        @Html.T("عرض التفاصيل", "View details")
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="#">
+                                                        <i class="feather-user me-2"></i>
+                                                        @Html.T("ملف الطالب", "Student profile")
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action("Compose", "Messages", new { receiverId = attempt.StudentId })">
+                                                        <i class="feather-mail me-2"></i>
+                                                        @Html.T("إرسال رسالة", "Send message")
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="card-body text-center py-5">
+                    <div class="avatar-text avatar-xl bg-soft-secondary text-secondary mb-4 mx-auto">
+                        <i class="feather-file-text"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">@Html.T("لا توجد محاولات بعد", "No attempts yet")</h5>
+                    <p class="text-muted mb-0">@Html.T("لم يحاول أي طالب حل هذا الاختبار حتى الآن", "No student has attempted this quiz yet")</p>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Additional Statistics -->
+    <div class="row mt-4">
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أفضل الطلاب أداءً", "Top performing students")</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model != null && Model.Any())
+                    {
+                        var topStudents = Model
+                            .Where(a => a.Status == LMS.Domain.Enums.QuizAttemptStatus.Completed)
+                            .GroupBy(a => a.StudentId)
+                            .Select(g => new { 
+                                Student = g.First().Student, 
+                                BestScore = g.Max(a => a.Score),
+                                Attempts = g.Count()
+                            })
+                            .OrderByDescending(s => s.BestScore)
+                            .Take(topStudentsLimit)
+                            .ToList();
+
+                        <div class="list-group">
+                            @for (int i = 0; i < topStudents.Count; i++)
+                            {
+                                var student = topStudents[i];
+                                <div class="list-group-item">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="badge @(i < 3 ? "bg-warning" : "bg-secondary")">
+                                            #@(i + 1)
+                                        </div>
+                                        <div class="avatar-text avatar-sm">
+                                            @student.Student?.FirstName?.Substring(0, 1)
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="fw-bold mb-0">@student.Student?.FullName</h6>
+                                            <p class="text-muted fs-12 mb-0">@student.Attempts @Html.T("محاولة", "attempt(s)")</p>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="badge bg-soft-success text-success">
+                                                @student.BestScore.ToString("F1")%
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إحصائيات متقدمة", "Advanced statistics")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span>@Html.T("الطلاب الفريدون:", "Unique students:")</span>
+                        <span class="fw-bold">@uniqueStudents</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span>@Html.T("أعلى درجة:", "Highest score:")</span>
+                        <span class="fw-bold text-success">@(Model.Any() ? Model.Max(a => a.Score).ToString("F1") : "0")%</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span>@Html.T("أقل درجة:", "Lowest score:")</span>
+                        <span class="fw-bold text-danger">@(Model.Any() ? Model.Min(a => a.Score).ToString("F1") : "0")%</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span>@Html.T("الوسيط:", "Median:")</span>
+                        <span class="fw-bold">@(Model.Any() ? Model.OrderBy(a => a.Score).Skip(Model.Count() / 2).First().Score.ToString("F1") : "0")%</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>@Html.T("معدل المحاولات للطالب:", "Attempts per student:")</span>
+                        <span class="fw-bold">@(uniqueStudents > 0 ? (totalAttempts * 1.0 / uniqueStudents).ToString("F1") : "0")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <script>
+        $(document).ready(function () {
+            // Scores Distribution Chart
+            const scoresCtx = document.getElementById('scoresChart').getContext('2d');
+            const scoresChart = new Chart(scoresCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['0-20%', '21-40%', '41-60%', '61-80%', '81-100%'],
+                    datasets: [{
+                        label: '@Html.Raw(Html.T("عدد المحاولات", "Number of attempts").Replace("'", "\\'"))',
+                        data: [
+                            @Model.Count(a => a.Score <= 20),
+                            @Model.Count(a => a.Score > 20 && a.Score <= 40),
+                            @Model.Count(a => a.Score > 40 && a.Score <= 60),
+                            @Model.Count(a => a.Score > 60 && a.Score <= 80),
+                            @Model.Count(a => a.Score > 80)
+                        ],
+                        backgroundColor: [
+                            'rgba(220, 53, 69, 0.7)',
+                            'rgba(255, 193, 7, 0.7)',
+                            'rgba(13, 202, 240, 0.7)',
+                            'rgba(25, 135, 84, 0.7)',
+                            'rgba(13, 110, 253, 0.7)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Pass Rate Chart
+            const passRateCtx = document.getElementById('passRateChart').getContext('2d');
+            const passRateChart = new Chart(passRateCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['@Html.Raw(Html.T("ناجح", "Passed").Replace("'", "\\'"))', '@Html.Raw(Html.T("راسب", "Failed").Replace("'", "\\'"))'],
+                    datasets: [{
+                        data: [@passedAttempts, @failedAttempts],
+                        backgroundColor: [
+                            'rgba(25, 135, 84, 0.8)',
+                            'rgba(220, 53, 69, 0.8)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // Export function
+            window.exportToExcel = function() {
+                alert('@Html.Raw(Html.T("جاري تصدير البيانات...", "Exporting data...").Replace("'", "\\'"))');
+            };
+        });
+    </script>
+}
+

@@ -1,0 +1,286 @@
+@model IEnumerable<LMS.Areas.Instructor.ViewModels.ProctoringSettingListViewModel>
+
+@{
+    ViewData["Title"] = Html.T("إدارة المراقبة", "Proctoring Management");
+    ViewData["Subtitle"] = Html.T("إعدادات مراقبة الاختبارات", "Exam proctoring settings");
+    var createUrl = Url.Action("Create");
+}
+
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="mb-1">@ViewData["Title"]</h4>
+        <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="@createUrl" class="btn btn-primary">
+            <i class="feather-plus me-2"></i>
+            @Html.T("إضافة إعدادات مراقبة", "Add Proctoring Settings")
+        </a>
+        <button class="btn btn-light" onclick="window.location.reload()">
+            <i class="feather-refresh-cw me-2"></i>
+            @Html.T("تحديث", "Refresh")
+        </button>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الإعدادات", "Total Settings") },
+                { "Value", Model.Count() },
+                { "Icon", "shield" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("المفعّلة", "Enabled") },
+                { "Value", Model.Count(p => p.IsEnabled) },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("مع كاميرا", "With Camera") },
+                { "Value", Model.Count(p => p.RequireWebcam) },
+                { "Icon", "video" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("مع كشف الوجه", "With Face Detection") },
+                { "Value", Model.Count(p => p.EnableFaceDetection) },
+                { "Icon", "user-check" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">@Html.T("الدورة", "Course")</label>
+                            <select name="courseId" class="form-select" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                @if (ViewBag.Courses != null)
+                                {
+                                    foreach (var course in ViewBag.Courses as IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)
+                                    {
+                                        <option value="@course.Value" selected="@(ViewBag.CourseId?.ToString() == course.Value)">@course.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="feather-filter me-2"></i>
+                                @Html.T("تصفية", "Filter")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Proctoring Settings List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إعدادات المراقبة", "Proctoring Settings")</h5>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var setting in Model)
+                            {
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <a href="@Url.Action("Details", new { id = setting.Id })" class="fw-bold text-dark text-break d-block">@setting.QuizTitle</a>
+                                        <span class="badge bg-soft-primary text-primary">@setting.CourseTitle</span>
+                                        @if (setting.IsEnabled) { <span class="badge bg-soft-success text-success ms-1">@Html.T("مفعّل", "Enabled")</span> }
+                                        else { <span class="badge bg-soft-secondary text-secondary ms-1">@Html.T("معطّل", "Disabled")</span> }
+                                        <div class="fs-12 text-muted mt-2">@setting.CreatedAt.ToString("dd/MM/yyyy")</div>
+                                        <div class="hstack gap-2 mt-2">
+                                            <a href="@Url.Action("Details", new { id = setting.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-eye"></i></a>
+                                            <a href="@Url.Action("Edit", new { id = setting.Id })" class="btn btn-sm btn-outline-secondary"><i class="feather-edit"></i></a>
+                                            <form method="post" asp-action="ToggleEnabled" asp-route-id="@setting.Id" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="btn btn-sm btn-outline-warning"><i class="feather-power"></i></button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("الاختبار", "Quiz")</th>
+                                            <th>@Html.T("الدورة", "Course")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                            <th>@Html.T("الكاميرا", "Camera")</th>
+                                            <th>@Html.T("التسجيل", "Recording")</th>
+                                            <th>@Html.T("كشف الوجه", "Face Detection")</th>
+                                            <th>@Html.T("تاريخ الإنشاء", "Created Date")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var setting in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a href="@Url.Action("Details", new { id = setting.Id })" class="fw-bold text-dark">
+                                                    @setting.QuizTitle
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-primary text-primary">@setting.CourseTitle</span>
+                                            </td>
+                                            <td>
+                                                @if (setting.IsEnabled)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-check-circle me-1"></i>@Html.T("مفعّل", "Enabled")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">
+                                                        <i class="feather-x-circle me-1"></i>@Html.T("معطّل", "Disabled")
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (setting.RequireWebcam)
+                                                {
+                                                    <i class="feather-check text-success fs-18"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="feather-x text-danger fs-18"></i>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (setting.RecordVideo)
+                                                {
+                                                    <i class="feather-check text-success fs-18"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="feather-x text-danger fs-18"></i>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (setting.EnableFaceDetection)
+                                                {
+                                                    <i class="feather-check text-success fs-18"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="feather-x text-danger fs-18"></i>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="fs-13 text-muted">@setting.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { id = setting.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    <a href="@Url.Action("Edit", new { id = setting.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                        <i class="feather-edit"></i>
+                                                    </a>
+                                                    <form method="post" asp-action="ToggleEnabled" asp-route-id="@setting.Id" class="d-inline">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@(setting.IsEnabled ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))">
+                                                            <i class="feather-power"></i>
+                                                        </button>
+                                                    </form>
+                                                    <div class="dropdown">
+                                                        <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown">
+                                                            <i class="feather-more-horizontal"></i>
+                                                        </a>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li>
+                                                                <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="deleteSetting(@setting.Id, '@setting.QuizTitle')">
+                                                                    <i class="feather-trash-2 me-3"></i>
+                                                                    <span>@Html.T("حذف", "Delete")</span>
+                                                                </a>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-shield"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد إعدادات مراقبة", "No proctoring settings")</h5>
+                            <p class="text-muted mb-4">@Html.T("ابدأ بإضافة إعدادات مراقبة لاختباراتك لضمان نزاهة الامتحانات", "Start by adding proctoring settings to your quizzes to ensure exam integrity")</p>
+                            <a href="@Url.Action("Create")" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إضافة إعدادات مراقبة", "Add Proctoring Settings")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Form (Hidden) -->
+<form id="deleteForm" method="post" style="display:none;">
+    @Html.AntiForgeryToken()
+</form>
+
+@section Scripts {
+    <script>
+        function deleteSetting(id, quizTitle) {
+            if (confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف إعدادات المراقبة للاختبار: ", "Are you sure you want to delete proctoring settings for quiz: ").Replace("'", "\\'"))' + quizTitle + '?')) {
+                var form = document.getElementById('deleteForm');
+                form.action = '@Url.Action("Delete")/' + id;
+                form.submit();
+            }
+        }
+
+        // Initialize tooltips
+        $(document).ready(function () {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

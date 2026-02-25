@@ -1,0 +1,500 @@
+@model LMS.Areas.Instructor.ViewModels.CourseEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل الدورة", "Edit Course");
+    ViewData["Subtitle"] = $"تعديل: {Model.Title}";
+    var detailsUrl = Url.Action("Details", new { id = Model.Id });
+    var modulesUrl = Url.Action("Index", "Modules", new { courseId = Model.Id });
+    var studentsUrl = Url.Action("Index", "Students", new { courseId = Model.Id });
+    var deleteUrl = Url.Action("Delete", new { id = Model.Id });
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + detailsUrl + "' class='btn btn-light'><i class='feather-eye me-2'></i>معاينة الدورة</a><div class='dropdown'><button class='btn btn-light dropdown-toggle' type='button' data-bs-toggle='dropdown'><i class='feather-more-vertical'></i></button><ul class='dropdown-menu dropdown-menu-end'><li><a class='dropdown-item' href='" + modulesUrl + "'><i class='feather-layers me-2'></i> إدارة المحتوى</a></li><li><a class='dropdown-item' href='" + studentsUrl + "'><i class='feather-users me-2'></i> الطلاب المسجلين</a></li><li><hr class='dropdown-divider'></li><li><a class='dropdown-item text-danger' href='javascript:void(0)' onclick='confirmDelete(\"" + deleteUrl + "\", \"هل أنت متأكد من حذف هذه الدورة؟\")'><i class='feather-trash-2 me-2'></i> حذف الدورة</a></li></ul></div>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Edit" method="post" enctype="multipart/form-data" id="courseForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="InstructorId" />
+        <input type="hidden" asp-for="ExistingThumbnailUrl" />
+
+        <!-- Rest of the form is similar to Create.cshtml -->
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Progress Indicator -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <h6 class="mb-0">@Html.T("اكتمال الدورة", "Course completion")</h6>
+                            <span class="badge bg-soft-primary text-primary">@(ViewBag.CompletionPercentage ?? 0)%</span>
+                        </div>
+                        <div class="progress" style="height: 6px;">
+                            <div class="progress-bar" role="progressbar" style="width: @(ViewBag.CompletionPercentage ?? 0)%" aria-valuenow="@(ViewBag.CompletionPercentage ?? 0)" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div class="mt-2 fs-11 text-muted">
+                            @if (ViewBag.MissingItems != null && ViewBag.MissingItems.Count > 0)
+                            {
+                                <span>@Html.T("لإكمال الدورة:", "To complete the course:") @string.Join(Html.T("، ", ", "), ViewBag.MissingItems)</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Basic Information Card (Same as Create) -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            المعلومات الأساسية
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("عنوان الدورة", "Course title") <span class="text-danger">*</span></label>
+                                <input asp-for="Title" class="form-control">
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("نبذة مختصرة", "Short description") <span class="text-danger">*</span></label>
+                                <textarea asp-for="ShortDescription" class="form-control" rows="3"></textarea>
+                                <span asp-validation-for="ShortDescription" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("الوصف التفصيلي", "Full description") <span class="text-danger">*</span></label>
+                                <textarea asp-for="Description" class="form-control" rows="6" id="descriptionEditor"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("التصنيف", "Category") <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <select asp-for="CategoryId" class="form-select" asp-items="ViewBag.Categories" id="categorySelect"></select>
+                                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal" title="@Html.T("إضافة تصنيف جديد", "Add new category")">
+                                        <i class="feather-plus"></i>
+                                    </button>
+                                </div>
+                                <span asp-validation-for="CategoryId" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("التصنيف الفرعي", "Subcategory")</label>
+                                <div class="input-group">
+                                    <select asp-for="SubCategoryId" class="form-select" id="subcategorySelect">
+                                        <option value="">-- @Html.T("بدون تصنيف فرعي", "No subcategory") --</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" id="addSubcategoryBtn" data-bs-toggle="modal" data-bs-target="#addSubcategoryModal" title="@Html.T("إضافة تصنيف فرعي", "Add subcategory")" disabled>
+                                        <i class="feather-plus"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">@Html.T("اختر التصنيف الرئيسي أولاً", "Choose category first")</small>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("المستوى", "Level") <span class="text-danger">*</span></label>
+                                <select asp-for="Level" class="form-select">
+                                    <option value="Beginner">@Html.T("مبتدئ", "Beginner")</option>
+                                    <option value="Intermediate">@Html.T("متوسط", "Intermediate")</option>
+                                    <option value="Advanced">@Html.T("متقدم", "Advanced")</option>
+                                    <option value="AllLevels">@Html.T("جميع المستويات", "All levels")</option>
+                                </select>
+                                <span asp-validation-for="Level" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("اللغة", "Language") <span class="text-danger">*</span></label>
+                                <select asp-for="Language" class="form-select">
+                                    <option value="Arabic">@Html.T("العربية", "Arabic")</option>
+                                    <option value="English">@Html.T("الإنجليزية", "English")</option>
+                                    <option value="French">@Html.T("الفرنسية", "French")</option>
+                                </select>
+                                <span asp-validation-for="Language" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("مدة الدورة (بالساعات)", "Course duration (hours)")</label>
+                                <input asp-for="DurationHours" type="number" class="form-control" min="0" step="0.5">
+                                <span asp-validation-for="DurationHours" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Learning Points (Same as Create with existing data) -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-book-open me-2 text-primary"></i>
+                            @Html.T("ما ستتعلمه في هذه الدورة", "What you'll learn")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="learningPointsContainer">
+                            @if (Model.LearningPoints != null && Model.LearningPoints.Any())
+                            {
+                                @for (int i = 0; i < Model.LearningPoints.Count; i++)
+                                {
+                                    <div class="input-group mb-3">
+                                        <input type="text" class="form-control" name="LearningPoints[@i]" value="@Model.LearningPoints[i]">
+                                        <button class="btn btn-outline-danger" type="button" onclick="removeLearningPoint(this)">
+                                            <i class="feather-x"></i>
+                                        </button>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" name="LearningPoints[0]" placeholder="@Html.T("أضف نقطة تعلم", "Add learning point")">
+                                    <button class="btn btn-outline-danger" type="button" onclick="removeLearningPoint(this)">
+                                        <i class="feather-x"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                        <button type="button" class="btn btn-sm btn-light" onclick="addLearningPoint()">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إضافة نقطة جديدة", "Add new point")
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Requirements (Same as Create with existing data) -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-check-square me-2 text-primary"></i>
+                            @Html.T("المتطلبات الأساسية", "Prerequisites")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="requirementsContainer">
+                            @if (Model.Requirements != null && Model.Requirements.Any())
+                            {
+                                @for (int i = 0; i < Model.Requirements.Count; i++)
+                                {
+                                    <div class="input-group mb-3">
+                                        <input type="text" class="form-control" name="Requirements[@i]" value="@Model.Requirements[i]">
+                                        <button class="btn btn-outline-danger" type="button" onclick="removeRequirement(this)">
+                                            <i class="feather-x"></i>
+                                        </button>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" name="Requirements[0]" placeholder="@Html.T("أضف متطلب", "Add requirement")">
+                                    <button class="btn btn-outline-danger" type="button" onclick="removeRequirement(this)">
+                                        <i class="feather-x"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                        <button type="button" class="btn btn-sm btn-light" onclick="addRequirement()">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إضافة متطلب جديد", "Add new requirement")
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Media -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-image me-2 text-primary"></i>
+                            @Html.T("الصور والوسائط", "Images & media")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "ThumbnailUrl" },
+                                    { "FieldId", "thumbnailUrl" },
+                                    { "Label", Html.T("صورة الدورة المصغرة", "Course thumbnail") },
+                                    { "MediaType", "Image" },
+                                    { "CurrentValue", Model.ExistingThumbnailUrl },
+                                    { "Required", true },
+                                    { "HelpText", Html.T("الحجم الموصى به: 1280x720 بكسل", "Recommended size: 1280x720 px") },
+                                    { "AspectRatio", "16/9" }
+                                })
+                            </div>
+
+                            <div class="col-lg-12">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "IntroVideoUrl" },
+                                    { "FieldId", "introVideoUrl" },
+                                    { "Label", Html.T("فيديو تعريفي", "Intro video") },
+                                    { "MediaType", "Video" },
+                                    { "CurrentValue", Model.IntroVideoUrl },
+                                    { "Required", false },
+                                    { "HelpText", Html.T("فيديو قصير 1-3 دقائق يعرض محتوى الدورة", "Short 1-3 min video presenting the course") },
+                                    { "AspectRatio", "16/9" }
+                                })
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar (Same as Create) -->
+            <div class="col-lg-4">
+                <!-- Publishing Options -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("خيارات النشر", "Publishing options")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("الحالة", "Status")</label>
+                            <select asp-for="Status" class="form-select">
+                                <option value="Draft">@Html.T("مسودة", "Draft")</option>
+                                <option value="PendingReview">@Html.T("جاهز للمراجعة", "Ready for review")</option>
+                                <option value="Published">@Html.T("منشورة", "Published")</option>
+                                <option value="Archived">@Html.T("مؤرشفة", "Archived")</option>
+                            </select>
+                        </div>
+                        <div class="alert alert-soft-info">
+                            <p class="fs-11 mb-0"><i class="feather-info me-2"></i>@Html.T("آخر تحديث:", "Last updated:") @(Model.UpdatedAt?.ToString("dd/MM/yyyy hh:mm tt") ?? "-")</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pricing -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("السعر", "Pricing")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("نوع الدورة", "Course type")</label>
+                            <select class="form-select" id="courseType" onchange="togglePricing()">
+                                <option value="paid" selected="@(Model.Price > 0)">@Html.T("مدفوعة", "Paid")</option>
+                                <option value="free" selected="@(Model.Price == 0)">@Html.T("مجانية", "Free")</option>
+                            </select>
+                        </div>
+
+                        <div id="pricingSection" style="display: @(Model.Price > 0 ? "block" : "none")">
+                            <div class="mb-4">
+                                <label class="form-label">@Html.T("السعر", "Price")</label>
+                                <div class="input-group">
+                                    <input asp-for="Price" type="number" class="form-control" min="0" step="0.01">
+                                    <span class="input-group-text">ر.س</span>
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label">@Html.T("سعر الخصم", "Discount price")</label>
+                                <div class="input-group">
+                                    <input asp-for="DiscountPrice" type="number" class="form-control" min="0" step="0.01">
+                                    <span class="input-group-text">ر.س</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إحصائيات الدورة", "Course statistics")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <span class="text-muted">@Html.T("الطلاب المسجلين", "Enrolled students")</span>
+                            <span class="fw-bold">@(ViewBag.EnrollmentCount ?? 0)</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <span class="text-muted">@Html.T("التقييم", "Rating")</span>
+                            <span class="fw-bold">@Model.AverageRating.ToString("F1") ⭐</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <span class="text-muted">@Html.T("المشاهدات", "Views")</span>
+                            <span class="fw-bold">@(ViewBag.ViewCount ?? 0)</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="text-muted">@Html.T("الإيرادات الكلية", "Total revenue")</span>
+                            <span class="fw-bold text-success">@((ViewBag.TotalRevenue ?? 0).ToEGP())</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEO Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("تحسين محركات البحث", "SEO")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("عنوان SEO", "SEO title")</label>
+                            <input asp-for="MetaTitle" class="form-control">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("وصف SEO", "SEO description")</label>
+                            <textarea asp-for="MetaDescription" class="form-control" rows="3"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("الكلمات المفتاحية", "Keywords")</label>
+                            <input asp-for="MetaKeywords" class="form-control">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الإعدادات", "Settings")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input asp-for="IsPublic" class="form-check-input" type="checkbox" id="isPublic">
+                            <label class="form-check-label" for="isPublic">@Html.T("دورة عامة", "Public course")</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input asp-for="AllowDiscussions" class="form-check-input" type="checkbox" id="allowDiscussions">
+                            <label class="form-check-label" for="allowDiscussions">@Html.T("السماح بالمناقشات", "Allow discussions")</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input asp-for="EnableCertificate" class="form-check-input" type="checkbox" id="enableCertificate">
+                            <label class="form-check-label" for="enableCertificate">@Html.T("إصدار شهادة", "Issue certificate")</label>
+                        </div>
+
+                        <div class="form-check form-switch">
+                            <input asp-for="EnableDrip" class="form-check-input" type="checkbox" id="enableDrip">
+                            <label class="form-check-label" for="enableDrip">@Html.T("المحتوى التدريجي", "Content drip")</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between gap-3">
+                            <a href="@Url.Action("Index")" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                @Html.T("إلغاء", "Cancel")
+                            </a>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="feather-save me-2"></i>
+                                    @Html.T("حفظ التعديلات", "Save changes")
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@await Html.PartialAsync("_DeleteModal")
+@await Html.PartialAsync("_CategoryModals")
+
+@section Scripts {
+    @await Html.PartialAsync("_TinyMCEScripts")
+    <script src="~/js/instructor-category-manager.js"></script>
+    <script>
+        // Initialize TinyMCE for description editor
+        initTinyMCE('#descriptionEditor', { height: 400 });
+
+        // Initialize Category Manager for on-the-fly category creation
+        document.addEventListener('DOMContentLoaded', function() {
+            InstructorCategoryManager.init({
+                categorySelectId: 'categorySelect',
+                subcategorySelectId: 'subcategorySelect',
+                addSubcategoryBtnId: 'addSubcategoryBtn',
+                apiBaseUrl: '/Instructor/Courses'
+            });
+
+            // Load subcategories for existing category
+            @if (Model.CategoryId > 0)
+            {
+                <text>
+                InstructorCategoryManager.loadAndSelectSubcategory(@Model.CategoryId, @(Model.SubCategoryId ?? 0));
+                </text>
+            }
+        });
+
+        let learningPointIndex = @(Model.LearningPoints?.Count ?? 1);
+        function addLearningPoint() {
+            const container = document.getElementById('learningPointsContainer');
+            const html = `
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" name="LearningPoints[${learningPointIndex}]" placeholder="@Html.T("أضف نقطة تعلم جديدة", "Add learning point")">
+                    <button class="btn btn-outline-danger" type="button" onclick="removeLearningPoint(this)">
+                        <i class="feather-x"></i>
+                    </button>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+            learningPointIndex++;
+        }
+
+        function removeLearningPoint(btn) {
+            btn.closest('.input-group').remove();
+        }
+
+        let requirementIndex = @(Model.Requirements?.Count ?? 1);
+        function addRequirement() {
+            const container = document.getElementById('requirementsContainer');
+            const html = `
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" name="Requirements[${requirementIndex}]" placeholder="أضف متطلب جديد">
+                    <button class="btn btn-outline-danger" type="button" onclick="removeRequirement(this)">
+                        <i class="feather-x"></i>
+                    </button>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', html);
+            requirementIndex++;
+        }
+
+        function removeRequirement(btn) {
+            btn.closest('.input-group').remove();
+        }
+
+        function togglePricing() {
+            const courseType = document.getElementById('courseType').value;
+            const pricingSection = document.getElementById('pricingSection');
+            if (courseType === 'free') {
+                pricingSection.style.display = 'none';
+                document.querySelector('[name="Price"]').value = '0';
+            } else {
+                pricingSection.style.display = 'block';
+            }
+        }
+
+        function previewThumbnail(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const preview = document.getElementById('thumbnailPreview');
+                    preview.querySelector('img').src = e.target.result;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+    </script>
+
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

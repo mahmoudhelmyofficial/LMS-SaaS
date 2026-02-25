@@ -1,0 +1,262 @@
+@model IEnumerable<LMS.Domain.Entities.Assessments.Quiz>
+@using LMS.Helpers
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إدارة الاختبارات", "Quizzes Management");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة اختبارات دوراتك", "View and manage your course quizzes");
+    var createUrl = Url.Action("Create");
+    
+    // Load platform settings
+    var defaultPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Default", 12);
+}
+
+@await Html.PartialAsync("_PageHeader", ViewDataDictionaryHelper.CreateWith(
+    ViewData,
+    "ActionButtons",
+    Html.Raw("<a href='" + createUrl + "' class='btn btn-primary'><i class='feather-plus me-2'></i>" + Html.T("إنشاء اختبار جديد", "Create new quiz") + "</a>")
+))
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("إجمالي الاختبارات", "Total quizzes")),
+                ("Value", ViewBag.TotalQuizzes ?? 0),
+                ("Icon", "help-circle"),
+                ("Color", "primary")
+            ))
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("إجمالي الأسئلة", "Total questions")),
+                ("Value", ViewBag.TotalQuestions ?? 0),
+                ("Icon", "list"),
+                ("Color", "info")
+            ))
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("المحاولات", "Attempts")),
+                ("Value", ViewBag.TotalAttempts ?? 0),
+                ("Icon", "users"),
+                ("Color", "success")
+            ))
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("معدل النجاح", "Pass rate")),
+                ("Value", $"{ViewBag.AveragePassRate ?? 0}%"),
+                ("Icon", "trending-up"),
+                ("Color", "warning")
+            ))
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <select class="form-select" name="courseId" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                @if (ViewBag.Courses != null)
+                                {
+                                    foreach (var course in ViewBag.Courses)
+                                    {
+                                        var isSelected = ViewBag.CourseId != null && (int)ViewBag.CourseId == (int)course.Id;
+                                        <option value="@course.Id" selected="@(isSelected ? "selected" : null)">@course.Title</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <select class="form-select" name="type" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الأنواع", "All types")</option>
+                                <option value="Practice" selected="@(ViewBag.Type == "Practice" ? "selected" : null)">@Html.T("تدريبي", "Practice")</option>
+                                <option value="Final" selected="@(ViewBag.Type == "Final" ? "selected" : null)">@Html.T("نهائي", "Final")</option>
+                                <option value="Midterm" selected="@(ViewBag.Type == "Midterm" ? "selected" : null)">@Html.T("نصف نهائي", "Midterm")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" name="search" placeholder="@Html.T("بحث...", "Search...")" value="@ViewBag.SearchTerm">
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quizzes List -->
+    <div class="row">
+        @if (Model != null && Model.Any())
+        {
+            foreach (var quiz in Model)
+            {
+                <div class="col-12 col-lg-6 col-xl-4 mb-4">
+                    <div class="card stretch stretch-full">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start justify-content-between mb-3">
+                                <div class="avatar-text avatar-lg bg-soft-warning text-warning">
+                                    <i class="feather-help-circle"></i>
+                                </div>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown">
+                                        <i class="feather-more-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Edit", new { id = quiz.Id })">
+                                                <i class="feather-edit me-2"></i>
+                                                @Html.T("تعديل", "Edit")
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Questions", new { quizId = quiz.Id })">
+                                                <i class="feather-list me-2"></i>
+                                                @Html.T("إدارة الأسئلة", "Manage questions")
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Attempts", new { quizId = quiz.Id })">
+                                                <i class="feather-users me-2"></i>
+                                                @Html.T("المحاولات", "Attempts")
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Analytics", new { quizId = quiz.Id })">
+                                                <i class="feather-bar-chart-2 me-2"></i>
+                                                @Html.T("التحليلات", "Analytics")
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form asp-action="Duplicate" asp-route-id="@quiz.Id" method="post" style="display:inline;" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من نسخ هذا الاختبار؟", "Are you sure you want to duplicate this quiz?").Replace("'", "\\'"))');">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="dropdown-item">
+                                                    <i class="feather-copy me-2"></i>
+                                                    @Html.T("نسخ الاختبار", "Duplicate quiz")
+                                                </button>
+                                            </form>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@Url.Action("Delete", new { id = quiz.Id })', '@Html.Raw(Html.T("هل أنت متأكد من حذف هذا الاختبار؟", "Are you sure you want to delete this quiz?").Replace("'", "\\'"))')">
+                                                <i class="feather-trash-2 me-2"></i>
+                                                @Html.T("حذف", "Delete")
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <h5 class="mb-2">
+                                <a href="@Url.Action("Details", new { id = quiz.Id })" class="text-dark">
+                                    @quiz.Title
+                                </a>
+                            </h5>
+                            <p class="text-muted fs-13 mb-3">@quiz.Description</p>
+
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <div class="p-2 bg-soft-primary rounded text-center">
+                                        <h6 class="mb-0">@(ViewBag.QuestionCounts?.ContainsKey(quiz.Id) == true ? ViewBag.QuestionCounts[quiz.Id] : 0)</h6>
+                                        <p class="fs-11 text-muted mb-0">@Html.T("أسئلة", "Questions")</p>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="p-2 bg-soft-success rounded text-center">
+                                        <h6 class="mb-0">@quiz.TimeLimitMinutes</h6>
+                                        <p class="fs-11 text-muted mb-0">@Html.T("دقيقة", "min")</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <span class="fs-12 text-muted">@Html.T("درجة النجاح", "Passing score")</span>
+                                <span class="fw-bold">@quiz.PassingScore%</span>
+                            </div>
+
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <span class="fs-12 text-muted">@Html.T("المحاولات", "Attempts")</span>
+                                <span class="badge bg-soft-info text-info">
+                                    @(ViewBag.AttemptCounts?.ContainsKey(quiz.Id) == true ? ViewBag.AttemptCounts[quiz.Id] : 0)
+                                </span>
+                            </div>
+
+                            <div class="progress mb-2" style="height: 6px;">
+                                <div class="progress-bar bg-success" style="width: @(ViewBag.PassRates?.ContainsKey(quiz.Id) == true ? ViewBag.PassRates[quiz.Id] : 0)%"></div>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="fs-11 text-muted">@Html.T("معدل النجاح", "Pass rate")</span>
+                                <span class="fs-11 fw-medium">@(ViewBag.PassRates?.ContainsKey(quiz.Id) == true ? ViewBag.PassRates[quiz.Id] : 0)%</span>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-light">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="feather-book fs-12 text-muted"></i>
+                                @{
+                                    var courseId = quiz.Lesson?.Module?.Course?.Id ?? quiz.Lesson?.Module?.CourseId ?? 0;
+                                    var courseTitle = quiz.Lesson?.Module?.Course?.Title;
+                                }
+                                @if (courseId > 0 && !string.IsNullOrEmpty(courseTitle))
+                                {
+                                    <a href="@Url.Action("Details", "Courses", new { area = "Instructor", id = courseId })" class="fs-12 text-truncate">
+                                        @courseTitle
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span class="fs-12 text-muted text-truncate">@(courseTitle ?? "—")</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Pagination -->
+            <div class="col-lg-12">
+                @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                    ViewData,
+                    ("CurrentPage", ViewBag.CurrentPage ?? 1),
+                    ("TotalPages", ViewBag.TotalPages ?? 1),
+                    ("TotalItems", ViewBag.TotalItems ?? 0),
+                    ("PageSize", ViewBag.PageSize ?? defaultPageSize),
+                    ("Action", "Index"),
+                    ("Controller", "Quizzes")
+                ))
+            </div>
+        }
+        else
+        {
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-warning text-warning mb-4 mx-auto">
+                            <i class="feather-help-circle"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">@Html.T("لا توجد اختبارات بعد", "No quizzes yet")</h5>
+                        <p class="text-muted mb-4">@Html.T("ابدأ بإنشاء أول اختبار لطلابك", "Start by creating your first quiz for students")</p>
+                        <a href="@Url.Action("Create")" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إنشاء اختبار جديد", "Create new quiz")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@await Html.PartialAsync("_DeleteModal")
+

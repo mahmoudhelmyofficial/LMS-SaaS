@@ -1,0 +1,176 @@
+@* Sidebar Enhancement Scripts - Admin Area *@
+<script>
+(function() {
+    'use strict';
+    
+    const BADGE_UPDATE_INTERVAL = 60000; // 60 seconds for admin
+    
+    // Initialize on DOM ready
+    document.addEventListener('DOMContentLoaded', function() {
+        initSidebarDropdowns();
+        initializeBadges();
+    });
+    
+    // Simple accordion-style sidebar dropdown functionality
+    function initSidebarDropdowns() {
+        const sidebar = document.querySelector('#main-sidebar, .nxl-navigation');
+        if (!sidebar) return;
+        
+        // Get all dropdown menu items
+        const dropdownItems = sidebar.querySelectorAll('.nxl-hasmenu');
+        
+        // Initialize: close all submenus except active ones
+        dropdownItems.forEach(function(item) {
+            const submenu = item.querySelector('.nxl-submenu');
+            if (!submenu) return;
+            
+            // Only keep active menu open initially
+            if (item.classList.contains('active')) {
+                item.classList.add('nxl-trigger');
+                submenu.style.display = 'block';
+            } else {
+                item.classList.remove('nxl-trigger', 'open');
+                submenu.style.display = 'none';
+            }
+        });
+        
+        // Handle click on dropdown toggle links
+        sidebar.addEventListener('click', function(e) {
+            // Find if we clicked on a dropdown toggle (the parent link, not submenu items)
+            const link = e.target.closest('.nxl-hasmenu > .nxl-link');
+            if (!link) return;
+            
+            const parentItem = link.parentElement;
+            if (!parentItem || !parentItem.classList.contains('nxl-hasmenu')) return;
+            
+            const submenu = parentItem.querySelector('.nxl-submenu');
+            if (!submenu) return;
+            
+            // Prevent default navigation for dropdown toggles
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Check if this menu is currently open
+            const isOpen = parentItem.classList.contains('nxl-trigger');
+            
+            // Close all other open menus (accordion behavior)
+            dropdownItems.forEach(function(item) {
+                if (item !== parentItem && item.classList.contains('nxl-trigger')) {
+                    item.classList.remove('nxl-trigger', 'open');
+                    const otherSubmenu = item.querySelector('.nxl-submenu');
+                    if (otherSubmenu) {
+                        slideUp(otherSubmenu, 250);
+                    }
+                }
+            });
+            
+            // Toggle current menu
+            if (isOpen) {
+                parentItem.classList.remove('nxl-trigger', 'open');
+                slideUp(submenu, 250);
+            } else {
+                parentItem.classList.add('nxl-trigger', 'open');
+                slideDown(submenu, 250);
+            }
+        });
+    }
+    
+    // Slide down animation
+    function slideDown(element, duration) {
+        if (!element) return;
+        
+        // Reset any previous animation
+        element.style.removeProperty('transition');
+        element.style.removeProperty('height');
+        element.style.removeProperty('overflow');
+        
+        element.style.display = 'block';
+        const height = element.scrollHeight;
+        
+        element.style.overflow = 'hidden';
+        element.style.height = '0';
+        
+        // Force reflow
+        element.offsetHeight;
+        
+        element.style.transition = 'height ' + duration + 'ms ease';
+        element.style.height = height + 'px';
+        
+        setTimeout(function() {
+            element.style.removeProperty('transition');
+            element.style.removeProperty('height');
+            element.style.removeProperty('overflow');
+        }, duration);
+    }
+    
+    // Slide up animation
+    function slideUp(element, duration) {
+        if (!element) return;
+        
+        element.style.overflow = 'hidden';
+        element.style.height = element.scrollHeight + 'px';
+        
+        // Force reflow
+        element.offsetHeight;
+        
+        element.style.transition = 'height ' + duration + 'ms ease';
+        element.style.height = '0';
+        
+        setTimeout(function() {
+            element.style.display = 'none';
+            element.style.removeProperty('transition');
+            element.style.removeProperty('height');
+            element.style.removeProperty('overflow');
+        }, duration);
+    }
+    
+    // Initialize and update notification badges
+    function initializeBadges() {
+        updateBadges();
+        setInterval(updateBadges, BADGE_UPDATE_INTERVAL);
+    }
+    
+    function updateBadges() {
+        // Pending instructor applications (endpoint exists)
+        fetchBadgeCount('/Admin/Instructors/GetPendingCount', 'pending-applications-badge');
+        // Optional: add GetPendingCount/GetOpenCount to respective controllers to enable badges
+        fetchBadgeCount('/Admin/Courses/GetPendingCount', 'pending-courses-badge');
+        fetchBadgeCount('/Admin/Refunds/GetPendingCount', 'pending-refunds-badge');
+        fetchBadgeCount('/Admin/WithdrawalMethods/GetPendingCount', 'pending-withdrawals-badge');
+        fetchBadgeCount('/Admin/Support/GetOpenCount', 'open-tickets-badge');
+    }
+    
+    function fetchBadgeCount(url, badgeId) {
+        const badge = document.getElementById(badgeId);
+        if (!badge) return;
+        
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        })
+        .then(function(response) {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(function(data) {
+            const count = data.count || data.Count || 0;
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count.toString();
+                badge.style.display = 'inline-flex';
+            } else {
+                badge.textContent = '';
+                badge.style.display = 'none';
+            }
+        })
+        .catch(function() {
+            // Silently fail - don't show errors for badge updates
+            badge.style.display = 'none';
+        });
+    }
+})();
+</script>
+

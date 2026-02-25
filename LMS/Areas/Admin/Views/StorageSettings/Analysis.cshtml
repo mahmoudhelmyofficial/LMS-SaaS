@@ -1,0 +1,136 @@
+@model LMS.Areas.Admin.Controllers.StorageAnalysis
+@{
+    ViewData["Title"] = Html.T("تحليل التخزين", "Storage analysis");
+    ViewData["Breadcrumbs"] = new List<(string Name, string Url)>
+    {
+        (Html.T("الإعدادات", "Settings"), Url.Action("Index", "Settings")),
+        (Html.T("التخزين", "Storage"), Url.Action("Index")),
+        (Html.T("التحليل", "Analysis"), "")
+    };
+}
+
+<div class="main-content">
+    <!-- Total Size Card -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h5 class="mb-1">إجمالي حجم التخزين</h5>
+                    <h2 class="mb-0 text-primary">@Model.FormattedTotalSize</h2>
+                </div>
+                <div class="col-md-6 text-end">
+                    <a asp-action="Index" class="btn btn-outline-primary">
+                        <i class="feather-arrow-right me-2"></i>العودة للإعدادات
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Folder Chart -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0"><i class="feather-pie-chart me-2"></i>توزيع التخزين</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="storageChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Folder List -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0"><i class="feather-folder me-2"></i>تفاصيل المجلدات</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>@Html.T("المجلد", "Folder")</th>
+                                    <th>@Html.T("الحجم", "Size")</th>
+                                    <th>@Html.T("الملفات", "Files")</th>
+                                    <th>@Html.T("النسبة", "Share")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.FolderSizes?.Any() == true)
+                                {
+                                    foreach (var folder in Model.FolderSizes.OrderByDescending(f => f.Size))
+                                    {
+                                        var percentage = Model.TotalSize > 0 ? (decimal)folder.Size / Model.TotalSize * 100 : 0;
+                                        <tr>
+                                            <td>
+                                                <i class="feather-folder me-2 text-warning"></i>
+                                                @folder.FolderName
+                                            </td>
+                                            <td><strong>@folder.FormattedSize</strong></td>
+                                            <td>@folder.FileCount ملف</td>
+                                            <td>
+                                                <div class="progress" style="height: 6px; width: 100px;">
+                                                    <div class="progress-bar" style="width: @percentage%"></div>
+                                                </div>
+                                                <small class="text-muted">@percentage.ToString("N1")%</small>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="4" class="text-center py-4 text-muted">
+                                            <i class="feather-folder fs-1 mb-3 d-block opacity-50"></i>
+                                            لا توجد مجلدات
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const folderData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.FolderSizes ?? new List<LMS.Areas.Admin.Controllers.FolderSizeInfo>()));
+        
+        if (folderData.length > 0) {
+            const ctx = document.getElementById('storageChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: folderData.map(d => d.FolderName),
+                    datasets: [{
+                        data: folderData.map(d => d.Size),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(255, 206, 86, 0.8)',
+                            'rgba(75, 192, 192, 0.8)',
+                            'rgba(153, 102, 255, 0.8)',
+                            'rgba(255, 159, 64, 0.8)',
+                            'rgba(199, 199, 199, 0.8)',
+                            'rgba(83, 102, 255, 0.8)',
+                            'rgba(255, 99, 255, 0.8)',
+                            'rgba(99, 255, 132, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'right' }
+                    }
+                }
+            });
+        }
+    </script>
+}
+

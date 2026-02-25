@@ -1,0 +1,267 @@
+@model LMS.Areas.Admin.ViewModels.ContentDripCreateViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء قاعدة جدولة محتوى", "Create Content Drip Rule");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("إدارة المحتوى", "Content management"), null),
+        (Html.T("جدولة المحتوى", "Content drip"), Url.Action("Index", "ContentDrip")),
+        (Html.T("إنشاء قاعدة جديدة", "Create new rule"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        .select2-container { width: 100% !important; }
+        .drip-type-selector .form-check { padding: 15px; border: 2px solid #e5e7eb; border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: all 0.3s; }
+        .drip-type-selector .form-check:hover { border-color: #3b82f6; background: #f0f9ff; }
+        .drip-type-selector .form-check-input:checked + label { font-weight: bold; }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-clock me-2"></i>قاعدة جدولة المحتوى
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Create" method="post">
+                        @Html.AntiForgeryToken()
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="CourseId" class="form-label">@Html.T("الدورة", "Course") <span class="text-danger">*</span></label>
+                            <select asp-for="CourseId" class="form-select" id="courseSelect">
+                                <option value="">-- اختر الدورة --</option>
+                                @if (ViewBag.Courses != null)
+                                {
+                                    @foreach (var course in ViewBag.Courses)
+                                    {
+                                        <option value="@course.Value">@course.Text</option>
+                                    }
+                                }
+                            </select>
+                            <span asp-validation-for="CourseId" class="text-danger"></span>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label asp-for="ModuleId" class="form-label">@Html.T("الوحدة (اختياري)", "Module (optional)")</label>
+                                <select asp-for="ModuleId" class="form-select" id="moduleSelect" disabled>
+                                    <option value="">-- اختر الوحدة --</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="LessonId" class="form-label">@Html.T("الدرس (اختياري)", "Lesson (optional)")</label>
+                                <select asp-for="LessonId" class="form-select" id="lessonSelect" disabled>
+                                    <option value="">-- اختر الدرس --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="DripType" class="form-label">@Html.T("نوع الجدولة", "Schedule type") <span class="text-danger">*</span></label>
+                            <div class="drip-type-selector">
+                                <div class="form-check">
+                                    <input asp-for="DripType" type="radio" class="form-check-input" value="@ContentDripType.ByDays" id="byDays" checked />
+                                    <label class="form-check-label w-100" for="byDays">
+                                        <strong>بعد عدد أيام من التسجيل</strong>
+                                        <small class="d-block text-muted">يتم إتاحة المحتوى بعد عدد معين من الأيام من تسجيل الطالب</small>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input asp-for="DripType" type="radio" class="form-check-input" value="@ContentDripType.ByDate" id="byDate" />
+                                    <label class="form-check-label w-100" for="byDate">
+                                        <strong>في تاريخ محدد</strong>
+                                        <small class="d-block text-muted">يتم إتاحة المحتوى في تاريخ ووقت محدد</small>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input asp-for="DripType" type="radio" class="form-check-input" value="@ContentDripType.ByWeekDay" id="byWeekDay" />
+                                    <label class="form-check-label w-100" for="byWeekDay">
+                                        <strong>في يوم معين من الأسبوع</strong>
+                                        <small class="d-block text-muted">يتم إتاحة المحتوى كل أسبوع في يوم محدد</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="byDaysOptions" class="form-group mb-4">
+                            <label asp-for="DaysAfterEnrollment" class="form-label">@Html.T("عدد الأيام", "Days count") <span class="text-danger">*</span></label>
+                            <input asp-for="DaysAfterEnrollment" type="number" class="form-control" min="0" placeholder="@Html.T("مثال: 7", "e.g. 7")" />
+                            <small class="text-muted">@Html.T("سيتم إتاحة المحتوى بعد هذا العدد من الأيام", "Content will be released after this number of days")</small>
+                        </div>
+
+                        <div id="byDateOptions" class="form-group mb-4" style="display: none;">
+                            <label asp-for="SpecificDate" class="form-label">@Html.T("التاريخ والوقت", "Date and time") <span class="text-danger">*</span></label>
+                            <input asp-for="SpecificDate" type="datetime-local" class="form-control" />
+                        </div>
+
+                        <div id="byWeekDayOptions" class="form-group mb-4" style="display: none;">
+                            <label asp-for="DayOfWeek" class="form-label">@Html.T("يوم الأسبوع", "Day of week") <span class="text-danger">*</span></label>
+                            <select asp-for="DayOfWeek" class="form-select">
+                                <option value="0">@Html.T("الأحد", "Sunday")</option>
+                                <option value="1">@Html.T("الاثنين", "Monday")</option>
+                                <option value="2">@Html.T("الثلاثاء", "Tuesday")</option>
+                                <option value="3">@Html.T("الأربعاء", "Wednesday")</option>
+                                <option value="4">@Html.T("الخميس", "Thursday")</option>
+                                <option value="5">@Html.T("الجمعة", "Friday")</option>
+                                <option value="6">@Html.T("السبت", "Saturday")</option>
+                            </select>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label asp-for="ReleaseHour" class="form-label">@Html.T("ساعة الإتاحة", "Release hour") <span class="text-danger">*</span></label>
+                                <input asp-for="ReleaseHour" type="number" class="form-control" min="0" max="23" value="9" />
+                                <small class="text-muted">@Html.T("الساعة بتوقيت 24 ساعة (0-23)", "Hour in 24h format (0-23)")</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="TimeZone" class="form-label">@Html.T("المنطقة الزمنية", "Time zone")</label>
+                                <select asp-for="TimeZone" class="form-select">
+                                    <option value="Africa/Cairo">@Html.T("القاهرة (GMT+2)", "Cairo (GMT+2)")</option>
+                                    <option value="Asia/Riyadh">@Html.T("الرياض (GMT+3)", "Riyadh (GMT+3)")</option>
+                                    <option value="Asia/Dubai">@Html.T("دبي (GMT+4)", "Dubai (GMT+4)")</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title mb-3">
+                                    <i class="feather-bell me-2"></i>@Html.T("إعدادات الإشعارات", "Notification settings")
+                                </h6>
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="SendNotification" class="form-check-input" type="checkbox" checked />
+                                    <label class="form-check-label" asp-for="SendNotification">@Html.T("إرسال إشعار للطالب", "Send notification to student")</label>
+                                </div>
+                                <div id="notificationSettings">
+                                    <div class="form-group mb-3">
+                                        <label asp-for="NotificationTitle" class="form-label">@Html.T("عنوان الإشعار", "Notification title")</label>
+                                        <input asp-for="NotificationTitle" class="form-control" placeholder="@Html.T("محتوى جديد متاح!", "New content available!")" />
+                                    </div>
+                                    <div class="form-group mb-3">
+                                        <label asp-for="NotificationMessage" class="form-label">@Html.T("رسالة الإشعار", "Notification message")</label>
+                                        <textarea asp-for="NotificationMessage" class="form-control" rows="2" placeholder="@Html.T("تم إتاحة محتوى جديد في الدورة...", "New content has been released in the course...")"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-check form-switch mb-4">
+                            <input asp-for="IsActive" class="form-check-input" type="checkbox" checked />
+                            <label class="form-check-label" asp-for="IsActive">@Html.T("نشطة (تطبيق القاعدة)", "Active (apply rule)")</label>
+                        </div>
+
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="Index" class="btn btn-light">
+                                <i class="feather-x me-2"></i>إلغاء
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-2"></i>حفظ القاعدة
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-info me-2"></i>دليل الجدولة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-3">
+                        <i class="feather-info me-2"></i>
+                        <small><strong>بعد عدد أيام:</strong> مثال: إتاحة المحتوى بعد 7 أيام من التسجيل</small>
+                    </div>
+                    <div class="alert alert-success mb-3">
+                        <i class="feather-calendar me-2"></i>
+                        <small><strong>@Html.T("تاريخ محدد", "Specific date"):</strong> @Html.T("مثال: إتاحة المحتوى في 1 يناير 2024", "e.g. Release content on January 1, 2024")</small>
+                    </div>
+                    <div class="alert alert-warning mb-0">
+                        <i class="feather-clock me-2"></i>
+                        <small><strong>يوم من الأسبوع:</strong> مثال: إتاحة المحتوى كل يوم اثنين</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            $('#courseSelect, #moduleSelect, #lessonSelect').select2({ dir: 'rtl' });
+
+            // Handle course change
+            $('#courseSelect').on('change', function() {
+                const courseId = $(this).val();
+                if (courseId) {
+                    $('#moduleSelect').prop('disabled', false);
+                    $.get('@Url.Action("GetModulesByCourse", "ContentDrip")?courseId=' + courseId, function(data) {
+                        $('#moduleSelect').empty().append('<option value="">-- اختر الوحدة --</option>');
+                        $.each(data, function(i, item) {
+                            $('#moduleSelect').append('<option value="' + item.id + '">' + item.title + '</option>');
+                        });
+                    });
+                } else {
+                    $('#moduleSelect, #lessonSelect').prop('disabled', true).empty();
+                }
+            });
+
+            // Handle module change
+            $('#moduleSelect').on('change', function() {
+                const moduleId = $(this).val();
+                if (moduleId) {
+                    $('#lessonSelect').prop('disabled', false);
+                    $.get('@Url.Action("GetLessonsByModule", "ContentDrip")?moduleId=' + moduleId, function(data) {
+                        $('#lessonSelect').empty().append('<option value="">-- اختر الدرس --</option>');
+                        $.each(data, function(i, item) {
+                            $('#lessonSelect').append('<option value="' + item.id + '">' + item.title + '</option>');
+                        });
+                    });
+                } else {
+                    $('#lessonSelect').prop('disabled', true).empty();
+                }
+            });
+
+            // Handle drip type change (ByDays=1, ByDate=3, ByWeekDay=5)
+            function setDripTypeOptions() {
+                var val = $('input[name="DripType"]:checked').val();
+                $('#byDaysOptions, #byDateOptions, #byWeekDayOptions').hide()
+                    .find('input, select').prop('disabled', true);
+                if (val == '1') {
+                    $('#byDaysOptions').show().find('input, select').prop('disabled', false);
+                } else if (val == '3') {
+                    $('#byDateOptions').show().find('input, select').prop('disabled', false);
+                } else if (val == '5') {
+                    $('#byWeekDayOptions').show().find('input, select').prop('disabled', false);
+                }
+            }
+            $('input[name="DripType"]').on('change', setDripTypeOptions);
+            setDripTypeOptions();
+
+            // Handle notification toggle
+            $('input[name="SendNotification"]').on('change', function() {
+                $('#notificationSettings').toggle($(this).is(':checked'));
+            });
+        });
+    </script>
+}
+

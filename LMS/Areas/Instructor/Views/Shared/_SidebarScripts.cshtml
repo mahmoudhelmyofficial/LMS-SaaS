@@ -1,0 +1,62 @@
+@* Sidebar Enhancement Scripts - Instructor Area *@
+@* NOTE: Main sidebar toggle logic is handled in _Layout.cshtml to avoid conflicts *@
+@inject IPlatformSettingsService PlatformSettings
+@{
+    var badgeRefreshInterval = await PlatformSettings.GetIntSettingAsync("UI.BadgeRefreshIntervalMs", 30000);
+}
+<script>
+(function() {
+    'use strict';
+    
+    const BADGE_UPDATE_INTERVAL = @badgeRefreshInterval; // milliseconds
+    
+    // Initialize badges on DOM ready
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeBadges();
+    });
+    
+    // Initialize and update notification badges
+    function initializeBadges() {
+        updateBadges();
+        setInterval(updateBadges, BADGE_UPDATE_INTERVAL);
+    }
+    
+    function updateBadges() {
+        // Update unread messages count
+        fetchBadgeCount('/Instructor/Messages/GetUnreadCount', 'unread-messages-badge');
+    }
+    
+    function fetchBadgeCount(url, badgeId) {
+        const badge = document.getElementById(badgeId);
+        if (!badge) return;
+        
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        })
+        .then(function(response) {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(function(data) {
+            const count = data.count || data.Count || 0;
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count.toString();
+                badge.style.display = 'inline-flex';
+            } else {
+                badge.textContent = '';
+                badge.style.display = 'none';
+            }
+        })
+        .catch(function() {
+            // Silently fail - don't show errors for badge updates
+            badge.style.display = 'none';
+        });
+    }
+})();
+</script>
+

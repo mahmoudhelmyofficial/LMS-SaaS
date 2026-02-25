@@ -1,0 +1,267 @@
+@model List<LMS.Domain.Entities.Payments.SubscriptionPlan>
+@{
+    ViewData["Title"] = Html.T("خطط الاشتراك", "Subscription Plans");
+}
+
+@section Styles {
+<style>
+    .pricing-card {
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    .pricing-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    }
+    .pricing-card.featured {
+        border: 3px solid #667eea;
+        transform: scale(1.05);
+    }
+    .pricing-card.featured .badge-most-popular {
+        position: absolute;
+        top: -15px;
+        right: 50%;
+        transform: translateX(50%);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 5px 20px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .feature-item {
+        padding: 8px 0;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    .feature-item:last-child {
+        border-bottom: none;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+    <div class="card-body py-5 text-center">
+        <h1 class="text-white fw-bold mb-2">@Html.T("اختر الخطة المناسبة لك", "Choose the plan that suits you")</h1>
+        <p class="text-white opacity-75 mb-4">@Html.T("وصول غير محدود لآلاف الدورات التعليمية", "Unlimited access to thousands of courses")</p>
+        
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-light billing-toggle active" data-billing="monthly">@Html.T("شهري", "Monthly")</button>
+            <button type="button" class="btn btn-outline-light billing-toggle" data-billing="yearly">@Html.T("سنوي (وفر 20%)", "Yearly (Save 20%)")</button>
+        </div>
+    </div>
+</div>
+
+<!-- Pricing Cards -->
+@if (Model != null && Model.Any())
+{
+    <div class="row g-4 mb-4">
+        @foreach (var plan in Model)
+        {
+            var isFeatured = plan.IsFeatured;
+            var cardClass = isFeatured ? "pricing-card featured" : "pricing-card";
+            var iconClass = plan.Name.ToLower().Contains("pro") ? "feather-star" : 
+                           plan.Name.ToLower().Contains("enterprise") || plan.Name.ToLower().Contains("مؤسس") ? "feather-briefcase" :
+                           "feather-package";
+            var colorClass = plan.Name.ToLower().Contains("pro") ? "primary" : 
+                            plan.Name.ToLower().Contains("enterprise") || plan.Name.ToLower().Contains("مؤسس") ? "warning" :
+                            "secondary";
+            var yearlyPrice = plan.Price * 12 * 0.8m; // 20% discount for yearly
+            
+            <div class="col-lg-4">
+                <div class="card @cardClass stretch stretch-full">
+                    @if (isFeatured)
+                    {
+                        <span class="badge-most-popular">@Html.T("الأكثر شعبية", "Most Popular")</span>
+                    }
+                    <div class="card-body p-4">
+                        <div class="text-center mb-4">
+                            <div class="avatar-text avatar-lg bg-soft-@colorClass text-@colorClass mx-auto mb-3">
+                                <i class="@iconClass"></i>
+                            </div>
+                            <h4 class="fw-bold mb-2">@(plan.NameAr ?? plan.Name)</h4>
+                            @if (!string.IsNullOrEmpty(plan.Description) || !string.IsNullOrEmpty(plan.NameAr))
+                            {
+                                <p class="text-muted mb-3">@(plan.Description ?? plan.NameAr ?? plan.Name)</p>
+                            }
+                            <h1 class="fw-bold @(isFeatured ? "text-primary" : "") mb-0">
+                                <span class="monthly-price">@plan.Price.ToEGP(0)</span>
+                                <span class="yearly-price" style="display: none;">@yearlyPrice.ToEGP(0)</span>
+                                <small class="text-muted fs-6">
+                                    /<span class="billing-period">@(plan.BillingCycle == "Monthly" ? Html.T("شهر", "month") : plan.BillingCycle == "Yearly" ? Html.T("سنة", "year") : plan.BillingCycle)</span>
+                                </small>
+                            </h1>
+                            @if (plan.TrialDays > 0)
+                            {
+                                <div class="mt-2">
+                                    <span class="badge bg-success">@Html.T("تجربة مجانية", "Free trial") @plan.TrialDays @Html.T("يوم", "days")</span>
+                                </div>
+                            }
+                        </div>
+
+                        <ul class="list-unstyled mb-4">
+                            @if (!string.IsNullOrEmpty(plan.Features))
+                            {
+                                var features = plan.Features.Split(new[] { '\n', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                                foreach (var feature in features)
+                                {
+                                    var isExcluded = feature.Trim().StartsWith("-") || feature.Trim().StartsWith("❌");
+                                    var cleanFeature = feature.Trim().TrimStart('-', '❌', '✓', '✔').Trim();
+                                    <li class="mb-2 @(isExcluded ? "text-muted" : "")">
+                                        <i class="@(isExcluded ? "feather-x text-danger" : "feather-check text-success") me-2"></i>
+                                        @cleanFeature
+                                    </li>
+                                }
+                            }
+                            else
+                            {
+                                <!-- Default features if none specified -->
+                                <li class="mb-2">
+                                    <i class="feather-check text-success me-2"></i>
+                                    @(plan.CoursesLimit.HasValue && plan.CoursesLimit > 0 ? $"{plan.CoursesLimit} " + Html.T("دورة", "courses") : Html.T("وصول غير محدود للدورات", "Unlimited course access"))
+                                </li>
+                                <li class="mb-2">
+                                    <i class="feather-check text-success me-2"></i>
+                                    @Html.T("شهادات إتمام", "Completion certificates")
+                                </li>
+                                @if (plan.AccessToLiveClasses)
+                                {
+                                    <li class="mb-2">
+                                        <i class="feather-check text-success me-2"></i>
+                                        @Html.T("جلسات مباشرة", "Live sessions")
+                                    </li>
+                                }
+                                @if (plan.UnlimitedCertificates)
+                                {
+                                    <li class="mb-2">
+                                        <i class="feather-check text-success me-2"></i>
+                                        @Html.T("شهادات معتمدة", "Certified certificates")
+                                    </li>
+                                }
+                                @if (plan.PrioritySupport)
+                                {
+                                    <li class="mb-2">
+                                        <i class="feather-check text-success me-2"></i>
+                                        @Html.T("دعم أولوي", "Priority support")
+                                    </li>
+                                }
+                            }
+                        </ul>
+
+                        @if (plan.Price > 0)
+                        {
+                            <a asp-action="Subscribe" asp-route-planId="@plan.Id" class="btn @(isFeatured ? "btn-primary" : "btn-outline-" + colorClass) w-100">
+                                @Html.T("اشترك الآن", "Subscribe Now")
+                            </a>
+                        }
+                        else
+                        {
+                            <a asp-action="Subscribe" asp-route-planId="@plan.Id" class="btn btn-success w-100">
+                                @Html.T("ابدأ مجاناً", "Start for Free")
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="card stretch stretch-full mb-4">
+        <div class="card-body text-center py-5">
+            <div class="avatar-text avatar-xl bg-soft-warning text-warning mx-auto mb-3">
+                <i class="feather-alert-circle"></i>
+            </div>
+            <h5 class="fw-bold mb-2">@Html.T("لا توجد خطط متاحة حالياً", "No plans available at the moment")</h5>
+            <p class="text-muted mb-3">@Html.T("يرجى المحاولة لاحقاً أو التواصل مع الدعم الفني", "Please try again later or contact support")</p>
+            <a asp-controller="Home" asp-action="Contact" asp-area="" class="btn btn-primary">
+                <i class="feather-mail me-2"></i>
+                @Html.T("تواصل معنا", "Contact Us")
+            </a>
+        </div>
+    </div>
+}
+
+<!-- FAQ Section -->
+<div class="card stretch stretch-full">
+    <div class="card-header">
+        <h5 class="fw-bold mb-0">
+            <i class="feather-help-circle me-2"></i>
+            @Html.T("الأسئلة الشائعة", "Frequently Asked Questions")
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="accordion" id="faqAccordion">
+            <div class="accordion-item border-0">
+                <h2 class="accordion-header">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                        @Html.T("هل يمكنني إلغاء الاشتراك في أي وقت؟", "Can I cancel my subscription at any time?")
+                    </button>
+                </h2>
+                <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                    <div class="accordion-body text-muted">
+                        @Html.T("نعم، يمكنك إلغاء اشتراكك في أي وقت. سيبقى اشتراكك نشطاً حتى نهاية الفترة المدفوعة.", "Yes, you can cancel at any time. Your subscription will remain active until the end of the paid period.")
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item border-0">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                        @Html.T("هل يمكنني تغيير خطتي لاحقاً؟", "Can I change my plan later?")
+                    </button>
+                </h2>
+                <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                    <div class="accordion-body text-muted">
+                        @Html.T("نعم، يمكنك الترقية أو تخفيض خطتك في أي وقت من إعدادات حسابك.", "Yes, you can upgrade or downgrade your plan anytime from your account settings.")
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item border-0">
+                <h2 class="accordion-header">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                        @Html.T("ما هي طرق الدفع المتاحة؟", "What payment methods are available?")
+                    </button>
+                </h2>
+                <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                    <div class="accordion-body text-muted">
+                        @Html.T("نقبل البطاقات الائتمانية (Visa, Mastercard) والمحافظ الإلكترونية وفودافون كاش.", "We accept credit cards (Visa, Mastercard), e-wallets and Vodafone Cash.")
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="billing-labels" data-month="@Html.T("شهر", "month")" data-year="@Html.T("سنة", "year")" class="d-none"></div>
+@section Scripts {
+<script>
+    var billingLabels = document.getElementById('billing-labels');
+    var monthLabel = billingLabels ? billingLabels.dataset.month : 'month';
+    var yearLabel = billingLabels ? billingLabels.dataset.year : 'year';
+    document.querySelectorAll('.billing-toggle').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.billing-toggle').forEach(b => {
+                b.classList.remove('active', 'btn-light');
+                b.classList.add('btn-outline-light');
+            });
+            this.classList.remove('btn-outline-light');
+            this.classList.add('active', 'btn-light');
+            
+            const billing = this.dataset.billing;
+            if (billing === 'yearly') {
+                document.querySelectorAll('.monthly-price').forEach(el => el.style.display = 'none');
+                document.querySelectorAll('.yearly-price').forEach(el => el.style.display = 'inline');
+                document.querySelectorAll('.billing-period').forEach(el => el.textContent = yearLabel);
+            } else {
+                document.querySelectorAll('.monthly-price').forEach(el => el.style.display = 'inline');
+                document.querySelectorAll('.yearly-price').forEach(el => el.style.display = 'none');
+                document.querySelectorAll('.billing-period').forEach(el => el.textContent = monthLabel);
+            }
+        });
+    });
+</script>
+}

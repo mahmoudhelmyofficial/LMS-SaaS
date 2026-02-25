@@ -1,0 +1,297 @@
+@{
+    ViewData["Title"] = Html.T("إحصائيات نشاط المستخدمين", "User Activity Statistics");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("نشاط المستخدمين", "User Activity"), Url.Action("Index", "UserActivity")),
+        (Html.T("الإحصائيات", "Statistics"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+
+    // Get stats from ViewBag
+    var stats = ViewBag.Stats;
+}
+
+@section Styles {
+    <style>
+        .chart-container {
+            position: relative;
+            height: 350px;
+        }
+        .stat-card {
+            transition: all 0.3s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Filter Section -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form asp-action="Statistics" method="get" class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label">@Html.T("من تاريخ", "From Date")</label>
+                    <input type="date" name="fromDate" class="form-control" value="@ViewBag.FromDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">@Html.T("إلى تاريخ", "To Date")</label>
+                    <input type="date" name="toDate" class="form-control" value="@ViewBag.ToDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary d-block w-100">
+                        <i class="feather-filter me-2"></i>@Html.T("تصفية", "Filter")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6">
+            <div class="card stat-card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("إجمالي الأنشطة", "Total Activities")</p>
+                            <h3 class="fw-bold mb-0">@(stats?.TotalActivities ?? 0)</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                            <i class="feather-activity"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stat-card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("مستخدمين نشطين", "Active Users")</p>
+                            <h3 class="fw-bold mb-0 text-success">@(stats?.UniqueUsers ?? 0)</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-success text-success">
+                            <i class="feather-users"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stat-card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("إجمالي الوقت", "Total Time")</p>
+                            <h3 class="fw-bold mb-0 text-info">@(stats?.TotalTimeHours.ToString("F1") ?? "0") <small class="fs-6">@Html.T("ساعة", "hr")</small></h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-info text-info">
+                            <i class="feather-clock"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stat-card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("متوسط الوقت", "Average Time")</p>
+                            <h3 class="fw-bold mb-0 text-warning">@(stats?.AvgTimePerUser.ToString("F0") ?? "0") <small class="fs-6">@Html.T("دقيقة", "min")</small></h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-warning text-warning">
+                            <i class="feather-trending-up"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Activity Chart -->
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-bar-chart-2 me-2"></i>@Html.T("نشاط المستخدمين خلال الفترة", "User Activity Over Period")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity by Day -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-calendar me-2"></i>@Html.T("النشاط حسب اليوم", "Activity by Day")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="dayChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Stats -->
+        <div class="col-lg-4">
+            <!-- Most Active Day -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-star me-2"></i>@Html.T("اليوم الأكثر نشاطاً", "Most Active Day")
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                        <i class="feather-calendar" style="font-size: 2rem;"></i>
+                    </div>
+                    <h3 class="fw-bold mb-2">@(stats?.MostActiveDay ?? "N/A")</h3>
+                    <p class="text-muted mb-0">@Html.T("أعلى معدل نشاط", "Highest activity rate")</p>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-zap me-2"></i>@Html.T("إحصائيات سريعة", "Quick Stats")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("متوسط جلسة يومية", "Avg. daily session")</span>
+                        <strong>@((stats?.AvgTimePerUser / 60.0).ToString("F1") ?? "0") @Html.T("ساعة", "hr")</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("نشاط/مستخدم", "Activity/User")</span>
+                        <strong>@(stats?.UniqueUsers > 0 ? (stats.TotalActivities / stats.UniqueUsers).ToString("F1") : "0")</strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">@Html.T("معدل المشاركة", "Engagement Rate")</span>
+                        <strong class="text-success">@Html.T("عالي", "High")</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Options -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-download me-2"></i>@Html.T("تصدير البيانات", "Export Data")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="/api/export/user-activity?format=csv&fromDate=@ViewBag.FromDate?.ToString("yyyy-MM-dd")&toDate=@ViewBag.ToDate?.ToString("yyyy-MM-dd")" class="btn btn-outline-primary">
+                            <i class="feather-file-text me-2"></i>@Html.T("تصدير CSV", "Export CSV")
+                        </a>
+                        <a href="/api/export/user-activity?format=excel&fromDate=@ViewBag.FromDate?.ToString("yyyy-MM-dd")&toDate=@ViewBag.ToDate?.ToString("yyyy-MM-dd")" class="btn btn-outline-success">
+                            <i class="feather-file me-2"></i>@Html.T("تصدير Excel", "Export Excel")
+                        </a>
+                        <a href="/api/export/user-activity?format=pdf&fromDate=@ViewBag.FromDate?.ToString("yyyy-MM-dd")&toDate=@ViewBag.ToDate?.ToString("yyyy-MM-dd")" class="btn btn-outline-danger">
+                            <i class="feather-file-text me-2"></i>@Html.T("تصدير PDF", "Export PDF")
+                        </a>
+                        <a href="javascript:void(0)" onclick="window.print()" class="btn btn-outline-secondary">
+                            <i class="feather-printer me-2"></i>@Html.T("طباعة", "Print")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Dynamic chart data from server
+        var chartLabels = @Html.Raw(Json.Serialize(ViewBag.ChartLabels ?? new List<string>()));
+        var activityData = @Html.Raw(Json.Serialize(ViewBag.ActivityData ?? new List<int>()));
+        var timeData = @Html.Raw(Json.Serialize(ViewBag.TimeData ?? new List<double>()));
+        
+        // Activity Chart
+        const activityCtx = document.getElementById('activityChart').getContext('2d');
+        new Chart(activityCtx, {
+            type: 'line',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: '@(Html.T("عدد الأنشطة", "Number of Activities"))',
+                    data: activityData,
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 }
+                    }
+                }
+            }
+        });
+
+        // Day Chart
+        const dayCtx = document.getElementById('dayChart').getContext('2d');
+        new Chart(dayCtx, {
+            type: 'bar',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: '@(Html.T("الوقت (ساعات)", "Time (hours)"))',
+                    data: timeData,
+                    backgroundColor: [
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(245, 158, 11, 0.8)',
+                        'rgba(239, 68, 68, 0.8)',
+                        'rgba(139, 92, 246, 0.8)',
+                        'rgba(236, 72, 153, 0.8)',
+                        'rgba(34, 197, 94, 0.8)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+}
+

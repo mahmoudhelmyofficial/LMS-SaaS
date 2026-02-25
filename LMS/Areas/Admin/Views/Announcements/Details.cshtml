@@ -1,0 +1,608 @@
+@model LMS.Domain.Entities.Notifications.SystemAnnouncement
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل الإعلان", "Announcement details");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإعلانات", "Announcements"), Url.Action("Index", "Announcements", new { area = "Admin" })),
+        (Html.T("تفاصيل الإعلان", "Announcement details"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("تعديل", "Edit"), "feather-edit", Url.Action("Edit", "Announcements", new { area = "Admin", id = Model.Id }), "btn-primary"),
+        (Html.T("حذف", "Delete"), "feather-trash-2", "javascript:void(0)", "btn-danger delete-btn")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .announcement-content {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            color: #333;
+        }
+        .info-label {
+            font-weight: 600;
+            color: #6c757d;
+            min-width: 120px;
+        }
+        .status-active {
+            animation: pulse 2s infinite;
+        }
+        @@keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .announcement-header {
+            background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%));
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .stats-box {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        .stats-box:hover {
+            transform: translateY(-5px);
+        }
+        .timeline {
+            position: relative;
+            padding-right: 30px;
+        }
+        .timeline-item {
+            position: relative;
+            padding-bottom: 25px;
+        }
+        .timeline-marker {
+            position: absolute;
+            right: -36px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .timeline-item:before {
+            content: '';
+            position: absolute;
+            right: -31px;
+            top: 17px;
+            width: 2px;
+            height: calc(100% - 5px);
+            background: #e5e7eb;
+        }
+        .timeline-item:last-child:before {
+            display: none;
+        }
+        @@media print {
+            .print-mode .page-header,
+            .print-mode .nxl-navigation,
+            .print-mode .nxl-header,
+            .print-mode .card-header-action,
+            .print-mode .btn,
+            .print-mode footer {
+                display: none !important;
+            }
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Announcement Header -->
+    <div class="announcement-header">
+        <div class="d-flex align-items-start justify-content-between mb-3">
+            <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <span class="badge bg-white text-primary">@Model.Type</span>
+                    @{
+                        var priorityColor = Model.Priority switch
+                        {
+                            "Low" => "success",
+                            "Normal" => "info",
+                            "High" => "warning",
+                            "Critical" => "danger",
+                            _ => "secondary"
+                        };
+                    }
+                    <span class="badge bg-@priorityColor">@Model.Priority</span>
+                    @if (Model.IsPinned)
+                    {
+                        <span class="badge bg-warning">
+                            <i class="feather-anchor"></i>
+                            مثبت
+                        </span>
+                    }
+                    @if (Model.IsActive)
+                    {
+                        <span class="badge bg-success status-active">
+                            <i class="feather-check-circle"></i>
+                            نشط
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">
+                            <i class="feather-x-circle"></i>
+                            غير نشط
+                        </span>
+                    }
+                </div>
+                <h2 class="text-white mb-0">@Model.Title</h2>
+            </div>
+        </div>
+        <div class="row g-3 text-white">
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">الجمهور المستهدف</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-users"></i>
+                    <span class="fw-semibold">@Model.Target</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">تاريخ الإنشاء</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-calendar"></i>
+                    <span class="fw-semibold">@Model.CreatedAt.ToString("dd/MM/yyyy")</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">المشاهدات</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-eye"></i>
+                    <span class="fw-semibold">@Model.ViewsCount</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">الكاتب</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-user"></i>
+                    <span class="fw-semibold">
+                        @if (Model.CreatedBy != null)
+                        {
+                            @($"{Model.CreatedBy.FirstName} {Model.CreatedBy.LastName}")
+                        }
+                        else
+                        {
+                            @("النظام")
+                        }
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Announcement Content -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-file-text me-2"></i>
+                        محتوى الإعلان
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="announcement-content">
+                        @Html.Raw(Model.Content)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timeline -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-clock me-2"></i>
+                        الجدول الزمني
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        @if (Model.StartDate.HasValue)
+                        {
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-text bg-soft-success text-success">
+                                        <i class="feather-play-circle"></i>
+                                    </div>
+                                    <div>
+                                        <small class="text-muted d-block">تاريخ البدء</small>
+                                        <span class="fw-semibold">@Model.StartDate.Value.ToString("dd/MM/yyyy hh:mm tt")</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        @if (Model.EndDate.HasValue)
+                        {
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-text bg-soft-danger text-danger">
+                                        <i class="feather-stop-circle"></i>
+                                    </div>
+                                    <div>
+                                        <small class="text-muted d-block">تاريخ الانتهاء</small>
+                                        <span class="fw-semibold">@Model.EndDate.Value.ToString("dd/MM/yyyy hh:mm tt")</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="avatar-text bg-soft-primary text-primary">
+                                    <i class="feather-calendar"></i>
+                                </div>
+                                <div>
+                                    <small class="text-muted d-block">تاريخ الإنشاء</small>
+                                    <span class="fw-semibold">@Model.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")</span>
+                                </div>
+                            </div>
+                        </div>
+                        @if (Model.UpdatedAt.HasValue)
+                        {
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-text bg-soft-warning text-warning">
+                                        <i class="feather-edit"></i>
+                                    </div>
+                                    <div>
+                                        <small class="text-muted d-block">آخر تحديث</small>
+                                        <span class="fw-semibold">@Model.UpdatedAt.Value.ToString("dd/MM/yyyy hh:mm tt")</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions History -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-activity me-2"></i>
+                        سجل الإجراءات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-success"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-1">تم إنشاء الإعلان</h6>
+                                <p class="text-muted mb-1">@Model.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")</p>
+                                <small class="text-muted">
+                                    بواسطة:
+                                    @if (Model.CreatedBy != null)
+                                    {
+                                        @($"{Model.CreatedBy.FirstName} {Model.CreatedBy.LastName}")
+                                    }
+                                    else
+                                    {
+                                        @("النظام")
+                                    }
+                                </small>
+                            </div>
+                        </div>
+                        @if (Model.UpdatedAt.HasValue)
+                        {
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary"></div>
+                                <div class="timeline-content">
+                                    <h6 class="mb-1">تم تحديث الإعلان</h6>
+                                    <p class="text-muted mb-0">@Model.UpdatedAt.Value.ToString("dd/MM/yyyy hh:mm tt")</p>
+                                </div>
+                            </div>
+                        }
+                        @if (Model.ViewsCount > 0)
+                        {
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-info"></div>
+                                <div class="timeline-content">
+                                    <h6 class="mb-1">المشاهدات</h6>
+                                    <p class="text-muted mb-0">@Model.ViewsCount مستخدم شاهد هذا الإعلان</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Statistics -->
+            <div class="row g-3 mb-4">
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-primary text-primary mb-2">
+                            <i class="feather-eye"></i>
+                        </div>
+                        <h3 class="mb-1">@Model.ViewsCount</h3>
+                        <small class="text-muted">مشاهدة</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-success text-success mb-2">
+                            <i class="feather-mouse-pointer"></i>
+                        </div>
+                        <h3 class="mb-1">0</h3>
+                        <small class="text-muted">نقرة</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info Card -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-info me-2"></i>
+                        معلومات الإعلان
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="vstack gap-3">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="info-label">النوع:</span>
+                            <span class="badge bg-soft-primary text-primary">@Model.Type</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="info-label">الأولوية:</span>
+                            <span class="badge bg-soft-@priorityColor text-@priorityColor">@Model.Priority</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="info-label">الجمهور:</span>
+                            <span class="fw-semibold">@Model.Target</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="info-label">الحالة:</span>
+                            @if (Model.IsActive)
+                            {
+                                <span class="badge bg-soft-success text-success">نشط</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-soft-secondary text-secondary">غير نشط</span>
+                            }
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="info-label">مثبت:</span>
+                            @if (Model.IsPinned)
+                            {
+                                <span class="text-success"><i class="feather-check-circle"></i> نعم</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted"><i class="feather-x-circle"></i> لا</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-zap me-2"></i>
+                        @Html.T("إجراءات سريعة", "Quick actions")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        @if (Model.IsActive)
+                        {
+                            <form asp-area="Admin" asp-action="ToggleActive" asp-route-id="@Model.Id" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-warning w-100 mb-2">
+                                    <i class="feather-pause me-2"></i>
+                                    تعطيل الإعلان
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form asp-area="Admin" asp-action="ToggleActive" asp-route-id="@Model.Id" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-success w-100 mb-2">
+                                    <i class="feather-play me-2"></i>
+                                    تفعيل الإعلان
+                                </button>
+                            </form>
+                        }
+                        @if (Model.IsPinned)
+                        {
+                            <form asp-area="Admin" asp-action="TogglePin" asp-route-id="@Model.Id" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-light-brand w-100">
+                                    <i class="feather-anchor me-2"></i>
+                                    إلغاء التثبيت
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form asp-area="Admin" asp-action="TogglePin" asp-route-id="@Model.Id" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-light-brand w-100">
+                                    <i class="feather-anchor me-2"></i>
+                                    تثبيت الإعلان
+                                </button>
+                            </form>
+                        }
+                        <a asp-area="Admin" asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-light-brand">
+                            <i class="feather-edit me-2"></i>
+                            تعديل الإعلان
+                        </a>
+                        <button type="button" class="btn btn-light-brand" onclick="window.print()">
+                            <i class="feather-printer me-2"></i>
+                            طباعة
+                        </button>
+                        <button type="button" class="btn btn-light-brand" data-bs-toggle="modal" data-bs-target="#shareModal">
+                            <i class="feather-share-2 me-2"></i>
+                            مشاركة
+                        </button>
+                        <hr>
+                        <button type="button" class="btn btn-danger delete-btn">
+                            <i class="feather-trash-2 me-2"></i>
+                            حذف الإعلان
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Related Announcements -->
+            @{
+                var relatedAnnouncements = ViewBag.RelatedAnnouncements as IEnumerable<LMS.Domain.Entities.Notifications.SystemAnnouncement>;
+            }
+            @if (relatedAnnouncements != null && relatedAnnouncements.Any())
+            {
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-link me-2"></i>
+                            إعلانات ذات صلة
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="vstack gap-2">
+                            @foreach (var announcement in relatedAnnouncements.Take(3))
+                            {
+                                <a asp-area="Admin" asp-action="Details" asp-route-id="@announcement.Id" class="d-flex align-items-center gap-2 text-decoration-none">
+                                    <div class="avatar-text bg-soft-primary text-primary avatar-sm">
+                                        <i class="feather-bell"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-0 fs-13">@announcement.Title</h6>
+                                        <small class="text-muted">@announcement.CreatedAt.ToRelativeTime()</small>
+                                    </div>
+                                </a>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<form asp-area="Admin" asp-action="Delete" asp-route-id="@Model.Id" method="post" id="deleteForm">
+    @Html.AntiForgeryToken()
+</form>
+
+<!-- Share Modal -->
+<div class="modal fade" id="shareModal" tabindex="-1" data-bs-backdrop="false" aria-labelledby="shareModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="shareModalLabel">
+                    <i class="feather-share-2 me-2"></i>
+                    @Html.T("مشاركة الإعلان", "Share announcement")
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@Html.T("إغلاق", "Close")"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group mb-3">
+                    <label class="form-label">@Html.T("رابط الإعلان", "Announcement link")</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="shareUrl" 
+                               value="@Url.Action("Details", "Announcements", new { area = "Admin", id = Model.Id }, Context.Request.Scheme)" readonly />
+                        <button class="btn btn-primary" type="button" onclick="copyShareUrl()">
+                            <i class="feather-copy"></i>
+                        </button>
+                    </div>
+                    <small class="form-text text-muted">@Html.T("انقر على الزر لنسخ الرابط", "Click the button to copy the link")</small>
+                </div>
+                <hr>
+                <div class="text-center">
+                    <p class="text-muted mb-3">@Html.T("أو شارك عبر:", "Or share via:")</p>
+                    <div class="d-flex justify-content-center gap-2">
+                        <a href="https://twitter.com/intent/tweet?url=@Uri.EscapeDataString(Url.Action("Details", "Announcements", new { area = "Admin", id = Model.Id }, Context.Request.Scheme))&text=@Uri.EscapeDataString(Model.Title)" 
+                           target="_blank" class="btn btn-light-brand">
+                            <i class="feather-twitter"></i>
+                        </a>
+                        <a href="https://www.facebook.com/sharer/sharer.php?u=@Uri.EscapeDataString(Url.Action("Details", "Announcements", new { area = "Admin", id = Model.Id }, Context.Request.Scheme))" 
+                           target="_blank" class="btn btn-light-brand">
+                            <i class="feather-facebook"></i>
+                        </a>
+                        <a href="https://wa.me/?text=@Uri.EscapeDataString(Model.Title + " - " + Url.Action("Details", "Announcements", new { area = "Admin", id = Model.Id }, Context.Request.Scheme))" 
+                           target="_blank" class="btn btn-light-brand">
+                            <i class="feather-message-circle"></i>
+                        </a>
+                        <a href="mailto:?subject=@Uri.EscapeDataString(Model.Title)&body=@Uri.EscapeDataString(Url.Action("Details", "Announcements", new { area = "Admin", id = Model.Id }, Context.Request.Scheme))" 
+                           class="btn btn-light-brand">
+                            <i class="feather-mail"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إغلاق", "Close")</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Delete confirmation
+            window.__AnnounceDetailsT = {
+                confirmDelete: '@Html.Raw(Html.T("هل أنت متأكد من حذف هذا الإعلان؟ لا يمكن التراجع عن هذا الإجراء.", "Are you sure you want to delete this announcement? This action cannot be undone.").Replace("'", "\\'"))',
+                linkCopied: '@Html.Raw(Html.T("تم نسخ الرابط", "Link copied").Replace("'", "\\'"))'
+            };
+            $('.delete-btn').click(function() {
+                if (confirm(window.__AnnounceDetailsT.confirmDelete)) {
+                    $('#deleteForm').submit();
+                }
+            });
+
+            // Print functionality
+            window.onbeforeprint = function() {
+                document.body.classList.add('print-mode');
+            };
+            
+            window.onafterprint = function() {
+                document.body.classList.remove('print-mode');
+            };
+        });
+
+        function copyShareUrl() {
+            var copyText = document.getElementById("shareUrl");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999); // For mobile devices
+            
+            navigator.clipboard.writeText(copyText.value).then(function() {
+                // Show success feedback
+                var btn = event.target.closest('button');
+                var originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="feather-check"></i>';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-success');
+                
+                setTimeout(function() {
+                    btn.innerHTML = originalHtml;
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-primary');
+                }, 2000);
+            }).catch(function(err) {
+                // Fallback for older browsers
+                document.execCommand('copy');
+                alert(window.__AnnounceDetailsT.linkCopied);
+            });
+        }
+    </script>
+}
+
+<!-- Timeline styles merged into main Styles section above -->
+

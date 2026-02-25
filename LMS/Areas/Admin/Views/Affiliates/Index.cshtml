@@ -1,0 +1,359 @@
+@model IEnumerable<LMS.Areas.Admin.ViewModels.AffiliateDisplayViewModel>
+
+@{
+    ViewData["Title"] = Html.T("إدارة الشركاء التابعين", "Affiliates Management");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التسويق بالعمولة", "Affiliate Marketing"), null),
+        (Html.T("إدارة الشركاء التابعين", "Affiliates"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("العمولات", "Commissions"), "feather-dollar-sign", Url.Action("Commissions", "Affiliates"), "btn-success")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+    <style>
+        .earning-amount {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #0ab39c;
+        }
+        .conversion-rate {
+            font-size: 0.9rem;
+        }
+        .affiliate-code {
+            font-family: 'Courier New', monospace;
+            background: #f3f6f9;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-users"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("إجمالي الشركاء", "Total Affiliates")</span>
+                            <h3 class="fw-bold mb-0">@Model.Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-user-check"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("شركاء نشطون", "Active Affiliates")</span>
+                            <h3 class="fw-bold mb-0">@Model.Count(a => a.IsActive).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-mouse-pointer"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("إجمالي النقرات", "Total clicks")</span>
+                            <h3 class="fw-bold mb-0">@Model.Sum(a => a.TotalClicks).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                            <i class="feather-dollar-sign"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("إجمالي الأرباح", "Total earnings")</span>
+                            <h3 class="fw-bold mb-0">@Model.Sum(a => a.TotalEarnings).ToEGP()</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section FilterDropdown {
+    <a href="javascript:void(0);" class="dropdown-item filter-all">
+        <i class="feather-eye me-3"></i>
+        <span>@Html.T("الكل", "All")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-active">
+        <i class="feather-check-circle me-3"></i>
+        <span>@Html.T("نشط", "Active")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-inactive">
+        <i class="feather-x-circle me-3"></i>
+        <span>@Html.T("غير نشط", "Inactive")</span>
+    </a>
+    <div class="dropdown-divider"></div>
+    <a href="javascript:void(0);" class="dropdown-item filter-high-performer">
+        <i class="feather-trending-up me-3"></i>
+        <span>@Html.T("أداء عالي", "High performer")</span>
+    </a>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="affiliatesTable">
+                            <thead>
+                                <tr>
+                                    <th class="wd-30">
+                                        <div class="custom-control custom-checkbox ms-1">
+                                            <input type="checkbox" class="custom-control-input" id="checkAll">
+                                            <label class="custom-control-label" for="checkAll"></label>
+                                        </div>
+                                    </th>
+                                    <th>@Html.T("الشريك", "Affiliate")</th>
+                                    <th>@Html.T("البريد الإلكتروني", "Email")</th>
+                                    <th>@Html.T("الكود", "Code")</th>
+                                    <th>@Html.T("نسبة العمولة", "Commission rate")</th>
+                                    <th>@Html.T("النقرات", "Clicks")</th>
+                                    <th>@Html.T("التحويلات", "Conversions")</th>
+                                    <th>@Html.T("الأرباح", "Earnings")</th>
+                                    <th>@Html.T("معدل التحويل", "Conversion rate")</th>
+                                    <th>@Html.T("تاريخ الانضمام", "Join date")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var affiliate in Model)
+                                {
+                                    var conversionRate = affiliate.TotalClicks > 0 ? (affiliate.TotalConversions * 100.0 / affiliate.TotalClicks) : 0;
+                                    <tr>
+                                        <td>
+                                            <div class="item-checkbox ms-1">
+                                                <div class="custom-control custom-checkbox">
+                                                    <input type="checkbox" class="custom-control-input checkbox" id="checkBox_@affiliate.Id">
+                                                    <label class="custom-control-label" for="checkBox_@affiliate.Id"></label>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="hstack gap-3">
+                                                <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                                    @affiliate.AffiliateName.Substring(0, 1)
+                                                </div>
+                                                <div>
+                                                    <span class="d-block fw-semibold">@affiliate.AffiliateName</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="text-muted">@affiliate.AffiliateEmail</span>
+                                        </td>
+                                        <td>
+                                            <span class="affiliate-code">@affiliate.UniqueCode</span>
+                                            <button class="btn btn-sm btn-icon" onclick="copyToClipboard('@affiliate.UniqueCode')" data-bs-toggle="tooltip" title="@Html.T("نسخ", "Copy")">
+                                                <i class="feather-copy"></i>
+                                            </button>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-success text-success">@affiliate.CommissionRate.ToString("F1")%</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-semibold">@affiliate.TotalClicks.ToString("N0")</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-semibold text-success">@affiliate.TotalConversions.ToString("N0")</span>
+                                        </td>
+                                        <td>
+                                            <span class="earning-amount">@affiliate.TotalEarnings.ToEGP()</span>
+                                        </td>
+                                        <td>
+                                            <div class="conversion-rate">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="progress flex-grow-1" style="height: 6px; width: 60px;">
+                                                        <div class="progress-bar @(conversionRate >= 5 ? "bg-success" : conversionRate >= 2 ? "bg-warning" : "bg-danger")" 
+                                                             style="width: @Math.Min(conversionRate * 10, 100)%"></div>
+                                                    </div>
+                                                    <span class="fw-semibold">@conversionRate.ToString("F1")%</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="text-muted">@affiliate.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                        </td>
+                                        <td>
+                                            @if (affiliate.IsActive)
+                                            {
+                                                <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">@Html.T("غير نشط", "Inactive")</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="@Url.Action("Commissions", "Affiliates", new { affiliateId = affiliate.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض العمولات", "View commissions")">
+                                                    <i class="feather-dollar-sign"></i>
+                                                </a>
+                                                <button type="button" class="avatar-text avatar-md border-0 bg-transparent" data-bs-toggle="tooltip" title="@Html.T("نسخ كود الشريك", "Copy affiliate code")" onclick="copyCode('@affiliate.UniqueCode')">
+                                                    <i class="feather-copy"></i>
+                                                </button>
+                                                <div class="dropdown">
+                                                    <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown" data-bs-offset="0,21">
+                                                        <i class="feather-more-horizontal"></i>
+                                                    </a>
+                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        <li>
+                                                            <a class="dropdown-item" href="@Url.Action("Commissions", "Affiliates", new { affiliateId = affiliate.Id })">
+                                                                <i class="feather-dollar-sign me-3"></i>
+                                                                <span>@Html.T("عرض العمولات", "View commissions")</span>
+                                                            </a>
+                                                        </li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item @(affiliate.IsActive ? "text-warning" : "text-success")" href="javascript:void(0)" onclick="toggleStatus('@affiliate.Id')">
+                                                                <i class="feather-@(affiliate.IsActive ? "x" : "check")-circle me-3"></i>
+                                                                <span>@(affiliate.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))</span>
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@affiliate.Id')">
+                                                                <i class="feather-trash-2 me-3"></i>
+                                                                <span>@Html.T("حذف", "Delete")</span>
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden Forms for POST Actions -->
+<form id="toggleStatusForm" method="post" style="display: none;">
+    @Html.AntiForgeryToken()
+</form>
+
+<form id="deleteForm" method="post" style="display: none;">
+    @Html.AntiForgeryToken()
+</form>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            var table = $('#affiliatesTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[7, "desc"]],
+                "pageLength": 25
+            });
+
+            $('#checkAll').on('change', function() {
+                $('.checkbox').prop('checked', $(this).prop('checked'));
+            });
+
+            $('.filter-all').on('click', function() {
+                table.column(10).search('').draw();
+            });
+
+            $('.filter-active').on('click', function() {
+                table.column(10).search('@Html.Raw(Html.T("نشط", "Active"))').draw();
+            });
+
+            $('.filter-inactive').on('click', function() {
+                table.column(10).search('@Html.Raw(Html.T("غير نشط", "Inactive"))').draw();
+            });
+
+            $('.filter-high-performer').on('click', function() {
+                table.column(7).search('').draw();
+                table.order([7, 'desc']).draw();
+            });
+
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                toastr.success('@Html.Raw(Html.T("تم نسخ الكود", "Code copied")): ' + text);
+            }).catch(function() {
+                // Fallback for older browsers
+                var textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                toastr.success('تم نسخ الكود: ' + text);
+            });
+        }
+        
+        // Alias for copyCode
+        function copyCode(text) {
+            copyToClipboard(text);
+        }
+
+        function toggleStatus(affiliateId) {
+            if (confirm('@(Html.T("هل تريد تغيير حالة هذا الشريك؟", "Do you want to change this affiliate's status?"))')) {
+                var form = document.getElementById('toggleStatusForm');
+                form.action = '@Url.Action("ToggleStatus", "Affiliates")/' + affiliateId;
+                form.submit();
+            }
+        }
+
+        function confirmDelete(affiliateId) {
+            if (confirm('@(Html.T("هل أنت متأكد من حذف هذا الشريك؟", "Are you sure you want to delete this affiliate?"))\n@(Html.T("سيتم حذف جميع العمولات المرتبطة به.", "All associated commissions will be deleted."))')) {
+                var form = document.getElementById('deleteForm');
+                form.action = '@Url.Action("Delete", "Affiliates")/' + affiliateId;
+                form.submit();
+            }
+        }
+    </script>
+}
+

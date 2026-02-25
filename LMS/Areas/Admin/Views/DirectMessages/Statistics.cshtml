@@ -1,0 +1,444 @@
+@{
+    ViewData["Title"] = Html.T("إحصائيات الرسائل المباشرة", "Direct messages statistics");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التواصل الاجتماعي", "Social"), null),
+        (Html.T("الرسائل المباشرة", "Direct messages"), Url.Action("Index", "DirectMessages")),
+        (Html.T("الإحصائيات", "Statistics"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var stats = ViewBag.Stats;
+    var fromDate = ViewBag.FromDate as DateTime?;
+    var toDate = ViewBag.ToDate as DateTime?;
+}
+
+@section Styles {
+    <link rel="stylesheet" type="text/css" href="~/assets/vendors/css/daterangepicker.min.css" />
+    <style>
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s;
+        }
+        .stat-card:hover {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transform: translateY(-5px);
+        }
+        .stat-icon {
+            width: 70px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 15px;
+            font-size: 2rem;
+        }
+        .chart-container {
+            position: relative;
+            height: 350px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Date Filter -->
+    <div class="card stretch stretch-full mb-4">
+        <div class="card-body">
+            <form asp-action="Statistics" method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                    <input type="date" name="fromDate" class="form-control" value="@fromDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                    <input type="date" name="toDate" class="form-control" value="@toDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="feather-search me-2"></i>
+                        بحث
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="stat-icon bg-soft-primary text-primary">
+                        <i class="feather-mail"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-1">@(stats?.TotalMessages ?? 0)</h3>
+                <p class="text-muted mb-0">إجمالي الرسائل</p>
+                <div class="mt-3">
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar bg-primary" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="stat-icon bg-soft-success text-success">
+                        <i class="feather-check-circle"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-1">@(stats?.ReadMessages ?? 0)</h3>
+                <p class="text-muted mb-0">رسائل مقروءة</p>
+                <div class="mt-3">
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar bg-success" style="width: @(stats?.TotalMessages > 0 ? (stats.ReadMessages * 100 / stats.TotalMessages) : 0)%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="stat-icon bg-soft-warning text-warning">
+                        <i class="feather-circle"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-1">@(stats?.UnreadMessages ?? 0)</h3>
+                <p class="text-muted mb-0">رسائل غير مقروءة</p>
+                <div class="mt-3">
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar bg-warning" style="width: @(stats?.TotalMessages > 0 ? (stats.UnreadMessages * 100 / stats.TotalMessages) : 0)%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="stat-icon bg-soft-info text-info">
+                        <i class="feather-message-circle"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-1">@(stats?.UniqueConversations ?? 0)</h3>
+                <p class="text-muted mb-0">محادثات فريدة</p>
+                <div class="mt-3">
+                    <div class="progress" style="height: 4px;">
+                        <div class="progress-bar bg-info" style="width: 75%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Average Response Time -->
+        <div class="col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-clock me-2"></i>
+                        متوسط وقت الاستجابة
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <div class="display-4 fw-bold text-primary">
+                            @{
+                                var avgResponseTime = stats?.AvgResponseTime ?? 0;
+                                if (avgResponseTime < 1)
+                                {
+                                    <span>@((avgResponseTime * 60).ToString("0"))</span>
+                                    <span class="fs-5 text-muted">دقيقة</span>
+                                }
+                                else if (avgResponseTime < 24)
+                                {
+                                    <span>@avgResponseTime.ToString("0.0")</span>
+                                    <span class="fs-5 text-muted">ساعة</span>
+                                }
+                                else
+                                {
+                                    <span>@((avgResponseTime / 24).ToString("0.0"))</span>
+                                    <span class="fs-5 text-muted">يوم</span>
+                                }
+                            }
+                        </div>
+                    </div>
+                    <div class="alert alert-light">
+                        <i class="feather-info me-2"></i>
+                        <small>متوسط الوقت بين إرسال الرسالة وقراءتها</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Read Rate -->
+        <div class="col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-percent me-2"></i>
+                        معدل القراءة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <canvas id="readRateChart" width="200" height="200"></canvas>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <h5 class="fw-bold text-success mb-1">@(stats?.TotalMessages > 0 ? ((stats.ReadMessages * 100 / stats.TotalMessages).ToString("0.0")) : "0")%</h5>
+                            <small class="text-muted">مقروءة</small>
+                        </div>
+                        <div class="col-6">
+                            <h5 class="fw-bold text-warning mb-1">@(stats?.TotalMessages > 0 ? ((stats.UnreadMessages * 100 / stats.TotalMessages).ToString("0.0")) : "0")%</h5>
+                            <small class="text-muted">غير مقروءة</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row g-4 mb-4">
+        <!-- Messages Timeline -->
+        <div class="col-md-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-trending-up me-2"></i>
+                        الرسائل خلال الفترة
+                    </h5>
+                    <div class="card-header-action">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-light active" onclick="updateChart('daily')">@Html.T("يومي", "Daily")</button>
+                            <button type="button" class="btn btn-light" onclick="updateChart('weekly')">@Html.T("أسبوعي", "Weekly")</button>
+                            <button type="button" class="btn btn-light" onclick="updateChart('monthly')">@Html.T("شهري", "Monthly")</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="messagesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Users -->
+        <div class="col-md-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-users me-2"></i>
+                        أكثر المستخدمين نشاطاً
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="vstack gap-3">
+                        @{
+                            var topUsers = ViewBag.TopUsers as IEnumerable<dynamic>;
+                            var rank = 1;
+                        }
+                        @if (topUsers != null && topUsers.Any())
+                        {
+                            foreach (var user in topUsers)
+                            {
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-text bg-soft-primary text-primary avatar-md">
+                                        #@rank
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="fw-bold mb-1">@user.UserName</h6>
+                                        <small class="text-muted">@user.MessageCount رسالة</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-soft-primary text-primary">@user.ReadRate%</span>
+                                    </div>
+                                </div>
+                                rank++;
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-3">
+                                <i class="feather-users fs-3 mb-2 d-block"></i>
+                                <small>لا توجد بيانات</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Heatmap -->
+    <div class="card stretch stretch-full">
+        <div class="card-header">
+            <h5 class="card-title">
+                <i class="feather-activity me-2"></i>
+                خريطة النشاط (حسب الساعة)
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="activityHeatmap"></canvas>
+            </div>
+            <div class="alert alert-info mt-3 mb-0">
+                <i class="feather-info me-2"></i>
+                <strong>معلومة:</strong> توضح هذه الخريطة أوقات الذروة لإرسال الرسائل خلال اليوم
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <script src="~/assets/vendors/js/daterangepicker.min.js"></script>
+    
+    <script>
+        const readRate = @(stats?.TotalMessages > 0 ? (stats.ReadMessages * 100 / stats.TotalMessages) : 0);
+        const unreadRate = 100 - readRate;
+
+        // Read Rate Pie Chart
+        const readRateCtx = document.getElementById('readRateChart');
+        if (readRateCtx) {
+            new Chart(readRateCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['مقروءة', 'غير مقروءة'],
+                    datasets: [{
+                        data: [readRate, unreadRate],
+                        backgroundColor: ['#10b981', '#f59e0b'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Dynamic chart data from server
+        var chartLabels = @Html.Raw(Json.Serialize(ViewBag.ChartLabels ?? new List<string>()));
+        var sentData = @Html.Raw(Json.Serialize(ViewBag.SentData ?? new List<int>()));
+        var readDataArr = @Html.Raw(Json.Serialize(ViewBag.ReadData ?? new List<int>()));
+        var hourlyData = @Html.Raw(Json.Serialize(ViewBag.HourlyData ?? new List<int>()));
+        
+        // Messages Timeline Chart
+        const messagesCtx = document.getElementById('messagesChart');
+        if (messagesCtx) {
+            const messagesChart = new Chart(messagesCtx, {
+                type: 'line',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: 'الرسائل المرسلة',
+                        data: sentData,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }, {
+                        label: 'الرسائل المقروءة',
+                        data: readDataArr,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            rtl: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Activity Heatmap
+        const heatmapCtx = document.getElementById('activityHeatmap');
+        if (heatmapCtx) {
+            const hours = Array.from({length: 24}, (_, i) => i + ':00');
+            const maxActivity = Math.max(...hourlyData, 1);
+            
+            new Chart(heatmapCtx, {
+                type: 'bar',
+                data: {
+                    labels: hours,
+                    datasets: [{
+                        label: 'عدد الرسائل',
+                        data: hourlyData,
+                        backgroundColor: hours.map((_, i) => {
+                            const value = (hourlyData[i] / maxActivity) * 100;
+                            if (value > 75) return '#ef4444';
+                            if (value > 50) return '#f59e0b';
+                            if (value > 25) return '#3b82f6';
+                            return '#10b981';
+                        })
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'الرسائل: ' + context.parsed.y;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(period) {
+            // Update button states
+            document.querySelectorAll('.btn-group button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // TODO: Update chart data based on period
+            console.log('Updating chart for period:', period);
+        }
+    </script>
+}
+

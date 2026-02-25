@@ -1,0 +1,603 @@
+@model IEnumerable<LMS.Domain.Entities.Courses.Course>
+@using LMS.Helpers
+
+@{
+    ViewData["Title"] = Html.T("إدارة الدورات", "Course Management");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة جميع دوراتك التعليمية", "View and manage all your courses");
+    var createWizardUrl = Url.Action("CreateWizard");
+    var indexUrl = Url.Action("Index");
+    var publishedUrl = Url.Action("Index", new { status = "Published" });
+    var draftUrl = Url.Action("Index", new { status = "Draft" });
+    var pendingUrl = Url.Action("Index", new { status = "PendingReview" });
+}
+
+@await Html.PartialAsync("_PageHeader", ViewDataDictionaryHelper.CreateWith(
+    ViewData,
+    "ActionButtons",
+    Html.Raw("<a href='" + createWizardUrl + "' class='btn btn-primary'><i class='feather-plus me-2'></i>" + Html.T("إنشاء دورة جديدة", "Create New Course") + "</a><div class='dropdown'><button class='btn btn-light dropdown-toggle' type='button' data-bs-toggle='dropdown'><i class='feather-filter me-2'></i>" + Html.T("تصفية", "Filter") + "</button><ul class='dropdown-menu dropdown-menu-end'><li><a class='dropdown-item' href='" + indexUrl + "'>" + Html.T("جميع الدورات", "All Courses") + "</a></li><li><a class='dropdown-item' href='" + publishedUrl + "'>" + Html.T("المنشورة", "Published") + "</a></li><li><a class='dropdown-item' href='" + draftUrl + "'>" + Html.T("المسودات", "Drafts") + "</a></li><li><a class='dropdown-item' href='" + pendingUrl + "'>" + Html.T("قيد المراجعة", "Pending Review") + "</a></li></ul></div>")
+))
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    @{
+        var newCoursesThisMonth = ViewBag.NewCoursesThisMonth as int? ?? 0;
+        var publishedThisMonth = ViewBag.PublishedThisMonth as int? ?? 0;
+        var newStudentsThisWeek = ViewBag.NewStudentsThisWeek as int? ?? 0;
+    }
+    <div class="row mb-4 g-3">
+        <div class="col-12 col-sm-6 col-lg-3">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("إجمالي الدورات", "Total Courses")),
+                ("Value", ViewBag.TotalCourses ?? 0),
+                ("Icon", "book"),
+                ("Color", "primary"),
+                ("Change", newCoursesThisMonth > 0 ? $"+{newCoursesThisMonth}" : ""),
+                ("ChangeText", newCoursesThisMonth > 0 ? Html.T("هذا الشهر", "this month") : "")
+            ))
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("الدورات المنشورة", "Published Courses")),
+                ("Value", ViewBag.PublishedCourses ?? 0),
+                ("Icon", "check-circle"),
+                ("Color", "success"),
+                ("Change", publishedThisMonth > 0 ? $"+{publishedThisMonth}" : ""),
+                ("ChangeText", publishedThisMonth > 0 ? Html.T("هذا الشهر", "this month") : "")
+            ))
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("المسودات", "Drafts")),
+                ("Value", ViewBag.DraftCourses ?? 0),
+                ("Icon", "edit"),
+                ("Color", "warning"),
+                ("Link", Url.Action("Index", new { status = "Draft" }))
+            ))
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("إجمالي الطلاب", "Total Students")),
+                ("Value", ViewBag.TotalStudents ?? 0),
+                ("Icon", "users"),
+                ("Color", "info"),
+                ("Change", newStudentsThisWeek > 0 ? $"+{newStudentsThisWeek}" : ""),
+                ("ChangeText", newStudentsThisWeek > 0 ? Html.T("هذا الأسبوع", "this week") : "")
+            ))
+        </div>
+    </div>
+
+    <!-- Courses List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full border-0" style="border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);">
+                <div class="card-header d-flex align-items-center justify-content-between" style="border-bottom: 1px solid var(--border-color-light, #f1f5f9); padding: 1rem 1.5rem;">
+                    <h5 class="card-title mb-0 fw-bold">@Html.T("قائمة الدورات", "Courses List")</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <!-- View Toggle -->
+                        <div class="view-toggle btn-group" role="group" style="border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                            <button type="button" class="btn btn-sm" id="tableViewBtn" onclick="switchCoursesView('table')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); transition: all 0.25s ease;">
+                                <i class="feather-list" style="font-size: 15px;"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm active" id="cardViewBtn" onclick="switchCoursesView('card')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); border-right: none; transition: all 0.25s ease;">
+                                <i class="feather-grid" style="font-size: 15px;"></i>
+                            </button>
+                        </div>
+                        <div data-bs-toggle="tooltip" title="@Html.T("تحديث", "Refresh")">
+                            <a href="@Url.Action("Index")" class="avatar-text avatar-xs bg-warning" style="border-radius: 10px;">
+                                <i class="feather-refresh-cw"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    <!-- Search and Filter Bar -->
+                    <div class="p-4 border-bottom" style="background: var(--light, #f8fafc);">
+                        <form method="get" class="row g-3">
+                            <div class="col-md-4">
+                                <div class="input-group" style="border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                                    <input type="text" class="form-control border-0" name="search" placeholder="@Html.T("البحث عن دورة...", "Search courses...")" value="@ViewBag.SearchTerm" style="background: #fff;">
+                                    <button class="btn btn-primary" type="submit" style="border-radius: 0;">
+                                        <i class="feather-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" name="category" onchange="this.form.submit()" style="border-radius: 10px; border-color: var(--border-color, #e2e8f0);">
+                                    <option value="">@Html.T("جميع التصنيفات", "All Categories")</option>
+                                    @if (ViewBag.Categories != null)
+                                    {
+                                        foreach (var cat in ViewBag.Categories)
+                                        {
+                                            var isSelected = ViewBag.SelectedCategory != null && ViewBag.SelectedCategory.Equals(cat.Id);
+                                            <option value="@cat.Id" selected="@isSelected">@cat.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" name="level" onchange="this.form.submit()" style="border-radius: 10px; border-color: var(--border-color, #e2e8f0);">
+                                    <option value="">@Html.T("جميع المستويات", "All Levels")</option>
+                                    <option value="Beginner">@Html.T("مبتدئ", "Beginner")</option>
+                                    <option value="Intermediate">@Html.T("متوسط", "Intermediate")</option>
+                                    <option value="Advanced">@Html.T("متقدم", "Advanced")</option>
+                                    <option value="AllLevels">@Html.T("جميع المستويات", "All Levels")</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select class="form-select" name="sortBy" onchange="this.form.submit()" style="border-radius: 10px; border-color: var(--border-color, #e2e8f0);">
+                                    <option value="newest">@Html.T("الأحدث", "Newest")</option>
+                                    <option value="oldest">@Html.T("الأقدم", "Oldest")</option>
+                                    <option value="students">@Html.T("الطلاب", "Students")</option>
+                                    <option value="revenue">@Html.T("الإيرادات", "Revenue")</option>
+                                    <option value="rating">@Html.T("التقييم", "Rating")</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+
+                    @if (Model != null && Model.Any())
+                    {
+                        <!-- TABLE VIEW -->
+                        <div id="tableView" class="courses-view-panel d-none">
+                            <div class="d-md-none p-4">
+                                @foreach (var course in Model)
+                                {
+                                    var studentCount = ViewBag.EnrollmentCounts?.ContainsKey(course.Id) == true ? ViewBag.EnrollmentCounts[course.Id] : 0;
+                                    <div class="card mb-3 border">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-start gap-3">
+                                                <div class="avatar-image flex-shrink-0" style="width:56px;height:56px;border-radius:10px;overflow:hidden;">
+                                                    <img src="@(course.ThumbnailUrl ?? "/assets/images/general/placeholder.png")" alt="@course.Title" class="img-fluid" style="object-fit:cover;width:100%;height:100%;">
+                                                </div>
+                                                <div class="min-w-0 flex-grow-1">
+                                                    <a href="@Url.Action("Details", new { id = course.Id })" class="fw-bold text-dark text-break d-block">@course.Title</a>
+                                                    <p class="fs-12 text-muted mb-1">@course.Category?.Name</p>
+                                                    @switch (course.Status)
+                                                    {
+                                                        case LMS.Domain.Enums.CourseStatus.Published: <span class="badge bg-soft-success text-success">@Html.T("منشورة", "Published")</span> break;
+                                                        case LMS.Domain.Enums.CourseStatus.Draft: <span class="badge bg-soft-warning text-warning">@Html.T("مسودة", "Draft")</span> break;
+                                                        case LMS.Domain.Enums.CourseStatus.PendingReview: <span class="badge bg-soft-info text-info">@Html.T("قيد المراجعة", "Pending Review")</span> break;
+                                                        default: <span class="badge bg-soft-secondary text-secondary">@course.Status</span> break;
+                                                    }
+                                                    <div class="d-flex flex-wrap gap-2 mt-2 fs-12">
+                                                        <span><i class="feather-users text-muted"></i> @studentCount</span>
+                                                        <span><i class="feather-star text-warning"></i> @course.AverageRating.ToString("F1")</span>
+                                                        <span class="fw-bold text-success">@course.Price.ToEGP()</span>
+                                                    </div>
+                                                    <div class="hstack gap-2 mt-2">
+                                                        <a href="@Url.Action("Details", new { id = course.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-eye"></i></a>
+                                                        <a href="@Url.Action("CreateWizard", new { id = course.Id, step = 1 })" class="btn btn-sm btn-outline-secondary"><i class="feather-edit"></i></a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="d-none d-md-block">
+                                <div class="table-responsive" style="overflow: visible; -webkit-overflow-scrolling: touch; max-width: 100%;">
+                                    <table class="table table-hover mb-0 courses-table-modern">
+                                        <thead>
+                                            <tr>
+                                                <th class="wd-30">
+                                                    <div class="btn-group">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="selectAll">
+                                                        </div>
+                                                    </div>
+                                                </th>
+                                                <th>@Html.T("الدورة", "Course")</th>
+                                                <th>@Html.T("الحالة", "Status")</th>
+                                                <th>@Html.T("الطلاب", "Students")</th>
+                                                <th>@Html.T("التقييم", "Rating")</th>
+                                                <th>@Html.T("الإيرادات", "Revenue")</th>
+                                                <th>@Html.T("آخر تحديث", "Last Updated")</th>
+                                                <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var course in Model)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" value="@course.Id">
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-3">
+                                                        <div class="avatar-image avatar-lg" style="border-radius: 10px; overflow: hidden; flex-shrink: 0;">
+                                                            <img src="@(course.ThumbnailUrl ?? "/assets/images/general/placeholder.png")" alt="@course.Title" class="img-fluid" style="object-fit: cover; width: 100%; height: 100%;">
+                                                        </div>
+                                                        <div>
+                                                            <a href="@Url.Action("Details", new { id = course.Id })" class="fw-bold text-dark">@course.Title</a>
+                                                            <p class="fs-12 text-muted mb-0">@course.Category?.Name</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    @switch (course.Status)
+                                                    {
+                                                        case LMS.Domain.Enums.CourseStatus.Published:
+                                                            <span class="badge bg-soft-success text-success" style="border-radius: 8px; padding: 5px 12px; font-weight: 600;">@Html.T("منشورة", "Published")</span>
+                                                            break;
+                                                        case LMS.Domain.Enums.CourseStatus.Draft:
+                                                            <span class="badge bg-soft-warning text-warning" style="border-radius: 8px; padding: 5px 12px; font-weight: 600;">@Html.T("مسودة", "Draft")</span>
+                                                            break;
+                                                        case LMS.Domain.Enums.CourseStatus.PendingReview:
+                                                            <span class="badge bg-soft-info text-info" style="border-radius: 8px; padding: 5px 12px; font-weight: 600;">@Html.T("قيد المراجعة", "Pending Review")</span>
+                                                            break;
+                                                        case LMS.Domain.Enums.CourseStatus.Archived:
+                                                            <span class="badge bg-soft-secondary text-secondary" style="border-radius: 8px; padding: 5px 12px; font-weight: 600;">@Html.T("مؤرشفة", "Archived")</span>
+                                                            break;
+                                                        default:
+                                                            <span class="badge bg-soft-secondary text-secondary" style="border-radius: 8px; padding: 5px 12px; font-weight: 600;">@course.Status</span>
+                                                            break;
+                                                    }
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <i class="feather-users text-muted"></i>
+                                                        <span class="fw-medium">@(ViewBag.EnrollmentCounts?.ContainsKey(course.Id) == true ? ViewBag.EnrollmentCounts[course.Id] : 0)</span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <i class="feather-star text-warning"></i>
+                                                        <span class="fw-medium">@course.AverageRating.ToString("F1")</span>
+                                                        <span class="text-muted fs-11">(@course.TotalReviews)</span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="fw-bold text-success">@course.Price.ToEGP()</span>
+                                                </td>
+                                                <td>
+                                                    <span class="fs-12 text-muted">@(course.UpdatedAt?.ToString("dd/MM/yyyy") ?? "-")</span>
+                                                </td>
+                                                <td>
+                                                    <div class="hstack gap-2 justify-content-end">
+                                                        <a href="@Url.Action("Details", new { id = course.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض", "View")" style="border-radius: 10px;">
+                                                            <i class="feather-eye"></i>
+                                                        </a>
+                                                        <a href="@Url.Action("CreateWizard", new { id = course.Id, step = 1 })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")" style="border-radius: 10px;">
+                                                            <i class="feather-edit"></i>
+                                                        </a>
+                                                        <div class="dropdown">
+                                                            <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown" data-bs-offset="0,21" data-bs-boundary="viewport" style="border-radius: 10px;">
+                                                                <i class="feather-more-horizontal"></i>
+                                                            </a>
+                                                            <ul class="dropdown-menu dropdown-menu-end course-actions-dropdown" style="border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.12); border: 1px solid var(--border-color-light, #f1f5f9); padding: 8px; min-width: 220px; z-index: 1080;">
+                                                                <li>
+                                                                    <a class="dropdown-item" href="@Url.Action("Index", "Modules", new { courseId = course.Id })" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-layers me-3"></i>
+                                                                        <span>@Html.T("إدارة المحتوى", "Manage Content")</span>
+                                                                    </a>
+                                                                </li>
+                                                                <li>
+                                                                    <a class="dropdown-item" href="@Url.Action("Index", "Students", new { courseId = course.Id })" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-users me-3"></i>
+                                                                        <span>@Html.T("الطلاب المسجلين", "Enrolled Students")</span>
+                                                                    </a>
+                                                                </li>
+                                                                <li>
+                                                                    <a class="dropdown-item" href="@Url.Action("CourseDetails", "Analytics", new { courseId = course.Id })" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-bar-chart-2 me-3"></i>
+                                                                        <span>@Html.T("التحليلات", "Analytics")</span>
+                                                                    </a>
+                                                                </li>
+                                                                <li><hr class="dropdown-divider" style="margin: 4px 0;"></li>
+                                                                <li>
+                                                                    <form asp-action="Duplicate" asp-route-id="@course.Id" method="post" style="display:inline;">
+                                                                        @Html.AntiForgeryToken()
+                                                                        <button type="submit" class="dropdown-item" style="border-radius: 8px; padding: 10px 14px;">
+                                                                            <i class="feather-copy me-3"></i>
+                                                                            <span>@Html.T("نسخ الدورة", "Duplicate Course")</span>
+                                                                        </button>
+                                                                    </form>
+                                                                </li>
+                                                                @if (course.Status == LMS.Domain.Enums.CourseStatus.Published)
+                                                                {
+                                                                    <li>
+                                                                        <form asp-action="Unpublish" asp-route-id="@course.Id" method="post" style="display:inline;">
+                                                                            @Html.AntiForgeryToken()
+                                                                            <button type="submit" class="dropdown-item" style="border-radius: 8px; padding: 10px 14px;">
+                                                                                <i class="feather-eye-off me-3"></i>
+                                                                                <span>@Html.T("إلغاء النشر", "Unpublish")</span>
+                                                                            </button>
+                                                                        </form>
+                                                                    </li>
+                                                                }
+                                                                else if (course.Status == LMS.Domain.Enums.CourseStatus.Draft)
+                                                                {
+                                                                    <li>
+                                                                        <form asp-action="Publish" asp-route-id="@course.Id" method="post" style="display:inline;">
+                                                                            @Html.AntiForgeryToken()
+                                                                            <button type="submit" class="dropdown-item" style="border-radius: 8px; padding: 10px 14px;">
+                                                                                <i class="feather-check-circle me-3"></i>
+                                                                                <span>@Html.T("نشر الدورة", "Publish Course")</span>
+                                                                            </button>
+                                                                        </form>
+                                                                    </li>
+                                                                }
+                                                                <li><hr class="dropdown-divider" style="margin: 4px 0;"></li>
+                                                                <li>
+                                                                    <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@Url.Action("Delete", new { id = course.Id })', '@(Html.T("هل أنت متأكد من حذف الدورة؟", "Are you sure you want to delete this course?")) @course.Title')" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-trash-2 me-3"></i>
+                                                                        <span>@Html.T("حذف", "Delete")</span>
+                                                                    </a>
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            </div>
+                        </div>
+
+                        <!-- CARD VIEW -->
+                        <div id="cardView" class="courses-view-panel courses-view-active">
+                            <div class="p-4">
+                                <div class="row g-4">
+                                    @foreach (var course in Model)
+                                    {
+                                        var studentCount = ViewBag.EnrollmentCounts?.ContainsKey(course.Id) == true ? ViewBag.EnrollmentCounts[course.Id] : 0;
+                                        <div class="col-12 col-sm-6 col-xl-4 col-xxl-3">
+                                            <div class="instructor-course-card" style="border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border: 1px solid var(--border-color-light, #f1f5f9); height: 100%; display: flex; flex-direction: column;">
+                                                <!-- Thumbnail -->
+                                                <div class="position-relative" style="aspect-ratio: 16/9; overflow: hidden;">
+                                                    <img src="@(course.ThumbnailUrl ?? "/assets/images/general/placeholder.png")"
+                                                         alt="@course.Title"
+                                                         style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease;">
+                                                    <!-- Status Badge -->
+                                                    <div class="position-absolute top-0 start-0 p-3">
+                                                        @switch (course.Status)
+                                                        {
+                                                            case LMS.Domain.Enums.CourseStatus.Published:
+                                                                <span class="badge" style="background: rgba(5, 150, 105, 0.9); color: #fff; padding: 6px 12px; border-radius: 8px; font-weight: 600; backdrop-filter: blur(4px); font-size: 11px;">
+                                                                    <i class="feather-check-circle me-1" style="font-size: 11px; color: #fff !important;"></i> @Html.T("منشورة", "Published")
+                                                                </span>
+                                                                break;
+                                                            case LMS.Domain.Enums.CourseStatus.Draft:
+                                                                <span class="badge" style="background: rgba(217, 119, 6, 0.9); color: #fff; padding: 6px 12px; border-radius: 8px; font-weight: 600; backdrop-filter: blur(4px); font-size: 11px;">
+                                                                    <i class="feather-edit me-1" style="font-size: 11px; color: #fff !important;"></i> @Html.T("مسودة", "Draft")
+                                                                </span>
+                                                                break;
+                                                            case LMS.Domain.Enums.CourseStatus.PendingReview:
+                                                                <span class="badge" style="background: rgba(2, 132, 199, 0.9); color: #fff; padding: 6px 12px; border-radius: 8px; font-weight: 600; backdrop-filter: blur(4px); font-size: 11px;">
+                                                                    <i class="feather-clock me-1" style="font-size: 11px; color: #fff !important;"></i> @Html.T("قيد المراجعة", "Pending Review")
+                                                                </span>
+                                                                break;
+                                                            default:
+                                                                <span class="badge" style="background: rgba(100, 116, 139, 0.9); color: #fff; padding: 6px 12px; border-radius: 8px; font-weight: 600; backdrop-filter: blur(4px); font-size: 11px;">
+                                                                    @course.Status
+                                                                </span>
+                                                                break;
+                                                        }
+                                                    </div>
+                                                    <!-- Price Badge -->
+                                                    <div class="position-absolute bottom-0 end-0 p-3">
+                                                        <span class="badge" style="background: rgba(0,0,0,0.65); color: #fff; padding: 6px 12px; border-radius: 8px; font-weight: 700; backdrop-filter: blur(4px); font-size: 12px;">
+                                                            @course.Price.ToEGP()
+                                                        </span>
+                                                    </div>
+                                                    <!-- Quick Actions Overlay -->
+                                                    <div class="course-card-overlay" style="position: absolute; inset: 0; background: rgba(0,0,0,0.4); opacity: 0; transition: opacity 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                                        <a href="@Url.Action("Details", new { id = course.Id })" class="btn btn-sm btn-light" style="border-radius: 10px; padding: 8px 12px;" data-bs-toggle="tooltip" title="@Html.T("عرض", "View")">
+                                                            <i class="feather-eye"></i>
+                                                        </a>
+                                                        <a href="@Url.Action("CreateWizard", new { id = course.Id, step = 1 })" class="btn btn-sm btn-light" style="border-radius: 10px; padding: 8px 12px;" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                            <i class="feather-edit"></i>
+                                                        </a>
+                                                        <a href="@Url.Action("Index", "Modules", new { courseId = course.Id })" class="btn btn-sm btn-light" style="border-radius: 10px; padding: 8px 12px;" data-bs-toggle="tooltip" title="@Html.T("إدارة المحتوى", "Manage Content")">
+                                                            <i class="feather-layers"></i>
+                                                        </a>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Card Body -->
+                                                <div class="p-3 d-flex flex-column flex-grow-1">
+                                                    <div class="d-flex align-items-start justify-content-between mb-2">
+                                                        <div class="flex-grow-1 pe-2">
+                                                            <a href="@Url.Action("Details", new { id = course.Id })" class="fw-bold text-dark d-block mb-1" style="font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; text-decoration: none;">
+                                                                @course.Title
+                                                            </a>
+                                                            @if (course.Category != null)
+                                                            {
+                                                                <span class="fs-12 text-muted">@course.Category.Name</span>
+                                                            }
+                                                        </div>
+                                                        <!-- Dropdown Menu -->
+                                                        <div class="dropdown flex-shrink-0">
+                                                            <button class="btn btn-sm btn-light" data-bs-toggle="dropdown" data-bs-boundary="viewport" style="border-radius: 8px; padding: 4px 8px; border: 1px solid var(--border-color-light, #f1f5f9);">
+                                                                <i class="feather-more-vertical" style="font-size: 14px;"></i>
+                                                            </button>
+                                                            <ul class="dropdown-menu dropdown-menu-end course-actions-dropdown" style="border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.12); border: 1px solid var(--border-color-light, #f1f5f9); padding: 8px; min-width: 200px; z-index: 1080;">
+                                                                <li>
+                                                                    <a class="dropdown-item" href="@Url.Action("Index", "Modules", new { courseId = course.Id })" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-layers me-3"></i><span>@Html.T("إدارة المحتوى", "Manage Content")</span>
+                                                                    </a>
+                                                                </li>
+                                                                <li>
+                                                                    <a class="dropdown-item" href="@Url.Action("Index", "Students", new { courseId = course.Id })" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-users me-3"></i><span>@Html.T("الطلاب المسجلين", "Enrolled Students")</span>
+                                                                    </a>
+                                                                </li>
+                                                                <li>
+                                                                    <a class="dropdown-item" href="@Url.Action("CourseDetails", "Analytics", new { courseId = course.Id })" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-bar-chart-2 me-3"></i><span>@Html.T("التحليلات", "Analytics")</span>
+                                                                    </a>
+                                                                </li>
+                                                                <li><hr class="dropdown-divider" style="margin: 4px 0;"></li>
+                                                                <li>
+                                                                    <form asp-action="Duplicate" asp-route-id="@course.Id" method="post" style="display:inline;">
+                                                                        @Html.AntiForgeryToken()
+                                                                        <button type="submit" class="dropdown-item" style="border-radius: 8px; padding: 10px 14px;">
+                                                                            <i class="feather-copy me-3"></i><span>@Html.T("نسخ الدورة", "Duplicate Course")</span>
+                                                                        </button>
+                                                                    </form>
+                                                                </li>
+                                                                @if (course.Status == LMS.Domain.Enums.CourseStatus.Published)
+                                                                {
+                                                                    <li>
+                                                                        <form asp-action="Unpublish" asp-route-id="@course.Id" method="post" style="display:inline;">
+                                                                            @Html.AntiForgeryToken()
+                                                                            <button type="submit" class="dropdown-item" style="border-radius: 8px; padding: 10px 14px;">
+                                                                                <i class="feather-eye-off me-3"></i><span>@Html.T("إلغاء النشر", "Unpublish")</span>
+                                                                            </button>
+                                                                        </form>
+                                                                    </li>
+                                                                }
+                                                                else if (course.Status == LMS.Domain.Enums.CourseStatus.Draft)
+                                                                {
+                                                                    <li>
+                                                                        <form asp-action="Publish" asp-route-id="@course.Id" method="post" style="display:inline;">
+                                                                            @Html.AntiForgeryToken()
+                                                                            <button type="submit" class="dropdown-item" style="border-radius: 8px; padding: 10px 14px;">
+                                                                                <i class="feather-check-circle me-3"></i><span>@Html.T("نشر الدورة", "Publish Course")</span>
+                                                                            </button>
+                                                                        </form>
+                                                                    </li>
+                                                                }
+                                                                <li><hr class="dropdown-divider" style="margin: 4px 0;"></li>
+                                                                <li>
+                                                                    <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@Url.Action("Delete", new { id = course.Id })', '@(Html.T("هل أنت متأكد من حذف الدورة؟", "Are you sure you want to delete this course?"))')" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-trash-2 me-3"></i><span>@Html.T("حذف", "Delete")</span>
+                                                                    </a>
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Stats Row -->
+                                                    <div class="mt-auto pt-3" style="border-top: 1px solid var(--border-color-light, #f1f5f9);">
+                                                        <div class="d-flex align-items-center justify-content-between">
+                                                            <div class="d-flex align-items-center gap-3">
+                                                                <span class="d-flex align-items-center gap-1 text-muted" style="font-size: 12px;">
+                                                                    <i class="feather-users" style="font-size: 13px;"></i> @studentCount
+                                                                </span>
+                                                                <span class="d-flex align-items-center gap-1" style="font-size: 12px; color: #d97706;">
+                                                                    <i class="feather-star" style="font-size: 13px; color: #d97706 !important;"></i> @course.AverageRating.ToString("F1")
+                                                                </span>
+                                                            </div>
+                                                            <span class="fs-12 text-muted">@(course.UpdatedAt?.ToString("dd/MM/yyyy") ?? "-")</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pagination -->
+                        @await Html.PartialAsync("_Pagination")
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto" style="border-radius: 20px;">
+                                <i class="feather-book-open"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد دورات بعد", "No courses yet")</h5>
+                            <p class="text-muted mb-4">@Html.T("ابدأ بإنشاء أول دورة تعليمية لك", "Start by creating your first course")</p>
+                            <a href="@Url.Action("CreateWizard")" class="btn btn-primary" style="border-radius: 10px; padding: 10px 24px;">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إنشاء دورة جديدة", "Create New Course")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DeleteModal")
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Select all checkbox
+            $('#selectAll').on('change', function () {
+                $('tbody input[type="checkbox"]').prop('checked', this.checked);
+            });
+
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            // Restore view preference (default is grid/card)
+            var savedView = localStorage.getItem('instructor_courses_view');
+            if (savedView === 'table') {
+                switchCoursesView('table');
+            } else {
+                switchCoursesView('card');
+            }
+
+            // Fix dropdown positioning for table dropdowns
+            document.querySelectorAll('.courses-table-modern .dropdown').forEach(function (dropdown) {
+                dropdown.addEventListener('show.bs.dropdown', function () {
+                    var tableResponsive = this.closest('.table-responsive');
+                    if (tableResponsive) {
+                        tableResponsive.style.overflow = 'visible';
+                    }
+                });
+                dropdown.addEventListener('hidden.bs.dropdown', function () {
+                    var tableResponsive = this.closest('.table-responsive');
+                    if (tableResponsive) {
+                        tableResponsive.style.overflow = 'visible';
+                    }
+                });
+            });
+        });
+
+        function switchCoursesView(mode) {
+            var tableView = document.getElementById('tableView');
+            var cardView = document.getElementById('cardView');
+            var tableBtn = document.getElementById('tableViewBtn');
+            var cardBtn = document.getElementById('cardViewBtn');
+
+            if (mode === 'card') {
+                tableView.classList.add('d-none');
+                tableView.classList.remove('courses-view-active');
+                cardView.classList.remove('d-none');
+                cardView.classList.add('courses-view-active');
+                cardBtn.classList.add('active');
+                tableBtn.classList.remove('active');
+            } else {
+                cardView.classList.add('d-none');
+                cardView.classList.remove('courses-view-active');
+                tableView.classList.remove('d-none');
+                tableView.classList.add('courses-view-active');
+                tableBtn.classList.add('active');
+                cardBtn.classList.remove('active');
+            }
+
+            // Save preference
+            localStorage.setItem('instructor_courses_view', mode);
+
+            // Reinitialize tooltips for new view
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                var existingTooltip = bootstrap.Tooltip.getInstance(tooltipTriggerEl);
+                if (!existingTooltip) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                }
+                return existingTooltip;
+            });
+        }
+    </script>
+}

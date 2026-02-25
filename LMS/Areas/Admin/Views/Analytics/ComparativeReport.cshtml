@@ -1,0 +1,395 @@
+@model dynamic
+
+@{
+    ViewData["Title"] = Html.T("التقرير المقارن", "Comparative report");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("التحليلات", "Analytics"), Url.Action("Index", "Analytics")),
+        (Html.T("التقرير المقارن", "Comparative report"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/daterangepicker.min.css" />
+    <style>
+        .comparison-card {
+            transition: all 0.3s ease;
+        }
+        .comparison-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .growth-indicator {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        .growth-positive {
+            color: #0ab39c;
+        }
+        .growth-negative {
+            color: #f06548;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get">
+                        <div class="row g-3">
+                            <div class="col-md-12 mb-3">
+                                <h6 class="fw-bold">الفترة الأولى</h6>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                                <input type="date" name="period1Start" class="form-control" value="@(Model?.Period1Start?.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.AddMonths(-2).ToString("yyyy-MM-dd"))" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                                <input type="date" name="period1End" class="form-control" value="@(Model?.Period1End?.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.AddMonths(-1).ToString("yyyy-MM-dd"))" />
+                            </div>
+                            
+                            <div class="col-md-12 mb-3">
+                                <h6 class="fw-bold">الفترة الثانية</h6>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                                <input type="date" name="period2Start" class="form-control" value="@(Model?.Period2Start?.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.AddMonths(-1).ToString("yyyy-MM-dd"))" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                                <input type="date" name="period2End" class="form-control" value="@(Model?.Period2End?.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.ToString("yyyy-MM-dd"))" />
+                            </div>
+
+                            <div class="col-md-12">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="feather-search me-2"></i>
+                                    مقارنة
+                                </button>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                                        <i class="feather-download me-2"></i>تصدير
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item" href="/api/export/payments?format=csv"><i class="feather-file-text me-2"></i>@Html.T("CSV", "CSV")</a></li>
+                                        <li><a class="dropdown-item" href="/api/export/payments?format=excel"><i class="feather-file me-2"></i>@Html.T("إكسل", "Excel")</a></li>
+                                        <li><a class="dropdown-item" href="/api/export/payments?format=pdf"><i class="feather-file-text me-2"></i>@Html.T("PDF", "PDF")</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><a class="dropdown-item" href="javascript:void(0)" onclick="window.print()"><i class="feather-printer me-2"></i>طباعة</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Model != null)
+    {
+        <!-- Growth Indicators -->
+        <div class="row mb-4">
+            <div class="col-lg-4">
+                <div class="card comparison-card">
+                    <div class="card-body text-center">
+                        <div class="avatar-text avatar-xl bg-soft-success text-success mx-auto mb-3">
+                            <i class="feather-trending-up"></i>
+                        </div>
+                        <h6 class="text-muted mb-2">نمو الإيرادات</h6>
+                        <h2 class="growth-indicator @(Model.RevenueGrowth >= 0 ? "growth-positive" : "growth-negative")">
+                            @(Model.RevenueGrowth >= 0 ? "+" : "")@Model.RevenueGrowth.ToString("F1")%
+                        </h2>
+                        <p class="text-muted mb-0">
+                            <small>من @Model.Period1.Revenue.ToEGP() إلى @Model.Period2.Revenue.ToEGP()</small>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card comparison-card">
+                    <div class="card-body text-center">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                            <i class="feather-users"></i>
+                        </div>
+                        <h6 class="text-muted mb-2">نمو المستخدمين</h6>
+                        <h2 class="growth-indicator @(Model.UsersGrowth >= 0 ? "growth-positive" : "growth-negative")">
+                            @(Model.UsersGrowth >= 0 ? "+" : "")@Model.UsersGrowth.ToString("F1")%
+                        </h2>
+                        <p class="text-muted mb-0">
+                            <small>من @Model.Period1.NewUsers مستخدم إلى @Model.Period2.NewUsers مستخدم</small>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card comparison-card">
+                    <div class="card-body text-center">
+                        <div class="avatar-text avatar-xl bg-soft-warning text-warning mx-auto mb-3">
+                            <i class="feather-user-check"></i>
+                        </div>
+                        <h6 class="text-muted mb-2">@Html.T("نمو التسجيلات", "Enrollments growth")</h6>
+                        <h2 class="growth-indicator @(Model.EnrollmentsGrowth >= 0 ? "growth-positive" : "growth-negative")">
+                            @(Model.EnrollmentsGrowth >= 0 ? "+" : "")@Model.EnrollmentsGrowth.ToString("F1")%
+                        </h2>
+                        <p class="text-muted mb-0">
+                            <small>من @Model.Period1.Enrollments تسجيل إلى @Model.Period2.Enrollments تسجيل</small>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Comparison -->
+        <div class="row mb-4">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("مقارنة تفصيلية", "Detailed comparison")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th>@Html.T("المقياس", "Metric")</th>
+                                        <th class="text-center">
+                                            @Html.T("الفترة الأولى", "Period 1")<br>
+                                            <small class="text-muted">@Model.Period1Start.ToString("dd/MM/yyyy") - @Model.Period1End.ToString("dd/MM/yyyy")</small>
+                                        </th>
+                                        <th class="text-center">
+                                            @Html.T("الفترة الثانية", "Period 2")<br>
+                                            <small class="text-muted">@Model.Period2Start.ToString("dd/MM/yyyy") - @Model.Period2End.ToString("dd/MM/yyyy")</small>
+                                        </th>
+                                        <th class="text-center">@Html.T("النمو", "Growth")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="fw-semibold">
+                                            <i class="feather-dollar-sign text-success me-2"></i>
+                                            @Html.T("الإيرادات", "Revenue")
+                                        </td>
+                                        <td class="text-center">@Model.Period1.Revenue.ToEGP()</td>
+                                        <td class="text-center">@Model.Period2.Revenue.ToEGP()</td>
+                                        <td class="text-center">
+                                            <span class="badge @(Model.RevenueGrowth >= 0 ? "bg-soft-success text-success" : "bg-soft-danger text-danger")">
+                                                <i class="feather-@(Model.RevenueGrowth >= 0 ? "trending-up" : "trending-down") me-1"></i>
+                                                @(Model.RevenueGrowth >= 0 ? "+" : "")@Model.RevenueGrowth.ToString("F1")%
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">
+                                            <i class="feather-user-check text-primary me-2"></i>
+                                            @Html.T("التسجيلات", "Enrollments")
+                                        </td>
+                                        <td class="text-center">@Model.Period1.Enrollments</td>
+                                        <td class="text-center">@Model.Period2.Enrollments</td>
+                                        <td class="text-center">
+                                            <span class="badge @(Model.EnrollmentsGrowth >= 0 ? "bg-soft-success text-success" : "bg-soft-danger text-danger")">
+                                                <i class="feather-@(Model.EnrollmentsGrowth >= 0 ? "trending-up" : "trending-down") me-1"></i>
+                                                @(Model.EnrollmentsGrowth >= 0 ? "+" : "")@Model.EnrollmentsGrowth.ToString("F1")%
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">
+                                            <i class="feather-users text-info me-2"></i>
+                                            @Html.T("مستخدمون جدد", "New users")
+                                        </td>
+                                        <td class="text-center">@Model.Period1.NewUsers</td>
+                                        <td class="text-center">@Model.Period2.NewUsers</td>
+                                        <td class="text-center">
+                                            <span class="badge @(Model.UsersGrowth >= 0 ? "bg-soft-success text-success" : "bg-soft-danger text-danger")">
+                                                <i class="feather-@(Model.UsersGrowth >= 0 ? "trending-up" : "trending-down") me-1"></i>
+                                                @(Model.UsersGrowth >= 0 ? "+" : "")@Model.UsersGrowth.ToString("F1")%
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">
+                                            <i class="feather-book text-warning me-2"></i>
+                                            @Html.T("دورات جديدة", "New courses")
+                                        </td>
+                                        <td class="text-center">@Model.Period1.NewCourses</td>
+                                        <td class="text-center">@Model.Period2.NewCourses</td>
+                                        <td class="text-center">
+                                            @{
+                                                var coursesGrowth = Model.Period1.NewCourses > 0 ? 
+                                                    ((Model.Period2.NewCourses - Model.Period1.NewCourses) * 100.0 / Model.Period1.NewCourses) : 0;
+                                            }
+                                            <span class="badge @(coursesGrowth >= 0 ? "bg-soft-success text-success" : "bg-soft-danger text-danger")">
+                                                <i class="feather-@(coursesGrowth >= 0 ? "trending-up" : "trending-down") me-1"></i>
+                                                @(coursesGrowth >= 0 ? "+" : "")@coursesGrowth.ToString("F1")%
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="fw-semibold">
+                                            <i class="feather-rotate-ccw text-danger me-2"></i>
+                                            @Html.T("الاستردادات", "Refunds")
+                                        </td>
+                                        <td class="text-center">@Model.Period1.Refunds (@Model.Period1.RefundedAmount.ToEGP())</td>
+                                        <td class="text-center">@Model.Period2.Refunds (@Model.Period2.RefundedAmount.ToEGP())</td>
+                                        <td class="text-center">
+                                            @{
+                                                var refundsGrowth = Model.Period1.Refunds > 0 ? 
+                                                    ((Model.Period2.Refunds - Model.Period1.Refunds) * 100.0 / Model.Period1.Refunds) : 0;
+                                            }
+                                            <span class="badge @(refundsGrowth <= 0 ? "bg-soft-success text-success" : "bg-soft-danger text-danger")">
+                                                <i class="feather-@(refundsGrowth <= 0 ? "trending-down" : "trending-up") me-1"></i>
+                                                @(refundsGrowth >= 0 ? "+" : "")@refundsGrowth.ToString("F1")%
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("مقارنة الإيرادات", "Revenue comparison")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div style="height: 300px;">
+                            <canvas id="revenueComparisonChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("مقارنة التسجيلات", "Enrollments comparison")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div style="height: 300px;">
+                            <canvas id="enrollmentsComparisonChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-info text-info mx-auto mb-3">
+                            <i class="feather-bar-chart-2"></i>
+                        </div>
+                        <h5>@Html.T("اختر الفترات الزمنية للمقارنة", "Select time periods to compare")</h5>
+                        <p class="text-muted">@Html.T("قم بتحديد فترتين زمنيتين لمقارنة الأداء بينهما", "Select two time periods to compare performance")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/daterangepicker.min.js"></script>
+    <script>
+        var _exportMsg = '@Html.Raw(Html.T("وظيفة التصدير قيد التطوير", "Export feature in development"))';
+        var _period1 = '@Html.Raw(Html.T("الفترة الأولى", "Period 1"))';
+        var _period2 = '@Html.Raw(Html.T("الفترة الثانية", "Period 2"))';
+        var _revenueLabel = '@Html.Raw(Html.T("الإيرادات (ر.س)", "Revenue (SAR)"))';
+        var _enrollmentsLabel = '@Html.Raw(Html.T("التسجيلات", "Enrollments"))';
+        function exportComparison() {
+            alert(_exportMsg);
+        }
+
+        @if (Model != null)
+        {
+            <text>
+            $(document).ready(function() {
+                // Revenue Comparison Chart
+                const revenueCtx = document.getElementById('revenueComparisonChart').getContext('2d');
+                new Chart(revenueCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: [_period1, _period2],
+                        datasets: [{
+                            label: _revenueLabel,
+                            data: [@Model.Period1.Revenue, @Model.Period2.Revenue],
+                            backgroundColor: ['#3454d1', '#0ab39c'],
+                            borderRadius: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return value.toLocaleString() + ' ر.س';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Enrollments Comparison Chart
+                const enrollmentsCtx = document.getElementById('enrollmentsComparisonChart').getContext('2d');
+                new Chart(enrollmentsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: [_period1, _period2],
+                        datasets: [{
+                            label: _enrollmentsLabel,
+                            data: [@Model.Period1.Enrollments, @Model.Period2.Enrollments],
+                            backgroundColor: ['#f7b84b', '#f06548'],
+                            borderRadius: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            });
+            </text>
+        }
+    </script>
+}
+

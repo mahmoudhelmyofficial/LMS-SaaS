@@ -1,0 +1,164 @@
+@model List<LMS.Areas.Admin.ViewModels.BookAdminListViewModel>
+@using LMS.Domain.Enums
+@{
+    ViewData["Title"] = Html.T("الكتب قيد المراجعة", "Books Pending Review");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("إدارة المحتوى", "Content Management"), null),
+        (Html.T("الكتب", "Books"), Url.Action("Index", "Books")),
+        (Html.T("قيد المراجعة", "Pending Review"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("العودة للقائمة", "Back to List"), "feather-arrow-right", Url.Action("Index"), "btn-outline-secondary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    @if (Model.Any())
+    {
+        <div class="row g-4">
+            @foreach (var book in Model)
+            {
+                <div class="col-lg-6">
+                    <div class="card stretch stretch-full">
+                        <div class="row g-0">
+                            <div class="col-md-4">
+                                @if (!string.IsNullOrEmpty(book.CoverImageUrl))
+                                {
+                                    <img src="@book.CoverImageUrl" class="img-fluid rounded-start h-100" 
+                                         alt="@book.Title" style="object-fit: cover; max-height: 200px;">
+                                }
+                                else
+                                {
+                                    <div class="bg-soft-primary rounded-start h-100 d-flex align-items-center justify-content-center"
+                                         style="min-height: 200px;">
+                                        <i class="feather-book-open fs-1 text-primary"></i>
+                                    </div>
+                                }
+                            </div>
+                            <div class="col-md-8">
+                                <div class="card-body">
+                                    <h5 class="card-title">@book.Title</h5>
+                                    <p class="card-text text-muted small">
+                                        <i class="feather-user me-1"></i>
+                                        @book.InstructorName
+                                        <span class="mx-2">|</span>
+                                        <i class="feather-folder me-1"></i>
+                                        @book.CategoryName
+                                    </p>
+                                    
+                                    <div class="mb-3">
+                                        @if (book.DiscountPrice.HasValue)
+                                        {
+                                            <span class="text-decoration-line-through text-muted">@book.Price.ToString("N2")</span>
+                                            <span class="text-success fw-bold ms-1">@book.DiscountPrice.Value.ToString("N2") EGP</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="fw-bold">@book.Price.ToString("N2") EGP</span>
+                                        }
+                                    </div>
+
+                                    <p class="text-muted small mb-3">
+                                        <i class="feather-calendar me-1"></i>
+                                        @Html.T("تم الإرسال", "Submitted"): @book.SubmittedForReviewAt?.ToString("dd/MM/yyyy hh:mm tt")
+                                    </p>
+
+                                    <div class="btn-group">
+                                        <a href="@Url.Action("Details", new { id = book.Id })" 
+                                           class="btn btn-outline-primary btn-sm">
+                                            <i class="feather-eye me-1"></i>
+                                            @Html.T("مراجعة", "Review")
+                                        </a>
+                                        <form asp-action="Publish" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@book.Id">
+                                            <button type="submit" class="btn btn-success btn-sm"
+                                                    onclick="return confirm('@(Html.T("هل تريد نشر هذا الكتاب؟", "Do you want to publish this book?"))');">
+                                                <i class="feather-check me-1"></i>
+                                                @Html.T("نشر", "Publish")
+                                            </button>
+                                        </form>
+                                        <button type="button" class="btn btn-danger btn-sm" 
+                                                onclick="showRejectModal('@book.Id', '@book.Title.Replace("'", "\\'")'); return false;">
+                                            <i class="feather-x me-1"></i>
+                                            @Html.T("رفض", "Reject")
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="card stretch stretch-full">
+            <div class="card-body text-center py-5">
+                <i class="feather-check-circle fs-1 text-success mb-3 d-block"></i>
+                <h5>@Html.T("لا توجد كتب قيد المراجعة", "No books pending review")</h5>
+                <p class="text-muted">@Html.T("جميع الكتب تمت مراجعتها", "All books have been reviewed")</p>
+                <a href="@Url.Action("Index")" class="btn btn-primary">
+                    <i class="feather-arrow-right me-2"></i>
+                    @Html.T("العودة للقائمة", "Back to list")
+                </a>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectBookModal" tabindex="-1" data-bs-backdrop="false" aria-labelledby="rejectBookModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="Reject" asp-controller="Books" asp-area="Admin" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="BookId" id="rejectBookId" value="" />
+                <div class="modal-header">
+                    <h5 class="modal-title" id="rejectBookModalLabel">
+                        <i class="feather-x-circle text-danger me-2"></i>
+                        @Html.T("رفض الكتاب", "Reject book")
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@Html.T("إغلاق", "Close")"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="feather-alert-triangle me-2"></i>
+                        @Html.T("رفض كتاب", "Reject book"): <strong id="rejectBookName"></strong>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("سبب الرفض", "Rejection reason") <span class="text-danger">*</span></label>
+                        <textarea name="Reason" class="form-control" rows="4" required 
+                                  placeholder="@Html.T("أدخل سبب رفض الكتاب بالتفصيل ليتمكن المدرس من تصحيح المشكلة...", "Enter the reason for rejecting the book in detail so the instructor can fix the issue...")"></textarea>
+                        <small class="text-muted">@Html.T("يرجى توضيح السبب بشكل واضح لمساعدة المدرس على تحسين الكتاب", "Please explain the reason clearly to help the instructor improve the book")</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="feather-x me-2"></i>
+                        @Html.T("رفض الكتاب", "Reject book")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function showRejectModal(bookId, bookTitle) {
+            document.getElementById('rejectBookId').value = bookId;
+            document.getElementById('rejectBookName').textContent = bookTitle;
+            var modal = new bootstrap.Modal(document.getElementById('rejectBookModal'));
+            modal.show();
+        }
+    </script>
+}

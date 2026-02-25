@@ -1,0 +1,336 @@
+@model List<LMS.Domain.Entities.Social.Comment>
+@{
+    ViewData["Title"] = Html.T("تعليقاتي", "My Comments");
+}
+
+@section Styles {
+<style>
+    .comment-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        transition: all 0.3s ease;
+        border-right: 4px solid transparent;
+    }
+    .comment-card:hover {
+        transform: translateX(-5px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        border-right-color: var(--bs-primary);
+    }
+    .comment-card.approved {
+        border-right-color: #10b981;
+    }
+    .comment-card.pending {
+        border-right-color: #f59e0b;
+        background: #fffbeb;
+    }
+    .comment-content {
+        background: #f9fafb;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 15px 0;
+        line-height: 1.8;
+    }
+    .reply-indicator {
+        background: #e0e7ff;
+        border-right: 3px solid #667eea;
+        padding: 10px 15px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Page Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-message-square text-primary me-2"></i>
+                    @Html.T("تعليقاتي", "My Comments")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("جميع التعليقات التي نشرتها على الدروس والمناقشات", "All comments you posted on lessons and discussions")</p>
+            </div>
+            <div class="col-lg-4 text-end">
+                <div class="d-inline-flex align-items-center gap-3">
+                    <div class="badge bg-soft-success text-success px-3 py-2">
+                        <i class="feather-check-circle me-1"></i>
+                        @Model.Count(c => c.IsApproved) @Html.T("موافق عليها", "approved")
+                    </div>
+                    <div class="badge bg-soft-warning text-warning px-3 py-2">
+                        <i class="feather-clock me-1"></i>
+                        @Model.Count(c => !c.IsApproved) @Html.T("قيد المراجعة", "pending review")
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Overview -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-3 col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-primary text-primary mx-auto mb-3">
+                    <i class="feather-message-circle"></i>
+                </div>
+                <h3 class="fw-bold mb-1">@Model.Count</h3>
+                <p class="text-muted mb-0">@Html.T("إجمالي التعليقات", "Total Comments")</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-success text-success mx-auto mb-3">
+                    <i class="feather-check-circle"></i>
+                </div>
+                <h3 class="fw-bold mb-1">@Model.Count(c => c.IsApproved)</h3>
+                <p class="text-muted mb-0">@Html.T("تعليقات منشورة", "Published Comments")</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-warning text-warning mx-auto mb-3">
+                    <i class="feather-clock"></i>
+                </div>
+                <h3 class="fw-bold mb-1">@Model.Count(c => !c.IsApproved)</h3>
+                <p class="text-muted mb-0">@Html.T("قيد المراجعة", "Pending Review")</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-info text-info mx-auto mb-3">
+                    <i class="feather-corner-up-right"></i>
+                </div>
+                <h3 class="fw-bold mb-1">@Model.Count(c => c.ParentCommentId.HasValue)</h3>
+                <p class="text-muted mb-0">@Html.T("ردود على تعليقات", "Replies to Comments")</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center gap-3">
+            <label class="fw-bold text-muted">@Html.T("تصفية:", "Filter:")</label>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary active" onclick="filterComments('all')">
+                    @Html.T("الكل", "All") (@Model.Count)
+                </button>
+                <button type="button" class="btn btn-outline-success" onclick="filterComments('approved')">
+                    @Html.T("منشورة", "Published") (@Model.Count(c => c.IsApproved))
+                </button>
+                <button type="button" class="btn btn-outline-warning" onclick="filterComments('pending')">
+                    @Html.T("قيد المراجعة", "Pending") (@Model.Count(c => !c.IsApproved))
+                </button>
+                <button type="button" class="btn btn-outline-info" onclick="filterComments('replies')">
+                    @Html.T("ردود", "Replies") (@Model.Count(c => c.ParentCommentId.HasValue))
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Comments List -->
+<div class="row g-4">
+    <div class="col-12">
+        @if (Model.Any())
+        {
+            foreach (var comment in Model)
+            {
+                <div class="comment-card @(comment.IsApproved ? "approved" : "pending")" 
+                     data-status="@(comment.IsApproved ? "approved" : "pending")"
+                     data-is-reply="@(comment.ParentCommentId.HasValue ? "true" : "false")">
+                    <div class="d-flex align-items-start justify-content-between mb-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-lg @(comment.IsApproved ? "bg-soft-success text-success" : "bg-soft-warning text-warning")">
+                                <i class="feather-message-circle"></i>
+                            </div>
+                            <div>
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <h6 class="fw-bold mb-0">@comment.EntityType</h6>
+                                    @if (comment.IsApproved)
+                                    {
+                                        <span class="badge bg-soft-success text-success">
+                                            <i class="feather-check me-1"></i>@Html.T("منشور", "Published")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-soft-warning text-warning">
+                                            <i class="feather-clock me-1"></i>@Html.T("قيد المراجعة", "Pending")
+                                        </span>
+                                    }
+                                    @if (comment.IsEdited)
+                                    {
+                                        <span class="badge bg-soft-info text-info">
+                                            <i class="feather-edit-2 me-1"></i>@Html.T("معدّل", "Edited")
+                                        </span>
+                                    }
+                                </div>
+                                <small class="text-muted">
+                                    <i class="feather-calendar me-1"></i>
+                                    @comment.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                                    @if (comment.IsEdited && comment.EditedAt.HasValue)
+                                    {
+                                        <span class="me-2">•</span>
+                                        <i class="feather-edit me-1"></i>
+                                        <text>@Html.T("عُدّل:", "Edited:") @comment.EditedAt.Value.ToString("dd/MM/yyyy HH:mm")</text>
+                                    }
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-icon btn-light" type="button" data-bs-toggle="dropdown">
+                                <i class="feather-more-vertical"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="@Url.Action("Edit", new { id = comment.Id })">
+                                        <i class="feather-edit me-2"></i>@Html.T("تعديل", "Edit")
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <form asp-action="Delete" asp-route-id="@comment.Id" method="post" 
+                                          onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا التعليق؟", "Are you sure you want to delete this comment?").Replace("'", "\\'"))')">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="dropdown-item text-danger">
+                                            <i class="feather-trash-2 me-2"></i>@Html.T("حذف", "Delete")
+                                        </button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    @if (comment.ParentCommentId.HasValue && comment.ParentComment != null)
+                    {
+                        <div class="reply-indicator">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <i class="feather-corner-up-right text-primary"></i>
+                                <small class="fw-bold text-muted">@Html.T("رد على:", "Reply to:")</small>
+                            </div>
+                            <small class="text-muted">@comment.ParentComment.Content?.Substring(0, Math.Min(100, comment.ParentComment.Content.Length))@(comment.ParentComment.Content?.Length > 100 ? "..." : "")</small>
+                        </div>
+                    }
+                    
+                    <div class="comment-content">
+                        <p class="mb-0">@comment.Content</p>
+                    </div>
+                    
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-4">
+                            <small class="text-muted">
+                                <i class="feather-hash me-1"></i>
+                                @Html.T("المعرف:", "ID:") @comment.EntityId
+                            </small>
+                            @if (comment.LikesCount > 0)
+                            {
+                                <small class="text-muted">
+                                    <i class="feather-thumbs-up me-1"></i>
+                                    @comment.LikesCount @Html.T("إعجاب", "likes")
+                                </small>
+                            }
+                        </div>
+                        
+                        @if (!comment.IsApproved)
+                        {
+                            <div class="alert alert-warning mb-0 py-1 px-3">
+                                <i class="feather-info me-2"></i>
+                                <small>@Html.T("سيتم مراجعة تعليقك ونشره قريباً", "Your comment will be reviewed and published soon")</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            ViewData["Icon"] = "message-circle";
+            ViewData["Title"] = Html.T("لا توجد تعليقات بعد", "No comments yet");
+            ViewData["Message"] = Html.T("لم تقم بنشر أي تعليقات حتى الآن. شارك آرائك وأفكارك مع المجتمع!", "You haven't posted any comments yet. Share your thoughts with the community!");
+            ViewData["ActionText"] = Html.T("تصفح الدورات", "Browse Courses");
+            ViewData["ActionUrl"] = Url.Action("Browse", "Courses");
+            @await Html.PartialAsync("_EmptyState")
+        }
+    </div>
+</div>
+
+<!-- Pagination -->
+@if (Model.Count > 0)
+{
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center">
+                    <p class="text-muted mb-0">
+                        @Html.T("عرض", "Showing") @Model.Count @Html.T("تعليق", "comment(s)")
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    function filterComments(filter) {
+        // Update active button
+        document.querySelectorAll('.btn-group button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        event.target.classList.add('active');
+        
+        // Filter comments
+        const comments = document.querySelectorAll('.comment-card');
+        
+        comments.forEach(comment => {
+            const status = comment.dataset.status;
+            const isReply = comment.dataset.isReply === 'true';
+            
+            let show = false;
+            
+            switch(filter) {
+                case 'all':
+                    show = true;
+                    break;
+                case 'approved':
+                    show = status === 'approved';
+                    break;
+                case 'pending':
+                    show = status === 'pending';
+                    break;
+                case 'replies':
+                    show = isReply;
+                    break;
+            }
+            
+            comment.style.display = show ? 'block' : 'none';
+            
+            // Add animation
+            if (show) {
+                comment.style.opacity = '0';
+                setTimeout(() => {
+                    comment.style.transition = 'opacity 0.3s';
+                    comment.style.opacity = '1';
+                }, 50);
+            }
+        });
+    }
+</script>
+}

@@ -1,0 +1,169 @@
+@model IEnumerable<LMS.Domain.Entities.Support.TicketCategory>
+
+@{
+    ViewData["Title"] = Html.T("تصنيفات التذاكر", "Ticket categories");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الدعم الفني", "Support"), Url.Action("Index", "Support")),
+        (Html.T("التصنيفات", "Categories"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var ticketCounts = ViewBag.TicketCounts as Dictionary<int, int> ?? new Dictionary<int, int>();
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <!-- Add Category Form -->
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-plus-circle me-2"></i>
+                        @Html.T("إضافة تصنيف جديد", "Add New Category")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="CreateCategory" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="form-group mb-3">
+                            <label class="form-label">@Html.T("اسم التصنيف", "Category name") <span class="text-danger">*</span></label>
+                            <input type="text" name="name" class="form-control" placeholder="@Html.T("أدخل اسم التصنيف...", "Enter category name...")" required />
+                        </div>
+                        <div class="form-group mb-3">
+                            <label class="form-label">@Html.T("الوصف", "Description")</label>
+                            <textarea name="description" class="form-control" rows="3" placeholder="@Html.T("وصف اختياري للتصنيف...", "Optional category description...")"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إضافة التصنيف", "Add category")
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Categories List -->
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تصنيفات تذاكر الدعم", "Support Ticket Categories")</h5>
+                    <div class="card-header-action">
+                        <span class="badge bg-soft-primary text-primary">@Model.Count() @Html.T("تصنيف", "category")</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الاسم", "Name")</th>
+                                        <th>@Html.T("الوصف", "Description")</th>
+                                        <th>@Html.T("عدد التذاكر", "Tickets count")</th>
+                                        <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var category in Model)
+                                    {
+                                        var count = ticketCounts.ContainsKey(category.Id) ? ticketCounts[category.Id] : 0;
+                                        <tr>
+                                            <td>
+                                                <span class="fw-bold">@category.Name</span>
+                                            </td>
+                                            <td>
+                                                <span class="text-muted">@(string.IsNullOrEmpty(category.Description) ? "-" : category.Description)</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-primary text-primary">@count @Html.T("تذكرة", "ticket")</span>
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <button type="button" class="avatar-text avatar-md text-primary" 
+                                                            data-bs-toggle="modal" data-bs-target="#editModal_@category.Id" title="@Html.T("تعديل", "Edit")">
+                                                        <i class="feather-edit-2"></i>
+                                                    </button>
+                                                    @if (count == 0)
+                                                    {
+                                                        <form asp-action="DeleteCategory" asp-route-id="@category.Id" method="post" class="d-inline"
+                                                              onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا التصنيف؟", "Are you sure you want to delete this category?"))')">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="avatar-text avatar-md text-danger border-0 bg-transparent" title="@Html.T("حذف", "Delete")">
+                                                                <i class="feather-trash-2"></i>
+                                                            </button>
+                                                        </form>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="avatar-text avatar-md text-muted" data-bs-toggle="tooltip" 
+                                                              title="@Html.T("لا يمكن الحذف - مرتبط بتذاكر", "Cannot delete - linked to tickets")">
+                                                            <i class="feather-lock"></i>
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        <!-- Edit Modal -->
+                                        <div class="modal fade" id="editModal_@category.Id" tabindex="-1" data-bs-backdrop="false">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <form asp-action="UpdateCategory" asp-route-id="@category.Id" method="post">
+                                                        @Html.AntiForgeryToken()
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title">@Html.T("تعديل التصنيف", "Edit category")</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <div class="form-group mb-3">
+                                                                <label class="form-label">@Html.T("اسم التصنيف", "Category name") <span class="text-danger">*</span></label>
+                                                                <input type="text" name="name" class="form-control" value="@category.Name" required />
+                                                            </div>
+                                                            <div class="form-group">
+                                                                <label class="form-label">@Html.T("الوصف", "Description")</label>
+                                                                <textarea name="description" class="form-control" rows="3">@category.Description</textarea>
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                                                            <button type="submit" class="btn btn-primary">
+                                                                <i class="feather-save me-2"></i>
+                                                                @Html.T("حفظ التغييرات", "Save changes")
+                                                            </button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <div class="avatar-text avatar-xl bg-soft-warning text-warning mx-auto mb-3">
+                                <i class="feather-folder"></i>
+                            </div>
+                            <h5>@Html.T("لا توجد تصنيفات بعد", "No categories yet")</h5>
+                            <p class="text-muted">أضف تصنيفاً جديداً من النموذج على اليسار</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+

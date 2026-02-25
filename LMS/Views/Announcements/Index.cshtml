@@ -1,0 +1,110 @@
+@model IEnumerable<LMS.Domain.Entities.Notifications.SystemAnnouncement>
+@{
+    ViewData["Title"] = Html.T("الإعلانات", "Announcements");
+    ViewData["Subtitle"] = Html.T("إعلانات المنصة المهمة", "Important platform announcements");
+    var currentPage = ViewBag.Page as int? ?? 1;
+    var isInstructor = User.IsInRole("Instructor");
+    var isStudent = User.IsInRole("Student");
+    Layout = isInstructor ? "~/Areas/Instructor/Views/Shared/_Layout.cshtml" : (isStudent ? "~/Areas/Student/Views/Shared/_Layout.cshtml" : "~/Views/Shared/_Layout.cshtml");
+    var dashboardUrl = isInstructor ? Url.Action("Index", "Dashboard", new { area = "Instructor" }) : (isStudent ? Url.Action("Index", "Dashboard", new { area = "Student" }) : "/");
+    var path = Context.Request.Path.Value ?? "";
+    var announcementsBase = path.StartsWith("/Student/Announcements", StringComparison.OrdinalIgnoreCase) ? "/Student/Announcements" : (path.StartsWith("/Instructor/PlatformAnnouncements", StringComparison.OrdinalIgnoreCase) ? "/Instructor/PlatformAnnouncements" : "/Announcements");
+}
+
+<div class="page-header mb-4">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            @if (ViewData["Subtitle"] != null)
+            {
+                <p class="fs-12 fw-medium text-muted mb-0">@ViewData["Subtitle"]</p>
+            }
+        </div>
+        <ul class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="@dashboardUrl">@Html.T("الرئيسية", "Home")</a></li>
+            <li class="breadcrumb-item active">@Html.T("الإعلانات", "Announcements")</li>
+        </ul>
+    </div>
+</div>
+
+@if (isInstructor)
+{
+    @await Html.PartialAsync("~/Areas/Instructor/Views/Shared/_AlertMessages.cshtml")
+}
+else if (isStudent)
+{
+    @await Html.PartialAsync("~/Areas/Student/Views/Shared/_AlertMessage.cshtml")
+}
+
+@if (Model != null && Model.Any())
+{
+    <div class="row">
+        @foreach (var announcement in Model)
+        {
+            <div class="col-12 mb-3">
+                <div class="card border shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                                    <h5 class="mb-0">
+                                        <a href="/Announcements/Details/@announcement.Id" class="text-decoration-none text-dark">
+                                            @announcement.Title
+                                        </a>
+                                    </h5>
+                                    @if (announcement.IsPinned)
+                                    {
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="feather-anchor"></i> @Html.T("مثبت", "Pinned")
+                                        </span>
+                                    }
+                                    <span class="badge bg-secondary">@announcement.Type</span>
+                                </div>
+                                <p class="text-muted small mb-0">
+                                    <i class="feather-calendar"></i> @announcement.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                                    @if (announcement.ViewsCount > 0)
+                                    {
+                                        <span class="ms-2"><i class="feather-eye"></i> @announcement.ViewsCount</span>
+                                    }
+                                </p>
+                            </div>
+                            <a href="/Announcements/Details/@announcement.Id" class="btn btn-outline-primary btn-sm">
+                                @Html.T("عرض", "View") <i class="feather-arrow-left"></i>
+                            </a>
+                        </div>
+                        @if (!string.IsNullOrEmpty(announcement.Content))
+                        {
+                            var plain = System.Text.RegularExpressions.Regex.Replace(announcement.Content, "<[^>]+>", " ");
+                            var preview = plain.Length > 150 ? plain.Substring(0, 150) + "..." : plain;
+                            <p class="mt-2 mb-0 text-muted small">@preview</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (currentPage > 1 || (Model?.Count() == 10))
+    {
+        <nav class="mt-4" aria-label="@Html.T("تنقل الصفحات", "Page navigation")">
+            <ul class="pagination justify-content-center">
+                @if (currentPage > 1)
+                {
+                    <li class="page-item">
+                        <a class="page-link" href="@(announcementsBase)?page=@(currentPage - 1)">@Html.T("السابق", "Previous")</a>
+                    </li>
+                }
+                <li class="page-item active"><span class="page-link">@currentPage</span></li>
+                <li class="page-item">
+                    <a class="page-link" href="@(announcementsBase)?page=@(currentPage + 1)">@Html.T("التالي", "Next")</a>
+                </li>
+            </ul>
+        </nav>
+    }
+}
+else
+{
+    <div class="alert alert-info">
+        <i class="feather-info"></i> @Html.T("لا توجد إعلانات حالياً.", "No announcements at the moment.")
+    </div>
+}

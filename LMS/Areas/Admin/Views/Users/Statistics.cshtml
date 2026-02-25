@@ -1,0 +1,462 @@
+@model LMS.Areas.Admin.ViewModels.UserStatisticsViewModel
+
+@{
+    ViewData["Title"] = Html.T("إحصائيات المستخدمين", "User Statistics");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("إدارة المستخدمين", "User Management"), Url.Action("Index", "Users")),
+        (Html.T("الإحصائيات", "Statistics"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("تصدير التقرير", "Export Report"), "feather-download", Url.Action("CustomExport", "ReportExports", new { area = "Admin", type = "Users" }), "btn-success"),
+        (Html.T("تحديث", "Refresh"), "feather-refresh-cw", Url.Action("Statistics", "Users"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Overview Statistics Cards -->
+    <div class="row">
+        <div class="col-xxl-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                            <i class="feather-users"></i>
+                        </div>
+                        <div class="text-end">
+                            <h2 class="fw-bold mb-1">@Model.TotalUsers.ToString("N0")</h2>
+                            <p class="text-muted mb-0">@Html.T("إجمالي المستخدمين", "Total Users")</p>
+                        </div>
+                    </div>
+                    <div class="pt-3 mt-3 border-top">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="text-muted">
+                                <i class="feather-trending-up text-success me-1"></i>
+                                @Html.T("هذا الشهر", "This Month")
+                            </span>
+                            <span class="fw-bold text-success">@Model.NewUsersThisMonth.ToString("N0")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xxl-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="avatar-text avatar-lg bg-soft-success text-success">
+                            <i class="feather-user-check"></i>
+                        </div>
+                        <div class="text-end">
+                            <h2 class="fw-bold mb-1">@Model.ActiveUsers.ToString("N0")</h2>
+                            <p class="text-muted mb-0">@Html.T("المستخدمون النشطون", "Active Users")</p>
+                        </div>
+                    </div>
+                    <div class="pt-3 mt-3 border-top">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="text-muted">@Html.T("نسبة النشاط", "Activity Rate")</span>
+                            <span class="fw-bold">@(Model.TotalUsers > 0 ? Math.Round((decimal)Model.ActiveUsers / Model.TotalUsers * 100, 1) : 0)%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xxl-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="avatar-text avatar-lg bg-soft-warning text-warning">
+                            <i class="feather-user-x"></i>
+                        </div>
+                        <div class="text-end">
+                            <h2 class="fw-bold mb-1">@Model.InactiveUsers.ToString("N0")</h2>
+                            <p class="text-muted mb-0">@Html.T("غير النشطين", "Inactive")</p>
+                        </div>
+                    </div>
+                    <div class="pt-3 mt-3 border-top">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="text-muted">@Html.T("نسبة عدم النشاط", "Inactivity Rate")</span>
+                            <span class="fw-bold text-warning">@(Model.TotalUsers > 0 ? Math.Round((decimal)Model.InactiveUsers / Model.TotalUsers * 100, 1) : 0)%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xxl-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="avatar-text avatar-lg bg-soft-info text-info">
+                            <i class="feather-user-plus"></i>
+                        </div>
+                        <div class="text-end">
+                            <h2 class="fw-bold mb-1">@Model.NewUsersToday.ToString("N0")</h2>
+                            <p class="text-muted mb-0">@Html.T("مستخدمون جدد اليوم", "New Users Today")</p>
+                        </div>
+                    </div>
+                    <div class="pt-3 mt-3 border-top">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="text-muted">@Html.T("سجلوا دخول اليوم", "Logged In Today")</span>
+                            <span class="fw-bold">@Model.UsersLoggedInToday.ToString("N0")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users by Role -->
+    <div class="row mt-4">
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("المستخدمون حسب الدور", "Users by Role")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="text-center p-4 border rounded">
+                                <div class="avatar-text avatar-xl bg-soft-danger text-danger mx-auto mb-3">
+                                    <i class="feather-shield fs-3"></i>
+                                </div>
+                                <h4 class="fw-bold mb-1">@Model.TotalAdmins.ToString("N0")</h4>
+                                <p class="text-muted mb-0">@Html.T("المديرون", "Admins")</p>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="text-center p-4 border rounded">
+                                <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                                    <i class="feather-book fs-3"></i>
+                                </div>
+                                <h4 class="fw-bold mb-1">@Model.TotalInstructors.ToString("N0")</h4>
+                                <p class="text-muted mb-0">@Html.T("المدرسون", "Instructors")</p>
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="text-center p-4 border rounded">
+                                <div class="avatar-text avatar-xl bg-soft-success text-success mx-auto mb-3">
+                                    <i class="feather-users fs-3"></i>
+                                </div>
+                                <h4 class="fw-bold mb-1">@Model.TotalStudents.ToString("N0")</h4>
+                                <p class="text-muted mb-0">@Html.T("الطلاب", "Students")</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <canvas id="rolesChart" height="150"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("نمو المستخدمين", "User Growth")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("الفترة", "Period")</th>
+                                    <th class="text-center">@Html.T("مستخدمون جدد", "New Users")</th>
+                                    <th class="text-center">@Html.T("النمو", "Growth")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <i class="feather-calendar text-primary me-2"></i>
+                                        @Html.T("اليوم", "Today")
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="fw-bold">@Model.NewUsersToday.ToString("N0")</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-soft-success text-success">
+                                            <i class="feather-trending-up"></i>
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <i class="feather-calendar text-success me-2"></i>
+                                        @Html.T("هذا الشهر", "This Month")
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="fw-bold">@Model.NewUsersThisMonth.ToString("N0")</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-soft-success text-success">
+                                            <i class="feather-trending-up"></i>
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <i class="feather-activity text-info me-2"></i>
+                                        @Html.T("نشطون اليوم", "Active Today")
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="fw-bold">@Model.UsersLoggedInToday.ToString("N0")</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-soft-info text-info">
+                                            @(Model.ActiveUsers > 0 ? Math.Round((decimal)Model.UsersLoggedInToday / Model.ActiveUsers * 100, 1) : 0)%
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="border-top pt-4 mt-4">
+                        <canvas id="growthChart" height="150"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Details -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تفاصيل النشاط", "Activity Details")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <!-- Email Verified -->
+                        <div class="col-lg-3 col-md-6">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <div class="avatar-text avatar-md bg-soft-success text-success">
+                                        <i class="feather-mail"></i>
+                                    </div>
+                                    <span class="badge bg-soft-success text-success">@Html.T("موثق", "Verified")</span>
+                                </div>
+                                <h5 class="fw-bold mb-1">@Model.EmailVerifiedCount.ToString("N0")</h5>
+                                <p class="text-muted mb-0">@Html.T("البريد موثق", "Email Verified")</p>
+                                @{
+                                    var emailVerifyPercent = Model.TotalUsers > 0 ? (decimal)Model.EmailVerifiedCount / Model.TotalUsers * 100 : 0;
+                                }
+                                <div class="progress mt-3" style="height: 5px;">
+                                    <div class="progress-bar bg-success" style="width: @emailVerifyPercent%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Phone Verified -->
+                        <div class="col-lg-3 col-md-6">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <div class="avatar-text avatar-md bg-soft-info text-info">
+                                        <i class="feather-phone"></i>
+                                    </div>
+                                    <span class="badge bg-soft-info text-info">@Html.T("موثق", "Verified")</span>
+                                </div>
+                                <h5 class="fw-bold mb-1">@Model.PhoneVerifiedCount.ToString("N0")</h5>
+                                <p class="text-muted mb-0">@Html.T("الهاتف موثق", "Phone Verified")</p>
+                                @{
+                                    var phoneVerifyPercent = Model.TotalUsers > 0 ? (decimal)Model.PhoneVerifiedCount / Model.TotalUsers * 100 : 0;
+                                }
+                                <div class="progress mt-3" style="height: 5px;">
+                                    <div class="progress-bar bg-info" style="width: @phoneVerifyPercent%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Two Factor -->
+                        <div class="col-lg-3 col-md-6">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <div class="avatar-text avatar-md bg-soft-warning text-warning">
+                                        <i class="feather-shield"></i>
+                                    </div>
+                                    <span class="badge bg-soft-warning text-warning">@Html.T("مفعل", "Enabled")</span>
+                                </div>
+                                <h5 class="fw-bold mb-1">@Model.TwoFactorEnabledCount.ToString("N0")</h5>
+                                <p class="text-muted mb-0">@Html.T("مصادقة ثنائية", "Two-Factor Auth")</p>
+                                @{
+                                    var twoFactorPercent = Model.TotalUsers > 0 ? (decimal)Model.TwoFactorEnabledCount / Model.TotalUsers * 100 : 0;
+                                }
+                                <div class="progress mt-3" style="height: 5px;">
+                                    <div class="progress-bar bg-warning" style="width: @twoFactorPercent%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Profile Complete -->
+                        <div class="col-lg-3 col-md-6">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                        <i class="feather-user"></i>
+                                    </div>
+                                    <span class="badge bg-soft-primary text-primary">@Html.T("مكتمل", "Complete")</span>
+                                </div>
+                                <h5 class="fw-bold mb-1">@Model.ProfileCompletedCount.ToString("N0")</h5>
+                                <p class="text-muted mb-0">@Html.T("ملف مكتمل", "Profile Complete")</p>
+                                @{
+                                    var profileCompletePercent = Model.TotalUsers > 0 ? (decimal)Model.ProfileCompletedCount / Model.TotalUsers * 100 : 0;
+                                }
+                                <div class="progress mt-3" style="height: 5px;">
+                                    <div class="progress-bar bg-primary" style="width: @profileCompletePercent%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("ملخص شامل", "Summary")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("المقياس", "Metric")</th>
+                                    <th class="text-center">@Html.T("القيمة", "Value")</th>
+                                    <th class="text-center">@Html.T("النسبة", "Percentage")</th>
+                                    <th class="text-center">@Html.T("الاتجاه", "Trend")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>@Html.T("إجمالي المستخدمين المسجلين", "Total Registered Users")</td>
+                                    <td class="text-center fw-bold">@Model.TotalUsers.ToString("N0")</td>
+                                    <td class="text-center">100%</td>
+                                    <td class="text-center">
+                                        <i class="feather-minus text-muted"></i>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>@Html.T("المستخدمون النشطون", "Active Users")</td>
+                                    <td class="text-center fw-bold">@Model.ActiveUsers.ToString("N0")</td>
+                                    <td class="text-center">@(Model.TotalUsers > 0 ? Math.Round((decimal)Model.ActiveUsers / Model.TotalUsers * 100, 1) : 0)%</td>
+                                    <td class="text-center">
+                                        <i class="feather-trending-up text-success"></i>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>@Html.T("المستخدمون غير النشطين", "Inactive Users")</td>
+                                    <td class="text-center fw-bold">@Model.InactiveUsers.ToString("N0")</td>
+                                    <td class="text-center">@(Model.TotalUsers > 0 ? Math.Round((decimal)Model.InactiveUsers / Model.TotalUsers * 100, 1) : 0)%</td>
+                                    <td class="text-center">
+                                        <i class="feather-trending-down text-danger"></i>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>@Html.T("المشتركون هذا الشهر", "New This Month")</td>
+                                    <td class="text-center fw-bold">@Model.NewUsersThisMonth.ToString("N0")</td>
+                                    <td class="text-center">@(Model.TotalUsers > 0 ? Math.Round((decimal)Model.NewUsersThisMonth / Model.TotalUsers * 100, 1) : 0)%</td>
+                                    <td class="text-center">
+                                        <i class="feather-trending-up text-success"></i>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>@Html.T("المشتركون اليوم", "New Today")</td>
+                                    <td class="text-center fw-bold">@Model.NewUsersToday.ToString("N0")</td>
+                                    <td class="text-center">@(Model.NewUsersThisMonth > 0 ? Math.Round((decimal)Model.NewUsersToday / Model.NewUsersThisMonth * 100, 1) : 0)%</td>
+                                    <td class="text-center">
+                                        <i class="feather-activity text-info"></i>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Roles Distribution Chart - translated labels
+        var rolesLabels = @Html.Raw(Json.Serialize(new[] { Html.T("الطلاب", "Students"), Html.T("المدرسون", "Instructors"), Html.T("المديرون", "Admins") }));
+        var rolesCtx = document.getElementById('rolesChart').getContext('2d');
+        new Chart(rolesCtx, {
+            type: 'doughnut',
+            data: {
+                labels: rolesLabels,
+                datasets: [{
+                    data: [@Model.TotalStudents, @Model.TotalInstructors, @Model.TotalAdmins],
+                    backgroundColor: [
+                        'rgba(34, 197, 94, 0.8)',
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(239, 68, 68, 0.8)'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        rtl: true
+                    }
+                }
+            }
+        });
+
+        // Growth Trend Chart
+        var growthLabels = @Html.Raw(Json.Serialize(Model.WeeklyGrowth.Select(x => x.Label)));
+        var growthData = @Html.Raw(Json.Serialize(Model.WeeklyGrowth.Select(x => x.Count)));
+        
+        var growthCtx = document.getElementById('growthChart').getContext('2d');
+        new Chart(growthCtx, {
+            type: 'line',
+            data: {
+                labels: growthLabels,
+                datasets: [{
+                    label: '@(Html.T("مستخدمون جدد", "New Users"))',
+                    data: growthData,
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+}

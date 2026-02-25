@@ -1,0 +1,447 @@
+@model LMS.Areas.Admin.ViewModels.AnnouncementEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل الإعلان", "Edit announcement");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإعلانات", "Announcements"), Url.Action("Index", "Announcements", new { area = "Admin" })),
+        (Html.T("تعديل الإعلان", "Edit announcement"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
+    <style>
+        .note-editor.note-frame {
+            direction: rtl;
+            text-align: right;
+        }
+        .announcement-preview {
+            padding: 20px;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            background: #f8f9fa;
+            min-height: 200px;
+        }
+        .stats-card {
+            background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%));
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .timeline {
+            position: relative;
+            padding-right: 30px;
+        }
+        .timeline-item {
+            position: relative;
+            padding-bottom: 20px;
+        }
+        .timeline-marker {
+            position: absolute;
+            right: -36px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .timeline-item:before {
+            content: '';
+            position: absolute;
+            right: -31px;
+            top: 17px;
+            width: 2px;
+            height: calc(100% - 5px);
+            background: #e5e7eb;
+        }
+        .timeline-item:last-child:before {
+            display: none;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Edit Form -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-edit-2 me-2"></i>
+                        @Html.T("تعديل معلومات الإعلان", "Edit announcement details")
+                    </h5>
+                    <div class="card-header-action">
+                        <span class="badge bg-soft-info text-info">
+                            <i class="feather-eye me-1"></i>
+                            @Model.ViewsCount مشاهدة
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form asp-area="Admin" asp-action="Edit" asp-route-id="@Model.Id" method="post" id="announcementEditForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="Id" />
+                        <input type="hidden" asp-for="ViewsCount" />
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <!-- Title -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Title" class="form-label">
+                                @Html.T("عنوان الإعلان", "Announcement title") <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Title" class="form-control form-control-lg" placeholder="@Html.T("أدخل عنوان الإعلان...", "Enter announcement title...")" />
+                            <span asp-validation-for="Title" class="text-danger"></span>
+                        </div>
+
+                        <!-- Content -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Content" class="form-label">
+                                @Html.T("محتوى الإعلان", "Announcement content") <span class="text-danger">*</span>
+                            </label>
+                            <textarea asp-for="Content" id="contentEditor" class="form-control" rows="10"></textarea>
+                            <span asp-validation-for="Content" class="text-danger"></span>
+                        </div>
+
+                        <!-- Type and Priority -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="Type" class="form-label">
+                                        @Html.T("نوع الإعلان", "Announcement type") <span class="text-danger">*</span>
+                                    </label>
+                                    <select asp-for="Type" class="form-select">
+                                        <option value="General">@Html.T("عام", "General")</option>
+                                        <option value="System">@Html.T("نظام", "System")</option>
+                                        <option value="Maintenance">@Html.T("صيانة", "Maintenance")</option>
+                                        <option value="Update">@Html.T("تحديث", "Update")</option>
+                                        <option value="Event">@Html.T("حدث", "Event")</option>
+                                        <option value="Promotion">@Html.T("عرض ترويجي", "Promotion")</option>
+                                    </select>
+                                    <span asp-validation-for="Type" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="Priority" class="form-label">
+                                        @Html.T("الأولوية", "Priority") <span class="text-danger">*</span>
+                                    </label>
+                                    <select asp-for="Priority" class="form-select" id="prioritySelect">
+                                        <option value="Low">@Html.T("منخفضة", "Low")</option>
+                                        <option value="Normal">@Html.T("عادية", "Normal")</option>
+                                        <option value="High">@Html.T("مرتفعة", "High")</option>
+                                        <option value="Critical">@Html.T("حرجة", "Critical")</option>
+                                    </select>
+                                    <span asp-validation-for="Priority" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Target Audience -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Target" class="form-label">
+                                @Html.T("الجمهور المستهدف", "Target audience") <span class="text-danger">*</span>
+                            </label>
+                            <select asp-for="Target" class="form-select" id="targetSelect">
+                                <option value="All">@Html.T("الجميع", "All")</option>
+                                <option value="Students">@Html.T("الطلاب فقط", "Students only")</option>
+                                <option value="Instructors">@Html.T("المدرسين فقط", "Instructors only")</option>
+                                <option value="Admins">@Html.T("المسؤولين فقط", "Admins only")</option>
+                            </select>
+                            <span asp-validation-for="Target" class="text-danger"></span>
+                        </div>
+
+                        <!-- Date Range -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="StartDate" class="form-label">
+                                        <i class="feather-calendar me-2"></i>
+                                        @Html.T("تاريخ البدء", "Start date")
+                                    </label>
+                                    <input asp-for="StartDate" type="datetime-local" class="form-control" />
+                                    <span asp-validation-for="StartDate" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="EndDate" class="form-label">
+                                        <i class="feather-calendar me-2"></i>
+                                        @Html.T("تاريخ الانتهاء", "End date")
+                                    </label>
+                                    <input asp-for="EndDate" type="datetime-local" class="form-control" />
+                                    <span asp-validation-for="EndDate" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Options -->
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title mb-3">
+                                    <i class="feather-settings me-2"></i>
+                                    @Html.T("خيارات الإعلان", "Announcement options")
+                                </h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsPinned" class="form-check-input" type="checkbox" id="isPinnedSwitch" />
+                                            <label class="form-check-label" for="isPinnedSwitch">
+                                                <i class="feather-anchor me-2"></i>
+                                                @Html.T("تثبيت في الأعلى", "Pin to top")
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActiveSwitch" />
+                                            <label class="form-check-label" for="isActiveSwitch">
+                                                <i class="feather-eye me-2"></i>
+                                                @Html.T("نشط (مرئي للمستخدمين)", "Active (visible to users)")
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="SendNotification" class="form-check-input" type="checkbox" id="sendNotificationSwitch" />
+                                            <label class="form-check-label" for="sendNotificationSwitch">
+                                                <i class="feather-bell me-2"></i>
+                                                @Html.T("إرسال إشعار عند التحديث", "Send notification on update")
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="SendEmail" class="form-check-input" type="checkbox" id="sendEmailSwitch" />
+                                            <label class="form-check-label" for="sendEmailSwitch">
+                                                <i class="feather-mail me-2"></i>
+                                                @Html.T("إرسال بريد إلكتروني", "Send email")
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="ShowOnLandingPage" class="form-check-input" type="checkbox" id="showOnLandingSwitch" />
+                                            <label class="form-check-label" for="showOnLandingSwitch">
+                                                <i class="feather-home me-2"></i>
+                                                @Html.T("عرض في الصفحة الرئيسية", "Show on landing page")
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-2 justify-content-between">
+                            <div class="d-flex gap-2">
+                                <a asp-area="Admin" asp-action="Index" class="btn btn-light">
+                                    <i class="feather-x me-2"></i>
+                                    @Html.T("إلغاء", "Cancel")
+                                </a>
+                                <a asp-area="Admin" asp-action="Details" asp-route-id="@Model.Id" class="btn btn-secondary">
+                                    <i class="feather-eye me-2"></i>
+                                    @Html.T("عرض التفاصيل", "View details")
+                                </a>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-warning" id="previewBtn">
+                                    <i class="feather-eye me-2"></i>
+                                    @Html.T("معاينة", "Preview")
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="feather-save me-2"></i>
+                                    @Html.T("حفظ التغييرات", "Save changes")
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview and Stats Panel -->
+        <div class="col-lg-4">
+            <!-- Statistics Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-body stats-card">
+                    <h6 class="text-white mb-4">
+                        <i class="feather-bar-chart me-2"></i>
+                        @Html.T("إحصائيات الإعلان", "Announcement statistics")
+                    </h6>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h3 class="text-white mb-1">@Model.ViewsCount</h3>
+                                <small class="text-white-50">@Html.T("مشاهدة", "Views")</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h3 class="text-white mb-1">0</h3>
+                                <small class="text-white-50">@Html.T("نقرة", "Click(s)")</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview Card -->
+            <div class="card stretch stretch-full" id="previewCard">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-eye me-2"></i>
+                        @Html.T("معاينة الإعلان", "Announcement preview")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="announcement-preview">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <span class="badge bg-soft-primary text-primary" id="previewType">@Model.Type</span>
+                            <span class="badge bg-soft-warning text-warning" id="previewPriority">@Model.Priority</span>
+                        </div>
+                        <h5 class="fw-bold mb-3" id="previewTitle">@Model.Title</h5>
+                        <div class="preview-content" id="previewContent">
+                            @Html.Raw(Model.Content)
+                        </div>
+                        <hr class="my-3">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <small class="text-muted">
+                                <i class="feather-users me-1"></i>
+                                <span id="previewTarget">@Model.Target</span>
+                            </small>
+                            <small class="text-muted">
+                                <i class="feather-eye me-1"></i>
+                                @Model.ViewsCount @Html.T("مشاهدة", "Views")
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action History -->
+            <div class="card stretch stretch-full mt-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-clock me-2"></i>
+                        @Html.T("سجل الإجراءات", "Action history")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-success"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted">@Html.T("تم الإنشاء", "Created")</small>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted">@Html.T("آخر تعديل", "Last modified")</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Initialize Summernote
+            $('#contentEditor').summernote({
+                height: 250,
+                direction: 'rtl',
+                placeholder: 'اكتب محتوى الإعلان هنا...',
+                toolbar: [
+                    ['style', ['style', 'bold', 'italic', 'underline', 'clear']],
+                    ['font', ['strikethrough', 'superscript', 'subscript']],
+                    ['para', ['ul', 'ol', 'paragraph']],
+                    ['insert', ['link', 'picture']],
+                    ['view', ['fullscreen', 'codeview', 'help']]
+                ]
+            });
+
+            // Initialize Select2
+            $('#targetSelect').select2({ dir: 'rtl' });
+
+            // Live Preview
+            function updatePreview() {
+                const title = $('#Title').val() || 'عنوان الإعلان';
+                const content = $('#contentEditor').summernote('code') || 'محتوى الإعلان سيظهر هنا...';
+                const type = $('#Type option:selected').text();
+                const priority = $('#Priority option:selected').text();
+                const target = $('#Target option:selected').text();
+                
+                $('#previewTitle').text(title);
+                $('#previewContent').html(content);
+                $('#previewType').text(type);
+                $('#previewPriority').text(priority);
+                $('#previewTarget').text(target);
+
+                // Update priority badge color
+                const priorityValue = $('#Priority').val();
+                const priorityClass = {
+                    'Low': 'bg-soft-success text-success',
+                    'Normal': 'bg-soft-primary text-primary',
+                    'High': 'bg-soft-warning text-warning',
+                    'Critical': 'bg-soft-danger text-danger'
+                };
+                $('#previewPriority').attr('class', 'badge ' + priorityClass[priorityValue]);
+            }
+
+            // Update preview on change
+            $('#Title, #Type, #Priority, #Target').on('change keyup', updatePreview);
+            $('#contentEditor').on('summernote.change', updatePreview);
+
+            // Preview button
+            $('#previewBtn').click(function() {
+                updatePreview();
+                $('html, body').animate({
+                    scrollTop: $('#previewCard').offset().top - 100
+                }, 500);
+            });
+
+            // Date validation
+            $('#StartDate, #EndDate').on('change', function() {
+                const startDate = new Date($('#StartDate').val());
+                const endDate = new Date($('#EndDate').val());
+                
+                if (startDate && endDate && startDate > endDate) {
+                    alert('@Html.Raw(Html.T("تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء", "End date must be after start date").Replace("'", "\\'"))');
+                    $('#EndDate').val('');
+                }
+            });
+
+            // Unsaved changes warning
+            let hasUnsavedChanges = false;
+            $('#announcementEditForm input, #announcementEditForm select, #announcementEditForm textarea').on('change', function() {
+                hasUnsavedChanges = true;
+            });
+
+            $('#announcementEditForm').on('submit', function() {
+                hasUnsavedChanges = false;
+            });
+
+            $(window).on('beforeunload', function() {
+                if (hasUnsavedChanges) {
+                    return 'لديك تغييرات غير محفوظة. هل أنت متأكد من المغادرة؟';
+                }
+            });
+        });
+    </script>
+}
+
+<!-- Timeline styles merged into main Styles section above -->
+

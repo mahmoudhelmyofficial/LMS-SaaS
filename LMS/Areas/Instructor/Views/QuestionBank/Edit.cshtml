@@ -1,0 +1,196 @@
+@model LMS.Areas.Instructor.ViewModels.QuestionBankEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل بنك الأسئلة", "Edit Question Bank");
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw($@"<a href='{Url.Action("Details", new { id = Model.Id })}' class='btn btn-light'><i class='feather-arrow-right me-2'></i>العودة</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Edit" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header"><h5 class="card-title">معلومات البنك</h5></div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Name">اسم البنك <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" asp-for="Name" required />
+                                <span asp-validation-for="Name" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Description">الوصف</label>
+                                <textarea class="form-control" asp-for="Description" rows="4"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="CategoryId">التصنيف الرئيسي</label>
+                                <div class="input-group">
+                                    <select asp-for="CategoryId" class="form-select" id="categorySelect">
+                                        <option value="">-- اختر التصنيف --</option>
+                                        @if (ViewBag.Categories != null)
+                                        {
+                                            foreach (var category in ViewBag.Categories as Microsoft.AspNetCore.Mvc.Rendering.SelectList)
+                                            {
+                                                var isSelected = Model.CategoryId.HasValue && category.Value == Model.CategoryId.Value.ToString();
+                                                <option value="@category.Value" selected="@isSelected">@category.Text</option>
+                                            }
+                                        }
+                                    </select>
+                                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal" title="إضافة تصنيف جديد">
+                                        <i class="feather-plus"></i>
+                                    </button>
+                                </div>
+                                <span asp-validation-for="CategoryId" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">التصنيف الفرعي</label>
+                                <div class="input-group">
+                                    <select name="SubCategoryId" class="form-select" id="subcategorySelect">
+                                        <option value="">-- بدون تصنيف فرعي --</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" id="addSubcategoryBtn" data-bs-toggle="modal" data-bs-target="#addSubcategoryModal" title="إضافة تصنيف فرعي" disabled>
+                                        <i class="feather-plus"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">اختر التصنيف الرئيسي أولاً</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-save me-2"></i>حفظ التعديلات
+                        </button>
+                        <a href="@Url.Action("Details", new { id = Model.Id })" class="btn btn-light w-100"><i class="feather-x me-2"></i>إلغاء</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@* Category Modals for On-the-Fly Creation *@
+@await Html.PartialAsync("_CategoryModals")
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/instructor-category-manager.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Category Manager for on-the-fly category creation
+            InstructorCategoryManager.init({
+                categorySelectId: 'categorySelect',
+                subcategorySelectId: 'subcategorySelect',
+                addSubcategoryBtnId: 'addSubcategoryBtn',
+                apiBaseUrl: '/Instructor/QuestionBank'
+            });
+
+            // Handle main category selection to enable subcategory button
+            const categorySelect = document.getElementById('categorySelect');
+            const addSubcategoryBtn = document.getElementById('addSubcategoryBtn');
+            const subcategorySelect = document.getElementById('subcategorySelect');
+            
+            if (categorySelect) {
+                categorySelect.addEventListener('change', function() {
+                    const categoryId = this.value;
+                    const selectedText = this.options[this.selectedIndex]?.text || '';
+                    
+                    // Enable/disable subcategory button
+                    if (addSubcategoryBtn) {
+                        addSubcategoryBtn.disabled = !categoryId;
+                    }
+                    
+                    // Update parent category info for subcategory modal
+                    const parentCategoryId = document.getElementById('parentCategoryId');
+                    const parentCategoryName = document.getElementById('parentCategoryName');
+                    
+                    if (parentCategoryId) parentCategoryId.value = categoryId;
+                    if (parentCategoryName) parentCategoryName.value = selectedText;
+                    
+                    // Load subcategories via AJAX
+                    if (categoryId && subcategorySelect) {
+                        loadSubcategories(categoryId);
+                    } else if (subcategorySelect) {
+                        subcategorySelect.innerHTML = '<option value="">-- بدون تصنيف فرعي --</option>';
+                    }
+                });
+            }
+
+            // Function to load subcategories
+            async function loadSubcategories(categoryId, selectedSubcategoryId) {
+                if (!subcategorySelect) return;
+                
+                subcategorySelect.innerHTML = '<option value="">جاري التحميل...</option>';
+                subcategorySelect.disabled = true;
+                
+                try {
+                    const response = await fetch(`/Instructor/QuestionBank/GetSubcategories?categoryId=${categoryId}`);
+                    if (!response.ok) throw new Error('Failed to load subcategories');
+                    
+                    const data = await response.json();
+                    subcategorySelect.innerHTML = '<option value="">-- بدون تصنيف فرعي --</option>';
+                    
+                    if (data && data.length > 0) {
+                        data.forEach(function(sub) {
+                            const option = document.createElement('option');
+                            option.value = sub.id;
+                            option.textContent = sub.name;
+                            if (selectedSubcategoryId && sub.id == selectedSubcategoryId) {
+                                option.selected = true;
+                            }
+                            subcategorySelect.appendChild(option);
+                        });
+                    }
+                    
+                    subcategorySelect.disabled = false;
+                } catch (error) {
+                    console.error('Error loading subcategories:', error);
+                    subcategorySelect.innerHTML = '<option value="">-- حدث خطأ --</option>';
+                    subcategorySelect.disabled = false;
+                }
+            }
+
+            // Load subcategories for existing category on page load
+            @if (Model.CategoryId.HasValue && Model.CategoryId.Value > 0)
+            {
+                <text>
+                // Trigger initial load of subcategories
+                const initialCategoryId = @Model.CategoryId.Value;
+                if (categorySelect) {
+                    categorySelect.value = initialCategoryId;
+                    
+                    // Update parent category info
+                    const parentCategoryId = document.getElementById('parentCategoryId');
+                    const parentCategoryName = document.getElementById('parentCategoryName');
+                    if (parentCategoryId) parentCategoryId.value = initialCategoryId;
+                    if (parentCategoryName) {
+                        const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+                        if (selectedOption) parentCategoryName.value = selectedOption.text;
+                    }
+                    
+                    // Enable subcategory button
+                    if (addSubcategoryBtn) addSubcategoryBtn.disabled = false;
+                    
+                    // Load subcategories
+                    loadSubcategories(initialCategoryId, null);
+                }
+                </text>
+            }
+        });
+    </script>
+}
+

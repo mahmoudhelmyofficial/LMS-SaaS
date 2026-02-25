@@ -1,0 +1,190 @@
+@model List<LMS.Domain.Entities.Assessments.Quiz>
+@{
+    ViewData["Title"] = Html.T("الاختبارات", "Quizzes");
+    var attempts = ViewBag.Attempts as List<LMS.Domain.Entities.Assessments.QuizAttempt> ?? new List<LMS.Domain.Entities.Assessments.QuizAttempt>();
+}
+
+@section Styles {
+<style>
+    .quiz-card {
+        transition: all 0.3s ease;
+    }
+    .quiz-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .quiz-status {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        z-index: 10;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-edit text-primary me-2"></i>
+                    @Html.T("اختباراتي", "My Quizzes")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("اختبر معرفتك وتابع تقدمك", "Test your knowledge and track your progress")</p>
+            </div>
+            <div class="col-lg-4">
+                <div class="row g-2">
+                    <div class="col-4">
+                        <div class="text-center">
+                            <h4 class="fw-bold text-primary mb-0">@Model.Count</h4>
+                            <small class="text-muted">@Html.T("متاح", "Available")</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-center">
+                            <h4 class="fw-bold text-success mb-0">@attempts.Count(a => a.IsPassed)</h4>
+                            <small class="text-muted">@Html.T("ناجح", "Passed")</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-center">
+                            <h4 class="fw-bold text-warning mb-0">@(attempts.Any() ? attempts.Average(a => a.PercentageScore).ToString("F0") : "0")%</h4>
+                            <small class="text-muted">@Html.T("المتوسط", "Average")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quizzes Grid -->
+@if (Model.Any())
+{
+    <div class="row g-4">
+        @foreach (var quiz in Model)
+        {
+            var userAttempts = attempts.Where(a => a.QuizId == quiz.Id).OrderByDescending(a => a.StartedAt).ToList();
+            var bestAttempt = userAttempts.FirstOrDefault();
+            var canAttempt = !quiz.MaxAttempts.HasValue || userAttempts.Count < quiz.MaxAttempts.Value;
+            var isAvailable = (!quiz.AvailableFrom.HasValue || quiz.AvailableFrom.Value <= DateTime.UtcNow) &&
+                            (!quiz.AvailableUntil.HasValue || quiz.AvailableUntil.Value >= DateTime.UtcNow);
+            
+            <div class="col-lg-4 col-md-6">
+                <div class="card quiz-card stretch stretch-full position-relative">
+                    @if (bestAttempt?.IsPassed == true)
+                    {
+                        <span class="quiz-status badge bg-success">
+                            <i class="feather-check-circle me-1"></i>
+                            @Html.T("ناجح", "Passed")
+                        </span>
+                    }
+                    else if (userAttempts.Any())
+                    {
+                        <span class="quiz-status badge bg-warning">
+                            <i class="feather-clock me-1"></i>
+                            @Html.T("يحتاج إعادة", "Needs retake")
+                        </span>
+                    }
+                    
+                    <div class="card-body">
+                        <div class="d-flex align-items-start mb-3">
+                            <div class="avatar-text avatar-lg bg-soft-primary text-primary me-3">
+                                <i class="feather-file-text"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h5 class="fw-bold mb-2">@quiz.Title</h5>
+                                <p class="text-muted fs-12 mb-0">@quiz.Lesson.Module.Course.Title</p>
+                            </div>
+                        </div>
+                        
+                        @if (!string.IsNullOrEmpty(quiz.Description))
+                        {
+                            <p class="text-muted fs-12 mb-3 text-truncate-2-line">@quiz.Description</p>
+                        }
+                        
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <span class="badge bg-soft-info text-info">
+                                <i class="feather-help-circle me-1"></i>
+                                @quiz.Questions.Count @Html.T("أسئلة", "questions")
+                            </span>
+                            @if (quiz.TimeLimit.HasValue && quiz.TimeLimit.Value > 0)
+                            {
+                                <span class="badge bg-soft-warning text-warning">
+                                    <i class="feather-clock me-1"></i>
+                                    @quiz.TimeLimit @Html.T("دقيقة", "min")
+                                </span>
+                            }
+                            @if (quiz.PassingScore > 0)
+                            {
+                                <span class="badge bg-soft-success text-success">
+                                    <i class="feather-target me-1"></i>
+                                    @quiz.PassingScore% @Html.T("للنجاح", "to pass")
+                                </span>
+                            }
+                        </div>
+                        
+                        @if (bestAttempt != null)
+                        {
+                            <div class="alert alert-@(bestAttempt.IsPassed ? "success" : "warning") mb-3">
+                                <small>
+                                    <strong>@Html.T("أفضل محاولة:", "Best attempt:")</strong> @bestAttempt.PercentageScore.ToString("F0")%
+                                    <br />
+                                    <strong>@Html.T("المحاولات:", "Attempts:")</strong> @userAttempts.Count / @(quiz.MaxAttempts?.ToString() ?? "∞")
+                                </small>
+                            </div>
+                        }
+                        
+                        @if (!isAvailable)
+                        {
+                            <button class="btn btn-secondary w-100" disabled>
+                                <i class="feather-lock me-2"></i>
+                                @Html.T("غير متاح حالياً", "Not available")
+                            </button>
+                        }
+                        else if (!canAttempt)
+                        {
+                            <button class="btn btn-secondary w-100" disabled>
+                                <i class="feather-x-circle me-2"></i>
+                                @Html.T("استنفذت المحاولات", "No attempts left")
+                            </button>
+                        }
+                        else
+                        {
+                            <a asp-action="Start" asp-route-quizId="@quiz.Id" class="btn btn-primary w-100">
+                                <i class="feather-play-circle me-2"></i>
+                                @(userAttempts.Any() ? Html.T("إعادة المحاولة", "Retry") : Html.T("بدء الاختبار", "Start quiz"))
+                            </a>
+                        }
+                        
+                        @if (userAttempts.Any())
+                        {
+                            <a asp-action="History" asp-route-quizId="@quiz.Id" class="btn btn-outline-secondary w-100 mt-2">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("عرض المحاولات السابقة", "View past attempts")
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            @{
+                ViewData["Icon"] = "edit";
+                ViewData["Title"] = Html.T("لا توجد اختبارات", "No quizzes");
+                ViewData["Message"] = Html.T("لا توجد اختبارات متاحة حالياً. سيتم إضافة اختبارات جديدة قريباً.", "No quizzes available at the moment. New quizzes will be added soon.");
+            }
+            @await Html.PartialAsync("_EmptyState")
+        </div>
+    </div>
+}
+

@@ -1,0 +1,304 @@
+@model List<LMS.Domain.Entities.Learning.Enrollment>
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("دوراتي", "My Courses");
+    var filter = ViewBag.Filter?.ToString() ?? "all";
+    var stats = ViewBag.Stats as LMS.Services.Interfaces.StudentLearningStats;
+    var recommendations = ViewBag.Recommendations as List<LMS.Services.Interfaces.CourseRecommendation> ?? new List<LMS.Services.Interfaces.CourseRecommendation>();
+    var atRiskAlerts = ViewBag.AtRiskAlerts as List<LMS.Services.Interfaces.AtRiskAlert> ?? new List<LMS.Services.Interfaces.AtRiskAlert>();
+    
+    // UI settings
+    var recommendationsLimit = await PlatformSettings.GetIntSettingAsync("UI.Recommendations.Limit", 3);
+}
+
+@section Styles {
+<style>
+    .filter-btn {
+        transition: all 0.3s ease;
+    }
+    .filter-btn.active {
+        background-color: var(--bs-primary);
+        color: white;
+        border-color: var(--bs-primary);
+    }
+    .course-card {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .course-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .at-risk-banner {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+    }
+    .recommendation-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 20px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- At-Risk Alerts -->
+@if (atRiskAlerts.Any())
+{
+    <div class="at-risk-banner">
+        <div class="d-flex align-items-center">
+            <div class="avatar-text avatar-lg bg-white bg-opacity-25 text-white me-3">
+                <i class="feather-alert-triangle"></i>
+            </div>
+            <div>
+                <h5 class="text-white mb-1">@Html.T("تنبيه: بعض الدورات تحتاج انتباهك!", "Alert: Some courses need your attention!")</h5>
+                <p class="mb-0 opacity-75">@Html.T("لديك", "You have") @atRiskAlerts.Count @Html.T("دورة لم يتم الوصول إليها مؤخراً", "course(s) not accessed recently")</p>
+            </div>
+            <button class="btn btn-light ms-auto" data-bs-toggle="modal" data-bs-target="#atRiskModal">
+                @Html.T("عرض التفاصيل", "View Details")
+            </button>
+        </div>
+    </div>
+}
+
+<!-- Stats Cards -->
+@if (stats != null)
+{
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-sm-6 col-lg-3">
+            @{
+                ViewData["Label"] = Html.T("إجمالي الدورات", "Total Courses");
+                ViewData["Value"] = stats.TotalEnrolledCourses.ToString();
+                ViewData["Description"] = $"{stats.ActiveCourses} {Html.T("قيد الدراسة", "in progress")}";
+                ViewData["Icon"] = "book-open";
+                ViewData["ColorClass"] = "primary";
+            }
+            @await Html.PartialAsync("_StatsCard")
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            @{
+                ViewData["Label"] = Html.T("الدورات المكتملة", "Completed Courses");
+                ViewData["Value"] = stats.CompletedCourses.ToString();
+                ViewData["Description"] = $"{stats.CertificatesEarned} {Html.T("شهادة محصلة", "certificates earned")}";
+                ViewData["Icon"] = "check-circle";
+                ViewData["ColorClass"] = "success";
+            }
+            @await Html.PartialAsync("_StatsCard")
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            @{
+                ViewData["Label"] = Html.T("ساعات التعلم", "Learning Hours");
+                ViewData["Value"] = (stats.TotalStudyMinutes / 60.0).ToString("F1");
+                ViewData["Description"] = Html.T("ساعة إجمالية", "total hours");
+                ViewData["Icon"] = "clock";
+                ViewData["ColorClass"] = "warning";
+            }
+            @await Html.PartialAsync("_StatsCard")
+        </div>
+        <div class="col-12 col-sm-6 col-lg-3">
+            @{
+                ViewData["Label"] = Html.T("متوسط التقدم", "Average Progress");
+                ViewData["Value"] = stats.AverageCompletionRate.ToString("F0") + "%";
+                ViewData["Description"] = Html.T("عبر جميع الدورات", "across all courses");
+                ViewData["Icon"] = "trending-up";
+                ViewData["ColorClass"] = "info";
+            }
+            @await Html.PartialAsync("_StatsCard")
+        </div>
+    </div>
+}
+
+<!-- Filter Tabs -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+            <div class="mb-3 mb-md-0">
+                <h5 class="fw-bold mb-1">@Html.T("دوراتي", "My Courses")</h5>
+                <p class="text-muted mb-0">@Model.Count @Html.T("دورة مسجلة", "enrolled course(s)")</p>
+            </div>
+            <div class="btn-group filter-btn-group" role="group">
+                <a asp-action="Index" asp-route-filter="all" class="btn btn-sm filter-btn @(filter == "all" ? "active" : "btn-outline-primary")">
+                    @Html.T("الكل", "All") (@Model.Count)
+                </a>
+                <a asp-action="Index" asp-route-filter="active" class="btn btn-sm filter-btn @(filter == "active" ? "active" : "btn-outline-primary")">
+                    @Html.T("قيد الدراسة", "In Progress") (@Model.Count(e => e.Status == LMS.Domain.Enums.EnrollmentStatus.Active))
+                </a>
+                <a asp-action="Index" asp-route-filter="inprogress" class="btn btn-sm filter-btn @(filter == "inprogress" ? "active" : "btn-outline-primary")">
+                    @Html.T("جاري التقدم", "Progressing") (@Model.Count(e => e.ProgressPercentage > 0 && e.ProgressPercentage < 100))
+                </a>
+                <a asp-action="Index" asp-route-filter="completed" class="btn btn-sm filter-btn @(filter == "completed" ? "active" : "btn-outline-primary")">
+                    @Html.T("مكتملة", "Completed") (@Model.Count(e => e.Status == LMS.Domain.Enums.EnrollmentStatus.Completed))
+                </a>
+                <a asp-action="Index" asp-route-filter="notstarted" class="btn btn-sm filter-btn @(filter == "notstarted" ? "active" : "btn-outline-primary")">
+                    @Html.T("لم تبدأ", "Not Started") (@Model.Count(e => e.ProgressPercentage == 0))
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Courses Grid -->
+@if (Model.Any())
+{
+    <div class="row g-4 mb-4">
+        @foreach (var enrollment in Model)
+        {
+            <div class="col-xl-4 col-md-6">
+                @await Html.PartialAsync("_CourseCard", enrollment)
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            @{
+                ViewData["Icon"] = "book-open";
+                ViewData["Title"] = Html.T("لا توجد دورات", "No Courses");
+                ViewData["Message"] = Html.T("لم تقم بالتسجيل في أي دورة بعد. ابدأ رحلة التعلم الآن!", "You haven't enrolled in any courses yet. Start your learning journey now!");
+                ViewData["ActionText"] = Html.T("تصفح الدورات", "Browse Courses");
+                ViewData["ActionArea"] = "Student";
+                ViewData["ActionController"] = "Courses";
+                ViewData["ActionAction"] = "Browse";
+            }
+            @await Html.PartialAsync("_EmptyState")
+        </div>
+    </div>
+}
+
+<!-- Recommendations Section -->
+@if (recommendations.Any())
+{
+    <div class="recommendation-card mb-4" style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 50%, #3d7ab5 100%); position: relative; overflow: hidden;">
+        <!-- Background decoration -->
+        <div style="position: absolute; top: -50%; right: -10%; width: 50%; height: 200%; background: radial-gradient(ellipse, rgba(255,255,255,0.08) 0%, transparent 70%); pointer-events: none;"></div>
+        
+        <div class="d-flex align-items-center justify-content-between mb-4 position-relative">
+            <div>
+                <h5 class="mb-1" style="color: #ffffff; font-weight: 700;">
+                    <i class="feather-star me-2" style="color: #fbbf24;"></i>
+                    @Html.T("دورات موصى بها لك", "Recommended Courses for You")
+                </h5>
+                <p class="mb-0" style="color: rgba(255,255,255,0.8); font-size: 14px;">@Html.T("بناءً على اهتماماتك ومهاراتك", "Based on your interests and skills")</p>
+            </div>
+            <a asp-action="Browse" class="btn btn-light btn-sm" style="font-weight: 600;">
+                @Html.T("عرض المزيد", "View More")
+                <i class="feather-arrow-left ms-1"></i>
+            </a>
+        </div>
+        <div class="row g-3 position-relative">
+            @foreach (var rec in recommendations.Take(recommendationsLimit))
+            {
+                <div class="col-md-4">
+                    <div class="card border-0" style="background: rgba(255,255,255,0.95); border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+                        <div class="card-body">
+                            <h6 class="mb-2" style="color: #1e293b; font-weight: 600;">@rec.CourseTitle</h6>
+                            <p class="fs-12 mb-3" style="color: #64748b;">@rec.Reason</p>
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="badge" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white;">@(rec.MatchScore.ToString("F0"))% @Html.T("تطابق", "match")</span>
+                                <a asp-controller="Courses" asp-action="Details" asp-route-id="@rec.CourseId" class="btn btn-sm" style="background: linear-gradient(135deg, #004aad 0%, #0066cc 100%); color: white; border: none;">
+                                    @Html.T("عرض", "View")
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<!-- Quick Actions -->
+<div class="card stretch stretch-full">
+    <div class="card-body">
+        <h5 class="fw-bold mb-4">@Html.T("إجراءات سريعة", "Quick Actions")</h5>
+        <div class="row g-3">
+            <div class="col-md-3">
+                <a asp-action="Browse" class="btn btn-outline-primary w-100 py-3">
+                    <i class="feather-search d-block fs-3 mb-2"></i>
+                    @Html.T("تصفح الدورات", "Browse Courses")
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a asp-controller="Wishlist" asp-action="Index" class="btn btn-outline-warning w-100 py-3">
+                    <i class="feather-heart d-block fs-3 mb-2"></i>
+                    @Html.T("قائمة الرغبات", "Wishlist")
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a asp-controller="Certificates" asp-action="Index" class="btn btn-outline-success w-100 py-3">
+                    <i class="feather-award d-block fs-3 mb-2"></i>
+                    @Html.T("شهاداتي", "My Certificates")
+                </a>
+            </div>
+            <div class="col-md-3">
+                <a asp-controller="LearningPaths" asp-action="Index" class="btn btn-outline-info w-100 py-3">
+                    <i class="feather-map d-block fs-3 mb-2"></i>
+                    @Html.T("مسارات التعلم", "Learning Paths")
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- At-Risk Courses Modal -->
+<div class="modal fade" id="atRiskModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="feather-alert-triangle text-danger me-2"></i>
+                    @Html.T("دورات تحتاج انتباهك", "Courses Need Your Attention")
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@Html.T("إغلاق", "Close")"></button>
+            </div>
+            <div class="modal-body">
+                @if (atRiskAlerts.Any())
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var alert in atRiskAlerts)
+                        {
+                            <div class="list-group-item">
+                                <div class="d-flex align-items-start">
+                                    <div class="avatar-text avatar-md bg-soft-danger text-danger me-3">
+                                        <i class="feather-book-open"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">@alert.CourseTitle</h6>
+                                        <p class="text-muted mb-2 fs-12">@alert.Message</p>
+                                        <div class="d-flex gap-2">
+                                            @foreach (var recommendation in alert.Recommendations)
+                                            {
+                                                <span class="badge bg-soft-info text-info">@recommendation</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <a asp-action="Details" asp-route-id="@alert.EnrollmentId" class="btn btn-sm btn-primary">
+                                        @Html.T("متابعة", "Continue")
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Auto-hide alerts after 5 seconds
+    setTimeout(function() {
+        $('.alert').fadeOut('slow');
+    }, 5000);
+</script>
+}
+

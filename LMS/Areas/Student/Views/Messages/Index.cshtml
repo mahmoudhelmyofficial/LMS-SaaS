@@ -1,0 +1,203 @@
+@model List<LMS.Domain.Entities.Social.DirectMessage>
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("الرسائل", "Messages");
+    var unreadCount = ViewBag.UnreadCount as int? ?? 0;
+    var currentPage = ViewBag.Page as int? ?? 1;
+    
+    // UI settings
+    var messagePreviewLength = await PlatformSettings.GetIntSettingAsync("UI.MessagePreviewLength", 100);
+    var messagesPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Messages", 20);
+}
+
+@section Styles {
+<style>
+    .messages-container {
+        height: calc(100vh - 200px);
+        min-height: 500px;
+    }
+    .conversations-list {
+        height: 100%;
+        overflow-y: auto;
+        border-left: 1px solid #e5e7eb;
+    }
+    .conversation-item {
+        padding: 15px;
+        border-bottom: 1px solid #e5e7eb;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .conversation-item:hover {
+        background-color: #f9fafb;
+    }
+    .conversation-item.unread {
+        background-color: #eff6ff;
+        border-right: 3px solid #667eea;
+    }
+    .conversation-item.active {
+        background-color: #eff6ff;
+    }
+    .conversation-item .min-width-0 { min-width: 0; }
+    .conversation-item .d-flex { flex-wrap: wrap; }
+    .conversation-item .text-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-mail text-primary me-2"></i>
+                    @Html.T("الرسائل", "Messages")
+                </h3>
+                <p class="text-muted mb-0">
+                    @if (unreadCount > 0)
+                    {
+                        <span class="badge bg-primary me-2">@unreadCount @Html.T("غير مقروءة", "unread")</span>
+                    }
+                    <span>@Model.Count @Html.T("رسالة", "messages")</span>
+                </p>
+            </div>
+            <div class="d-flex gap-2">
+                <a asp-action="Compose" class="btn btn-primary">
+                    <i class="feather-edit me-2"></i>@Html.T("رسالة جديدة", "New message")
+                </a>
+                @if (unreadCount > 0)
+                {
+                    <form asp-action="MarkAllAsRead" method="post">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-outline-secondary">
+                            <i class="feather-check-circle me-2"></i>@Html.T("تحديد الكل كمقروء", "Mark all as read")
+                        </button>
+                    </form>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Navigation Tabs -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body py-2">
+        <ul class="nav nav-pills">
+            <li class="nav-item">
+                <a asp-action="Index" class="nav-link active">
+                    <i class="feather-inbox me-2"></i>@Html.T("الوارد", "Inbox")
+                    @if (unreadCount > 0)
+                    {
+                        <span class="badge bg-primary ms-2">@unreadCount</span>
+                    }
+                </a>
+            </li>
+            <li class="nav-item">
+                <a asp-action="Sent" class="nav-link">
+                    <i class="feather-send me-2"></i>@Html.T("المرسل", "Sent")
+                </a>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<!-- Messages List -->
+<div class="card stretch stretch-full">
+    <div class="card-body p-0">
+        @if (Model.Any())
+        {
+            <div class="list-group list-group-flush">
+                @foreach (var message in Model)
+                {
+                    bool isRead = message.IsRead;
+                    string senderName = message.Sender?.FullName ?? Html.T("مستخدم", "User").ToString();
+                    string senderInitial = senderName.Length > 0 ? senderName.Substring(0, 1) : "?";
+                    DateTime sentAt = message.SentAt;
+                    string subject = message.Subject ?? ("(" + Html.T("بدون عنوان", "No subject") + ")");
+                    string body = message.Body ?? "";
+                    int messageId = message.Id;
+                    
+                    <a asp-action="Details" asp-route-id="@messageId" 
+                       class="list-group-item list-group-item-action conversation-item @(!isRead ? "unread" : "")">
+                        <div class="d-flex align-items-start flex-wrap gap-2">
+                            <div class="avatar-text avatar-md bg-soft-primary text-primary flex-shrink-0 me-2 me-md-3">
+                                @senderInitial
+                            </div>
+                            <div class="flex-grow-1 min-width-0">
+                                <div class="d-flex flex-column flex-sm-row flex-sm-wrap justify-content-between align-items-start gap-1 mb-1">
+                                    <h6 class="mb-0 @(!isRead ? "fw-bold" : "") text-break">
+                                        @senderName
+                                        @if (!isRead)
+                                        {
+                                            <span class="badge bg-primary ms-2">@Html.T("جديد", "New")</span>
+                                        }
+                                    </h6>
+                                    <small class="text-muted flex-shrink-0">@GetTimeAgo(sentAt)</small>
+                                </div>
+                                <p class="fw-semibold mb-1 text-dark text-break">@subject</p>
+                                <p class="text-muted fs-12 mb-0 text-truncate">
+                                    @(body.Length > messagePreviewLength ? body.Substring(0, messagePreviewLength) + "..." : body)
+                                </p>
+                            </div>
+                        </div>
+                    </a>
+                }
+            </div>
+            
+            <!-- Pagination -->
+            @if (currentPage > 1 || Model.Count >= messagesPageSize)
+            {
+                <div class="d-flex justify-content-center p-4">
+                    <nav>
+                        <ul class="pagination mb-0">
+                            @if (currentPage > 1)
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" asp-action="Index" asp-route-page="@(currentPage - 1)">@Html.T("السابق", "Previous")</a>
+                                </li>
+                            }
+                            <li class="page-item active">
+                                <span class="page-link">@currentPage</span>
+                            </li>
+                            @if (Model.Count >= messagesPageSize)
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" asp-action="Index" asp-route-page="@(currentPage + 1)">@Html.T("التالي", "Next")</a>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                    <i class="feather-inbox"></i>
+                </div>
+                <h5 class="fw-bold mb-2">@Html.T("لا توجد رسائل", "No messages")</h5>
+                <p class="text-muted mb-4">@Html.T("صندوق الوارد فارغ", "Inbox is empty")</p>
+                <a asp-action="Compose" class="btn btn-primary">
+                    <i class="feather-edit me-2"></i>
+                    @Html.T("إرسال رسالة جديدة", "Send new message")
+                </a>
+            </div>
+        }
+    </div>
+</div>
+
+@functions {
+    string GetTimeAgo(DateTime dateTime)
+    {
+        var timeSpan = DateTime.UtcNow - dateTime;
+        if (timeSpan.TotalMinutes < 1) return Html.T("الآن", "Just now");
+        if (timeSpan.TotalHours < 1) return (int)timeSpan.TotalMinutes + " " + Html.T("دقيقة", "minutes ago");
+        if (timeSpan.TotalDays < 1) return (int)timeSpan.TotalHours + " " + Html.T("ساعة", "hours ago");
+        if (timeSpan.TotalDays < 7) return (int)timeSpan.TotalDays + " " + Html.T("يوم", "days ago");
+        return dateTime.ToString("dd/MM/yyyy");
+    }
+}

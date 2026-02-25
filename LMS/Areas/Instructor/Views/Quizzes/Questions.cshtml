@@ -1,0 +1,404 @@
+@model List<LMS.Domain.Entities.Assessments.Question>
+@using LMS.Helpers
+
+@{
+    ViewData["Title"] = Html.T("إدارة أسئلة الاختبار", "Quiz Questions Management");
+    ViewData["Subtitle"] = Html.T("إضافة وتعديل الأسئلة", "Add and edit questions");
+    var quiz = ViewBag.Quiz as LMS.Domain.Entities.Assessments.Quiz;
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(
+        "<a href='" + Url.Action("Edit", new { id = quiz?.Id }) + "' class='btn btn-light me-2'><i class='feather-settings me-2'></i>" + Html.T("إعدادات الاختبار", "Quiz settings") + "</a>" +
+        "<a href='" + Url.Action("Index", new { courseId = quiz?.Lesson?.Module?.CourseId }) + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة", "Back") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @if (quiz != null)
+    {
+        <!-- Quiz Info -->
+        <div class="alert alert-info mb-4">
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-md bg-primary text-white">
+                        <i class="feather-help-circle"></i>
+                    </div>
+                    <div>
+                        <h6 class="fw-bold mb-1">@quiz.Title</h6>
+                        <p class="mb-0 fs-13">@quiz.Lesson?.Module?.Title - @quiz.Lesson?.Module?.Course?.Title</p>
+                    </div>
+                </div>
+                <div class="text-end">
+                    <div class="badge bg-soft-primary text-primary fs-13 mb-2">
+                        @Model.Count @Html.T("سؤال", "questions")
+                    </div>
+                    <br />
+                    <div class="badge bg-soft-success text-success fs-13">
+                        @Model.Sum(q => q.Points) @Html.T("نقطة", "points")
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Questions List -->
+            <div class="col-lg-8">
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-list me-2 text-primary"></i>
+                            @Html.T("قائمة الأسئلة", "Questions list")
+                        </h5>
+                        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addQuestionModal">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إضافة سؤال", "Add question")
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        @if (!Model.Any())
+                        {
+                            <div class="alert alert-warning">
+                                <i class="feather-alert-triangle me-2"></i>
+                                @Html.T("لا توجد أسئلة في هذا الاختبار. ابدأ بإضافة أسئلة باستخدام الزر أعلاه.", "No questions in this quiz yet. Start by adding questions using the button above.")
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var question in Model)
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex align-items-start gap-3">
+                                            <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                @question.OrderIndex
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <h6 class="fw-bold mb-2">@question.QuestionText</h6>
+                                                <div class="d-flex gap-2 mb-2">
+                                                    <span class="badge bg-soft-info text-info">
+                                                        @question.Type
+                                                    </span>
+                                                    <span class="badge bg-soft-success text-success">
+                                                        @question.Points @Html.T("نقطة", "points")
+                                                    </span>
+                                                    @if (!string.IsNullOrEmpty(question.DifficultyLevel))
+                                                    {
+                                                        <span class="badge bg-soft-warning text-warning">
+                                                            @question.DifficultyLevel
+                                                        </span>
+                                                    }
+                                                </div>
+                                                
+                                                @if (question.Options != null && question.Options.Any())
+                                                {
+                                                    <div class="mt-3">
+                                                        <strong class="fs-13">@Html.T("الخيارات:", "Options:")</strong>
+                                                        <ul class="list-unstyled mt-2 mb-0">
+                                                            @foreach (var option in question.Options)
+                                                            {
+                                                                <li class="mb-1">
+                                                                    @if (option.IsCorrect)
+                                                                    {
+                                                                        <i class="feather-check-circle text-success me-1"></i>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <i class="feather-circle text-muted me-1"></i>
+                                                                    }
+                                                                    <span class="@(option.IsCorrect ? "fw-bold text-success" : "")">@option.OptionText</span>
+                                                                </li>
+                                                            }
+                                                        </ul>
+                                                    </div>
+                                                }
+
+                                                @if (!string.IsNullOrEmpty(question.Explanation))
+                                                {
+                                                    <div class="mt-2">
+                                                        <strong class="fs-13">@Html.T("التفسير:", "Explanation:")</strong>
+                                                        <p class="mb-0 text-muted fs-13">@question.Explanation</p>
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div>
+                                                <form asp-action="DeleteQuestion" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا السؤال؟", "Are you sure you want to delete this question?").Replace("'", "\\'"))');">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="questionId" value="@question.Id" />
+                                                    <input type="hidden" name="quizId" value="@quiz.Id" />
+                                                    <button type="submit" class="btn btn-sm btn-icon btn-light-danger">
+                                                        <i class="feather-trash-2"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Statistics Card -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-bar-chart-2 me-2"></i>
+                            @Html.T("إحصائيات الاختبار", "Quiz statistics")
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("عدد الأسئلة:", "Number of questions:")</span>
+                            <span class="fw-bold">@Model.Count</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("مجموع النقاط:", "Total points:")</span>
+                            <span class="fw-bold">@Model.Sum(q => q.Points)</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("درجة النجاح:", "Passing score:")</span>
+                            <span class="fw-bold">@quiz.PassingScore%</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="fs-13">@Html.T("الحد الزمني:", "Time limit:")</span>
+                            <span class="fw-bold">@(quiz.TimeLimitMinutes?.ToString() ?? Html.T("غير محدد", "Unlimited")) @(quiz.TimeLimitMinutes.HasValue ? Html.T("دقيقة", "min") : "")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tips Card -->
+                <div class="card stretch stretch-full mb-4 bg-soft-info">
+                    <div class="card-body">
+                        <h6 class="fw-bold text-info mb-3">
+                            <i class="feather-lightbulb me-2"></i>
+                            @Html.T("نصائح لإنشاء الأسئلة", "Tips for creating questions")
+                        </h6>
+                        <ul class="list-unstyled mb-0 fs-13">
+                            <li class="mb-2">
+                                <i class="feather-check me-2"></i>
+                                @Html.T("اجعل الأسئلة واضحة ومباشرة", "Keep questions clear and direct")
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check me-2"></i>
+                                @Html.T("نوع في أنواع الأسئلة", "Vary question types")
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check me-2"></i>
+                                @Html.T("أضف تفسيرات للإجابات", "Add explanations for answers")
+                            </li>
+                            <li class="mb-0">
+                                <i class="feather-check me-2"></i>
+                                @Html.T("راجع الأسئلة قبل النشر", "Review questions before publishing")
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3">@Html.T("إجراءات سريعة", "Quick actions")</h6>
+                        <a href="@Url.Action("Attempts", new { quizId = quiz.Id })" class="btn btn-light w-100 mb-2">
+                            <i class="feather-users me-2"></i>
+                            @Html.T("عرض المحاولات", "View attempts")
+                        </a>
+                        <a href="@Url.Action("Analytics", new { quizId = quiz.Id })" class="btn btn-light w-100 mb-2">
+                            <i class="feather-trending-up me-2"></i>
+                            @Html.T("التحليلات", "Analytics")
+                        </a>
+                        <a href="@Url.Action("Edit", new { id = quiz.Id })" class="btn btn-light w-100">
+                            <i class="feather-settings me-2"></i>
+                            @Html.T("إعدادات الاختبار", "Quiz settings")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Add Question Modal (translation strings for JS) -->
+<div id="quiz-questions-i18n" data-option-label="@Html.T("الخيار", "Option")" data-true-label="@Html.T("صح", "True")" data-false-label="@Html.T("خطأ", "False")" data-please-select-correct="@Html.T("يرجى تحديد الإجابة الصحيحة", "Please select the correct answer")" style="display:none;"></div>
+<div class="modal fade" id="addQuestionModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form asp-action="AddQuestion" method="post" id="addQuestionForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="QuizId" value="@quiz?.Id" />
+                
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="feather-plus me-2"></i>
+                        @Html.T("إضافة سؤال جديد", "Add new question")
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@Html.T("إغلاق", "Close")"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label">@Html.T("نص السؤال", "Question text") <span class="text-danger">*</span></label>
+                            <textarea name="QuestionText" class="form-control" rows="3" required placeholder="@Html.T("اكتب السؤال هنا...", "Write your question here...")"></textarea>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">@Html.T("نوع السؤال", "Question type") <span class="text-danger">*</span></label>
+                            <select name="QuestionType" id="questionTypeSelect" class="form-control form-select" required>
+                                <option value="SingleChoice">@Html.T("اختيار واحد", "Single choice")</option>
+                                <option value="MultipleChoice">@Html.T("اختيار متعدد", "Multiple choice")</option>
+                                <option value="TrueFalse">@Html.T("صح/خطأ", "True/False")</option>
+                                <option value="ShortAnswer">@Html.T("إجابة قصيرة", "Short answer")</option>
+                                <option value="Essay">@Html.T("مقالي", "Essay")</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">@Html.T("النقاط", "Points") <span class="text-danger">*</span></label>
+                            <input type="number" name="Points" class="form-control" min="1" max="100" value="1" required />
+                        </div>
+
+                        <div class="col-12" id="optionsContainer">
+                            <label class="form-label">@Html.T("الخيارات", "Options")</label>
+                            <div id="optionsList">
+                                <div class="option-item mb-2">
+                                    <div class="input-group">
+                                        <div class="input-group-text">
+                                            <input type="hidden" name="Options[0].IsCorrect" value="false" class="hidden-correct" />
+                                            <input type="checkbox" name="Options[0].IsCorrect" value="true" class="form-check-input mt-0" />
+                                        </div>
+                                        <input type="text" name="Options[0].Text" class="form-control" placeholder="@Html.T("الخيار 1", "Option 1")" required />
+                                        <button type="button" class="btn btn-outline-danger btn-remove-option" disabled>
+                                            <i class="feather-x"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="option-item mb-2">
+                                    <div class="input-group">
+                                        <div class="input-group-text">
+                                            <input type="hidden" name="Options[1].IsCorrect" value="false" class="hidden-correct" />
+                                            <input type="checkbox" name="Options[1].IsCorrect" value="true" class="form-check-input mt-0" />
+                                        </div>
+                                        <input type="text" name="Options[1].Text" class="form-control" placeholder="@Html.T("الخيار 2", "Option 2")" required />
+                                        <button type="button" class="btn btn-outline-danger btn-remove-option">
+                                            <i class="feather-x"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnAddOption">
+                                <i class="feather-plus me-1"></i>
+                                @Html.T("إضافة خيار", "Add option")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="feather-check me-2"></i>
+                        @Html.T("إضافة السؤال", "Add question")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            var i18n = document.getElementById('quiz-questions-i18n');
+            var optionLabel = i18n ? i18n.getAttribute('data-option-label') || 'Option' : 'Option';
+            var trueLabel = i18n ? i18n.getAttribute('data-true-label') || 'True' : 'True';
+            var falseLabel = i18n ? i18n.getAttribute('data-false-label') || 'False' : 'False';
+            var pleaseSelectCorrect = i18n ? i18n.getAttribute('data-please-select-correct') || 'Please select the correct answer' : 'Please select the correct answer';
+            var optionIndex = 2;
+
+            function getOptionPlaceholder(n) { return optionLabel + ' ' + n; }
+
+            // Show/hide options based on question type
+            $('#questionTypeSelect').on('change', function () {
+                var questionType = $(this).val();
+                if (questionType === 'ShortAnswer' || questionType === 'Essay') {
+                    $('#optionsContainer').hide();
+                } else if (questionType === 'TrueFalse') {
+                    $('#optionsContainer').show();
+                    var trueEsc = $('<div>').text(trueLabel).html();
+                    var falseEsc = $('<div>').text(falseLabel).html();
+                    $('#optionsList').html(
+                        '<div class="option-item mb-2"><div class="input-group"><div class="input-group-text">' +
+                        '<input type="radio" name="correctAnswer" class="form-check-input mt-0" value="0" /></div>' +
+                        '<input type="text" name="Options[0].Text" class="form-control" value="' + trueEsc + '" readonly />' +
+                        '<input type="hidden" name="Options[0].IsCorrect" value="false" class="correct-flag" /></div></div>' +
+                        '<div class="option-item mb-2"><div class="input-group"><div class="input-group-text">' +
+                        '<input type="radio" name="correctAnswer" class="form-check-input mt-0" value="1" /></div>' +
+                        '<input type="text" name="Options[1].Text" class="form-control" value="' + falseEsc + '" readonly />' +
+                        '<input type="hidden" name="Options[1].IsCorrect" value="false" class="correct-flag" /></div></div>'
+                    );
+                    $('#btnAddOption').hide();
+
+                    $('input[name="correctAnswer"]').off('change').on('change', function() {
+                        $('.correct-flag').val('false');
+                        $(this).closest('.option-item').find('.correct-flag').val('true');
+                    });
+                } else {
+                    $('#optionsContainer').show();
+                    $('#btnAddOption').show();
+                }
+            }).trigger('change');
+
+            $('#btnAddOption').on('click', function () {
+                var ph = getOptionPlaceholder(optionIndex + 1);
+                var optionHtml = '<div class="option-item mb-2"><div class="input-group"><div class="input-group-text">' +
+                    '<input type="hidden" name="Options[' + optionIndex + '].IsCorrect" value="false" class="hidden-correct" />' +
+                    '<input type="checkbox" name="Options[' + optionIndex + '].IsCorrect" value="true" class="form-check-input mt-0" /></div>' +
+                    '<input type="text" name="Options[' + optionIndex + '].Text" class="form-control" placeholder="' + ph + '" required />' +
+                    '<button type="button" class="btn btn-outline-danger btn-remove-option"><i class="feather-x"></i></button></div></div>';
+                $('#optionsList').append(optionHtml);
+                optionIndex++;
+                updateRemoveButtons();
+            });
+
+            $(document).on('click', '.btn-remove-option', function () {
+                $(this).closest('.option-item').remove();
+                updateRemoveButtons();
+                reindexOptions();
+            });
+
+            function updateRemoveButtons() {
+                var optionCount = $('.option-item').length;
+                $('.btn-remove-option').prop('disabled', optionCount <= 2);
+            }
+
+            function reindexOptions() {
+                $('.option-item').each(function (index) {
+                    $(this).find('input[type="checkbox"]').attr('name', 'Options[' + index + '].IsCorrect');
+                    $(this).find('input[type="text"]').attr('name', 'Options[' + index + '].Text');
+                    $(this).find('input[type="text"]').attr('placeholder', getOptionPlaceholder(index + 1));
+                });
+                optionIndex = $('.option-item').length;
+            }
+
+            $('#addQuestionForm').on('submit', function (e) {
+                var questionType = $('#questionTypeSelect').val();
+                if (questionType !== 'ShortAnswer' && questionType !== 'Essay') {
+                    var hasCorrectAnswer = $('input[name*="IsCorrect"]:checked').length > 0 || $('input[name="correctAnswer"]:checked').length > 0;
+                    if (!hasCorrectAnswer) {
+                        e.preventDefault();
+                        alert(pleaseSelectCorrect);
+                        return false;
+                    }
+                }
+                return true;
+            });
+        });
+    </script>
+}
+

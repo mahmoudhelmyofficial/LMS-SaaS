@@ -1,0 +1,463 @@
+@model List<LMS.Domain.Entities.Payments.Refund>
+
+@{
+    ViewData["Title"] = Html.T("تقرير الاستردادات", "Refunds report");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("التحليلات", "Analytics"), Url.Action("Index", "Analytics")),
+        (Html.T("تقرير الاستردادات", "Refunds report"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    
+    var totalRefunds = ViewBag.TotalRefunds ?? 0;
+    var approvedRefunds = ViewBag.ApprovedRefunds ?? 0;
+    var pendingRefunds = ViewBag.PendingRefunds ?? 0;
+    var refundedAmount = ViewBag.RefundedAmount ?? 0m;
+}
+
+@section Styles {
+    <style>
+        .refund-card {
+            transition: all 0.3s ease;
+            border-right: 3px solid transparent;
+        }
+        .refund-card:hover {
+            border-right-color: #f06548;
+            background-color: #fff5f3;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                        <i class="feather-rotate-ccw"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">إجمالي الاستردادات</span>
+                        <h3 class="fw-bold mb-0">@totalRefunds</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                        <i class="feather-check-circle"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">مستردة</span>
+                        <h3 class="fw-bold mb-0">@approvedRefunds</h3>
+                        <small class="text-muted">@((totalRefunds > 0 ? (approvedRefunds * 100.0 / totalRefunds) : 0).ToString("F1"))%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                        <i class="feather-clock"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">قيد المراجعة</span>
+                        <h3 class="fw-bold mb-0">@pendingRefunds</h3>
+                        <small class="text-muted">@((totalRefunds > 0 ? (pendingRefunds * 100.0 / totalRefunds) : 0).ToString("F1"))%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                        <i class="feather-dollar-sign"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">المبلغ المسترد</span>
+                        <h3 class="fw-bold mb-0">@refundedAmount.ToEGP()</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("الحالة", "Status")</label>
+                            <select class="form-select" id="statusFilter">
+                                <option value="">@Html.T("الكل", "All")</option>
+                                <option value="Pending">@Html.T("قيد المراجعة", "Pending")</option>
+                                <option value="Approved">@Html.T("موافق عليه", "Approved")</option>
+                                <option value="Rejected">@Html.T("مرفوض", "Rejected")</option>
+                                <option value="Processed">@Html.T("معالج", "Processed")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("البحث", "Search")</label>
+                            <input type="text" class="form-control" id="searchRefund" placeholder="@Html.T("ابحث...", "Search...")">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("الترتيب حسب", "Sort by")</label>
+                            <select class="form-select" id="sortBy">
+                                <option value="date">@Html.T("التاريخ", "Date")</option>
+                                <option value="amount">@Html.T("المبلغ", "Amount")</option>
+                                <option value="status">@Html.T("الحالة", "Status")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">&nbsp;</label>
+                            <div class="btn-group w-100">
+                                <button type="button" class="btn btn-success dropdown-toggle w-100" data-bs-toggle="dropdown">
+                                    <i class="feather-download me-2"></i>تصدير البيانات
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="/api/export/refunds?format=csv"><i class="feather-file-text me-2"></i>@Html.T("CSV", "CSV")</a></li>
+                                    <li><a class="dropdown-item" href="/api/export/refunds?format=excel"><i class="feather-file me-2"></i>@Html.T("إكسل", "Excel")</a></li>
+                                    <li><a class="dropdown-item" href="/api/export/refunds?format=pdf"><i class="feather-file-text me-2"></i>@Html.T("PDF", "PDF")</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="window.print()"><i class="feather-printer me-2"></i>طباعة</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("اتجاه الاستردادات", "Refunds trend")</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 300px;">
+                        <canvas id="refundsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">توزيع الحالات</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 200px;">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                    <div class="mt-4">
+                        @{
+                            var pending = Model.Count(r => r.Status == LMS.Domain.Enums.RefundStatus.Pending);
+                            var approved = Model.Count(r => r.Status == LMS.Domain.Enums.RefundStatus.Approved);
+                            var rejected = Model.Count(r => r.Status == LMS.Domain.Enums.RefundStatus.Rejected);
+                        }
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <div style="width: 12px; height: 12px; background: #f7b84b; border-radius: 50%;"></div>
+                                <span>قيد المراجعة</span>
+                            </div>
+                            <span class="fw-bold">@pending</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <div style="width: 12px; height: 12px; background: #0ab39c; border-radius: 50%;"></div>
+                                <span>موافق عليه</span>
+                            </div>
+                            <span class="fw-bold">@approved</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center gap-2">
+                                <div style="width: 12px; height: 12px; background: #f06548; border-radius: 50%;"></div>
+                                <span>مرفوض</span>
+                            </div>
+                            <span class="fw-bold">@rejected</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Refunds Table -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("طلبات الاسترداد", "Refund requests")</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="refundsTable">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>@Html.T("رقم الطلب", "Order #")</th>
+                                    <th>@Html.T("الطالب", "Student")</th>
+                                    <th>@Html.T("الدورة", "Course")</th>
+                                    <th>@Html.T("تاريخ الطلب", "Request date")</th>
+                                    <th>@Html.T("المبلغ", "Amount")</th>
+                                    <th>@Html.T("السبب", "Reason")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th>@Html.T("تاريخ المعالجة", "Processed date")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var refund in Model)
+                                {
+                                    <tr class="refund-card">
+                                        <td>
+                                            <span class="badge bg-soft-primary text-primary">#@refund.Id</span>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                    @refund.Payment?.Student?.FirstName?.Substring(0, 1)
+                                                </div>
+                                                <div>
+                                                    <span class="d-block fw-semibold">@refund.Payment?.Student?.FirstName @refund.Payment?.Student?.LastName</span>
+                                                    <small class="text-muted">@refund.Payment?.Student?.Email</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="fw-semibold">@refund.Payment?.Course?.Title</span>
+                                        </td>
+                                        <td>
+                                            <div>
+                                                <span class="d-block">@refund.RequestedAt.ToString("dd/MM/yyyy")</span>
+                                                <small class="text-muted">@refund.RequestedAt.ToString("hh:mm tt")</small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold text-danger">@refund.RefundAmount.ToEGP()</span>
+                                        </td>
+                                        <td>
+                                            <span class="text-muted" data-bs-toggle="tooltip" title="@refund.Reason">
+                                                @(refund.Reason?.Length > 30 ? refund.Reason.Substring(0, 30) + "..." : refund.Reason)
+                                            </span>
+                                        </td>
+                                        <td>
+                                            @switch (refund.Status)
+                                            {
+                                                case LMS.Domain.Enums.RefundStatus.Pending:
+                                                    <span class="badge bg-soft-warning text-warning">قيد المراجعة</span>
+                                                    break;
+                                                case LMS.Domain.Enums.RefundStatus.Approved:
+                                                    <span class="badge bg-soft-success text-success">موافق عليه</span>
+                                                    break;
+                                                case LMS.Domain.Enums.RefundStatus.Rejected:
+                                                    <span class="badge bg-soft-danger text-danger">مرفوض</span>
+                                                    break;
+                                                case LMS.Domain.Enums.RefundStatus.Processed:
+                                                    <span class="badge bg-soft-info text-info">معالج</span>
+                                                    break;
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (refund.ProcessedAt.HasValue)
+                                            {
+                                                <div>
+                                                    <span class="d-block">@refund.ProcessedAt.Value.ToString("dd/MM/yyyy")</span>
+                                                    <small class="text-muted">@refund.ProcessedAt.Value.ToString("hh:mm tt")</small>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a asp-controller="Refunds" asp-action="Details" asp-route-id="@refund.Id" 
+                                                   class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض التفاصيل", "View details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                @if (refund.Status == LMS.Domain.Enums.RefundStatus.Pending)
+                                                {
+                                                    <a asp-controller="Refunds" asp-action="Process" asp-route-id="@refund.Id"
+                                                       class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("معالجة", "Process")">
+                                                        <i class="feather-check-circle"></i>
+                                                    </a>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                @if (!Model.Any())
+                {
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-success text-success mx-auto mb-3">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <h5>@Html.T("لا توجد استردادات", "No refunds")</h5>
+                        <p class="text-muted">لم يتم تقديم أي طلبات استرداد</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function exportRefunds() {
+            alert('@Html.Raw(Html.T("وظيفة التصدير قيد التطوير", "Export feature is under development").Replace("'", "\\'"))');
+        }
+
+        $(document).ready(function() {
+            // Search functionality
+            $('#searchRefund').on('keyup', function() {
+                var value = $(this).val().toLowerCase();
+                $('#refundsTable tbody tr').filter(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+                });
+            });
+
+            // Status filter
+            $('#statusFilter').on('change', function() {
+                var status = $(this).val();
+                if (status === '') {
+                    $('#refundsTable tbody tr').show();
+                } else {
+                    $('#refundsTable tbody tr').hide();
+                    $('#refundsTable tbody tr').filter(function() {
+                        return $(this).find('.badge').text().includes(status);
+                    }).show();
+                }
+            });
+
+            // Refunds Chart
+            const refunds = @Html.Raw(Json.Serialize(Model.Select(r => new { 
+                Date = r.RequestedAt.ToString("yyyy-MM-dd"),
+                Amount = r.RefundAmount
+            })));
+
+            const refundsByDate = {};
+            const amountsByDate = {};
+            refunds.forEach(r => {
+                if (!refundsByDate[r.Date]) {
+                    refundsByDate[r.Date] = 0;
+                    amountsByDate[r.Date] = 0;
+                }
+                refundsByDate[r.Date]++;
+                amountsByDate[r.Date] += r.Amount;
+            });
+
+            const dates = Object.keys(refundsByDate).sort();
+            const counts = dates.map(d => refundsByDate[d]);
+            const amounts = dates.map(d => amountsByDate[d]);
+
+            const ctx = document.getElementById('refundsChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates.map(d => new Date(d).toLocaleDateString('ar-SA')),
+                    datasets: [{
+                        label: 'عدد الاستردادات',
+                        data: counts,
+                        borderColor: '#f06548',
+                        backgroundColor: 'rgba(240, 101, 72, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'المبلغ المسترد (ر.س)',
+                        data: amounts,
+                        borderColor: '#3454d1',
+                        backgroundColor: 'rgba(52, 84, 209, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            beginAtZero: true
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            beginAtZero: true,
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Status Chart
+            const statusCtx = document.getElementById('statusChart').getContext('2d');
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['قيد المراجعة', 'موافق عليه', 'مرفوض'],
+                    datasets: [{
+                        data: [@Model.Count(r => r.Status == LMS.Domain.Enums.RefundStatus.Pending),
+                               @Model.Count(r => r.Status == LMS.Domain.Enums.RefundStatus.Approved),
+                               @Model.Count(r => r.Status == LMS.Domain.Enums.RefundStatus.Rejected)],
+                        backgroundColor: ['#f7b84b', '#0ab39c', '#f06548']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            // Initialize tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+

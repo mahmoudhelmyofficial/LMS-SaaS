@@ -1,0 +1,305 @@
+@model IEnumerable<LMS.Domain.Entities.Security.LoginLog>
+
+@{
+    ViewData["Title"] = Html.T("سجلات تسجيل الدخول", "Login Logs");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("الأمان", "Security"), Url.Action("Dashboard", "Security")),
+        (Html.T("سجلات الدخول", "Login Logs"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var fromDateStr = ViewBag.From?.ToString("yyyy-MM-dd") ?? "";
+    var toDateStr = ViewBag.To?.ToString("yyyy-MM-dd") ?? "";
+    var exportBaseUrl = $"/api/export/login-logs?fromDate={fromDateStr}&toDate={toDateStr}";
+    
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("تصدير CSV", "Export CSV"), "feather-file-text", exportBaseUrl + "&format=csv", "btn-outline-success"),
+        (Html.T("تصدير Excel", "Export Excel"), "feather-file", exportBaseUrl + "&format=excel", "btn-outline-primary"),
+        (Html.T("تصدير PDF", "Export PDF"), "feather-file-text", exportBaseUrl + "&format=pdf", "btn-outline-danger"),
+        (Html.T("طباعة", "Print"), "feather-printer", "javascript:window.print()", "btn-outline-secondary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .login-success { border-right: 4px solid #10b981; }
+        .login-failed { border-right: 4px solid #ef4444; }
+        .filter-badge { cursor: pointer; transition: all 0.3s; }
+        .filter-badge:hover { transform: translateY(-2px); }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Statistics Overview -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("إجمالي المحاولات", "Total Attempts")</p>
+                            <h3 class="fw-bold mb-0">@Model.Count()</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                            <i class="feather-log-in"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("تسجيلات ناجحة", "Successful Logins")</p>
+                            <h3 class="fw-bold mb-0 text-success">@Model.Count(l => l.IsSuccessful)</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("محاولات فاشلة", "Failed Attempts")</p>
+                            <h3 class="fw-bold mb-0 text-danger">@Model.Count(l => !l.IsSuccessful)</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-danger text-danger">
+                            <i class="feather-x-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("معدل النجاح", "Success Rate")</p>
+                            <h3 class="fw-bold mb-0 text-info">
+                                @(Model.Any() ? ((Model.Count(l => l.IsSuccessful) * 100.0 / Model.Count()).ToString("F1")) : "0")%
+                            </h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-info text-info">
+                            <i class="feather-trending-up"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form asp-action="LoginLogs" method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">@Html.T("من تاريخ", "From Date")</label>
+                    <input type="date" name="from" class="form-control" value="@ViewBag.From?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">@Html.T("إلى تاريخ", "To Date")</label>
+                    <input type="date" name="to" class="form-control" value="@ViewBag.To?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">@Html.T("الحالة", "Status")</label>
+                    <select name="success" class="form-select">
+                        <option value="">@Html.T("الكل", "All")</option>
+                        <option value="true" selected="@(ViewBag.Success == true)">@Html.T("ناجحة", "Success")</option>
+                        <option value="false" selected="@(ViewBag.Success == false)">@Html.T("فاشلة", "Failed")</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary d-block w-100">
+                        <i class="feather-filter me-2"></i>@Html.T("تصفية", "Filter")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Login Logs List -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>@Html.T("المستخدم", "User")</th>
+                            <th>@Html.T("التاريخ والوقت", "Date & Time")</th>
+                            <th>@Html.T("عنوان IP", "IP Address")</th>
+                            <th>@Html.T("الموقع", "Location")</th>
+                            <th>@Html.T("المتصفح", "Browser")</th>
+                            <th>@Html.T("الحالة", "Status")</th>
+                            <th>@Html.T("الإجراءات", "Actions")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in Model)
+                        {
+                            <tr class="@(log.IsSuccessful ? "login-success" : "login-failed")">
+                                <td>
+                                    @if (log.User != null)
+                                    {
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                @(log.User.FirstName?.Length > 0 ? log.User.FirstName.Substring(0, 1).ToUpper() : "")@(log.User.LastName?.Length > 0 ? log.User.LastName.Substring(0, 1).ToUpper() : "")
+                                            </div>
+                                            <div>
+                                                <div class="fw-semibold">@(log.User.FirstName ?? "") @(log.User.LastName ?? "")</div>
+                                                <small class="text-muted">@log.User.Email</small>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">@(log.AttemptedUsername ?? "-")</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div>@log.LoginAt.ToString("yyyy/MM/dd")</div>
+                                    <small class="text-muted">@log.LoginAt.ToString("hh:mm:ss tt")</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-soft-info text-info">
+                                        <i class="feather-globe me-1"></i>@log.IpAddress
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(log.Location))
+                                    {
+                                        <span class="badge bg-soft-secondary text-secondary">
+                                            <i class="feather-map-pin me-1"></i>@log.Location
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(log.UserAgent))
+                                    {
+                                        <span class="badge bg-soft-secondary text-secondary" title="@log.UserAgent">
+                                            <i class="feather-monitor me-1"></i>
+                                            @(log.UserAgent.Length > 30 ? log.UserAgent.Substring(0, 30) + "..." : log.UserAgent)
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (log.IsSuccessful)
+                                    {
+                                        <span class="badge bg-soft-success text-success">
+                                            <i class="feather-check me-1"></i>@Html.T("ناجح", "Success")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-soft-danger text-danger">
+                                            <i class="feather-x me-1"></i>@Html.T("فاشل", "Failed")
+                                        </span>
+                                        @if (!string.IsNullOrEmpty(log.FailureReason))
+                                        {
+                                            <br><small class="text-muted">@log.FailureReason</small>
+                                        }
+                                    }
+                                </td>
+                                <td>
+                                    <a asp-action="LoginLogDetails" asp-route-id="@log.Id" class="btn btn-sm btn-light" title="@(Html.T("التفاصيل", "Details"))">
+                                        <i class="feather-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (!Model.Any())
+            {
+                <div class="text-center py-5">
+                    <div class="avatar-text avatar-xl bg-soft-secondary text-secondary mx-auto mb-3">
+                        <i class="feather-inbox" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">لا توجد سجلات</h5>
+                    <p class="text-muted">لم يتم العثور على سجلات تسجيل دخول</p>
+                </div>
+            }
+            else
+            {
+                @* Pagination *@
+                var currentPage = (int)(ViewBag.Page ?? 1);
+                var hasMore = Model.Count() == 50;
+                
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <div class="text-muted small">
+                        @Html.T("عرض", "Showing") @Model.Count() @Html.T("سجل", "record(s)") - @Html.T("صفحة", "Page") @currentPage
+                    </div>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0">
+                            @if (currentPage > 1)
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" asp-action="LoginLogs" 
+                                       asp-route-page="@(currentPage - 1)" 
+                                       asp-route-from="@ViewBag.From?.ToString("yyyy-MM-dd")" 
+                                       asp-route-to="@ViewBag.To?.ToString("yyyy-MM-dd")" 
+                                       asp-route-success="@ViewBag.Success"
+                                       asp-route-userId="@ViewBag.UserId">
+                                        <i class="feather-chevron-right"></i> @Html.T("السابق", "Previous")
+                                    </a>
+                                </li>
+                            }
+                            <li class="page-item active"><span class="page-link">@currentPage</span></li>
+                            @if (hasMore)
+                            {
+                                <li class="page-item">
+                                    <a class="page-link" asp-action="LoginLogs" 
+                                       asp-route-page="@(currentPage + 1)" 
+                                       asp-route-from="@ViewBag.From?.ToString("yyyy-MM-dd")" 
+                                       asp-route-to="@ViewBag.To?.ToString("yyyy-MM-dd")" 
+                                       asp-route-success="@ViewBag.Success"
+                                       asp-route-userId="@ViewBag.UserId">
+                                        @Html.T("التالي", "Next") <i class="feather-chevron-left"></i>
+                                    </a>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Auto-refresh every 60 seconds (only if no filter is active)
+        $(document).ready(function() {
+            var hasFilters = '@(ViewBag.From != null || ViewBag.To != null || ViewBag.Success != null)' === 'True';
+            if (!hasFilters) {
+                setTimeout(function() {
+                    location.reload();
+                }, 60000);
+            }
+        });
+    </script>
+}
+

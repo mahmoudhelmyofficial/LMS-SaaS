@@ -1,0 +1,213 @@
+@model IEnumerable<LMS.Domain.Entities.Security.CountryRestriction>
+
+@{
+    ViewData["Title"] = Html.T("القيود الجغرافية", "Country restrictions");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("الأمان", "Security"), Url.Action("Dashboard", "Security")),
+        (Html.T("القيود الجغرافية", "Country restrictions"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إضافة قيد", "Add restriction"), "feather-plus", Url.Action("AddCountryRestriction", "Security"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+    var currentPage = (int)(ViewBag.Page ?? 1);
+    var hasMore = Model.Count() == 20;
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("إجمالي القيود", "Total restrictions")</p>
+                            <h3 class="fw-bold mb-0">@Model.Count()</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                            <i class="feather-globe"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("قيود نشطة", "Active restrictions")</p>
+                            <h3 class="fw-bold mb-0 text-success">@Model.Count(r => r.IsActive)</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("قيود محظورة", "Blocked restrictions")</p>
+                            <h3 class="fw-bold mb-0 text-danger">@Model.Count(r => r.RestrictionType == "Block" && r.IsActive)</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-danger text-danger">
+                            <i class="feather-slash"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <div class="avatar-text avatar-xl bg-soft-secondary text-secondary mx-auto mb-3">
+                    <i class="feather-globe" style="font-size: 3rem;"></i>
+                </div>
+                <h4 class="fw-bold mb-2">@Html.T("لا توجد قيود جغرافية", "No geographic restrictions")</h4>
+                <p class="text-muted mb-4">@Html.T("يمكنك إضافة قيود لتقييد أو مراقبة الوصول من دول معينة", "You can add restrictions to limit or monitor access from specific countries")</p>
+                <a asp-action="AddCountryRestriction" class="btn btn-primary">
+                    <i class="feather-plus me-2"></i>@Html.T("إضافة قيد جديد", "Add new restriction")
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Restrictions Grid -->
+        <div class="row">
+            @foreach (var restriction in Model.OrderBy(r => r.CountryName))
+            {
+                <div class="col-lg-6">
+                    <div class="card stretch stretch-full mb-4">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start justify-content-between mb-3">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-text avatar-lg @(restriction.IsActive ? (restriction.RestrictionType == "Block" ? "bg-soft-danger text-danger" : "bg-soft-success text-success") : "bg-soft-secondary text-secondary")">
+                                        <i class="feather-map-pin"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="fw-bold mb-1">@restriction.CountryName</h5>
+                                        <span class="badge bg-soft-primary text-primary">@restriction.CountryCode</span>
+                                    </div>
+                                </div>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-light" data-bs-toggle="dropdown">
+                                        <i class="feather-more-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <form asp-action="ToggleCountryRestriction" asp-route-id="@restriction.Id" method="post">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="dropdown-item">
+                                                    <i class="feather-power me-2"></i>
+                                                    @(restriction.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))
+                                                </button>
+                                            </form>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form asp-action="DeleteCountryRestriction" asp-route-id="@restriction.Id" method="post" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا القيد؟", "Are you sure you want to delete this restriction?").ToString().Replace("'", "\\'"))')">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="dropdown-item text-danger">
+                                                    <i class="feather-trash-2 me-2"></i>@Html.T("حذف", "Delete")
+                                                </button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <span class="badge @(restriction.RestrictionType == "Block" ? "bg-danger" : restriction.RestrictionType == "Allow" ? "bg-success" : "bg-warning")">
+                                    @restriction.RestrictionType
+                                </span>
+                                @if (restriction.IsActive)
+                                {
+                                    <span class="badge bg-soft-success text-success ms-2">
+                                        <i class="feather-check me-1"></i>@Html.T("نشط", "Active")
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-soft-secondary text-secondary ms-2">
+                                        <i class="feather-x me-1"></i>@Html.T("معطل", "Disabled")
+                                    </span>
+                                }
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(restriction.Reason))
+                            {
+                                <div class="alert alert-light mb-3">
+                                    <small class="text-muted">
+                                        <i class="feather-info me-1"></i>
+                                        @restriction.Reason
+                                    </small>
+                                </div>
+                            }
+
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    <i class="feather-calendar me-1"></i>
+                                    @restriction.CreatedAt.ToString("yyyy/MM/dd")
+                                </small>
+                                <form asp-action="ToggleCountryRestriction" asp-route-id="@restriction.Id" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm @(restriction.IsActive ? "btn-outline-warning" : "btn-outline-success")">
+                                        <i class="feather-power me-1"></i>
+                                        @(restriction.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+        
+        @* Pagination *@
+        @if (currentPage > 1 || hasMore)
+        {
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <div class="text-muted small">
+                    عرض @Model.Count() قيد - صفحة @currentPage
+                </div>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        @if (currentPage > 1)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" asp-action="CountryRestrictions" asp-route-page="@(currentPage - 1)">
+                                    <i class="feather-chevron-right"></i> السابق
+                                </a>
+                            </li>
+                        }
+                        <li class="page-item active"><span class="page-link">@currentPage</span></li>
+                        @if (hasMore)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" asp-action="CountryRestrictions" asp-route-page="@(currentPage + 1)">
+                                    التالي <i class="feather-chevron-left"></i>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                </nav>
+            </div>
+        }
+    }
+</div>
+

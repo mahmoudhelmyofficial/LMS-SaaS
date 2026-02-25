@@ -1,0 +1,285 @@
+@model IEnumerable<LMS.Domain.Entities.Security.UserSession>
+
+@{
+    ViewData["Title"] = Html.T("الجلسات النشطة", "Active Sessions");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("الأمان", "Security"), Url.Action("Dashboard", "Security")),
+        (Html.T("الجلسات النشطة", "Active Sessions"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var currentPage = (int)(ViewBag.Page ?? 1);
+    var hasMore = Model.Count() == 20;
+}
+
+@section Styles {
+    <style>
+        .session-card {
+            transition: all 0.3s ease;
+            border-right: 4px solid #10b981;
+        }
+        .session-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Filter -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form asp-action="ActiveSessions" method="get" class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label">@Html.T("البحث بمعرف المستخدم", "Search by User ID")</label>
+                    <input type="text" name="userId" class="form-control" value="@ViewBag.UserId" placeholder="@(Html.T("أدخل معرف المستخدم...", "Enter user ID..."))" />
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="feather-filter me-2"></i>@Html.T("تصفية", "Filter")
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <a asp-action="ActiveSessions" class="btn btn-outline-secondary w-100">
+                        <i class="feather-x me-2"></i>@Html.T("إعادة تعيين", "Reset")
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("الجلسات النشطة", "Active Sessions")</p>
+                            <h3 class="fw-bold mb-0 text-success">@Model.Count()</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-success text-success">
+                            <i class="feather-activity"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("مستخدمين مختلفين", "Unique Users")</p>
+                            <h3 class="fw-bold mb-0 text-primary">@Model.Select(s => s.UserId).Distinct().Count()</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                            <i class="feather-users"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("متوسط وقت الجلسة", "Avg. Session Time")</p>
+                            <h3 class="fw-bold mb-0 text-info">
+                                @if (Model.Any())
+                                {
+                                    var avgMinutes = Model.Average(s => (DateTime.UtcNow - s.CreatedAt).TotalMinutes);
+                                    @avgMinutes.ToString("F0")
+                                    <small class="fs-6">@Html.T("دقيقة", "min")</small>
+                                }
+                                else
+                                {
+                                    <span>0</span>
+                                }
+                            </h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-info text-info">
+                            <i class="feather-clock"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <div class="avatar-text avatar-xl bg-soft-secondary text-secondary mx-auto mb-3">
+                    <i class="feather-users" style="font-size: 3rem;"></i>
+                </div>
+                <h4 class="fw-bold mb-2">@Html.T("لا توجد جلسات نشطة", "No Active Sessions")</h4>
+                <p class="text-muted">@Html.T("لا يوجد مستخدمون متصلون حالياً", "No users are currently connected")</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Sessions Grid -->
+        <div class="row">
+            @foreach (var session in Model.OrderByDescending(s => s.LastActivityAt))
+            {
+                <div class="col-lg-6">
+                    <div class="card session-card stretch stretch-full mb-4">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start justify-content-between mb-3">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-text avatar-lg bg-soft-success text-success">
+                                        @if (session.User != null)
+                                        {
+                                            <span>@(session.User.FirstName?.Length > 0 ? session.User.FirstName.Substring(0, 1).ToUpper() : "")@(session.User.LastName?.Length > 0 ? session.User.LastName.Substring(0, 1).ToUpper() : "")</span>
+                                        }
+                                        else
+                                        {
+                                            <i class="feather-user"></i>
+                                        }
+                                    </div>
+                                    <div>
+                                        @if (session.User != null)
+                                        {
+                                            <h6 class="fw-bold mb-1">@(session.User.FirstName ?? "") @(session.User.LastName ?? "")</h6>
+                                            <p class="text-muted small mb-0">@session.User.Email</p>
+                                        }
+                                        else
+                                        {
+                                            <h6 class="fw-bold mb-1">@Html.T("مستخدم محذوف", "Deleted user")</h6>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-light" data-bs-toggle="dropdown">
+                                        <i class="feather-more-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <form asp-action="TerminateSession" asp-route-id="@session.Id" method="post" onsubmit="return confirm('@(Html.T("هل أنت متأكد من إنهاء هذه الجلسة؟", "Are you sure you want to terminate this session?"))');">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="dropdown-item text-danger">
+                                                    <i class="feather-x-circle me-2"></i>@Html.T("إنهاء الجلسة", "Terminate Session")
+                                                </button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-6">
+                                    <div class="p-2 bg-light rounded">
+                                        <p class="text-muted small mb-1">
+                                            <i class="feather-globe me-1"></i>@Html.T("عنوان IP", "IP Address")
+                                        </p>
+                                        <p class="fw-semibold mb-0 small">@session.IpAddress</p>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="p-2 bg-light rounded">
+                                        <p class="text-muted small mb-1">
+                                            <i class="feather-map-pin me-1"></i>@Html.T("الموقع", "Location")
+                                        </p>
+                                        <p class="fw-semibold mb-0 small">@(session.Location ?? Html.T("غير محدد", "Not set"))</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <p class="text-muted small mb-1">
+                                    <i class="feather-monitor me-1"></i>@Html.T("المتصفح", "Browser")
+                                </p>
+                                <p class="small mb-0 text-break">@(session.UserAgent?.Length > 80 ? session.UserAgent.Substring(0, 80) + "..." : session.UserAgent)</p>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="badge bg-soft-success text-success">
+                                        <i class="feather-circle me-1" style="font-size: 8px;"></i>@Html.T("نشط", "Active")
+                                    </span>
+                                </div>
+                                <div class="text-end">
+                                    <p class="text-muted small mb-0">
+                                        @Html.T("آخر نشاط:", "Last activity:") @((DateTime.UtcNow - session.LastActivityAt).TotalMinutes < 1 ? Html.T("الآن", "Now") : Html.T("منذ", "Since") + " " + (int)(DateTime.UtcNow - session.LastActivityAt).TotalMinutes + " " + Html.T("دقيقة", "min"))
+                                    </p>
+                                    <p class="text-muted small mb-0">
+                                        @Html.T("بدأت:", "Started:") @session.CreatedAt.ToString("yyyy/MM/dd hh:mm tt")
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+        
+        @* Pagination *@
+        @if (currentPage > 1 || hasMore)
+        {
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <div class="text-muted small">
+                    @Html.T("عرض", "Showing") @Model.Count() @Html.T("جلسة", "session(s)") - @Html.T("صفحة", "Page") @currentPage
+                </div>
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        @if (currentPage > 1)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" asp-action="ActiveSessions" 
+                                   asp-route-page="@(currentPage - 1)" 
+                                   asp-route-userId="@ViewBag.UserId">
+                                    <i class="feather-chevron-right"></i> @Html.T("السابق", "Previous")
+                                </a>
+                            </li>
+                        }
+                        <li class="page-item active"><span class="page-link">@currentPage</span></li>
+                        @if (hasMore)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" asp-action="ActiveSessions" 
+                                   asp-route-page="@(currentPage + 1)" 
+                                   asp-route-userId="@ViewBag.UserId">
+                                    @Html.T("التالي", "Next") <i class="feather-chevron-left"></i>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                </nav>
+            </div>
+        }
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            var refreshTimeout;
+            
+            function startRefresh() {
+                // Auto-refresh every 60 seconds
+                refreshTimeout = setTimeout(function() {
+                    location.reload();
+                }, 60000);
+            }
+            
+            // Pause refresh when dropdown is open
+            $(document).on('show.bs.dropdown', function() {
+                if (refreshTimeout) clearTimeout(refreshTimeout);
+            });
+            
+            $(document).on('hide.bs.dropdown', function() {
+                startRefresh();
+            });
+            
+            startRefresh();
+        });
+    </script>
+}
+

@@ -1,0 +1,557 @@
+@model IEnumerable<LMS.Domain.Entities.Social.DirectMessage>
+
+@{
+    ViewData["Title"] = Html.T("الرسائل المباشرة", "Direct messages");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التواصل", "Communications"), null),
+        (Html.T("الرسائل المباشرة", "Direct messages"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var currentUserId = ViewBag.CurrentUserId as string;
+    var preselectedRecipientId = ViewBag.RecipientId as string;
+    var users = ViewBag.Users as IEnumerable<dynamic>;
+    
+    // Find preselected recipient info if provided
+    var preselectedRecipient = !string.IsNullOrEmpty(preselectedRecipientId) && users != null 
+        ? users.FirstOrDefault(u => u.Id == preselectedRecipientId) 
+        : null;
+    var preselectedRecipientName = preselectedRecipient != null ? (string)preselectedRecipient.FullName : null;
+}
+
+@section Styles {
+    <style>
+        .messages-container {
+            height: calc(100vh - 250px);
+            overflow: hidden;
+        }
+        .conversations-list {
+            height: 100%;
+            overflow-y: auto;
+            border-left: 1px solid #e5e7eb;
+        }
+        .conversation-item {
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .conversation-item:hover, .conversation-item.active {
+            background-color: #f8f9ff;
+        }
+        .messages-area {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .messages-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .message-bubble {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+        }
+        .message-sent {
+            background: #3454d1;
+            color: white;
+            margin-right: auto;
+        }
+        .message-received {
+            background: #f3f4f6;
+            margin-left: auto;
+        }
+        .message-input {
+            border-top: 1px solid #e5e7eb;
+            padding: 20px;
+        }
+        .emoji-picker {
+            z-index: 1000;
+        }
+        .emoji-list .emoji {
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .emoji-list .emoji:hover {
+            transform: scale(1.3);
+        }
+        .attachment-preview {
+            display: none;
+            padding: 5px 10px;
+            background: #f3f4f6;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="row g-0 messages-container">
+                        <!-- Conversations List -->
+                        <div class="col-md-4 conversations-list">
+                            <div class="p-3 border-bottom">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" placeholder="@Html.T("بحث في المحادثات...", "Search conversations...")">
+                                    <button class="btn btn-light" type="button">
+                                        <i class="feather-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            @{
+                                // Group conversations by unique conversation pairs (order-agnostic)
+                                var conversations = Model != null && Model.Any() 
+                                    ? Model
+                                        .GroupBy(m => m.SenderId.CompareTo(m.RecipientId) < 0 
+                                            ? $"{m.SenderId}_{m.RecipientId}" 
+                                            : $"{m.RecipientId}_{m.SenderId}")
+                                        .Select(g => g.OrderByDescending(m => m.SentAt).First())
+                                        .OrderByDescending(m => m.SentAt)
+                                        .Take(20)
+                                        .ToList()
+                                    : new List<LMS.Domain.Entities.Social.DirectMessage>();
+
+                                // Check if preselected recipient already has a conversation
+                                var preselectedHasConversation = !string.IsNullOrEmpty(preselectedRecipientId) && conversations.Any(m => 
+                                    (m.SenderId == preselectedRecipientId || m.RecipientId == preselectedRecipientId));
+                                
+                                // Show new conversation entry if recipient is preselected but has no existing conversation
+                                var showNewConversationEntry = !string.IsNullOrEmpty(preselectedRecipientId) && 
+                                    !string.IsNullOrEmpty(preselectedRecipientName) && 
+                                    !preselectedHasConversation;
+                            }
+                            
+                            @if (showNewConversationEntry)
+                            {
+                                <!-- New Conversation Entry for preselected recipient -->
+                                <div class="conversation-item active new-conversation-item" 
+                                     data-recipient-id="@preselectedRecipientId"
+                                     data-recipient-name="@preselectedRecipientName"
+                                     onclick="loadConversation(this, '@preselectedRecipientId')">
+                                    <div class="d-flex align-items-start gap-3">
+                                        <div class="avatar-text avatar-md bg-soft-success text-success">
+                                            @(preselectedRecipientName?.Length > 0 ? preselectedRecipientName.Substring(0, 1) : "?")
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                                <h6 class="mb-0">@preselectedRecipientName</h6>
+                                                <span class="badge bg-success badge-sm">جديد</span>
+                                            </div>
+                                            <p class="text-success small mb-0">
+                                                <i class="feather-edit-3 me-1"></i>
+                                                ابدأ محادثة جديدة
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (conversations.Any())
+                            {
+                                var isFirst = !showNewConversationEntry;
+                                @foreach (var message in conversations)
+                                {
+                                    var otherUserId = message.SenderId == currentUserId ? message.RecipientId : message.SenderId;
+                                    var otherUser = message.SenderId == currentUserId ? message.Recipient : message.Sender;
+                                    var otherUserName = otherUser?.FirstName != null ? $"{otherUser.FirstName} {otherUser.LastName}" : "مستخدم";
+                                    
+                                    // Determine if this conversation should be active (preselected recipient with existing conversation)
+                                    var isActiveConversation = preselectedHasConversation && otherUserId == preselectedRecipientId;
+                                    var shouldBeActive = isFirst && !preselectedHasConversation ? true : isActiveConversation;
+                                    
+                                    <div class="conversation-item @(shouldBeActive ? "active" : "")" 
+                                         data-recipient-id="@otherUserId"
+                                         data-recipient-name="@otherUserName"
+                                         onclick="loadConversation(this, '@otherUserId')">
+                                        <div class="d-flex align-items-start gap-3">
+                                            <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                                @(otherUser?.FirstName?.Length > 0 ? otherUser.FirstName.Substring(0, 1) : "?")
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                                    <h6 class="mb-0">@otherUserName</h6>
+                                                    <small class="text-muted">@message.SentAt.ToString("hh:mm tt")</small>
+                                                </div>
+                                                <p class="text-muted small mb-0 text-truncate">@message.Message</p>
+                                                @if (!message.IsRead && message.RecipientId == currentUserId)
+                                                {
+                                                    <span class="badge bg-primary badge-sm mt-1">جديد</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                    isFirst = false;
+                                }
+                            }
+                            else if (!showNewConversationEntry)
+                            {
+                                <div class="text-center py-5">
+                                    <i class="feather-message-square fs-1 text-muted mb-3"></i>
+                                    <p class="text-muted">@Html.T("لا توجد محادثات بعد", "No conversations yet")</p>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Messages Area -->
+                        <div class="col-md-8">
+                            <div class="messages-area">
+                                <!-- Chat Header -->
+                                <div class="p-3 border-bottom">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="avatar-text avatar-lg bg-soft-primary text-primary chat-recipient-initial">
+                                                ?
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-0 chat-recipient-name">@Html.T("اختر محادثة", "Choose a conversation")</h6>
+                                                <small class="text-muted">اختر محادثة للبدء</small>
+                                            </div>
+                                        </div>
+                                        <div class="btn-group">
+                                            <a href="@Url.Action("Statistics", "DirectMessages")" class="btn btn-sm btn-light" title="@Html.T("الإحصائيات", "Statistics")">
+                                                <i class="feather-bar-chart-2"></i>
+                                            </a>
+                                            <button class="btn btn-sm btn-light" data-bs-toggle="dropdown" title="@Html.T("المزيد", "More")">
+                                                <i class="feather-more-vertical"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li><a class="dropdown-item" href="@Url.Action("Index", "DirectMessages")"><i class="feather-refresh-cw me-2"></i>@Html.T("تحديث", "Refresh")</a></li>
+                                                <li><a class="dropdown-item" href="@Url.Action("Statistics", "DirectMessages")"><i class="feather-bar-chart-2 me-2"></i>@Html.T("الإحصائيات", "Statistics")</a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Messages Content -->
+                                <div class="messages-content">
+                                    <div class="d-flex flex-column">
+                                        <!-- Received Message -->
+                                        <div class="d-flex align-items-end gap-2 mb-3">
+                                            <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                A
+                                            </div>
+                                            <div class="message-bubble message-received">
+                                                <p class="mb-1">@Html.T("مرحباً، لدي سؤال حول الدورة", "Hello, I have a question about the course")</p>
+                                                <small class="text-muted">10:30 ص</small>
+                                            </div>
+                                        </div>
+
+                                        <!-- Sent Message -->
+                                        <div class="d-flex justify-content-end mb-3">
+                                            <div class="message-bubble message-sent">
+                                                <p class="mb-1">@Html.T("أهلاً وسهلاً، كيف يمكنني مساعدتك؟", "Hello, how can I help you?")</p>
+                                                <small style="opacity: 0.8;">10:31 ص</small>
+                                            </div>
+                                        </div>
+
+                                        <!-- Date Separator -->
+                                        <div class="text-center my-3">
+                                            <span class="badge bg-soft-secondary text-secondary">@Html.T("اليوم", "Today")</span>
+                                        </div>
+
+                                        <!-- More Messages -->
+                                        <div class="d-flex align-items-end gap-2 mb-3">
+                                            <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                A
+                                            </div>
+                                            <div class="message-bubble message-received">
+                                                <p class="mb-1">@Html.T("هل يمكنني الحصول على امتداد للموعد النهائي؟", "Can I get an extension for the deadline?")</p>
+                                                <small class="text-muted">11:45 ص</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Message Input -->
+                                <div class="message-input">
+                                    <div class="attachment-preview" id="attachmentPreview">
+                                        <i class="feather-file me-2"></i>
+                                        <span id="attachmentName"></span>
+                                        <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2" onclick="removeAttachment()">
+                                            <i class="feather-x"></i>
+                                        </button>
+                                    </div>
+                                    <form id="sendMessageForm" enctype="multipart/form-data">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" id="recipientId" name="recipientId" value="">
+                                        <div class="input-group">
+                                            <button class="btn btn-light" type="button" id="attachmentBtn" title="@Html.T("إرفاق ملف", "Attach file")">
+                                                <i class="feather-paperclip"></i>
+                                            </button>
+                                            <input type="file" id="attachmentInput" name="attachment" style="display: none;" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif">
+                                            <input type="text" class="form-control" id="messageInput" name="message" placeholder="@Html.T("اكتب رسالتك هنا...", "Type your message here...")">
+                                            <button class="btn btn-light" type="button" id="emojiBtn" title="@Html.T("إيموجي", "Emoji")">
+                                                <i class="feather-smile"></i>
+                                            </button>
+                                            <button class="btn btn-primary" type="submit" id="sendBtn">
+                                                <i class="feather-send"></i>
+                                            </button>
+                                        </div>
+                                    </form>
+                                    
+                                    <!-- Emoji Picker -->
+                                    <div id="emojiPicker" class="emoji-picker" style="display: none; position: absolute; bottom: 80px; left: 20px;">
+                                        <div class="emoji-list p-3 bg-white border rounded shadow">
+                                            <span class="emoji p-1">😊</span>
+                                            <span class="emoji p-1">😀</span>
+                                            <span class="emoji p-1">😄</span>
+                                            <span class="emoji p-1">👍</span>
+                                            <span class="emoji p-1">👏</span>
+                                            <span class="emoji p-1">❤️</span>
+                                            <span class="emoji p-1">💯</span>
+                                            <span class="emoji p-1">🎉</span>
+                                            <span class="emoji p-1">✅</span>
+                                            <span class="emoji p-1">🙏</span>
+                                            <span class="emoji p-1">👋</span>
+                                            <span class="emoji p-1">🔥</span>
+                                            <span class="emoji p-1">⭐</span>
+                                            <span class="emoji p-1">💪</span>
+                                            <span class="emoji p-1">🤝</span>
+                                            <span class="emoji p-1">📚</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        var currentRecipientId = '';
+        var currentRecipientName = '';
+        // Preselected recipient from URL parameter (passed from server)
+        var preselectedRecipientId = '@(preselectedRecipientId ?? "")';
+        var preselectedRecipientName = '@(preselectedRecipientName ?? "")';
+
+        function loadConversation(element, recipientId) {
+            $('.conversation-item').removeClass('active');
+            $(element).addClass('active');
+            
+            currentRecipientId = recipientId;
+            currentRecipientName = $(element).data('recipient-name');
+            $('#recipientId').val(currentRecipientId);
+            
+            // Update chat header
+            $('.chat-recipient-name').text(currentRecipientName);
+            $('.chat-recipient-initial').text(currentRecipientName ? currentRecipientName.charAt(0) : '?');
+            
+            // Check if this is a new conversation entry (no existing messages)
+            var isNewConversation = $(element).hasClass('new-conversation-item');
+            
+            if (isNewConversation) {
+                // Show empty state for new conversation
+                showNewConversationState();
+            } else {
+                // Load conversation messages via AJAX
+                $.ajax({
+                    url: '@Url.Action("GetConversation", "DirectMessages")',
+                    type: 'GET',
+                    data: { recipientId: recipientId },
+                    success: function(response) {
+                        if (response.success) {
+                            renderMessages(response.messages);
+                        } else {
+                            console.error(response.message);
+                        }
+                    },
+                    error: function() {
+                        console.error('Error loading conversation');
+                    }
+                });
+            }
+        }
+        
+        function showNewConversationState() {
+            var container = $('.messages-content');
+            container.html(
+                '<div class="text-center text-muted py-5">' +
+                    '<i class="feather-edit-3 fs-1 mb-3 d-block text-success"></i>' +
+                    '<h5 class="text-dark mb-2">@Html.Raw(Html.T("محادثة جديدة مع", "New conversation with").ToString().Replace("'", "\\'")) ' + escapeHtml(currentRecipientName) + '</h5>' +
+                    '<p class="text-muted">اكتب رسالتك في الأسفل للبدء</p>' +
+                '</div>'
+            );
+            // Focus on message input for better UX
+            $('#messageInput').focus();
+        }
+        
+        function renderMessages(messages) {
+            var container = $('.messages-content');
+            container.empty();
+            
+            if (messages.length === 0) {
+                container.html('<div class="text-center text-muted py-5"><i class="feather-message-circle fs-1 mb-3 d-block"></i>ابدأ محادثة جديدة</div>');
+                return;
+            }
+            
+            var html = '<div class="d-flex flex-column">';
+            messages.forEach(function(msg) {
+                var time = new Date(msg.sentAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+                
+                if (msg.isSent) {
+                    html += '<div class="d-flex justify-content-end mb-3">' +
+                        '<div class="message-bubble message-sent">' +
+                        '<p class="mb-1">' + escapeHtml(msg.message) + '</p>';
+                    if (msg.attachmentUrl) {
+                        html += '<a href="' + msg.attachmentUrl + '" target="_blank" class="text-white-50 small"><i class="feather-paperclip me-1"></i>مرفق</a>';
+                    }
+                    html += '<small style="opacity: 0.8;">' + time + '</small>' +
+                        '</div></div>';
+                } else {
+                    html += '<div class="d-flex align-items-end gap-2 mb-3">' +
+                        '<div class="avatar-text avatar-sm bg-soft-primary text-primary">' + msg.senderName.charAt(0) + '</div>' +
+                        '<div class="message-bubble message-received">' +
+                        '<p class="mb-1">' + escapeHtml(msg.message) + '</p>';
+                    if (msg.attachmentUrl) {
+                        html += '<a href="' + msg.attachmentUrl + '" target="_blank" class="small"><i class="feather-paperclip me-1"></i>مرفق</a>';
+                    }
+                    html += '<small class="text-muted">' + time + '</small>' +
+                        '</div></div>';
+                }
+            });
+            html += '</div>';
+            
+            container.html(html);
+            container.scrollTop(container[0].scrollHeight);
+        }
+        
+        function escapeHtml(text) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(text));
+            return div.innerHTML;
+        }
+        
+        function removeAttachment() {
+            $('#attachmentInput').val('');
+            $('#attachmentPreview').hide();
+            $('#attachmentName').text('');
+        }
+
+        $(document).ready(function() {
+            $('[data-bs-toggle="tooltip"]').tooltip();
+            
+            // Attachment button click
+            $('#attachmentBtn').on('click', function() {
+                $('#attachmentInput').click();
+            });
+            
+            $('#attachmentInput').on('change', function() {
+                if (this.files.length > 0) {
+                    $('#attachmentName').text(this.files[0].name);
+                    $('#attachmentPreview').show();
+                }
+            });
+            
+            // Emoji picker toggle
+            $('#emojiBtn').on('click', function(e) {
+                e.stopPropagation();
+                $('#emojiPicker').toggle();
+            });
+            
+            // Insert emoji
+            $('.emoji').on('click', function() {
+                var emoji = $(this).text();
+                var input = $('#messageInput');
+                input.val(input.val() + emoji);
+                input.focus();
+                $('#emojiPicker').hide();
+            });
+            
+            // Hide emoji picker when clicking elsewhere
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('#emojiPicker, #emojiBtn').length) {
+                    $('#emojiPicker').hide();
+                }
+            });
+            
+            // Send message
+            $('#sendMessageForm').on('submit', function(e) {
+                e.preventDefault();
+                
+                var message = $('#messageInput').val().trim();
+                if (!message) {
+                    alert('@Html.Raw(Html.T("يرجى كتابة رسالة", "Please enter a message").Replace("'", "\\'"))');
+                    return;
+                }
+                
+                if (!currentRecipientId) {
+                    alert('@Html.Raw(Html.T("يرجى اختيار محادثة أولاً", "Please select a conversation first").Replace("'", "\\'"))');
+                    return;
+                }
+                
+                var formData = new FormData();
+                formData.append('recipientId', currentRecipientId);
+                formData.append('message', message);
+                formData.append('__RequestVerificationToken', $('input[name="__RequestVerificationToken"]').val());
+                
+                var attachmentFile = $('#attachmentInput')[0].files[0];
+                if (attachmentFile) {
+                    formData.append('attachment', attachmentFile);
+                }
+                
+                $('#sendBtn').prop('disabled', true);
+                
+                $.ajax({
+                    url: '@Url.Action("Send", "DirectMessages")',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.success) {
+                            $('#messageInput').val('');
+                            removeAttachment();
+                            
+                            // If this was a new conversation, reload the page to show it in the list
+                            var activeItem = $('.conversation-item.active');
+                            if (activeItem.hasClass('new-conversation-item')) {
+                                // Reload page to refresh conversation list with new conversation
+                                window.location.href = '@Url.Action("Index", "DirectMessages")?recipientId=' + currentRecipientId;
+                            } else {
+                                // Just reload the conversation messages
+                                loadConversation(activeItem[0], currentRecipientId);
+                            }
+                        } else {
+                            alert(response.message);
+                        }
+                    },
+                    error: function() {
+                        alert('@Html.Raw(Html.T("حدث خطأ أثناء إرسال الرسالة", "Error sending message").Replace("'", "\\'"))');
+                    },
+                    complete: function() {
+                        $('#sendBtn').prop('disabled', false);
+                    }
+                });
+            });
+            
+            // Send on Enter key
+            $('#messageInput').on('keypress', function(e) {
+                if (e.which === 13 && !e.shiftKey) {
+                    e.preventDefault();
+                    $('#sendMessageForm').submit();
+                }
+            });
+            
+            // Load the active conversation on page load
+            // Priority: preselected recipient > first conversation in list
+            var activeConversation = $('.conversation-item.active').first();
+            if (activeConversation.length) {
+                loadConversation(activeConversation[0], activeConversation.data('recipient-id'));
+            }
+        });
+    </script>
+}

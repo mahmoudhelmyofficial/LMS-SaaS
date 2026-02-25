@@ -1,0 +1,201 @@
+@model LMS.Areas.Instructor.ViewModels.WithdrawalRequestCreateViewModel
+
+@{
+    ViewData["Title"] = Html.T("طلب سحب جديد", "New Withdrawal Request");
+    ViewData["Subtitle"] = Html.T("طلب سحب أرباحك", "Withdraw your earnings");
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + Url.Action("Index") + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة", "Back") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Create" method="post">
+        @Html.AntiForgeryToken()
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Balance Info -->
+                <div class="card mb-4 bg-gradient-primary text-white">
+                    <div class="card-body">
+                        <h5 class="text-white mb-3">@Html.T("الرصيد المتاح", "Available balance")</h5>
+                        <div class="fs-32 fw-bold mb-2">@ViewBag.AvailableBalance.ToString("N2") جنيه</div>
+                        <p class="mb-0 opacity-75">الحد الأدنى للسحب: @ViewBag.MinimumWithdrawal.ToString("N0") جنيه</p>
+                    </div>
+                </div>
+
+                <!-- Withdrawal Details -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("تفاصيل السحب", "Withdrawal details")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="Amount">المبلغ المطلوب <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" asp-for="Amount" min="@ViewBag.MinimumWithdrawal" max="@ViewBag.AvailableBalance" step="0.01" required />
+                                    <span class="input-group-text">جنيه</span>
+                                </div>
+                                <div class="form-text">
+                                    الحد الأدنى: @ViewBag.MinimumWithdrawal.ToString("N0") جنيه
+                                    | المتاح: @ViewBag.AvailableBalance.ToString("N2") جنيه
+                                </div>
+                                <span asp-validation-for="Amount" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="Currency">العملة</label>
+                                <select asp-for="Currency" class="form-select">
+                                    <option value="EGP" selected>جنيه مصري (EGP)</option>
+                                    <option value="USD">دولار أمريكي (USD)</option>
+                                    <option value="EUR">يورو (EUR)</option>
+                                </select>
+                                <span asp-validation-for="Currency" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label" asp-for="WithdrawalMethodId">طريقة السحب <span class="text-danger">*</span></label>
+                                <select asp-for="WithdrawalMethodId" class="form-select" id="withdrawalMethod" required>
+                                    <option value="">-- اختر طريقة السحب --</option>
+                                    @if (ViewBag.WithdrawalMethods != null)
+                                    {
+                                        foreach (var method in ViewBag.WithdrawalMethods as IEnumerable<LMS.Domain.Entities.Financial.WithdrawalMethod>)
+                                        {
+                                            <option value="@method.Id" data-fee-fixed="@method.FeeFixed" data-fee-percent="@method.FeePercentage">
+                                                @method.Name - (رسوم: @method.FeeFixed جنيه + @method.FeePercentage%)
+                                            </option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="WithdrawalMethodId" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label" asp-for="AccountDetails">@Html.T("تفاصيل الحساب", "Account details") <span class="text-danger">*</span></label>
+                                <textarea class="form-control" asp-for="AccountDetails" rows="4" placeholder="@Html.T("أدخل تفاصيل حسابك (رقم الحساب، رقم المحفظة، إلخ)", "Enter your account details (account number, wallet number, etc.)")" required></textarea>
+                                <div class="form-text">@Html.T("يرجى التأكد من صحة البيانات المدخلة", "Please ensure the entered data is correct")</div>
+                                <span asp-validation-for="AccountDetails" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Notes">@Html.T("ملاحظات إضافية", "Additional notes")</label>
+                                <textarea class="form-control" asp-for="Notes" rows="3" placeholder="@Html.T("ملاحظات إضافية (اختياري)", "Additional notes (optional)")"></textarea>
+                                <span asp-validation-for="Notes" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fee Calculation -->
+                <div class="card mb-4 d-none" id="feeCard">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("حساب الرسوم", "Fee calculation")</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-borderless mb-0">
+                            <tr>
+                                <td>المبلغ المطلوب:</td>
+                                <td class="text-end fw-bold" id="requestedAmount">0.00 جنيه</td>
+                            </tr>
+                            <tr>
+                                <td>الرسوم:</td>
+                                <td class="text-end text-danger fw-bold" id="feeAmount">0.00 جنيه</td>
+                            </tr>
+                            <tr class="border-top">
+                                <td class="fw-bold">المبلغ الصافي:</td>
+                                <td class="text-end text-success fw-bold fs-18" id="netAmount">0.00 جنيه</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Important Notes -->
+                <div class="card bg-soft-warning border-0 mb-4">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3">
+                            <i class="feather-alert-triangle me-2"></i>
+                            تنبيهات مهمة
+                        </h6>
+                        <ul class="list-unstyled fs-13 mb-0">
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                تأكد من صحة بيانات الحساب
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                معالجة الطلب خلال 3-5 أيام عمل
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("لا يمكن إلغاء الطلب بعد الموافقة", "Request cannot be cancelled after approval")
+                            </li>
+                            <li class="mb-0">
+                                <i class="feather-check text-success me-2"></i>
+                                سيتم خصم الرسوم من المبلغ
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="card">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-check me-2"></i>
+                            تقديم طلب السحب
+                        </button>
+                        <a href="@Url.Action("Index")" class="btn btn-light w-100">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("إلغاء", "Cancel")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Styles {
+    <style>
+        .bg-gradient-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    
+    <script>
+        $(document).ready(function() {
+            function calculateFee() {
+                var amount = parseFloat($('#Amount').val()) || 0;
+                var selectedMethod = $('#withdrawalMethod option:selected');
+                var feeFixed = parseFloat(selectedMethod.data('fee-fixed')) || 0;
+                var feePercent = parseFloat(selectedMethod.data('fee-percent')) || 0;
+
+                if (amount > 0 && selectedMethod.val()) {
+                    var fee = feeFixed + (amount * feePercent / 100);
+                    var netAmount = amount - fee;
+
+                    $('#requestedAmount').text(amount.toFixed(2) + ' جنيه');
+                    $('#feeAmount').text(fee.toFixed(2) + ' جنيه');
+                    $('#netAmount').text(netAmount.toFixed(2) + ' جنيه');
+                    $('#feeCard').removeClass('d-none');
+                } else {
+                    $('#feeCard').addClass('d-none');
+                }
+            }
+
+            $('#Amount, #withdrawalMethod').on('change keyup', calculateFee);
+        });
+    </script>
+}
+

@@ -1,0 +1,426 @@
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("لوحة التحكم المالية", "Financial dashboard");
+    ViewData["Breadcrumb"] = new List<(string Text, string Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("المالية", "Financial"), "")
+    };
+    var metrics = ViewBag.Metrics as LMS.Areas.Admin.Controllers.FinancialMetrics;
+    var dunningStats = ViewBag.DunningStats as LMS.Services.DunningStats;
+    var chartDates = ViewBag.ChartDates as List<string> ?? new List<string>();
+    var chartData = ViewBag.ChartData as List<decimal> ?? new List<decimal>();
+    var topCourses = ViewBag.TopCourses as dynamic;
+    
+    // Load UI settings
+    var dashboardRefreshInterval = await PlatformSettings.GetIntSettingAsync("UI.DashboardRefreshIntervalMs", 60000);
+}
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1">
+                <i class="fas fa-chart-line text-primary me-2"></i>
+                لوحة التحكم المالية
+            </h4>
+            <p class="text-muted mb-0">نظرة شاملة على الأداء المالي للمنصة</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-action="ExportReport" asp-route-period="month" class="btn btn-outline-success">
+                <i class="fas fa-file-export me-1"></i>
+                تصدير تقرير
+            </a>
+            <button type="button" class="btn btn-primary" onclick="refreshStats()">
+                <i class="fas fa-sync-alt me-1"></i>
+                تحديث
+            </button>
+        </div>
+    </div>
+
+    <!-- Key Metrics Row -->
+    <div class="row g-3 mb-4">
+        <!-- Today's Revenue -->
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="text-muted mb-2">إيرادات اليوم</h6>
+                            <h3 class="mb-0" id="todayRevenue">@metrics?.TodayRevenue.ToString("N0") <small class="fs-6">ج.م</small></h3>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 rounded-circle p-3">
+                            <i class="fas fa-dollar-sign fa-2x text-primary"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">
+                        <span id="todayTransactions">@metrics?.TodayTransactions</span> معاملة
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Revenue -->
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="text-muted mb-2">إيرادات الشهر</h6>
+                            <h3 class="mb-0">@metrics?.MonthlyRevenue.ToString("N0") <small class="fs-6">ج.م</small></h3>
+                        </div>
+                        <div class="bg-success bg-opacity-10 rounded-circle p-3">
+                            <i class="fas fa-chart-bar fa-2x text-success"></i>
+                        </div>
+                    </div>
+                    @if (metrics?.MonthlyGrowth != 0)
+                    {
+                        var growthClass = metrics?.MonthlyGrowth > 0 ? "text-success" : "text-danger";
+                        var growthIcon = metrics?.MonthlyGrowth > 0 ? "arrow-up" : "arrow-down";
+                        <small class="@growthClass">
+                            <i class="fas fa-@growthIcon"></i>
+                            @Math.Abs(metrics?.MonthlyGrowth ?? 0).ToString("N1")% عن الشهر السابق
+                        </small>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- MRR -->
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="text-muted mb-2">الإيرادات الشهرية المتكررة (MRR)</h6>
+                            <h3 class="mb-0">@metrics?.MRR.ToString("N0") <small class="fs-6">ج.م</small></h3>
+                        </div>
+                        <div class="bg-info bg-opacity-10 rounded-circle p-3">
+                            <i class="fas fa-sync-alt fa-2x text-info"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">
+                        <span id="activeSubscriptions">@metrics?.ActiveSubscriptions</span> اشتراك نشط
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- AOV -->
+        <div class="col-md-3 col-sm-6">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="text-muted mb-2">متوسط قيمة الطلب</h6>
+                            <h3 class="mb-0">@metrics?.AverageOrderValue.ToString("N0") <small class="fs-6">ج.م</small></h3>
+                        </div>
+                        <div class="bg-warning bg-opacity-10 rounded-circle p-3">
+                            <i class="fas fa-shopping-cart fa-2x text-warning"></i>
+                        </div>
+                    </div>
+                    <small class="text-muted">هذا الشهر</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Cards Row -->
+    <div class="row g-3 mb-4">
+        <!-- Pending Payments -->
+        <div class="col-md-3">
+            <div class="card border-warning h-100">
+                <div class="card-body d-flex align-items-center">
+                    <div class="bg-warning bg-opacity-10 rounded p-3 me-3">
+                        <i class="fas fa-clock fa-2x text-warning"></i>
+                    </div>
+                    <div>
+                        <h5 class="mb-0" id="pendingPayments">@metrics?.PendingPayments</h5>
+                        <small class="text-muted">دفعات معلقة</small>
+                        <div class="text-warning small">@metrics?.PendingAmount.ToString("N0") ج.م</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Failed Payments -->
+        <div class="col-md-3">
+            <a asp-action="FailedPaymentsReport" class="text-decoration-none">
+                <div class="card border-danger h-100">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="bg-danger bg-opacity-10 rounded p-3 me-3">
+                            <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-0 text-dark" id="failedPayments">@metrics?.FailedPayments</h5>
+                            <small class="text-muted">دفعات فاشلة</small>
+                            <div class="text-danger small">@dunningStats?.TotalAmountAtRisk.ToString("N0") ج.م معرضة</div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Open Disputes -->
+        <div class="col-md-3">
+            <a asp-controller="Disputes" asp-action="Index" class="text-decoration-none">
+                <div class="card border-danger h-100">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="bg-danger bg-opacity-10 rounded p-3 me-3">
+                            <i class="fas fa-gavel fa-2x text-danger"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-0 text-dark" id="openDisputes">@metrics?.OpenDisputes</h5>
+                            <small class="text-muted">نزاعات مفتوحة</small>
+                            <div class="text-danger small">@metrics?.DisputeAmountAtRisk.ToString("N0") ج.م</div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Pending Payouts -->
+        <div class="col-md-3">
+            <a asp-controller="WithdrawalRequests" asp-action="Index" class="text-decoration-none">
+                <div class="card border-info h-100">
+                    <div class="card-body d-flex align-items-center">
+                        <div class="bg-info bg-opacity-10 rounded p-3 me-3">
+                            <i class="fas fa-university fa-2x text-info"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-0 text-dark">@metrics?.PendingInstructorPayouts</h5>
+                            <small class="text-muted">طلبات سحب معلقة</small>
+                            <div class="text-info small">@metrics?.PendingPayoutAmount.ToString("N0") ج.م</div>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Revenue Chart -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-area me-2 text-primary"></i>
+                        الإيرادات اليومية (آخر 30 يوم)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="revenueChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tachometer-alt me-2 text-primary"></i>
+                        ملخص سريع
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>إيرادات السنة</span>
+                            <strong>@metrics?.YtdRevenue.ToString("N0") ج.م</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>المستردات هذا الشهر</span>
+                            <strong class="text-danger">@metrics?.RefundedAmount.ToString("N0") ج.م</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>الخصومات هذا الشهر</span>
+                            <strong class="text-warning">@metrics?.DiscountsThisMonth.ToString("N0") ج.م</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>المسترد من الفاشلة</span>
+                            <strong class="text-success">@dunningStats?.RecoveredThisMonth.ToString("N0") ج.م</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between">
+                            <span>المعاملات هذا الشهر</span>
+                            <strong>@metrics?.MonthlyTransactions</strong>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-2">
+        <!-- Top Courses -->
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-trophy me-2 text-warning"></i>
+                        أعلى الدورات مبيعاً هذا الشهر
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>@Html.T("الدورة", "Course")</th>
+                                    <th>@Html.T("المبيعات", "Sales")</th>
+                                    <th>@Html.T("الإيرادات", "Revenue")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (topCourses != null)
+                                {
+                                    var rank = 1;
+                                    foreach (var course in topCourses)
+                                    {
+                                        <tr>
+                                            <td>
+                                                @if (rank <= 3)
+                                                {
+                                                    <span class="badge bg-@(rank == 1 ? "warning" : rank == 2 ? "secondary" : "info")">@rank</span>
+                                                }
+                                                else
+                                                {
+                                                    @rank
+                                                }
+                                            </td>
+                                            <td>@course.Title</td>
+                                            <td>@course.Sales</td>
+                                            <td><strong>@((decimal)course.Revenue).ToString("N0")</strong> ج.م</td>
+                                        </tr>
+                                        rank++;
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Revenue by Gateway -->
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-credit-card me-2 text-success"></i>
+                        الإيرادات حسب بوابة الدفع
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="gatewayChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="mb-3">@Html.T("إجراءات سريعة", "Quick actions")</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a asp-action="RevenueDetails" asp-route-period="month" class="btn btn-outline-primary">
+                            <i class="fas fa-list me-1"></i> تفاصيل الإيرادات
+                        </a>
+                        <a asp-controller="Payments" asp-action="Index" class="btn btn-outline-primary">
+                            <i class="fas fa-credit-card me-1"></i> جميع المدفوعات
+                        </a>
+                        <a asp-action="SubscriptionsReport" class="btn btn-outline-primary">
+                            <i class="fas fa-sync-alt me-1"></i> تقرير الاشتراكات
+                        </a>
+                        <a asp-controller="Refunds" asp-action="Index" class="btn btn-outline-primary">
+                            <i class="fas fa-undo me-1"></i> المستردات
+                        </a>
+                        <a asp-controller="Coupons" asp-action="Index" class="btn btn-outline-primary">
+                            <i class="fas fa-tag me-1"></i> الكوبونات
+                        </a>
+                        <a asp-controller="Currencies" asp-action="Index" class="btn btn-outline-primary">
+                            <i class="fas fa-coins me-1"></i> العملات
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Revenue Chart
+        const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+        new Chart(revenueCtx, {
+            type: 'line',
+            data: {
+                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(chartDates)),
+                datasets: [{
+                    label: 'الإيرادات (ج.م)',
+                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(chartData)),
+                    fill: true,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+
+        // Gateway Chart
+        const gatewayData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.RevenueByGateway ?? new List<object>()));
+        const gatewayCtx = document.getElementById('gatewayChart').getContext('2d');
+        new Chart(gatewayCtx, {
+            type: 'doughnut',
+            data: {
+                labels: gatewayData.map(x => x.Gateway),
+                datasets: [{
+                    data: gatewayData.map(x => x.Total),
+                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right' }
+                }
+            }
+        });
+
+        // Refresh stats function
+        function refreshStats() {
+            fetch('@Url.Action("GetRealTimeStats")')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('todayRevenue').innerHTML = 
+                        data.todayRevenue.toLocaleString() + ' <small class="fs-6">ج.م</small>';
+                    document.getElementById('todayTransactions').textContent = data.todayTransactions;
+                    document.getElementById('pendingPayments').textContent = data.pendingPayments;
+                    document.getElementById('failedPayments').textContent = data.failedPayments;
+                    document.getElementById('activeSubscriptions').textContent = data.activeSubscriptions;
+                    document.getElementById('openDisputes').textContent = data.openDisputes;
+                });
+        }
+
+        // Auto-refresh based on settings
+        setInterval(refreshStats, @dashboardRefreshInterval);
+    </script>
+}
+

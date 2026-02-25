@@ -1,0 +1,232 @@
+@model LMS.Domain.Entities.Marketing.FlashSale
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل العرض السريع", "Flash Sale Details");
+    ViewData["Subtitle"] = Model.Name;
+    var isActive = Model.IsActive && Model.StartDate <= DateTime.UtcNow && Model.EndDate > DateTime.UtcNow;
+    var isUpcoming = Model.StartDate > DateTime.UtcNow;
+    var isExpired = Model.EndDate <= DateTime.UtcNow;
+    var progressPercent = Model.MaxQuantity.HasValue && Model.MaxQuantity > 0 ? (Model.SoldQuantity * 100.0 / Model.MaxQuantity.Value) : 0;
+    var editUrl = Url.Action("Edit", new { id = Model.Id });
+    var indexUrl = Url.Action("Index");
+    var toggleBtnClass = Model.IsActive ? "warning" : "success";
+    var toggleIcon = Model.IsActive ? "pause" : "play";
+    var toggleText = Model.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable");
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="fs-12 fw-medium text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="page-header-right-items">
+            <div class="d-flex align-items-center gap-2 page-header-right-items-wrapper">
+                <a href="@editUrl" class="btn btn-primary">
+                    <i class="feather-edit me-2"></i>
+                    @Html.T("تعديل", "Edit")
+                </a>
+                <form asp-action="ToggleStatus" asp-route-id="@Model.Id" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-@toggleBtnClass">
+                        <i class="feather-@toggleIcon-circle me-2"></i>
+                        @toggleText
+                    </button>
+                </form>
+                <a href="@indexUrl" class="btn btn-light">
+                    <i class="feather-arrow-right me-2"></i>
+                    @Html.T("العودة", "Back")
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <!-- Main Details -->
+        <div class="col-lg-8">
+            <!-- Sale Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات العرض", "Sale information")</h5>
+                    <div>
+                        @if (isActive)
+                        {
+                            <span class="badge bg-success">نشط الآن</span>
+                        }
+                        else if (isUpcoming)
+                        {
+                            <span class="badge bg-info">قادم</span>
+                        }
+                        else if (isExpired)
+                        {
+                            <span class="badge bg-secondary">منتهي</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning">معطل</span>
+                        }
+                    </div>
+                </div>
+                <div class="card-body">
+                    <h4 class="fw-bold mb-3">@Model.Name</h4>
+                    @if (!string.IsNullOrEmpty(Model.Description))
+                    {
+                        <p class="text-muted" style="white-space: pre-wrap;">@Model.Description</p>
+                    }
+
+                    <!-- Course Info -->
+                    <div class="border rounded p-3 mb-4">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-image avatar-lg">
+                                <img src="@(Model.Course?.ThumbnailUrl ?? "/assets/images/general/placeholder.png")" alt="@Model.Course?.Title" class="img-fluid">
+                            </div>
+                            <div>
+                                <h6 class="fw-bold mb-1">@Model.Course?.Title</h6>
+                                <a href="@Url.Action("Details", "Courses", new { id = Model.CourseId })" class="fs-11 text-primary">
+                                    عرض الدورة <i class="feather-arrow-left ms-1"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pricing -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="text-center p-3 border rounded">
+                                <p class="text-muted fs-11 mb-1">السعر الأصلي</p>
+                                <h5 class="fw-bold text-muted text-decoration-line-through mb-0">@Model.OriginalPrice.ToEGP()</h5>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center p-3 bg-soft-success border rounded">
+                                <p class="text-success fs-11 mb-1">سعر العرض</p>
+                                <h5 class="fw-bold text-success mb-0">@Model.DiscountPrice.ToEGP()</h5>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center p-3 bg-soft-danger border rounded">
+                                <p class="text-danger fs-11 mb-1">نسبة الخصم</p>
+                                <h5 class="fw-bold text-danger mb-0">@Model.DiscountPercentage.ToString("F0")%</h5>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sales Progress -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-medium">المبيعات</span>
+                            <span class="fw-bold">@Model.SoldQuantity @(Model.MaxQuantity.HasValue ? $"/ {Model.MaxQuantity}" : "")</span>
+                        </div>
+                        <div class="progress" style="height: 12px;">
+                            <div class="progress-bar bg-success" style="width: @progressPercent%"></div>
+                        </div>
+                        @if (Model.MaxQuantity.HasValue)
+                        {
+                            <p class="fs-11 text-muted mt-2">
+                                متبقي: @(Model.MaxQuantity - Model.SoldQuantity) وحدة (@((100 - progressPercent).ToString("F1"))%)
+                            </p>
+                        }
+                    </div>
+
+                    <!-- Duration -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="text-muted fs-12 mb-1">تاريخ البدء</label>
+                                <p class="fw-medium mb-0">
+                                    <i class="feather-calendar me-2"></i>
+                                    @Model.StartDate.ToString("dd/MM/yyyy hh:mm tt")
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="text-muted fs-12 mb-1">تاريخ الانتهاء</label>
+                                <p class="fw-medium mb-0">
+                                    <i class="feather-calendar me-2"></i>
+                                    @Model.EndDate.ToString("dd/MM/yyyy hh:mm tt")
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Statistics -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("الإحصائيات", "Statistics")</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-shopping-cart text-primary"></i>
+                            <span class="fs-13">عدد المبيعات</span>
+                        </div>
+                        <span class="fw-bold fs-5">@Model.SoldQuantity</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                        <div class="d-flex align-items-center gap-2">
+                            @{ ViewBag.CurrencyIconClass = "text-success"; }
+                            @await Html.PartialAsync("_CurrencyIcon")
+                            <span class="fs-13">إجمالي الإيرادات</span>
+                        </div>
+                        <span class="fw-bold fs-5">@((Model.SoldQuantity * Model.DiscountPrice).ToEGP())</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-trending-down text-warning"></i>
+                            <span class="fs-13">الوفورات</span>
+                        </div>
+                        <span class="fw-bold">@((Model.SoldQuantity * (Model.OriginalPrice - Model.DiscountPrice)).ToEGP())</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("الإعدادات", "Settings")</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                        <span class="fs-13">الأولوية</span>
+                        <span class="badge bg-soft-dark text-dark">@Model.Priority</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                        <span class="fs-13">عرض المؤقت</span>
+                        @if (Model.ShowTimer)
+                        {
+                            <span class="badge bg-soft-success text-success">نعم</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-soft-secondary text-secondary">لا</span>
+                        }
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fs-13">الحالة</span>
+                        @if (Model.IsActive)
+                        {
+                            <span class="badge bg-soft-success text-success">مفعل</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-soft-secondary text-secondary">معطل</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+

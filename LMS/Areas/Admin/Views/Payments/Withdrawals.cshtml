@@ -1,0 +1,523 @@
+@model IEnumerable<LMS.Domain.Entities.Financial.WithdrawalRequest>
+
+@{
+    ViewData["Title"] = Html.T("طلبات السحب", "Withdrawal requests");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("المدفوعات", "Payments"), Url.Action("Index", "Payments")),
+        (Html.T("طلبات السحب", "Withdrawal requests"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+    <style>
+        .withdrawal-card {
+            transition: all 0.3s ease;
+        }
+        .withdrawal-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .amount-display {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-arrow-down-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي الطلبات", "Total requests")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-clock"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("قيد الانتظار", "Pending")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(w => w.Status == LMS.Domain.Enums.WithdrawalStatus.Pending).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("تمت الموافقة", "Approved")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(w => w.Status == LMS.Domain.Enums.WithdrawalStatus.Approved).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-dollar-sign"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي المبالغ", "Total amounts")</span>
+                            <h3 class="fw-bolder d-block">@Model.Where(w => w.Status == LMS.Domain.Enums.WithdrawalStatus.Approved).Sum(w => w.Amount).ToEGP()</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Hidden form for AJAX antiforgery token -->
+<form id="ajaxAntiForgeryForm" style="display:none" asp-antiforgery="true"></form>
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة طلبات السحب", "Withdrawal requests list")</h5>
+                    <div class="card-header-action">
+                        <div class="dropdown">
+                            <a href="javascript:void(0);" class="btn btn-sm btn-light-brand" data-bs-toggle="dropdown">
+                                <i class="feather-filter me-2"></i>
+                                تصفية
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-end">
+                                <a href="javascript:void(0);" class="dropdown-item filter-all">
+                                    <i class="feather-eye me-3"></i>
+                                    عرض الكل
+                                </a>
+                                <div class="dropdown-divider"></div>
+                                <a href="javascript:void(0);" class="dropdown-item filter-pending">
+                                    <i class="feather-clock me-3"></i>
+                                    قيد الانتظار
+                                </a>
+                                <a href="javascript:void(0);" class="dropdown-item filter-approved">
+                                    <i class="feather-check-circle me-3"></i>
+                                    تمت الموافقة
+                                </a>
+                                <a href="javascript:void(0);" class="dropdown-item filter-rejected">
+                                    <i class="feather-x-circle me-3"></i>
+                                    مرفوض
+                                </a>
+                                <a href="javascript:void(0);" class="dropdown-item filter-processing">
+                                    <i class="feather-loader me-3"></i>
+                                    قيد المعالجة
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="withdrawalsTable">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("رقم الطلب", "Request #")</th>
+                                    <th>@Html.T("المدرس", "Instructor")</th>
+                                    <th>@Html.T("المبلغ المطلوب", "Requested amount")</th>
+                                    <th>@Html.T("صافي المبلغ", "Net amount")</th>
+                                    <th>@Html.T("الرسوم", "Fees")</th>
+                                    <th>@Html.T("طريقة السحب", "Withdrawal method")</th>
+                                    <th>@Html.T("تاريخ الطلب", "Request date")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var withdrawal in Model)
+                                {
+                                    <tr class="withdrawal-card">
+                                        <td>
+                                            <span class="fw-bold text-primary">#@withdrawal.Id</span>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-3">
+                                                <div class="avatar-text avatar-md bg-soft-warning text-warning">
+                                                    <i class="feather-user"></i>
+                                                </div>
+                                                <div>
+                                                    <span class="d-block fw-semibold">
+                                                        @(withdrawal.Instructor?.FirstName) @(withdrawal.Instructor?.LastName)
+                                                    </span>
+                                                    <small class="text-muted">@(withdrawal.Instructor?.Email)</small>
+                                                    @if (withdrawal.Instructor?.InstructorProfile != null)
+                                                    {
+                                                        <small class="d-block text-success">@Html.T("الرصيد المتاح:", "Available:") @(withdrawal.Instructor.InstructorProfile.AvailableBalance.ToString("N2")) @withdrawal.Currency</small>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="amount-display text-primary">
+                                                @withdrawal.Amount.ToEGP()
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="amount-display text-success">
+                                                @withdrawal.NetAmount.ToEGP()
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="text-danger">@withdrawal.Fee.ToEGP()</span>
+                                            <small class="text-muted d-block">@withdrawal.FeePercentage.ToString("F1")%</small>
+                                        </td>
+                                        <td>
+                                            @if (withdrawal.WithdrawalMethod != null)
+                                            {
+                                                <div>
+                                                    <span class="badge bg-soft-info text-info">@withdrawal.WithdrawalMethod.Name</span>
+                                                    <small class="text-muted d-block">@withdrawal.WithdrawalMethod.Type</small>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">@Html.T("غير محدد", "Unspecified")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span>@withdrawal.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                            <small class="text-muted d-block">@withdrawal.CreatedAt.ToString("hh:mm tt")</small>
+                                        </td>
+                                        <td>
+                                            @switch (withdrawal.Status)
+                                            {
+                                                case LMS.Domain.Enums.WithdrawalStatus.Pending:
+                                                    <span class="badge bg-soft-warning text-warning">@Html.T("قيد الانتظار", "Pending")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.WithdrawalStatus.Processing:
+                                                    <span class="badge bg-soft-info text-info">@Html.T("قيد المعالجة", "Processing")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.WithdrawalStatus.Approved:
+                                                    <span class="badge bg-soft-success text-success">@Html.T("تمت الموافقة", "Approved")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.WithdrawalStatus.Rejected:
+                                                    <span class="badge bg-soft-danger text-danger">@Html.T("مرفوض", "Rejected")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.WithdrawalStatus.Completed:
+                                                    <span class="badge bg-soft-success text-success">@Html.T("مكتمل", "Completed")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.WithdrawalStatus.Cancelled:
+                                                    <span class="badge bg-soft-secondary text-secondary">@Html.T("ملغي", "Cancelled")</span>
+                                                    break;
+                                                default:
+                                                    <span class="badge bg-soft-secondary text-secondary">@withdrawal.Status</span>
+                                                    break;
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <button type="button" 
+                                                        class="avatar-text avatar-md" 
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#withdrawalDetailsModal" 
+                                                        onclick="showWithdrawalDetails(@withdrawal.Id)"
+                                                        title="@Html.T("عرض التفاصيل", "View details")">
+                                                    <i class="feather-eye"></i>
+                                                </button>
+                                                @if (withdrawal.Status == LMS.Domain.Enums.WithdrawalStatus.Pending)
+                                                {
+                                                    <div class="dropdown">
+                                                        <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown" data-bs-offset="0,21">
+                                                            <i class="feather-more-horizontal"></i>
+                                                        </a>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li>
+                                                                <a class="dropdown-item text-success" href="javascript:void(0)" onclick="processWithdrawal(@withdrawal.Id, 'approve')">
+                                                                    <i class="feather-check me-3"></i>
+                                                                    <span>@Html.T("الموافقة", "Approve")</span>
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="processWithdrawal(@withdrawal.Id, 'reject')">
+                                                                    <i class="feather-x me-3"></i>
+                                                                    <span>@Html.T("الرفض", "Reject")</span>
+                                                                </a>
+                                                            </li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)" onclick="processWithdrawal(@withdrawal.Id, 'processing')">
+                                                                    <i class="feather-loader me-3"></i>
+                                                                    <span>@Html.T("قيد المعالجة", "Processing")</span>
+                                                                </a>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Row -->
+    <div class="row mt-4">
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إحصائيات السحب", "Withdrawal statistics")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="p-3 border rounded text-center">
+                                <div class="avatar-text bg-soft-success text-success mx-auto mb-2">
+                                    <i class="feather-trending-up"></i>
+                                </div>
+                                <h5 class="fw-bold mb-1">@Model.Where(w => w.Status == LMS.Domain.Enums.WithdrawalStatus.Approved).Sum(w => w.NetAmount).ToEGP()</h5>
+                                <small class="text-muted">@Html.T("إجمالي المدفوعات", "Total payments")</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 border rounded text-center">
+                                <div class="avatar-text bg-soft-danger text-danger mx-auto mb-2">
+                                    <i class="feather-trending-down"></i>
+                                </div>
+                                <h5 class="fw-bold mb-1">@Model.Sum(w => w.Fee).ToEGP()</h5>
+                                <small class="text-muted">@Html.T("إجمالي الرسوم", "Total fees")</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 border rounded text-center">
+                                <div class="avatar-text bg-soft-primary text-primary mx-auto mb-2">
+                                    <i class="feather-percent"></i>
+                                </div>
+                                <h5 class="fw-bold mb-1">@((Model.Any() ? (Model.Count(w => w.Status == LMS.Domain.Enums.WithdrawalStatus.Approved) / (double)Model.Count() * 100) : 0).ToString("F1"))%</h5>
+                                <small class="text-muted">@Html.T("معدل الموافقة", "Approval rate")</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 border rounded text-center">
+                                <div class="avatar-text bg-soft-warning text-warning mx-auto mb-2">
+                                    <i class="feather-clock"></i>
+                                </div>
+                                <h5 class="fw-bold mb-1">@((Model.Any() && Model.Where(w => w.ProcessedAt.HasValue).Any() ? Model.Where(w => w.ProcessedAt.HasValue).Average(w => (w.ProcessedAt.Value - w.CreatedAt).TotalHours) : 0).ToString("F0"))</h5>
+                                <small class="text-muted">@Html.T("متوسط وقت المعالجة (ساعات)", "Avg. processing time (hours)")</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أفضل طرق السحب", "Top withdrawal methods")</h5>
+                </div>
+                <div class="card-body">
+                    @{
+                        var topMethods = Model.Where(w => w.WithdrawalMethod != null)
+                            .GroupBy(w => w.WithdrawalMethod!.Name)
+                            .OrderByDescending(g => g.Count())
+                            .Take(5);
+                    }
+                    @foreach (var methodGroup in topMethods)
+                    {
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <span class="fw-semibold">@methodGroup.Key</span>
+                                <span class="badge bg-soft-primary text-primary">@methodGroup.Count() طلب</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-primary" role="progressbar" 
+                                     style="width: @((methodGroup.Count() / (double)Model.Count() * 100).ToString("F0"))%"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Withdrawal Details Modal -->
+<div class="modal fade" id="withdrawalDetailsModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Html.T("تفاصيل طلب السحب", "Withdrawal request details")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="withdrawalDetailsContent">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">@Html.T("جاري التحميل...", "Loading...")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        window.__WithdrawalsT = {
+            approve: '@Html.Raw(Html.T("الموافقة على", "Approve").Replace("'", "\\'"))',
+            reject: '@Html.Raw(Html.T("رفض", "Reject").Replace("'", "\\'"))',
+            changeStatus: '@Html.Raw(Html.T("تحويل حالة", "Change status").Replace("'", "\\'"))',
+            rejectPrompt: '@Html.Raw(Html.T("يرجى إدخال سبب الرفض:", "Please enter rejection reason:").Replace("'", "\\'"))',
+            confirmApprove: '@Html.Raw(Html.T("هل أنت متأكد من الموافقة على هذا الطلب؟", "Are you sure you want to approve this request?").Replace("'", "\\'"))',
+            confirmReject: '@Html.Raw(Html.T("هل أنت متأكد من رفض هذا الطلب؟", "Are you sure you want to reject this request?").Replace("'", "\\'"))',
+            confirmProcessing: '@Html.Raw(Html.T("هل أنت متأكد من تحويل حالة هذا الطلب؟", "Are you sure you want to change the status of this request?").Replace("'", "\\'"))',
+            processing: '@Html.Raw(Html.T("جاري المعالجة...", "Processing...").Replace("'", "\\'"))'
+        };
+        $(document).ready(function() {
+            // Initialize DataTable
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            var table = $('#withdrawalsTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[6, "desc"]],
+                "pageLength": 25
+            });
+
+            // Filter functions
+            $('.filter-all').on('click', function() {
+                table.column(7).search('').draw();
+            });
+
+            $('.filter-pending').on('click', function() {
+                table.column(7).search('قيد الانتظار').draw();
+            });
+
+            $('.filter-approved').on('click', function() {
+                table.column(7).search('تمت الموافقة').draw();
+            });
+
+            $('.filter-rejected').on('click', function() {
+                table.column(7).search('مرفوض').draw();
+            });
+
+            $('.filter-processing').on('click', function() {
+                table.column(7).search('قيد المعالجة').draw();
+            });
+        });
+
+        function showWithdrawalDetails(withdrawalId) {
+            $('#withdrawalDetailsContent').html(`
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">@Html.T("جاري التحميل...", "Loading...")</span>
+                    </div>
+                </div>
+            `);
+
+            // Load withdrawal details via AJAX
+            fetch(`/Admin/Payments/GetWithdrawalDetails?id=${withdrawalId}`)
+                .then(response => response.json())
+                .then(data => {
+                    $('#withdrawalDetailsContent').html(data.html || '<div class="alert alert-danger">@Html.Raw(Html.T("حدث خطأ في تحميل التفاصيل", "Error loading details").ToString().Replace("'", "\\'"))</div>');
+                })
+                .catch(error => {
+                    $('#withdrawalDetailsContent').html('<div class="alert alert-danger">@Html.Raw(Html.T("حدث خطأ في تحميل التفاصيل", "Error loading details").ToString().Replace("'", "\\'"))</div>');
+                });
+        }
+
+        function processWithdrawal(withdrawalId, action) {
+            let confirmMsg = '';
+            let notes = '';
+            
+            switch(action) {
+                case 'approve':
+                    confirmMsg = window.__WithdrawalsT.confirmApprove;
+                    break;
+                case 'reject':
+                    notes = prompt(window.__WithdrawalsT.rejectPrompt);
+                    if (!notes) return;
+                    confirmMsg = window.__WithdrawalsT.confirmReject;
+                    break;
+                case 'processing':
+                    confirmMsg = window.__WithdrawalsT.confirmProcessing;
+                    break;
+            }
+
+            if (confirm(confirmMsg)) {
+                const btn = event.target;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + window.__WithdrawalsT.processing;
+                btn.disabled = true;
+
+                var token = document.querySelector('#ajaxAntiForgeryForm input[name="__RequestVerificationToken"]')?.value || document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+                if (!token) {
+                    alert('@Html.Raw(Html.T("جلسة منتهية. يرجى تحديث الصفحة.", "Session expired. Please refresh.").ToString().Replace("'", "\\'"))');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    return;
+                }
+
+                fetch('/Admin/Payments/ProcessWithdrawalAjax', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': token
+                    },
+                    body: JSON.stringify({
+                        id: withdrawalId,
+                        status: action,
+                        notes: notes
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        location.reload();
+                    } else {
+                        alert('@Html.Raw(Html.T("حدث خطأ:", "Error:").ToString().Replace("'", "\\'")) ' + (data.message || ''));
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('@Html.Raw(Html.T("حدث خطأ أثناء معالجة الطلب", "Error processing request").ToString().Replace("'", "\\'"))');
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                });
+            }
+        }
+    </script>
+}
+

@@ -1,0 +1,360 @@
+@model IEnumerable<LMS.Domain.Entities.Payments.Payment>
+
+@{
+    ViewData["Title"] = Html.T("إدارة المدفوعات", "Payment Management");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإدارة المالية", "Finance"), null),
+        (Html.T("المدفوعات", "Payments"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    
+    // Calculate dynamic statistics
+    var completedPayments = Model.Where(p => p.Status == LMS.Domain.Enums.PaymentStatus.Completed).ToList();
+    var totalAmount = completedPayments.Sum(p => p.TotalAmount);
+    
+    // Calculate growth from ViewBag (set by controller) or calculate here
+    var thisMonthStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+    var lastMonthStart = thisMonthStart.AddMonths(-1);
+    
+    var thisMonthPayments = completedPayments.Where(p => p.CreatedAt >= thisMonthStart).Sum(p => p.TotalAmount);
+    var lastMonthPayments = completedPayments.Where(p => p.CreatedAt >= lastMonthStart && p.CreatedAt < thisMonthStart).Sum(p => p.TotalAmount);
+    var growthPercentage = lastMonthPayments > 0 ? ((thisMonthPayments - lastMonthPayments) / lastMonthPayments) * 100 : 0;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-dollar-sign"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي المدفوعات", "Total Payments")</span>
+                            <h3 class="fw-bolder d-block">@totalAmount.ToString("N0") @Html.T("ر.س", "SAR")</h3>
+                        </div>
+                    </div>
+                    <div class="badge @(growthPercentage >= 0 ? "bg-soft-success text-success" : "bg-soft-danger text-danger")">
+                        <i class="feather-arrow-@(growthPercentage >= 0 ? "up" : "down") fs-10 me-1"></i>
+                        <span>@(growthPercentage >= 0 ? "+" : "")@growthPercentage.ToString("N1")%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("مدفوعات مكتملة", "Completed Payments")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(p => p.Status == LMS.Domain.Enums.PaymentStatus.Completed).ToString("N0")</h3>
+                        </div>
+                    </div>
+                    <div class="badge bg-soft-success text-success">
+                        <span>@Html.T("مكتمل", "Completed")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-clock"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("قيد الانتظار", "Pending")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(p => p.Status == LMS.Domain.Enums.PaymentStatus.Pending).ToString("N0")</h3>
+                        </div>
+                    </div>
+                    <div class="badge bg-soft-warning text-warning">
+                        <span>@Html.T("معلقة", "Pending")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                            <i class="feather-x-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("مدفوعات فاشلة", "Failed Payments")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(p => p.Status == LMS.Domain.Enums.PaymentStatus.Failed).ToString("N0")</h3>
+                        </div>
+                    </div>
+                    <div class="badge bg-soft-danger text-danger">
+                        <span>@Html.T("فاشل", "Failed")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section FilterDropdown {
+    <a href="javascript:void(0);" class="dropdown-item filter-all">
+        <i class="feather-eye me-3"></i>
+        <span>@Html.T("الكل", "All")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-completed">
+        <i class="feather-check-circle me-3"></i>
+        <span>@Html.T("مكتملة", "Completed")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-pending">
+        <i class="feather-clock me-3"></i>
+        <span>@Html.T("معلقة", "Pending")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-failed">
+        <i class="feather-x-circle me-3"></i>
+        <span>@Html.T("فاشلة", "Failed")</span>
+    </a>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header d-flex align-items-center justify-content-between" style="border-bottom: 1px solid var(--border-color-light, #f1f5f9); padding: 1rem 1.5rem;">
+                    <h5 class="card-title mb-0 fw-bold">@Html.T("قائمة المدفوعات", "Payments List")</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="view-toggle btn-group" role="group" style="border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                            <button type="button" class="btn btn-sm" id="tableViewBtn" onclick="switchAdminPaymentsView('table')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); transition: all 0.25s ease;"><i class="feather-list" style="font-size: 15px;"></i></button>
+                            <button type="button" class="btn btn-sm active" id="cardViewBtn" onclick="switchAdminPaymentsView('card')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); border-right: none; transition: all 0.25s ease;"><i class="feather-grid" style="font-size: 15px;"></i></button>
+                        </div>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                                <i class="feather-download me-2"></i>@Html.T("تصدير", "Export")
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/payments?format=csv">
+                                        <i class="feather-file-text me-2 text-success"></i>@Html.T("تصدير CSV", "Export CSV")
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/payments?format=excel">
+                                        <i class="feather-file me-2 text-primary"></i>@Html.T("تصدير Excel", "Export Excel")
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/payments?format=pdf">
+                                        <i class="feather-file-text me-2 text-danger"></i>@Html.T("تصدير PDF", "Export PDF")
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0)" onclick="window.print()">
+                                        <i class="feather-printer me-2 text-secondary"></i>@Html.T("طباعة", "Print")
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="tableView" class="courses-view-panel d-none">
+                        <div class="table-responsive" style="overflow: visible;">
+                            <table class="table table-hover courses-table-modern" id="paymentsTable">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("رقم المعاملة", "Transaction #")</th>
+                                    <th>@Html.T("الطالب", "Student")</th>
+                                    <th>@Html.T("الدورة", "Course")</th>
+                                    <th>@Html.T("المبلغ", "Amount")</th>
+                                    <th>@Html.T("طريقة الدفع", "Payment Method")</th>
+                                    <th>@Html.T("التاريخ", "Date")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var payment in Model)
+                                {
+                                    <tr>
+                                        <td>
+                                            <span class="fw-bold">#@payment.TransactionId</span>
+                                        </td>
+                                        <td>
+                                            @if (payment.Student != null)
+                                            {
+                                                <span>@payment.Student.FirstName @payment.Student.LastName</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (payment.Course != null)
+                                            {
+                                                <span>@payment.Course.Title</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold text-success">@payment.TotalAmount.ToEGP()</span>
+                                        </td>
+                                        <td>
+                                            @switch (payment.PaymentGateway?.ToLower())
+                                            {
+                                                case "stripe":
+                                                    <span class="badge bg-soft-primary text-primary">@Html.T("Stripe", "Stripe")</span>
+                                                    break;
+                                                case "paypal":
+                                                    <span class="badge bg-soft-info text-info">@Html.T("PayPal", "PayPal")</span>
+                                                    break;
+                                                default:
+                                                    <span class="badge bg-soft-secondary text-secondary">@payment.PaymentGateway</span>
+                                                    break;
+                                            }
+                                        </td>
+                                        <td>@payment.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")</td>
+                                        <td>
+                                            @switch (payment.Status)
+                                            {
+                                                case LMS.Domain.Enums.PaymentStatus.Completed:
+                                                    <span class="badge bg-soft-success text-success">@Html.T("مكتمل", "Completed")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.PaymentStatus.Pending:
+                                                    <span class="badge bg-soft-warning text-warning">@Html.T("معلق", "Pending")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.PaymentStatus.Failed:
+                                                    <span class="badge bg-soft-danger text-danger">@Html.T("فاشل", "Failed")</span>
+                                                    break;
+                                                default:
+                                                    <span class="badge bg-soft-secondary text-secondary">@payment.Status</span>
+                                                    break;
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="@Url.Action("Details", "Payments", new { id = payment.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                <a href="@Url.Action("Invoice", "Payments", new { id = payment.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("الفاتورة", "Invoice")">
+                                                    <i class="feather-file-text"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        </div>
+                    </div>
+                    <div id="cardView" class="courses-view-panel courses-view-active">
+                        <div class="p-4">
+                            <div class="row g-4">
+                                @foreach (var payment in Model)
+                                {
+                                    <div class="col-12 col-sm-6 col-xl-4 col-xxl-3">
+                                        <div class="card stretch stretch-full border-0" style="border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06); border: 1px solid var(--border-color-light, #f1f5f9); height: 100%;">
+                                            <div class="card-body p-3 d-flex flex-column">
+                                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                                    <span class="fw-bold">#@payment.TransactionId</span>
+                                                    <span class="fw-bold text-success">@payment.TotalAmount.ToEGP()</span>
+                                                </div>
+                                                <span class="d-block mb-1">@(payment.Student?.FirstName) @(payment.Student?.LastName)</span>
+                                                <span class="fs-12 text-muted d-block mb-2 text-truncate">@payment.Course?.Title</span>
+                                                <div class="mb-2">
+                                                    @switch (payment.Status) {
+                                                        case LMS.Domain.Enums.PaymentStatus.Completed: <span class="badge bg-soft-success text-success">@Html.T("مكتمل", "Completed")</span> break;
+                                                        case LMS.Domain.Enums.PaymentStatus.Pending: <span class="badge bg-soft-warning text-warning">@Html.T("معلق", "Pending")</span> break;
+                                                        case LMS.Domain.Enums.PaymentStatus.Failed: <span class="badge bg-soft-danger text-danger">@Html.T("فاشل", "Failed")</span> break;
+                                                        default: <span class="badge bg-soft-secondary text-secondary">@payment.Status</span> break;
+                                                    }
+                                                </div>
+                                                <div class="mt-auto pt-3" style="border-top: 1px solid var(--border-color-light, #f1f5f9);">
+                                                    <span class="fs-12 text-muted">@payment.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                                    <div class="hstack gap-2 mt-2">
+                                                        <a href="@Url.Action("Details", "Payments", new { id = payment.Id })" class="btn btn-sm btn-light"><i class="feather-eye"></i></a>
+                                                        <a href="@Url.Action("Invoice", "Payments", new { id = payment.Id })" class="btn btn-sm btn-light"><i class="feather-file-text"></i></a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            var table = $('#paymentsTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[5, "desc"]],
+                "pageLength": 25
+            });
+
+            $('.filter-all').on('click', function() {
+                table.column(6).search('').draw();
+            });
+
+            $('.filter-completed').on('click', function() {
+                table.column(6).search('مكتمل').draw();
+            });
+
+            $('.filter-pending').on('click', function() {
+                table.column(6).search('معلق').draw();
+            });
+
+            $('.filter-failed').on('click', function() {
+                table.column(6).search('فاشل').draw();
+            });
+
+            $('[data-bs-toggle="tooltip"]').tooltip();
+            var savedView = localStorage.getItem('admin_payments_index_view');
+            if (savedView === 'table') { switchAdminPaymentsView('table'); } else { switchAdminPaymentsView('card'); }
+        });
+        function switchAdminPaymentsView(mode) {
+            var tableView = document.getElementById('tableView');
+            var cardView = document.getElementById('cardView');
+            var tableBtn = document.getElementById('tableViewBtn');
+            var cardBtn = document.getElementById('cardViewBtn');
+            if (mode === 'card') {
+                if (tableView) { tableView.classList.add('d-none'); tableView.classList.remove('courses-view-active'); }
+                if (cardView) { cardView.classList.remove('d-none'); cardView.classList.add('courses-view-active'); }
+                if (cardBtn) cardBtn.classList.add('active');
+                if (tableBtn) tableBtn.classList.remove('active');
+            } else {
+                if (cardView) { cardView.classList.add('d-none'); cardView.classList.remove('courses-view-active'); }
+                if (tableView) { tableView.classList.remove('d-none'); tableView.classList.add('courses-view-active'); }
+                if (tableBtn) tableBtn.classList.add('active');
+                if (cardBtn) cardBtn.classList.remove('active');
+                if (typeof $ !== 'undefined' && $('#paymentsTable').length && $.fn.DataTable && $('#paymentsTable').DataTable) { try { $('#paymentsTable').DataTable().columns().adjust(); } catch (e) {} }
+            }
+            localStorage.setItem('admin_payments_index_view', mode);
+            [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]')).forEach(function (el) { if (!bootstrap.Tooltip.getInstance(el)) new bootstrap.Tooltip(el); });
+        }
+    </script>
+}
+

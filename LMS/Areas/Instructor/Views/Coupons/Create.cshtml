@@ -1,0 +1,387 @@
+@model LMS.Areas.Instructor.ViewModels.CouponCreateViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء كوبون جديد", "Create New Coupon");
+    ViewData["Subtitle"] = Html.T("إضافة كوبون خصم جديد للدورات", "Add new discount coupon for courses");
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Create" method="post" id="couponForm">
+        @Html.AntiForgeryToken()
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            @Html.T("المعلومات الأساسية", "Basic information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-8">
+                                <label class="form-label">@Html.T("كود الكوبون", "Coupon code") <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input asp-for="Code" class="form-control text-uppercase" placeholder="@Html.T("مثال: SUMMER2024", "e.g. SUMMER2024")" maxlength="20">
+                                    <button type="button" class="btn btn-light" onclick="generateCouponCode()">
+                                        <i class="feather-refresh-cw"></i> @Html.T("توليد", "Generate")
+                                    </button>
+                                </div>
+                                <span asp-validation-for="Code" class="text-danger"></span>
+                                <div class="form-text">
+                                    <i class="feather-info me-1"></i>
+                                    @Html.T("4-20 حرف، أحرف إنجليزية كبيرة وأرقام فقط", "4-20 chars, uppercase letters and numbers only")
+                                </div>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("الوصف", "Description") <span class="text-danger">*</span></label>
+                                <textarea asp-for="Description" class="form-control" rows="3" placeholder="@Html.T("وصف الكوبون وشروط استخدامه", "Coupon description and terms of use")"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Discount Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-percent me-2 text-primary"></i>
+                            @Html.T("إعدادات الخصم", "Discount settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("نوع الخصم", "Discount type") <span class="text-danger">*</span></label>
+                                <select asp-for="DiscountType" class="form-select" id="discountTypeSelect">
+                                    <option value="@LMS.Domain.Enums.DiscountType.Percentage">@Html.T("نسبة مئوية (%)", "Percentage (%)")</option>
+                                    <option value="@LMS.Domain.Enums.DiscountType.FixedAmount">@Html.T("مبلغ ثابت (ر.س)", "Fixed amount")</option>
+                                </select>
+                                <span asp-validation-for="DiscountType" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("قيمة الخصم", "Discount value") <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input asp-for="DiscountValue" type="number" class="form-control" min="0" step="0.01" placeholder="10">
+                                    <span class="input-group-text" id="discountUnit">%</span>
+                                </div>
+                                <span asp-validation-for="DiscountValue" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6" id="maxDiscountDiv" style="display: none;">
+                                <label class="form-label">@Html.T("الحد الأقصى للخصم", "Max discount")</label>
+                                <div class="input-group">
+                                    <input asp-for="MaxDiscountAmount" type="number" class="form-control" min="0" step="0.01" placeholder="100">
+                                    <span class="input-group-text">ر.س</span>
+                                </div>
+                                <span asp-validation-for="MaxDiscountAmount" class="text-danger"></span>
+                                <div class="form-text">@Html.T("للنسبة المئوية فقط - اختياري", "For percentage only - optional")</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("الحد الأدنى للشراء", "Minimum purchase")</label>
+                                <div class="input-group">
+                                    <input asp-for="MinimumPurchaseAmount" type="number" class="form-control" min="0" step="0.01" placeholder="0">
+                                    <span class="input-group-text">ر.س</span>
+                                </div>
+                                <span asp-validation-for="MinimumPurchaseAmount" class="text-danger"></span>
+                                <div class="form-text">@Html.T("اتركه 0 أو فارغاً لعدم وجود حد أدنى", "Leave 0 or empty for no minimum")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Applicable Courses -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-book me-2 text-primary"></i>
+                            @Html.T("الدورات المطبقة", "Applicable Courses")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="allCoursesCheck" checked>
+                                <label class="form-check-label" for="allCoursesCheck">
+                                    @Html.T("صالح لجميع الدورات", "Valid for all courses")
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="courseSelectionDiv" style="display: none;">
+                            <label class="form-label">@Html.T("اختر الدورات", "Select courses")</label>
+                            <select asp-for="SelectedCourseIds" class="form-select" asp-items="ViewBag.Courses" multiple size="8">
+                            </select>
+                            <span asp-validation-for="SelectedCourseIds" class="text-danger"></span>
+                            <div class="form-text">
+                                <i class="feather-info me-1"></i>
+                                @Html.T("استخدم Ctrl/Cmd للاختيار المتعدد", "Use Ctrl/Cmd for multiple selection")
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Validity Period -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-calendar me-2 text-primary"></i>
+                            @Html.T("فترة الصلاحية", "Validity period")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("تاريخ البدء", "Start date") <span class="text-danger">*</span></label>
+                                <input asp-for="ValidFrom" type="datetime-local" class="form-control">
+                                <span asp-validation-for="ValidFrom" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("تاريخ الانتهاء", "End date") <span class="text-danger">*</span></label>
+                                <input asp-for="ValidTo" type="datetime-local" class="form-control">
+                                <span asp-validation-for="ValidTo" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-12">
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-light btn-sm" onclick="setDuration(7)">@Html.T("أسبوع", "Week")</button>
+                                    <button type="button" class="btn btn-light btn-sm" onclick="setDuration(30)">@Html.T("شهر", "Month")</button>
+                                    <button type="button" class="btn btn-light btn-sm" onclick="setDuration(90)">@Html.T("3 أشهر", "3 months")</button>
+                                    <button type="button" class="btn btn-light btn-sm" onclick="setDuration(180)">@Html.T("6 أشهر", "6 months")</button>
+                                    <button type="button" class="btn btn-light btn-sm" onclick="setDuration(365)">@Html.T("سنة", "Year")</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Usage Limits -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("حدود الاستخدام", "Usage limits")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("الحد الأقصى لعدد الاستخدامات", "Max uses")</label>
+                            <input asp-for="MaxUses" type="number" class="form-control" min="0" placeholder="@Html.T("غير محدود", "Unlimited")">
+                            <span asp-validation-for="MaxUses" class="text-danger"></span>
+                            <div class="form-text">@Html.T("اتركه فارغاً للاستخدام غير المحدود", "Leave empty for unlimited")</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("الحد الأقصى لكل طالب", "Max per student")</label>
+                            <input asp-for="MaxUsesPerUser" type="number" class="form-control" min="1" value="1">
+                            <span asp-validation-for="MaxUsesPerUser" class="text-danger"></span>
+                            <div class="form-text">@Html.T("عدد مرات استخدام الطالب الواحد", "Uses per student")</div>
+                        </div>
+
+                        <div class="form-check form-switch">
+                            <input asp-for="FirstPurchaseOnly" class="form-check-input" type="checkbox" id="firstPurchaseOnly">
+                            <label class="form-check-label" for="firstPurchaseOnly">
+                                @Html.T("للمشتريات الأولى فقط", "First purchase only")
+                            </label>
+                        </div>
+                        <small class="text-muted">@Html.T("متاح فقط للطلاب الجدد", "For new students only")</small>
+                    </div>
+                </div>
+
+                <!-- Preview Card -->
+                <div class="card stretch stretch-full mb-4 bg-soft-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0 text-white">@Html.T("معاينة الكوبون", "Coupon preview")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <div class="avatar-text avatar-xl bg-white text-primary mb-3">
+                                <i class="feather-tag"></i>
+                            </div>
+                            <h3 class="fw-bold mb-2" id="previewCode">@Html.T("كود الكوبون", "COUPON")</h3>
+                            <p class="text-muted small mb-3" id="previewDescription">@Html.T("وصف الكوبون", "Coupon description")</p>
+                        </div>
+
+                        <div class="bg-white rounded p-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted small">@Html.T("نوع الخصم:", "Discount type:")</span>
+                                <span class="fw-bold" id="previewType">@Html.T("نسبة مئوية", "Percentage")</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted small">@Html.T("القيمة:", "Value:")</span>
+                                <span class="fw-bold text-primary fs-5" id="previewValue">0%</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted small">@Html.T("صالح من:", "Valid from:")</span>
+                                <span class="small" id="previewFrom">--/--/----</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted small">@Html.T("صالح حتى:", "Valid until:")</span>
+                                <span class="small" id="previewTo">--/--/----</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activation -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("التفعيل", "Activation")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch">
+                            <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActive" checked>
+                            <label class="form-check-label" for="isActive">
+                                @Html.T("تفعيل الكوبون فوراً", "Activate coupon immediately")
+                            </label>
+                        </div>
+                        <small class="text-muted">@Html.T("يمكن للطلاب استخدام الكوبون فور الحفظ", "Students can use the coupon once saved")</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between gap-3">
+                            <a href="@Url.Action("Index")" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-check me-2"></i>
+                                حفظ الكوبون
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize date fields with current date
+            const now = new Date();
+            const dateString = now.toISOString().slice(0, 16);
+            if (!$('#ValidFrom').val()) {
+                $('#ValidFrom').val(dateString);
+            }
+
+            // Initialize preview
+            updatePreview();
+
+            // Discount type change handler
+            $('#discountTypeSelect').on('change', function() {
+                const isPercentage = $(this).val() == '@((int)LMS.Domain.Enums.DiscountType.Percentage)';
+                $('#maxDiscountDiv').toggle(isPercentage);
+                $('#discountUnit').text(isPercentage ? '%' : 'ر.س');
+                updatePreview();
+            });
+
+            // All courses check handler
+            $('#allCoursesCheck').on('change', function() {
+                $('#courseSelectionDiv').toggle(!this.checked);
+                if (this.checked) {
+                    $('#SelectedCourseIds').val([]);
+                }
+            });
+
+            // Form inputs change handlers
+            $('#Code, #Description, #DiscountValue, #ValidFrom, #ValidTo').on('input change', updatePreview);
+            $('#discountTypeSelect').on('change', updatePreview);
+
+            // Form validation
+            $('#couponForm').on('submit', function(e) {
+                const code = $('#Code').val().trim();
+                if (code.length < 4 || code.length > 20) {
+                    e.preventDefault();
+                    alert('كود الكوبون يجب أن يكون بين 4 و 20 حرف');
+                    return false;
+                }
+
+                const discountValue = parseFloat($('#DiscountValue').val());
+                if (!discountValue || discountValue <= 0) {
+                    e.preventDefault();
+                    alert('يرجى إدخال قيمة خصم صحيحة');
+                    return false;
+                }
+
+                const validFrom = new Date($('#ValidFrom').val());
+                const validTo = new Date($('#ValidTo').val());
+                if (validTo <= validFrom) {
+                    e.preventDefault();
+                    alert('تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء');
+                    return false;
+                }
+            });
+        });
+
+        function generateCouponCode() {
+            $.get('@Url.Action("GenerateCode")', function(data) {
+                $('#Code').val(data.code);
+                updatePreview();
+            });
+        }
+
+        function setDuration(days) {
+            const from = new Date($('#ValidFrom').val() || new Date());
+            const to = new Date(from);
+            to.setDate(to.getDate() + days);
+            $('#ValidTo').val(to.toISOString().slice(0, 16));
+            updatePreview();
+        }
+
+        function updatePreview() {
+            // Update code
+            const code = $('#Code').val().trim() || 'COUPON';
+            $('#previewCode').text(code);
+
+            // Update description
+            const description = $('#Description').val().trim() || 'وصف الكوبون';
+            $('#previewDescription').text(description.substring(0, 50) + (description.length > 50 ? '...' : ''));
+
+            // Update discount type and value
+            const isPercentage = $('#discountTypeSelect').val() == '@((int)LMS.Domain.Enums.DiscountType.Percentage)';
+            $('#previewType').text(isPercentage ? 'نسبة مئوية' : 'مبلغ ثابت');
+            
+            const value = $('#DiscountValue').val() || '0';
+            $('#previewValue').text(value + (isPercentage ? '%' : ' ر.س'));
+
+            // Update dates
+            const validFrom = $('#ValidFrom').val();
+            const validTo = $('#ValidTo').val();
+            if (validFrom) {
+                const date = new Date(validFrom);
+                $('#previewFrom').text(date.toLocaleDateString('ar-SA'));
+            }
+            if (validTo) {
+                const date = new Date(validTo);
+                $('#previewTo').text(date.toLocaleDateString('ar-SA'));
+            }
+        }
+    </script>
+
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

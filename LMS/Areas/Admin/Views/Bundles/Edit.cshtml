@@ -1,0 +1,240 @@
+@model LMS.Areas.Admin.ViewModels.BundleEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل الباقة", "Edit bundle");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التسويق", "Marketing"), null),
+        (Html.T("الباقات", "Bundles"), Url.Action("Index", "Bundles")),
+        (Html.T("تعديل الباقة", "Edit bundle"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
+    <style>
+        .note-editor.note-frame { direction: rtl; text-align: right; }
+        .select2-container { width: 100% !important; }
+        .stats-badge {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 10px;
+            background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%));
+            color: white;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Sales Warning -->
+            @if (Model.SalesCount > 0)
+            {
+                <div class="alert alert-warning mb-4">
+                    <i class="feather-alert-triangle me-2"></i>
+                    <strong>@Html.T("تحذير:", "Warning:")</strong> @Html.T("تم بيع هذه الباقة", "This bundle has been sold") @Model.SalesCount @Html.T("مرة. كن حذراً عند تعديل الدورات أو السعر!", "time(s). Be careful when modifying courses or price!")
+                </div>
+            }
+
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-edit-2 me-2"></i>
+                        تعديل معلومات الباقة
+                    </h5>
+                    <div class="card-header-action">
+                        <span class="stats-badge">
+                            <i class="feather-shopping-cart me-2"></i>
+                            @Model.SalesCount مبيعات
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
+                        <input type="hidden" asp-for="Id" />
+                        <input type="hidden" asp-for="SalesCount" />
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="Name" class="form-label">@Html.T("اسم الباقة", "Bundle name") <span class="text-danger">*</span></label>
+                            <input asp-for="Name" class="form-control form-control-lg" />
+                            <span asp-validation-for="Name" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="ShortDescription" class="form-label">@Html.T("وصف مختصر", "Short description")</label>
+                            <textarea asp-for="ShortDescription" class="form-control" rows="2"></textarea>
+                            <span asp-validation-for="ShortDescription" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="Description" class="form-label">@Html.T("الوصف الكامل", "Full description")</label>
+                            <textarea asp-for="Description" id="descriptionEditor" class="form-control"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="ThumbnailUrl" class="form-label">@Html.T("صورة الغلاف", "Thumbnail URL")</label>
+                            <input asp-for="ThumbnailUrl" class="form-control" />
+                            <span asp-validation-for="ThumbnailUrl" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label class="form-label">@Html.T("الدورات المضمنة", "Included courses") <span class="text-danger">*</span></label>
+                            <select id="coursesSelect" name="CourseIds" class="form-select" multiple>
+                                @if (ViewBag.Courses != null)
+                                {
+                                    @foreach (var course in ViewBag.Courses as IEnumerable<dynamic>)
+                                    {
+                                        var isSelected = Model.CourseIds.Contains(course.Id);
+                                        <option value="@course.Id" selected="@isSelected">@course.Title</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="Price" class="form-label">@Html.T("سعر الباقة", "Bundle price") <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input asp-for="Price" type="number" class="form-control" step="0.01" min="0" />
+                                <span class="input-group-text">@Html.T("جنيه مصري", "EGP")</span>
+                            </div>
+                            <span asp-validation-for="Price" class="text-danger"></span>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label asp-for="ValidFrom" class="form-label">@Html.T("متاحة من", "Available from")</label>
+                                <input asp-for="ValidFrom" type="datetime-local" class="form-control" />
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="ValidTo" class="form-label">@Html.T("متاحة حتى", "Available until")</label>
+                                <input asp-for="ValidTo" type="datetime-local" class="form-control" />
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label asp-for="MaxSales" class="form-label">@Html.T("الحد الأقصى للمبيعات", "Max sales")</label>
+                                <input asp-for="MaxSales" type="number" class="form-control" min="@Model.SalesCount" />
+                                @if (Model.SalesCount > 0)
+                                {
+                                    <small class="text-warning">@Html.T("لا يمكن تقليله أقل من", "Cannot reduce below") @Model.SalesCount</small>
+                                }
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="DisplayOrder" class="form-label">@Html.T("ترتيب العرض", "Display order")</label>
+                                <input asp-for="DisplayOrder" type="number" class="form-control" min="0" />
+                            </div>
+                        </div>
+
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActiveSwitch" />
+                                            <label class="form-check-label" for="isActiveSwitch">
+                                                <i class="feather-eye me-2"></i>@Html.T("نشطة", "Active")
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsFeatured" class="form-check-input" type="checkbox" id="isFeaturedSwitch" />
+                                            <label class="form-check-label" for="isFeaturedSwitch">
+                                                <i class="feather-star me-2"></i>@Html.T("مميزة", "Featured")
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 justify-content-between">
+                            <a asp-action="Index" class="btn btn-light">
+                                <i class="feather-x me-2"></i>إلغاء
+                            </a>
+                            <div class="d-flex gap-2">
+                                <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-secondary">
+                                    <i class="feather-eye me-2"></i>@Html.T("عرض التفاصيل", "View details")
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="feather-save me-2"></i>حفظ التغييرات
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-bar-chart me-2"></i>
+                        إحصائيات الباقة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-around mb-4">
+                        <div class="text-center">
+                            <h3 class="text-primary mb-0">@Model.SalesCount</h3>
+                            <small class="text-muted">@Html.T("مبيعات", "Sales")</small>
+                        </div>
+                        <div class="text-center">
+                            <h3 class="text-success mb-0">@Model.CourseIds.Count</h3>
+                            <small class="text-muted">@Html.T("دورات", "Courses")</small>
+                        </div>
+                    </div>
+                    
+                    @if (Model.MaxSales.HasValue)
+                    {
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>@Html.T("التقدم", "Progress")</span>
+                                <span>@Model.SalesCount / @Model.MaxSales</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar" style="width: @(((double)Model.SalesCount / Model.MaxSales.Value) * 100)%"></div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="alert alert-info mb-0">
+                        <i class="feather-info me-2"></i>
+                        <small>تم تحديث البيانات لحظياً</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            $('#descriptionEditor').summernote({ height: 200, direction: 'rtl' });
+            $('#coursesSelect').select2({ dir: 'rtl', placeholder: 'اختر الدورات...' });
+
+            let hasChanges = false;
+            $('input, textarea, select').on('change', function() { hasChanges = true; });
+            $('form').on('submit', function() { hasChanges = false; });
+            $(window).on('beforeunload', function() {
+                if (hasChanges) return 'لديك تغييرات غير محفوظة';
+            });
+        });
+    </script>
+}
+

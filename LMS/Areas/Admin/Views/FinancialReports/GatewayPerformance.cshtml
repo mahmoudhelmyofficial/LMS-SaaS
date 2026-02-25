@@ -1,0 +1,270 @@
+@model List<LMS.Services.GatewayPerformanceReport>
+@{
+    ViewData["Title"] = Html.T("تقرير أداء بوابات الدفع", "Payment gateway performance report");
+    ViewData["ActiveMenu"] = "FinancialReports";
+    var fromDate = ViewBag.FromDate as DateTime? ?? DateTime.UtcNow.AddMonths(-3);
+    var toDate = ViewBag.ToDate as DateTime? ?? DateTime.UtcNow;
+    var totalRevenue = Model.Sum(g => g.TotalRevenue);
+    var totalTransactions = Model.Sum(g => g.TransactionCount);
+}
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <nav aria-label="@Html.T("مسار التنقل", "Breadcrumb")">
+                        <ol class="breadcrumb mb-2">
+                            <li class="breadcrumb-item"><a asp-action="Index">@Html.T("التقارير المالية", "Financial Reports")</a></li>
+                            <li class="breadcrumb-item active">@Html.T("بوابات الدفع", "Payment Gateways")</li>
+                        </ol>
+                    </nav>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-credit-card text-primary me-2"></i>
+                        @Html.T("تقرير أداء بوابات الدفع", "Payment Gateway Performance Report")
+                    </h1>
+                </div>
+                <form method="get" class="d-flex gap-2 align-items-center">
+                    <input type="date" name="fromDate" value="@fromDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" />
+                    <span class="text-muted">@Html.T("إلى", "To")</span>
+                    <input type="date" name="toDate" value="@toDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" />
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter me-1"></i>@Html.T("فلترة", "Filter")
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-4 mb-4">
+        @foreach (var gateway in Model.OrderByDescending(g => g.TotalRevenue).Take(4))
+        {
+            var percentage = totalRevenue > 0 ? (gateway.TotalRevenue / totalRevenue * 100) : 0;
+            var colors = new[] { "primary", "success", "info", "warning" };
+            var color = colors[Model.OrderByDescending(g => g.TotalRevenue).ToList().IndexOf(gateway) % 4];
+            
+            <div class="col-md-6 col-xl-3">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3">
+                            <div class="avatar-text bg-@color bg-opacity-10 text-@color rounded-circle"
+                                 style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-credit-card fa-lg"></i>
+                            </div>
+                            <span class="badge bg-@color">@percentage.ToString("F1")%</span>
+                        </div>
+                        <h6 class="text-muted mb-1">@gateway.GatewayName</h6>
+                        <h4 class="mb-0">@gateway.TotalRevenue.ToString("N0") @Html.T("ج.م", "EGP")</h4>
+                        <div class="d-flex justify-content-between mt-2 small text-muted">
+                            <span>@gateway.TransactionCount @Html.T("معاملة", "transaction(s)")</span>
+                            <span class="text-@(gateway.SuccessRate >= 95 ? "success" : gateway.SuccessRate >= 80 ? "warning" : "danger")">
+                                @gateway.SuccessRate.ToString("F1")% @Html.T("نجاح", "success")
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Revenue Distribution Chart -->
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-pie text-primary me-2"></i>
+                        @Html.T("توزيع الإيرادات حسب البوابة", "Revenue Distribution by Gateway")
+                    </h5>
+                </div>
+                <div class="card-body d-flex align-items-center justify-content-center">
+                    <canvas id="revenueChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Rate Chart -->
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar text-primary me-2"></i>
+                        @Html.T("نسبة النجاح حسب البوابة", "Success Rate by Gateway")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="successChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Table -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-transparent">
+            <h5 class="mb-0">
+                <i class="fas fa-table text-primary me-2"></i>
+                @Html.T("تفاصيل أداء البوابات", "Gateway Performance Details")
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>@Html.T("البوابة", "Gateway")</th>
+                            <th class="text-end">@Html.T("الإيرادات", "Revenue")</th>
+                            <th class="text-center">@Html.T("المعاملات", "Transactions")</th>
+                            <th class="text-center">@Html.T("نسبة النجاح", "Success Rate")</th>
+                            <th class="text-end">@Html.T("متوسط قيمة المعاملة", "Avg. Transaction")</th>
+                            <th class="text-end">@Html.T("إجمالي الرسوم", "Total Fees")</th>
+                            <th class="text-center">@Html.T("الحالة", "Status")</th>
+                            <th class="text-end">@Html.T("آخر استخدام", "Last Used")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var gateway in Model.OrderByDescending(g => g.TotalRevenue))
+                        {
+                            var revenuePercent = totalRevenue > 0 ? (gateway.TotalRevenue / totalRevenue * 100) : 0;
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="avatar-text bg-primary bg-opacity-10 text-primary rounded"
+                                             style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                                            <i class="fas fa-credit-card"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">@gateway.GatewayName</div>
+                                            <small class="text-muted">@gateway.GatewayType</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="text-end">
+                                    <div class="fw-bold text-success">@gateway.TotalRevenue.ToString("N2") @Html.T("ج.م", "EGP")</div>
+                                    <small class="text-muted">@revenuePercent.ToString("F1")%</small>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-info fs-6">@gateway.TransactionCount</span>
+                                    <div class="small text-muted">
+                                        <span class="text-success">@gateway.SuccessfulTransactions @Html.T("نجاح", "success")</span>
+                                        /
+                                        <span class="text-danger">@gateway.FailedTransactions @Html.T("فشل", "failed")</span>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <div class="d-flex align-items-center justify-content-center gap-2">
+                                        <div class="progress" style="width: 60px; height: 8px;">
+                                            <div class="progress-bar @(gateway.SuccessRate >= 95 ? "bg-success" : gateway.SuccessRate >= 80 ? "bg-warning" : "bg-danger")"
+                                                 style="width: @gateway.SuccessRate%"></div>
+                                        </div>
+                                        <span class="@(gateway.SuccessRate >= 95 ? "text-success" : gateway.SuccessRate >= 80 ? "text-warning" : "text-danger")">
+                                            @gateway.SuccessRate.ToString("F1")%
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="text-end">@gateway.AverageTransactionValue.ToString("N2") @Html.T("ج.م", "EGP")</td>
+                                <td class="text-end text-danger">@gateway.TotalFees.ToString("N2") @Html.T("ج.م", "EGP")</td>
+                                <td class="text-center">
+                                    @if (gateway.IsHealthy)
+                                    {
+                                        <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>@Html.T("متصل", "Connected")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger"><i class="fas fa-exclamation-circle me-1"></i>@Html.T("غير متصل", "Disconnected")</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    @if (gateway.LastUsedAt.HasValue)
+                                    {
+                                        var diff = DateTime.UtcNow - gateway.LastUsedAt.Value;
+                                        var lastUsedText = diff.TotalMinutes < 60
+                                            ? $"{(int)diff.TotalMinutes} " + Html.T("دقيقة", "min(s)") + " " + Html.T("منذ", "ago")
+                                            : diff.TotalHours < 24
+                                                ? $"{(int)diff.TotalHours} " + Html.T("ساعة", "hour(s)") + " " + Html.T("منذ", "ago")
+                                                : $"{(int)diff.TotalDays} " + Html.T("يوم", "day(s)") + " " + Html.T("منذ", "ago");
+                                        <span title="@gateway.LastUsedAt.Value.ToString("yyyy/MM/dd HH:mm")">
+                                            @lastUsedText
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot class="table-dark">
+                        <tr>
+                            <th>@Html.T("الإجمالي", "Total")</th>
+                            <th class="text-end">@totalRevenue.ToString("N2") @Html.T("ج.م", "EGP")</th>
+                            <th class="text-center">@totalTransactions</th>
+                            <th class="text-center">
+                                @if (Model.Count > 0)
+                                {
+                                    @((Model.Sum(g => g.SuccessfulTransactions) * 100.0m / Math.Max(1, totalTransactions)).ToString("F1"))@:%
+                                }
+                            </th>
+                            <th class="text-end">
+                                @if (totalTransactions > 0)
+                                {
+                                    @((totalRevenue / totalTransactions).ToString("N2"))@: @Html.T("ج.م", "EGP")
+                                }
+                            </th>
+                            <th class="text-end">@Model.Sum(g => g.TotalFees).ToString("N2") @Html.T("ج.م", "EGP")</th>
+                            <th colspan="2"></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Revenue Distribution Chart
+    new Chart(document.getElementById('revenueChart'), {
+        type: 'doughnut',
+        data: {
+            labels: [@Html.Raw(string.Join(",", Model.Select(g => $"'{g.GatewayName}'")))],
+            datasets: [{
+                data: [@string.Join(",", Model.Select(g => g.TotalRevenue))],
+                backgroundColor: ['#0d6efd', '#198754', '#ffc107', '#dc3545', '#6f42c1', '#0dcaf0', '#fd7e14', '#20c997']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    });
+
+    // Success Rate Chart
+    new Chart(document.getElementById('successChart'), {
+        type: 'bar',
+        data: {
+            labels: [@Html.Raw(string.Join(",", Model.Select(g => $"'{g.GatewayName}'")))],
+            datasets: [{
+                label: '@Html.Raw(Html.T("نسبة النجاح", "Success Rate"))',
+                data: [@string.Join(",", Model.Select(g => g.SuccessRate))],
+                backgroundColor: [@Html.Raw(string.Join(",", Model.Select(g => g.SuccessRate >= 95 ? "'#198754'" : g.SuccessRate >= 80 ? "'#ffc107'" : "'#dc3545'")))]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { max: 100, ticks: { callback: function(value) { return value + '%'; } } }
+            }
+        }
+    });
+</script>
+}
+

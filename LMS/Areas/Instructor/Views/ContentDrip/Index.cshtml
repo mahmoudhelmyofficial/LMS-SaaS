@@ -1,0 +1,327 @@
+@model IEnumerable<LMS.Domain.Entities.Courses.ContentDripRule>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إدارة جدولة المحتوى", "Content Scheduling Management");
+    ViewData["Subtitle"] = Html.T("التحكم في توقيت إتاحة المحتوى للطلاب", "Control when content is available to students");
+    var createUrl = Url.Action("Create");
+    
+    // Load platform settings
+    var defaultPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Default", 20);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + createUrl + "' class='btn btn-primary'><i class='feather-plus me-2'></i>" + Html.T("إضافة قاعدة جديدة", "Add new rule") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي القواعد", "Total rules") },
+                { "Value", ViewBag.TotalRules ?? 0 },
+                { "Icon", "clock" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("القواعد النشطة", "Active rules") },
+                { "Value", ViewBag.ActiveRules ?? 0 },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("الدورات المجدولة", "Scheduled courses") },
+                { "Value", ViewBag.ScheduledCourses ?? 0 },
+                { "Icon", "book" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("المحتوى المجدول", "Scheduled content") },
+                { "Value", ViewBag.ScheduledContent ?? 0 },
+                { "Icon", "layers" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Drip Rules List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قواعد الجدولة", "Scheduling rules")</h5>
+                    <div class="card-header-action">
+                        <div class="card-header-btn">
+                            <div data-bs-toggle="tooltip" title="@Html.T("تحديث", "Refresh")">
+                                <a href="@Url.Action("Index")" class="avatar-text avatar-xs bg-warning">
+                                    <i class="feather-refresh-cw"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    <!-- Filter Bar -->
+                    <div class="p-4 border-bottom">
+                        <form method="get" asp-action="Index" class="row g-3">
+                            <input type="hidden" name="page" value="1" />
+                            <div class="col-md-6">
+                                <select class="form-select" name="courseId" onchange="this.form.submit()">
+                                    <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                    @if (ViewBag.Courses != null)
+                                    {
+                                        foreach (var course in ViewBag.Courses)
+                                        {
+                                            <option value="@course.Value" selected="@(ViewBag.CourseId != null && ViewBag.CourseId.ToString() == course.Value)">@course.Text</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" name="isActive" onchange="this.form.submit()">
+                                    <option value="">@Html.T("جميع الحالات", "All statuses")</option>
+                                    <option value="true" selected="@(ViewBag.SelectedIsActive != null && (bool)ViewBag.SelectedIsActive == true)">@Html.T("نشطة", "Active")</option>
+                                    <option value="false" selected="@(ViewBag.SelectedIsActive != null && (bool)ViewBag.SelectedIsActive == false)">@Html.T("غير نشطة", "Inactive")</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" name="type" onchange="this.form.submit()">
+                                    <option value="">@Html.T("جميع الأنواع", "All types")</option>
+                                    <option value="AllAtOnce" selected="@(ViewBag.SelectedType == "AllAtOnce")">@Html.T("كل المحتوى دفعة واحدة", "All content at once")</option>
+                                    <option value="DaysAfterEnrollment" selected="@(ViewBag.SelectedType == "DaysAfterEnrollment")">@Html.T("بعد التسجيل بأيام", "Days after enrollment")</option>
+                                    <option value="SpecificDate" selected="@(ViewBag.SelectedType == "SpecificDate")">@Html.T("تاريخ محدد", "Specific date")</option>
+                                    <option value="Weekly" selected="@(ViewBag.SelectedType == "Weekly")">@Html.T("أسبوعي", "Weekly")</option>
+                                    <option value="Monthly" selected="@(ViewBag.SelectedType == "Monthly")">@Html.T("شهري", "Monthly")</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var rule in Model)
+                            {
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <div class="fw-medium text-break">@rule.Course?.Title</div>
+                                        <div class="text-muted fs-12 mt-1">
+                                            @if (rule.LessonId.HasValue) { <span>@rule.Lesson?.Title</span> }
+                                            else if (rule.ModuleId.HasValue) { <span>@rule.Module?.Title</span> }
+                                            else { <span>@Html.T("الدورة كاملة", "Full course")</span> }
+                                        </div>
+                                        <span class="badge bg-soft-primary text-primary mt-2">
+                                            @switch (rule.DripType)
+                                            {
+                                                case LMS.Domain.Enums.ContentDripType.DaysAfterEnrollment: @Html.T("بعد التسجيل بأيام", "Days after enrollment"); break;
+                                                case LMS.Domain.Enums.ContentDripType.SpecificDate: @Html.T("تاريخ محدد", "Specific date"); break;
+                                                case LMS.Domain.Enums.ContentDripType.Weekly: @Html.T("أسبوعي", "Weekly"); break;
+                                                case LMS.Domain.Enums.ContentDripType.Monthly: @Html.T("شهري", "Monthly"); break;
+                                                default: @Html.T("جدولة", "Scheduled"); break;
+                                            }
+                                        </span>
+                                        @if (rule.IsActive) { <span class="badge bg-soft-success text-success ms-1">@Html.T("نشطة", "Active")</span> }
+                                        else { <span class="badge bg-soft-secondary text-secondary ms-1">@Html.T("غير نشطة", "Inactive")</span> }
+                                        <div class="hstack gap-2 mt-2">
+                                            <a href="@Url.Action("Details", new { id = rule.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-eye"></i></a>
+                                            <a href="@Url.Action("Edit", new { id = rule.Id })" class="btn btn-sm btn-outline-secondary"><i class="feather-edit"></i></a>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("الدورة", "Course")</th>
+                                            <th>@Html.T("المحتوى", "Content")</th>
+                                            <th>@Html.T("نوع الجدولة", "Schedule type")</th>
+                                            <th>@Html.T("التوقيت", "Timing")</th>
+                                            <th>@Html.T("الإشعارات", "Notifications")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var rule in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-medium">@rule.Course?.Title</div>
+                                            </td>
+                                            <td>
+                                                @if (rule.LessonId.HasValue)
+                                                {
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <i class="feather-play-circle text-primary"></i>
+                                                        <span>@rule.Lesson?.Title</span>
+                                                    </div>
+                                                }
+                                                else if (rule.ModuleId.HasValue)
+                                                {
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <i class="feather-folder text-warning"></i>
+                                                        <span>@rule.Module?.Title</span>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">@Html.T("الدورة كاملة", "Full course")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-primary text-primary">
+                                                    @switch (rule.DripType)
+                                                    {
+                                                        case LMS.Domain.Enums.ContentDripType.AllAtOnce:
+                                                            @Html.T("كل المحتوى دفعة واحدة", "All content at once")
+                                                            break;
+                                                        case LMS.Domain.Enums.ContentDripType.DaysAfterEnrollment:
+                                                            @Html.T("بعد التسجيل بأيام", "Days after enrollment")
+                                                            break;
+                                                        case LMS.Domain.Enums.ContentDripType.AfterPreviousCompletion:
+                                                            @Html.T("بعد إكمال السابق", "After previous completion")
+                                                            break;
+                                                        case LMS.Domain.Enums.ContentDripType.SpecificDate:
+                                                            @Html.T("تاريخ محدد", "Specific date")
+                                                            break;
+                                                        case LMS.Domain.Enums.ContentDripType.Weekly:
+                                                            @Html.T("أسبوعي", "Weekly")
+                                                            break;
+                                                        case LMS.Domain.Enums.ContentDripType.Monthly:
+                                                            @Html.T("شهري", "Monthly")
+                                                            break;
+                                                        case LMS.Domain.Enums.ContentDripType.Sequential:
+                                                            @Html.T("متسلسل", "Sequential")
+                                                            break;
+                                                        case LMS.Domain.Enums.ContentDripType.Scheduled:
+                                                            @Html.T("مجدول", "Scheduled")
+                                                            break;
+                                                        default:
+                                                            @Html.T("غير محدد", "Not specified")
+                                                            break;
+                                                    }
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @if (rule.DaysAfterEnrollment.HasValue)
+                                                {
+                                                    <span class="fs-13">@Html.T("بعد", "After") @rule.DaysAfterEnrollment @Html.T("يوم", "days")</span>
+                                                }
+                                                else if (rule.SpecificDate.HasValue)
+                                                {
+                                                    <span class="fs-13">@rule.SpecificDate.Value.ToString("dd/MM/yyyy")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (rule.SendNotification)
+                                                {
+                                                    <i class="feather-bell text-success" data-bs-toggle="tooltip" title="@Html.T("إرسال إشعار", "Send notification")"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="feather-bell-off text-muted" data-bs-toggle="tooltip" title="@Html.T("بدون إشعار", "No notification")"></i>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (rule.IsActive)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">@Html.T("نشطة", "Active")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">@Html.T("غير نشطة", "Inactive")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { id = rule.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض", "View")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    <a href="@Url.Action("Edit", new { id = rule.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                        <i class="feather-edit"></i>
+                                                    </a>
+                                                    <form asp-action="ToggleActive" asp-route-id="@rule.Id" method="post" class="d-inline">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="avatar-text avatar-md border-0 bg-transparent" data-bs-toggle="tooltip" title="@(rule.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))">
+                                                            <i class="feather-@(rule.IsActive ? "pause" : "play")-circle"></i>
+                                                        </button>
+                                                    </form>
+                                                    <form asp-action="Delete" asp-route-id="@rule.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذه القاعدة؟ لا يمكن التراجع عن هذا الإجراء.", "Are you sure you want to delete this rule? This action cannot be undone.").Replace("'", "\\'"))')">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="avatar-text avatar-md border-0 bg-transparent text-danger" data-bs-toggle="tooltip" title="@Html.T("حذف", "Delete")">
+                                                            <i class="feather-trash-2"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+
+                        <!-- Pagination -->
+                        @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                            ViewData,
+                            ("CurrentPage", ViewBag.Page ?? 1),
+                            ("TotalPages", ViewBag.TotalPages ?? 1),
+                            ("TotalItems", ViewBag.TotalItems ?? 0),
+                            ("PageSize", defaultPageSize),
+                            ("Action", "Index"),
+                            ("Controller", "ContentDrip")
+                        ))
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-clock"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد قواعد جدولة بعد", "No scheduling rules yet")</h5>
+                            <p class="text-muted mb-4">@Html.T("ابدأ بإنشاء قواعد لجدولة إتاحة المحتوى للطلاب", "Start by creating rules to schedule when content is available to students")</p>
+                            <a href="@Url.Action("Create")" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إضافة قاعدة جديدة", "Add new rule")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

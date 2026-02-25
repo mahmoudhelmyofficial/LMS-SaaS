@@ -1,0 +1,383 @@
+@model IEnumerable<LMS.Areas.Instructor.ViewModels.CouponDisplayViewModel>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إدارة الكوبونات", "Coupons Management");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة كوبونات الخصم", "View and manage discount coupons");
+    
+    // Load platform settings
+    var usageCritical = await PlatformSettings.GetIntSettingAsync("Threshold.Usage.Critical", 90);
+    var usageWarning = await PlatformSettings.GetIntSettingAsync("Threshold.Usage.Warning", 70);
+    var defaultPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Default", 20);
+}
+
+@{
+    var createUrl = Url.Action("Create");
+    var indexUrl = Url.Action("Index");
+    var activeUrl = Url.Action("Index", new { status = LMS.Domain.Enums.CouponStatus.Active });
+    var inactiveUrl = Url.Action("Index", new { status = LMS.Domain.Enums.CouponStatus.Inactive });
+    var expiredUrl = Url.Action("Index", new { status = LMS.Domain.Enums.CouponStatus.Expired });
+    var actionButtonsHtml = "<a href='" + createUrl + "' class='btn btn-primary'>" +
+        "<i class='feather-plus me-2'></i>" +
+        (Html.T("إنشاء كوبون جديد", "Create New Coupon").ToString()) +
+        "</a>" +
+        "<div class='dropdown'>" +
+            "<button class='btn btn-light dropdown-toggle' type='button' data-bs-toggle='dropdown'>" +
+                "<i class='feather-filter me-2'></i>" +
+                Html.T("تصفية", "Filter") + "</button>" +
+            "<ul class='dropdown-menu dropdown-menu-end'>" +
+                "<li><a class='dropdown-item' href='" + indexUrl + "'>" + Html.T("جميع الكوبونات", "All coupons") + "</a></li>" +
+                "<li><a class='dropdown-item' href='" + activeUrl + "'>" + Html.T("النشطة", "Active") + "</a></li>" +
+                "<li><a class='dropdown-item' href='" + inactiveUrl + "'>" + Html.T("غير النشطة", "Inactive") + "</a></li>" +
+                "<li><a class='dropdown-item' href='" + expiredUrl + "'>" + Html.T("المنتهية", "Expired") + "</a></li>" +
+            "</ul>" +
+        "</div>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الكوبونات", "Total Coupons") },
+                { "Value", Model?.Count() ?? 0 },
+                { "Icon", "tag" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("الكوبونات النشطة", "Active Coupons") },
+                { "Value", Model?.Count(c => c.IsActive && c.Status == LMS.Domain.Enums.CouponStatus.Active) ?? 0 },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("مرات الاستخدام", "Times Used") },
+                { "Value", Model?.Sum(c => c.UsedCount) ?? 0 },
+                { "Icon", "shopping-cart" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("كوبونات منتهية", "Expired Coupons") },
+                { "Value", Model?.Count(c => c.Status == LMS.Domain.Enums.CouponStatus.Expired) ?? 0 },
+                { "Icon", "alert-circle" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Coupons List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة الكوبونات", "Coupons List")</h5>
+                    <div class="card-header-action">
+                        <div class="card-header-btn">
+                            <div data-bs-toggle="tooltip" title="@Html.T("تحديث", "Refresh")">
+                                <a href="@Url.Action("Index")" class="avatar-text avatar-xs bg-warning">
+                                    <i class="feather-refresh-cw"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var coupon in Model)
+                            {
+                                var now = DateTime.UtcNow;
+                                var isValid = coupon.ValidFrom <= now && coupon.ValidTo >= now;
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <a href="@Url.Action("Details", new { id = coupon.Id })" class="fw-bold text-dark d-block">@coupon.Code</a>
+                                        @if (!string.IsNullOrEmpty(coupon.Description))
+                                        {
+                                            <p class="text-muted fs-12 mb-2 text-break">@(coupon.Description.Length > 50 ? coupon.Description.Substring(0, 50) + "..." : coupon.Description)</p>
+                                        }
+                                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                                            <span class="fw-bold text-primary">
+                                                @if (coupon.DiscountType == LMS.Domain.Enums.DiscountType.Percentage) { @coupon.DiscountValue.ToString("F0")<text>%</text> } else { @coupon.DiscountValue.ToEGP() }
+                                            </span>
+                                            <span class="text-muted fs-12">@coupon.UsedCount @(coupon.MaxUses.HasValue ? $"/ {coupon.MaxUses}" : "")</span>
+                                        </div>
+                                        @if (coupon.Status == LMS.Domain.Enums.CouponStatus.Active && isValid) { <span class="badge bg-soft-success text-success mt-1">@Html.T("نشط", "Active")</span> }
+                                        else if (coupon.Status == LMS.Domain.Enums.CouponStatus.Expired || !isValid) { <span class="badge bg-soft-danger text-danger mt-1">@Html.T("منتهي", "Expired")</span> }
+                                        else { <span class="badge bg-soft-secondary text-secondary mt-1">@Html.T("غير نشط", "Inactive")</span> }
+                                        <div class="hstack gap-2 mt-2">
+                                            <a href="@Url.Action("Details", new { id = coupon.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-eye"></i></a>
+                                            <a href="@Url.Action("Edit", new { id = coupon.Id })" class="btn btn-sm btn-outline-secondary"><i class="feather-edit"></i></a>
+                                            <a href="@Url.Action("Statistics", new { id = coupon.Id })" class="btn btn-sm btn-outline-info"><i class="feather-bar-chart-2"></i></a>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th class="wd-30">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="selectAll">
+                                                </div>
+                                            </th>
+                                            <th>@Html.T("كود الكوبون", "Coupon Code")</th>
+                                            <th>@Html.T("الوصف", "Description")</th>
+                                            <th>@Html.T("نوع الخصم", "Discount Type")</th>
+                                            <th>@Html.T("قيمة الخصم", "Discount Value")</th>
+                                            <th>@Html.T("الاستخدام", "Usage")</th>
+                                            <th>@Html.T("الصلاحية", "Validity")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var coupon in Model)
+                                    {
+                                        var now = DateTime.UtcNow;
+                                        var isValid = coupon.ValidFrom <= now && coupon.ValidTo >= now;
+                                        var usagePercent = coupon.MaxUses.HasValue && coupon.MaxUses > 0 
+                                            ? (double)coupon.UsedCount / coupon.MaxUses.Value * 100 
+                                            : 0;
+                                        
+                                        <tr>
+                                            <td>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" value="@coupon.Id">
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                        <i class="feather-tag"></i>
+                                                    </div>
+                                                    <div>
+                                                        <a href="@Url.Action("Details", new { id = coupon.Id })" class="fw-bold text-dark">@coupon.Code</a>
+                                                        @if (coupon.IsActive && isValid)
+                                                        {
+                                                            <span class="badge bg-soft-success text-success ms-2">@Html.T("متاح الآن", "Available now")</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="text-muted">
+                                                    @if (!string.IsNullOrEmpty(coupon.Description))
+                                                    {
+                                                        @(coupon.Description.Length > 40 ? coupon.Description.Substring(0, 40) + "..." : coupon.Description)
+                                                    }
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @if (coupon.DiscountType == LMS.Domain.Enums.DiscountType.Percentage)
+                                                {
+                                                    <span class="badge bg-soft-info text-info">
+                                                        <i class="feather-percent"></i> نسبة مئوية
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        @{ ViewBag.CurrencyIconClass = ""; }
+                                                        @await Html.PartialAsync("_CurrencyIcon")
+                                                        <span>مبلغ ثابت</span>
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold text-primary">
+                                                    @if (coupon.DiscountType == LMS.Domain.Enums.DiscountType.Percentage)
+                                                    {
+                                                        @coupon.DiscountValue.ToString("F0")<text>%</text>
+                                                    }
+                                                    else
+                                                    {
+                                                        @coupon.DiscountValue.ToEGP()
+                                                    }
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <span class="fw-medium">@coupon.UsedCount</span>
+                                                    @if (coupon.MaxUses.HasValue)
+                                                    {
+                                                        <span class="text-muted">/ @coupon.MaxUses</span>
+                                                        <div class="progress" style="width: 60px; height: 6px;">
+                                                            <div class="progress-bar @(usagePercent >= usageCritical ? "bg-danger" : usagePercent >= usageWarning ? "bg-warning" : "bg-success")" 
+                                                                 role="progressbar" style="width: @usagePercent.ToString("F0")%"></div>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-soft-secondary text-secondary">غير محدود</span>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">
+                                                    من @coupon.ValidFrom.ToString("dd/MM/yyyy")
+                                                    <br />
+                                                    إلى @coupon.ValidTo.ToString("dd/MM/yyyy")
+                                                </small>
+                                            </td>
+                                            <td>
+                                                @if (coupon.Status == LMS.Domain.Enums.CouponStatus.Active && isValid)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-check-circle"></i> نشط
+                                                    </span>
+                                                }
+                                                else if (coupon.Status == LMS.Domain.Enums.CouponStatus.Expired || !isValid)
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger">
+                                                        <i class="feather-x-circle"></i> منتهي
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">
+                                                        <i class="feather-pause-circle"></i> غير نشط
+                                                    </span>
+                                                }
+                                                
+                                                @if (coupon.MaxUses.HasValue && coupon.UsedCount >= coupon.MaxUses.Value)
+                                                {
+                                                    <br />
+                                                    <span class="badge bg-soft-warning text-warning mt-1">
+                                                        <i class="feather-alert-triangle"></i> مكتمل
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { id = coupon.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض", "View")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    <a href="@Url.Action("Edit", new { id = coupon.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                        <i class="feather-edit"></i>
+                                                    </a>
+                                                    <a href="@Url.Action("Statistics", new { id = coupon.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("الإحصائيات", "Statistics")">
+                                                        <i class="feather-bar-chart-2"></i>
+                                                    </a>
+                                                    <div class="dropdown">
+                                                        <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown">
+                                                            <i class="feather-more-horizontal"></i>
+                                                        </a>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li>
+                                                                <form asp-action="ToggleStatus" asp-route-id="@coupon.Id" method="post" class="d-inline">
+                                                                    @Html.AntiForgeryToken()
+                                                                    <button type="submit" class="dropdown-item">
+                                                                        <i class="feather-power me-3"></i>
+                                                                        <span>@(coupon.IsActive ? "تعطيل" : "تفعيل")</span>
+                                                                    </button>
+                                                                </form>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)" onclick="copyCouponCode('@coupon.Code')">
+                                                                    <i class="feather-copy me-3"></i>
+                                                                    <span>نسخ الكود</span>
+                                                                </a>
+                                                            </li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@Url.Action("Delete", new { id = coupon.Id })', '@Html.Raw((Html.T("هل أنت متأكد من حذف الكوبون: ", "Are you sure you want to delete the coupon: ") + (coupon.Code ?? "").Replace("'", "\\'") + "؟").Replace("'", "\\'"))')">
+                                                                    <i class="feather-trash-2 me-3"></i>
+                                                                    <span>حذف</span>
+                                                                </a>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+
+                        <!-- Pagination -->
+                        @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                            ViewData,
+                            ("CurrentPage", ViewBag.Page ?? 1),
+                            ("TotalPages", ViewBag.TotalPages ?? 1),
+                            ("TotalItems", Model.Count()),
+                            ("PageSize", defaultPageSize),
+                            ("Action", "Index"),
+                            ("Controller", "Coupons")
+                        ))
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-tag"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد كوبونات بعد", "No coupons yet")</h5>
+                            <p class="text-muted mb-4">ابدأ بإنشاء كوبونات خصم لجذب المزيد من الطلاب وزيادة المبيعات</p>
+                            <a href="@Url.Action("Create")" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                إنشاء كوبون جديد
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DeleteModal")
+
+@section Scripts {
+    <script>
+        Object.assign(window.__T || (window.__T = {}), {
+            CopyCouponSuccess: '@Html.Raw(Html.T("تم نسخ كود الكوبون: ", "Coupon code copied: ").Replace("\\", "\\\\").Replace("'", "\\'"))',
+            CopyCouponFail: '@Html.Raw(Html.T("فشل نسخ الكود", "Failed to copy code").Replace("\\", "\\\\").Replace("'", "\\'"))'
+        });
+        $(document).ready(function () {
+            // Select all checkbox
+            $('#selectAll').on('change', function () {
+                $('tbody input[type="checkbox"]').prop('checked', this.checked);
+            });
+
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+
+        function copyCouponCode(code) {
+            var t = window.__T || {};
+            var okMsg = (t.CopyCouponSuccess || 'Coupon code copied: ') + code;
+            var failMsg = t.CopyCouponFail || 'Failed to copy code';
+            navigator.clipboard.writeText(code).then(function() {
+                alert(okMsg);
+            }, function() {
+                alert(failMsg);
+            });
+        }
+    </script>
+}
+

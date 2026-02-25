@@ -1,0 +1,399 @@
+@model object
+
+@{
+    ViewData["Title"] = Html.T("تحليلات التكليف", "Assignment Analytics");
+    ViewData["Subtitle"] = Html.T("إحصائيات وتحليلات مفصلة", "Detailed statistics and analytics");
+    var assignment = ViewBag.Assignment as LMS.Domain.Entities.Assessments.Assignment;
+    var analytics = ViewBag.Analytics;
+    var gradeDistribution = ViewBag.GradeDistribution as List<dynamic>;
+    var recentSubmissions = ViewBag.RecentSubmissions as List<LMS.Domain.Entities.Assessments.AssignmentSubmission>;
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(
+        "<a href='" + Url.Action("Submissions", new { assignmentId = assignment?.Id }) + "' class='btn btn-light me-2'><i class='feather-users me-2'></i>عرض الإجابات</a>" +
+        "<a href='" + Url.Action("Edit", new { id = assignment?.Id }) + "' class='btn btn-light me-2'><i class='feather-edit me-2'></i>تفاصيل التكليف</a>" +
+        "<a href='" + Url.Action("Index", new { courseId = assignment?.Lesson?.Module?.CourseId }) + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>العودة</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @if (assignment != null)
+    {
+        <!-- Assignment Info -->
+        <div class="alert alert-info mb-4">
+            <div class="d-flex align-items-center gap-3">
+                <div class="avatar-text avatar-md bg-primary text-white">
+                    <i class="feather-trending-up"></i>
+                </div>
+                <div>
+                    <h6 class="fw-bold mb-1">@assignment.Title</h6>
+                    <p class="mb-0 fs-13">@assignment.Lesson?.Module?.Title - @assignment.Lesson?.Module?.Course?.Title</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overview Statistics -->
+        <div class="row mb-4">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <p class="text-muted mb-1 fs-13">إجمالي التسليمات</p>
+                                <h3 class="fw-bold mb-0">@analytics.TotalSubmissions</h3>
+                                <small class="text-success">
+                                    <i class="feather-check-circle me-1"></i>
+                                    @analytics.GradedSubmissions مُقيّمة
+                                </small>
+                            </div>
+                            <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                                <i class="feather-file-text"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <p class="text-muted mb-1 fs-13">متوسط الدرجات</p>
+                                <h3 class="fw-bold mb-0">@analytics.AverageGrade.ToString("F1")</h3>
+                                <small class="text-muted">
+                                    من @assignment.MaxPoints نقطة
+                                </small>
+                            </div>
+                            <div class="avatar-text avatar-lg bg-soft-warning text-warning">
+                                <i class="feather-bar-chart"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <p class="text-muted mb-1 fs-13">معدل التسليم في الوقت</p>
+                                <h3 class="fw-bold mb-0 text-success">@analytics.OnTimeSubmissionRate.ToString("F1")%</h3>
+                                <small class="text-muted">
+                                    من @analytics.TotalSubmissions تسليم
+                                </small>
+                            </div>
+                            <div class="avatar-text avatar-lg bg-soft-success text-success">
+                                <i class="feather-trending-up"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <p class="text-muted mb-1 fs-13">التسليمات المتأخرة</p>
+                                <h3 class="fw-bold mb-0">@analytics.LateSubmissions</h3>
+                            </div>
+                            <div class="avatar-text avatar-lg bg-soft-info text-info">
+                                <i class="feather-clock"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Grade Distribution Chart -->
+            <div class="col-lg-8 mb-4">
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-pie-chart me-2 text-primary"></i>
+                            توزيع الدرجات
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (analytics.GradedSubmissions > 0)
+                        {
+                            <canvas id="gradeDistributionChart" height="300"></canvas>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning mb-0">
+                                <i class="feather-info me-2"></i>
+                                لا توجد بيانات كافية لعرض التوزيع. يجب أن يكون هناك تسليمات مُقيّمة.
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Performance Summary -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-activity me-2 text-primary"></i>
+                            ملخص الأداء
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="p-3 border rounded">
+                                    <p class="text-muted mb-1 fs-13">أعلى درجة</p>
+                                    <h4 class="fw-bold mb-0 text-success">@analytics.HighestGrade.ToString("F1")</h4>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 border rounded">
+                                    <p class="text-muted mb-1 fs-13">أقل درجة</p>
+                                    <h4 class="fw-bold mb-0 text-danger">@analytics.LowestGrade.ToString("F1")</h4>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 border rounded">
+                                    <p class="text-muted mb-1 fs-13">لم يسلموا</p>
+                                    <h4 class="fw-bold mb-0 text-primary">@analytics.NotSubmittedCount</h4>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4 mb-4">
+                <!-- Assignment Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-settings me-2"></i>
+                            إعدادات التكليف
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">الدرجة القصوى:</span>
+                            <span class="fw-bold">@assignment.MaxPoints نقطة</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">تاريخ التسليم:</span>
+                            <span class="fw-bold">@(assignment.DueDate?.ToString("dd/MM/yyyy hh:mm tt") ?? "غير محدد")</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">التسليم المتأخر:</span>
+                            <span class="@(assignment.AllowLateSubmission ? "text-success" : "text-muted")">
+                                @if (assignment.AllowLateSubmission)
+                                {
+                                    <text>نعم (خصم @assignment.LatePenaltyPercentage%)</text>
+                                }
+                                else
+                                {
+                                    <text>لا</text>
+                                }
+                            </span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">نوع التسليم:</span>
+                            <span class="fw-bold">
+                                @if (assignment.AllowTextSubmission && assignment.AllowFileUpload)
+                                {
+                                    <text>نص وملفات</text>
+                                }
+                                else if (assignment.AllowTextSubmission)
+                                {
+                                    <text>نص فقط</text>
+                                }
+                                else if (assignment.AllowFileUpload)
+                                {
+                                    <text>ملفات فقط (@assignment.MaxFiles ملف، @assignment.MaxFileSizeMB MB)</text>
+                                }
+                            </span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="fs-13">إعادة التسليم:</span>
+                            <span class="@(assignment.AllowResubmission ? "text-success" : "text-muted")">
+                                @if (assignment.AllowResubmission)
+                                {
+                                    <text>نعم @(assignment.MaxSubmissions.HasValue ? "(" + assignment.MaxSubmissions + " محاولات)" : "")</text>
+                                }
+                                else
+                                {
+                                    <text>لا</text>
+                                }
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Submissions -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-clock me-2"></i>
+                            أحدث التسليمات
+                        </h6>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (recentSubmissions != null && recentSubmissions.Any())
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var submission in recentSubmissions)
+                                {
+                                    <div class="list-group-item">
+                                        <div class="d-flex align-items-center gap-2 mb-2">
+                                            <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                @submission.Student?.FirstName?.Substring(0, 1)@submission.Student?.LastName?.Substring(0, 1)
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-0 fs-13">@submission.Student?.FullName</h6>
+                                            </div>
+                                            @if (submission.Grade.HasValue)
+                                            {
+                                                <span class="badge @(submission.Grade.Value >= (assignment.PassingPoints ?? assignment.MaxPoints * 0.5m) ? "bg-success" : "bg-danger")">
+                                                    @submission.Grade.Value.ToString("F1")
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-warning">بانتظار التقييم</span>
+                                            }
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <small class="text-muted">@submission.SubmittedAt.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                            @if (submission.IsLate)
+                                            {
+                                                <span class="badge bg-soft-danger text-danger fs-11">متأخر</span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="card-footer">
+                                <a href="@Url.Action("Submissions", new { assignmentId = assignment.Id })" class="btn btn-sm btn-light w-100">
+                                    عرض جميع التسليمات
+                                </a>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="p-3">
+                                <div class="alert alert-warning mb-0">
+                                    <i class="feather-alert-triangle me-2"></i>
+                                    لا توجد تسليمات حتى الآن
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grade Distribution Details -->
+        @if (gradeDistribution != null && gradeDistribution.Any())
+        {
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-bar-chart-2 me-2 text-primary"></i>
+                        تفاصيل توزيع الدرجات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        @foreach (var range in gradeDistribution)
+                        {
+                            var percentage = analytics.GradedSubmissions > 0
+                                ? (range.Count * 100.0 / analytics.GradedSubmissions)
+                                : 0;
+
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <div class="p-3 border rounded">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-bold">@range.Label</span>
+                                        <span class="badge bg-soft-primary text-primary">@range.Count</span>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar" role="progressbar" style="width: @percentage%"
+                                             aria-valuenow="@percentage" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <small class="text-muted">@percentage.ToString("F1")% من التسليمات</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            @if (analytics.GradedSubmissions > 0 && gradeDistribution != null)
+            {
+                <text>
+                // Grade Distribution Chart
+                var ctx = document.getElementById('gradeDistributionChart').getContext('2d');
+                var gradeDistributionChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: [@Html.Raw(string.Join(",", gradeDistribution.Select(r => "'" + r.Label + "'")))],
+                        datasets: [{
+                            label: 'عدد الطلاب',
+                            data: [@Html.Raw(string.Join(",", gradeDistribution.Select(r => r.Count)))],
+                            backgroundColor: [
+                                'rgba(220, 53, 69, 0.7)',
+                                'rgba(255, 193, 7, 0.7)',
+                                'rgba(255, 159, 64, 0.7)',
+                                'rgba(54, 162, 235, 0.7)',
+                                'rgba(75, 192, 192, 0.7)'
+                            ],
+                            borderColor: [
+                                'rgb(220, 53, 69)',
+                                'rgb(255, 193, 7)',
+                                'rgb(255, 159, 64)',
+                                'rgb(54, 162, 235)',
+                                'rgb(75, 192, 192)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            title: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        }
+                    }
+                });
+                </text>
+            }
+        });
+    </script>
+}

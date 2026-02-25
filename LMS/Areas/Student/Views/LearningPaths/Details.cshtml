@@ -1,0 +1,394 @@
+@model dynamic
+@{
+    ViewData["Title"] = Html.T("تفاصيل المسار التعليمي", "Learning Path Details");
+    var learningPath = ViewBag.LearningPath as LMS.Domain.Entities.Learning.LearningPath;
+    var enrollment = ViewBag.Enrollment as dynamic;
+    
+    var orderedCourses = learningPath?.Courses?.OrderBy(c => c.DisplayOrder).ToList() ?? new List<LMS.Domain.Entities.Learning.LearningPathCourse>();
+    
+    var learningOutcomes = new List<string>();
+    if (!string.IsNullOrEmpty(learningPath?.WhatYouWillLearn))
+    {
+        try
+        {
+            learningOutcomes = System.Text.Json.JsonSerializer.Deserialize<List<string>>(learningPath.WhatYouWillLearn) ?? new List<string>();
+        }
+        catch
+        {
+            learningOutcomes = learningPath.WhatYouWillLearn
+                .Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+        }
+    }
+}
+
+@if (learningPath == null)
+{
+    <div class="alert alert-danger">
+        <p>@Html.T("المسار التعليمي غير موجود", "Learning path not found")</p>
+    </div>
+    return;
+}
+
+@section Styles {
+<style>
+    .learning-path-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 50px;
+    }
+    .milestone-item {
+        position: relative;
+        padding-right: 40px;
+        padding-bottom: 30px;
+    }
+    .milestone-item::before {
+        content: '';
+        position: absolute;
+        right: 15px;
+        top: 30px;
+        bottom: 0;
+        width: 2px;
+        background: #e5e7eb;
+    }
+    .milestone-item:last-child::before {
+        display: none;
+    }
+    .milestone-icon {
+        position: absolute;
+        right: 0;
+        top: 0;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: white;
+        border: 2px solid #e5e7eb;
+    }
+    .milestone-item.completed .milestone-icon {
+        background: #22c55e;
+        border-color: #22c55e;
+        color: white;
+    }
+    .milestone-item.current .milestone-icon {
+        background: #667eea;
+        border-color: #667eea;
+        color: white;
+        animation: pulse 2s infinite;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Learning Path Header -->
+<div class="learning-path-header mb-4">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <div class="mb-3">
+                @if (learningPath.Category != null)
+                {
+                    <span class="badge bg-white bg-opacity-25 text-white">@learningPath.Category.Name</span>
+                }
+                <span class="badge bg-white bg-opacity-25 text-white">@learningPath.Level</span>
+            </div>
+            <h2 class="text-white fw-bold mb-2">@learningPath.Title</h2>
+            <p class="text-white opacity-75 mb-4">@learningPath.Description</p>
+            
+            <div class="d-flex align-items-center gap-4 flex-wrap">
+                <div class="text-white">
+                    <i class="feather-book-open me-2"></i>
+                    @learningPath.CoursesCount @Html.T("دورة", "course(s)")
+                </div>
+                <div class="text-white">
+                    <i class="feather-clock me-2"></i>
+                    @learningPath.TotalDurationHours @Html.T("ساعة", "hr(s)")
+                </div>
+                <div class="text-white">
+                    <i class="feather-users me-2"></i>
+                    @learningPath.EnrollmentCount @Html.T("طالب مسجل", "enrolled student(s)")
+                </div>
+                <div class="text-white">
+                    <i class="feather-award me-2"></i>
+                    @Html.T("شهادة معتمدة", "Certified")
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 text-center">
+            @if (enrollment != null)
+            {
+                <div class="bg-white bg-opacity-25 rounded-3 p-4">
+                    <h3 class="text-white fw-bold mb-2">@enrollment.Progress.ToString("F0")%</h3>
+                    <p class="text-white opacity-75 mb-3">@Html.T("مكتمل", "Completed")</p>
+                    <div class="progress ht-10 mb-3">
+                        <div class="progress-bar bg-white" style="width: @enrollment.Progress%"></div>
+                    </div>
+                    <a asp-action="Continue" asp-route-pathId="@learningPath.Id" class="btn btn-light w-100">
+                        <i class="feather-play-circle me-2"></i>
+                        @Html.T("متابعة التعلم", "Continue Learning")
+                    </a>
+                </div>
+            }
+            else
+            {
+                <form asp-action="Enroll" asp-route-pathId="@learningPath.Id" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-light btn-lg w-100">
+                        <i class="feather-user-plus me-2"></i>
+                        @Html.T("ابدأ المسار الآن", "Start Path Now")
+                    </button>
+                </form>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Main Content -->
+    <div class="col-lg-8">
+        <!-- About -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-info me-2"></i>
+                    @Html.T("عن المسار التعليمي", "About This Path")
+                </h5>
+            </div>
+            <div class="card-body">
+                @Html.Raw(learningPath.Description)
+            </div>
+        </div>
+
+        <!-- Learning Milestones -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-map me-2"></i>
+                    @Html.T("خريطة المسار", "Path Map") (@learningPath.CoursesCount @Html.T("دورة", "course(s)"))
+                </h5>
+            </div>
+            <div class="card-body">
+                @for (int i = 0; i < orderedCourses.Count; i++)
+                {
+                    var pathCourse = orderedCourses[i];
+                    var course = pathCourse.Course;
+                    var completedCourses = enrollment?.CompletedCourses as System.Collections.Generic.List<int> ?? new System.Collections.Generic.List<int>();
+                    var isCompleted = completedCourses.Contains(course.Id);
+                    var isCurrent = enrollment?.CurrentCourseId != null && (int)enrollment.CurrentCourseId == course.Id;
+                    
+                    <div class="milestone-item @(isCompleted ? "completed" : "") @(isCurrent ? "current" : "")">
+                        <div class="milestone-icon">
+                            @if (isCompleted)
+                            {
+                                <i class="feather-check fs-6"></i>
+                            }
+                            else if (isCurrent)
+                            {
+                                <i class="feather-play fs-6"></i>
+                            }
+                            else
+                            {
+                                <i class="feather-circle fs-6"></i>
+                            }
+                        </div>
+                        
+                        <div class="milestone-content">
+                            <div class="d-flex align-items-start justify-content-between mb-2">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="badge bg-soft-secondary text-secondary me-2">@Html.T("المرحلة", "Stage") @(i + 1)</span>
+                                        @if (isCompleted)
+                                        {
+                                            <span class="badge bg-success">@Html.T("مكتمل", "Completed")</span>
+                                        }
+                                        else if (isCurrent)
+                                        {
+                                            <span class="badge bg-primary">@Html.T("قيد التقدم", "In Progress")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-soft-secondary text-secondary">@Html.T("مقفل", "Locked")</span>
+                                        }
+                                    </div>
+                                    <h6 class="fw-bold mb-2">@course.Title</h6>
+                                    <p class="text-muted mb-2">@course.ShortDescription</p>
+                                    <div class="d-flex align-items-center gap-3 text-muted fs-12">
+                                        <span><i class="feather-video me-1"></i> @course.LessonsCount @Html.T("درس", "lesson(s)")</span>
+                                        <span><i class="feather-clock me-1"></i> @course.DurationHours @Html.T("ساعة", "hr(s)")</span>
+                                        @if (course.Instructor != null)
+                                        {
+                                            <span><i class="feather-user me-1"></i> @($"{course.Instructor.FirstName} {course.Instructor.LastName}")</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            @if (isCompleted || isCurrent)
+                            {
+                                <a asp-controller="Courses" asp-action="Details" asp-route-id="@course.Id" asp-area="Student" class="btn btn-sm btn-primary">
+                                    @if (isCompleted)
+                                    {
+                                        <i class="feather-eye me-2"></i>
+                                        <span>@Html.T("مراجعة", "Review")</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="feather-play-circle me-2"></i>
+                                        <span>@Html.T("متابعة", "Continue")</span>
+                                    }
+                                </a>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-secondary" disabled>
+                                    <i class="feather-lock me-2"></i>
+                                    مقفل
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- What You'll Learn -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-check-square me-2"></i>
+                    ماذا ستتعلم
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    @if (learningOutcomes.Any())
+                    {
+                        @foreach (var outcome in learningOutcomes)
+                        {
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start">
+                                    <i class="feather-check-circle text-success me-2 mt-1"></i>
+                                    <span>@outcome</span>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="col-12">
+                            <p class="text-muted mb-0">@Html.T("لا توجد مخرجات تعلم محددة لهذا المسار", "No specific learning outcomes defined for this path")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Progress Stats -->
+        @if (enrollment != null)
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="fw-bold mb-0">
+                        <i class="feather-trending-up me-2"></i>
+                        @Html.T("تقدمك", "Your Progress")
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <h1 class="fw-bold text-primary mb-0">@enrollment.Progress.ToString("F0")%</h1>
+                        <p class="text-muted mb-0">@Html.T("مكتمل", "Complete")</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">@Html.T("الدورات المكتملة", "Completed Courses")</span>
+                            <strong>@enrollment.CompletedCoursesCount / @learningPath.CoursesCount</strong>
+                        </div>
+                        <div class="progress ht-8">
+                            <div class="progress-bar bg-success" style="width: @((enrollment.CompletedCoursesCount * 100.0 / learningPath.CoursesCount))%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">@Html.T("الوقت المستغرق", "Time Spent")</span>
+                            <strong>@enrollment.TimeSpent @Html.T("ساعة", "hrs")</strong>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mb-0 py-2">
+                        <small>
+                            <i class="feather-calendar me-1"></i>
+                            @Html.T("بدأت في:", "Started on:") @enrollment.StartedAt.ToString("dd MMMM yyyy")
+                        </small>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Quick Info -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">@Html.T("معلومات سريعة", "Quick Info")</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <i class="feather-bar-chart text-primary me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("المستوى", "Level")</small>
+                        <strong>@learningPath.Level</strong>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center mb-3">
+                    <i class="feather-clock text-warning me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("المدة الكلية", "Total Duration")</small>
+                        <strong>@learningPath.TotalDurationHours @Html.T("ساعة", "hrs")</strong>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center mb-3">
+                    <i class="feather-award text-success me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("الشهادة", "Certificate")</small>
+                        <strong>@Html.T("متاحة عند الإتمام", "Available on completion")</strong>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center">
+                    <i class="feather-users text-info me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("الطلاب", "Students")</small>
+                        <strong>@learningPath.EnrolledStudentsCount @Html.T("طالب", "student(s)")</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Certificate Preview -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                    <h6 class="fw-bold mb-0">
+                        <i class="feather-award me-2"></i>
+                        @Html.T("الشهادة", "Certificate")
+                    </h6>
+            </div>
+            <div class="card-body text-center">
+                <div class="border rounded p-3 mb-3">
+                    <i class="feather-award text-warning fs-1 mb-2 d-block"></i>
+                    <strong class="d-block">@Html.T("شهادة إتمام معتمدة", "Accredited completion certificate")</strong>
+                </div>
+                <p class="text-muted fs-12 mb-0">
+                    @Html.T("احصل على شهادة معتمدة عند إتمام جميع الدورات في المسار", "Earn an accredited certificate when you complete all courses in the path")
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+

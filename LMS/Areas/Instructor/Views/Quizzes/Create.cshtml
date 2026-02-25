@@ -1,0 +1,397 @@
+@model LMS.Areas.Instructor.ViewModels.QuizCreateViewModel
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إنشاء اختبار جديد", "Create New Quiz");
+    ViewData["Subtitle"] = Html.T("إضافة اختبار للدرس", "Add quiz to lesson");
+    var lesson = ViewBag.Lesson as LMS.Domain.Entities.Courses.Lesson;
+    var lessons = ViewBag.Lessons as IEnumerable<dynamic>;
+    var indexUrl = Url.Action("Index", new { courseId = lesson?.Module?.CourseId });
+    
+    // Load platform settings
+    var defaultPassingScore = await PlatformSettings.GetIntSettingAsync("Quiz.DefaultPassingScore", 70);
+    var defaultTimeLimit = await PlatformSettings.GetIntSettingAsync("Quiz.TimeLimitMinutes.Default", 30);
+    var maxAttempts = await PlatformSettings.GetIntSettingAsync("Quiz.MaxAttempts.Limit", 10);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة", "Back") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @if (lessons != null && lesson == null)
+    {
+        <!-- Lesson Selection -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="feather-list me-2 text-primary"></i>
+                    اختر الدرس لإنشاء الاختبار
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <i class="feather-info me-2"></i>
+                    يرجى اختيار الدرس الذي تريد إضافة اختبار له من القائمة أدناه
+                </div>
+
+                @if (!lessons.Any())
+                {
+                    <div class="alert alert-warning">
+                        <i class="feather-alert-triangle me-2"></i>
+                        لا توجد دروس متاحة لإضافة اختبار. جميع الدروس تحتوي على اختبارات بالفعل.
+                    </div>
+                }
+                else
+                {
+                    <div class="form-group">
+                        <label class="form-label">اختر الدرس <span class="text-danger">*</span></label>
+                        <select id="lessonSelector" class="form-control form-select" required>
+                            <option value="">-- اختر الدرس --</option>
+                            @foreach (var item in lessons.GroupBy(l => l.CourseTitle))
+                            {
+                                <optgroup label="@item.Key">
+                                    @foreach (var l in item)
+                                    {
+                                        <option value="@l.Id">@l.ModuleTitle - @l.Title</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                    </div>
+                    <button type="button" id="btnContinue" class="btn btn-primary mt-3" disabled>
+                        <i class="feather-arrow-left me-2"></i>
+                        متابعة
+                    </button>
+                }
+            </div>
+        </div>
+    }
+    else if (lesson != null)
+    {
+        <!-- Lesson Info -->
+        <div class="alert alert-info mb-4">
+            <div class="d-flex align-items-center gap-3">
+                <div class="avatar-text avatar-md bg-primary text-white">
+                    <i class="feather-book"></i>
+                </div>
+                <div>
+                    <h6 class="fw-bold mb-1">@Html.T("الدرس:", "Lesson:") @lesson.Title</h6>
+                    <p class="mb-0 fs-13">@lesson.Module?.Title - @lesson.Module?.Course?.Title</p>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (lesson != null)
+    {
+    <form asp-action="Create" asp-route-lessonId="@Model.LessonId" method="post" id="quizForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="LessonId" />
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            المعلومات الأساسية
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">عنوان الاختبار <span class="text-danger">*</span></label>
+                                <input asp-for="Title" class="form-control" placeholder="@Html.T("مثال: اختبار الوحدة الأولى", "e.g. Unit 1 quiz")">
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">الوصف</label>
+                                <textarea asp-for="Description" class="form-control" rows="3" placeholder="@Html.T("وصف مختصر عن الاختبار", "Brief description of the quiz")"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">تعليمات الاختبار</label>
+                                <textarea asp-for="Instructions" class="form-control" rows="4" placeholder="@Html.T("اكتب التعليمات والملاحظات المهمة للطلاب قبل البدء", "Write instructions and important notes for students before starting")"></textarea>
+                                <span asp-validation-for="Instructions" class="text-danger"></span>
+                                <div class="form-text">
+                                    <i class="feather-info me-1"></i>
+                                    مثال: اقرأ الأسئلة جيداً، لديك محاولة واحدة فقط، الوقت محدد
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quiz Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-settings me-2 text-primary"></i>
+                            إعدادات الاختبار
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-4">
+                                <label class="form-label">درجة النجاح (%) <span class="text-danger">*</span></label>
+                                <input asp-for="PassingScore" type="number" min="0" max="100" class="form-control" placeholder="@defaultPassingScore">
+                                <span asp-validation-for="PassingScore" class="text-danger"></span>
+                                <div class="form-text">الحد الأدنى للنجاح (0-100)</div>
+                            </div>
+
+                            <div class="col-lg-4">
+                                <label class="form-label">الوقت المحدد (دقيقة)</label>
+                                <input asp-for="TimeLimitMinutes" type="number" min="0" class="form-control" placeholder="@defaultTimeLimit">
+                                <span asp-validation-for="TimeLimitMinutes" class="text-danger"></span>
+                                <div class="form-text">اتركه فارغاً لوقت غير محدود</div>
+                            </div>
+
+                            <div class="col-lg-4">
+                                <label class="form-label">عدد المحاولات</label>
+                                <input asp-for="MaxAttempts" type="number" min="1" max="@maxAttempts" class="form-control" placeholder="3">
+                                <span asp-validation-for="MaxAttempts" class="text-danger"></span>
+                                <div class="form-text">0 = محاولات غير محدودة</div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4" />
+
+                        <h6 class="fw-bold mb-3">@Html.T("خيارات إضافية", "Additional options")</h6>
+                        
+                        <div class="row g-3">
+                            <div class="col-lg-6">
+                                <div class="form-check form-switch">
+                                    <input asp-for="ShowCorrectAnswers" class="form-check-input" type="checkbox" id="showCorrectAnswers">
+                                    <label class="form-check-label" for="showCorrectAnswers">
+                                        إظهار الإجابات الصحيحة
+                                    </label>
+                                </div>
+                                <div class="form-text">عرض الإجابات الصحيحة بعد إنهاء الاختبار</div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <div class="form-check form-switch">
+                                    <input asp-for="ShowScoreImmediately" class="form-check-input" type="checkbox" id="showScoreImmediately" checked>
+                                    <label class="form-check-label" for="showScoreImmediately">
+                                        إظهار النتيجة فوراً
+                                    </label>
+                                </div>
+                                <div class="form-text">عرض الدرجة مباشرة بعد إنهاء الاختبار</div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <div class="form-check form-switch">
+                                    <input asp-for="ShuffleQuestions" class="form-check-input" type="checkbox" id="shuffleQuestions">
+                                    <label class="form-check-label" for="shuffleQuestions">
+                                        ترتيب عشوائي للأسئلة
+                                    </label>
+                                </div>
+                                <div class="form-text">عرض الأسئلة بترتيب مختلف لكل طالب</div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <div class="form-check form-switch">
+                                    <input asp-for="ShuffleOptions" class="form-check-input" type="checkbox" id="shuffleOptions">
+                                    <label class="form-check-label" for="shuffleOptions">
+                                        ترتيب عشوائي للخيارات
+                                    </label>
+                                </div>
+                                <div class="form-text">عرض خيارات الإجابة بترتيب مختلف</div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <div class="form-check form-switch">
+                                    <input asp-for="AllowBackNavigation" class="form-check-input" type="checkbox" id="allowBackNavigation" checked>
+                                    <label class="form-check-label" for="allowBackNavigation">
+                                        السماح بالرجوع للأسئلة
+                                    </label>
+                                </div>
+                                <div class="form-text">السماح بالتنقل بين الأسئلة</div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <div class="form-check form-switch">
+                                    <input asp-for="OneQuestionPerPage" class="form-check-input" type="checkbox" id="oneQuestionPerPage">
+                                    <label class="form-check-label" for="oneQuestionPerPage">
+                                        سؤال واحد في الصفحة
+                                    </label>
+                                </div>
+                                <div class="form-text">عرض سؤال واحد فقط في كل صفحة</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Quick Settings Guide -->
+                <div class="card stretch stretch-full mb-4 bg-soft-primary">
+                    <div class="card-body">
+                        <h6 class="fw-bold text-primary mb-3">
+                            <i class="feather-help-circle me-2"></i>
+                            نصائح إعداد الاختبار
+                        </h6>
+                        <ul class="list-unstyled mb-0 fs-13">
+                            <li class="mb-3">
+                                <i class="feather-check-circle me-2 text-success"></i>
+                                <strong>درجة النجاح:</strong> عادة 60-70% للاختبارات العادية
+                            </li>
+                            <li class="mb-3">
+                                <i class="feather-clock me-2 text-info"></i>
+                                <strong>الوقت المحدد:</strong> احسب دقيقة واحدة لكل سؤال
+                            </li>
+                            <li class="mb-3">
+                                <i class="feather-refresh-cw me-2 text-warning"></i>
+                                <strong>المحاولات:</strong> 2-3 محاولات لاختبارات التدريب
+                            </li>
+                            <li class="mb-0">
+                                <i class="feather-shuffle me-2 text-danger"></i>
+                                <strong>ترتيب عشوائي:</strong> يمنع الغش ويحسن التقييم
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Preview Card -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-eye me-2"></i>
+                            معاينة سريعة
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">درجة النجاح:</span>
+                            <span class="fw-bold" id="previewPassingScore">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">الوقت المحدد:</span>
+                            <span class="fw-bold" id="previewTimeLimit">غير محدود</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">المحاولات:</span>
+                            <span class="fw-bold" id="previewAttempts">--</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="fs-13">نوع الاختبار:</span>
+                            <span class="badge bg-soft-primary text-primary" id="previewType">عادي</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Note -->
+                <div class="alert alert-warning">
+                    <i class="feather-alert-triangle me-2"></i>
+                    <strong>ملاحظة:</strong> بعد إنشاء الاختبار، ستحتاج إلى إضافة الأسئلة
+                </div>
+
+                <!-- Submit Button -->
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-save me-2"></i>
+                            إنشاء الاختبار
+                        </button>
+                        <a href="@Url.Action("Index", new { courseId = lesson?.Module?.CourseId })" class="btn btn-light w-100">
+                            <i class="feather-x me-2"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+    }
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        // Lesson selector functionality
+        $('#lessonSelector').on('change', function() {
+            var lessonId = $(this).val();
+            $('#btnContinue').prop('disabled', !lessonId);
+        });
+
+        $('#btnContinue').on('click', function() {
+            var lessonId = $('#lessonSelector').val();
+            if (lessonId) {
+                window.location.href = '@Url.Action("Create")?lessonId=' + lessonId;
+            }
+        });
+    </script>
+    
+    <script>
+        $(document).ready(function () {
+            // Update preview in real-time
+            function updatePreview() {
+                const passingScore = $('#PassingScore').val() || '--';
+                const timeLimit = $('#TimeLimitMinutes').val();
+                const maxAttempts = $('#MaxAttempts').val();
+
+                $('#previewPassingScore').text(passingScore + '%');
+                $('#previewTimeLimit').text(timeLimit ? timeLimit + ' دقيقة' : 'غير محدود');
+                $('#previewAttempts').text(maxAttempts || 'غير محدود');
+
+                // Update type based on settings
+                const isTimed = timeLimit > 0;
+                const isLimitedAttempts = maxAttempts > 0 && maxAttempts < 5;
+                const isStrict = $('#ShuffleQuestions').is(':checked') && $('#ShuffleOptions').is(':checked');
+
+                let type = 'عادي';
+                let badgeClass = 'bg-soft-primary text-primary';
+
+                if (isTimed && isLimitedAttempts && isStrict) {
+                    type = 'صارم';
+                    badgeClass = 'bg-soft-danger text-danger';
+                } else if (isTimed || isLimitedAttempts) {
+                    type = 'متوسط';
+                    badgeClass = 'bg-soft-warning text-warning';
+                }
+
+                $('#previewType').text(type).attr('class', 'badge ' + badgeClass);
+            }
+
+            // Attach event listeners
+            $('#PassingScore, #TimeLimitMinutes, #MaxAttempts').on('input', updatePreview);
+            $('#ShuffleQuestions, #ShuffleOptions').on('change', updatePreview);
+
+            // Initial update
+            updatePreview();
+
+            // Form validation
+            $('#quizForm').on('submit', function(e) {
+                const title = $('#Title').val().trim();
+                const passingScore = parseInt($('#PassingScore').val());
+
+                if (!title || title.length < 3) {
+                    e.preventDefault();
+                    alert('يرجى إدخال عنوان للاختبار (3 أحرف على الأقل)');
+                    $('#Title').focus();
+                    return false;
+                }
+
+                if (isNaN(passingScore) || passingScore < 0 || passingScore > 100) {
+                    e.preventDefault();
+                    alert('يرجى إدخال درجة نجاح صحيحة (0-100)');
+                    $('#PassingScore').focus();
+                    return false;
+                }
+
+                return true;
+            });
+        });
+    </script>
+}
+

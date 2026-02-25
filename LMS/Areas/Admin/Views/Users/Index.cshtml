@@ -1,0 +1,547 @@
+@model LMS.Areas.Admin.ViewModels.UsersListViewModel
+@using LMS.Services.Interfaces
+@inject ISystemConfigurationService SystemConfigService
+
+@{
+    ViewData["Title"] = Html.T("إدارة المستخدمين", "User Management");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("إدارة المستخدمين", "User Management"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إضافة مستخدم", "Add User"), "feather-plus", Url.Action("Create", "Users"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+    <style>
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded">
+                            <i class="feather-users"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي المستخدمين", "Total Users")</span>
+                            <h3 class="fw-bolder d-block">@Model.TotalUsers.ToString("N0")</h3>
+                        </div>
+                    </div>
+                    <div class="badge @(Model.GrowthPercentage >= 0 ? "bg-soft-success text-success" : "bg-soft-danger text-danger")">
+                        <i class="feather-arrow-@(Model.GrowthPercentage >= 0 ? "up" : "down") fs-10 me-1"></i>
+                        <span>@(Model.GrowthPercentage >= 0 ? "+" : "")@Model.GrowthPercentage.ToString("N1")%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded">
+                            <i class="feather-user-check"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("مستخدمين نشطون", "Active Users")</span>
+                            <h3 class="fw-bolder d-block">@Model.ActiveUsers.ToString("N0")</h3>
+                        </div>
+                    </div>
+                    <div class="badge bg-soft-success text-success">
+                        <span>@Html.T("نشط", "Active")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded">
+                            <i class="feather-user-plus"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("مستخدمين جدد", "New Users")</span>
+                            <h3 class="fw-bolder d-block">@Model.NewUsersThisMonth.ToString("N0")</h3>
+                        </div>
+                    </div>
+                    <div class="badge bg-soft-primary text-primary">
+                        <span>@Html.T("هذا الشهر", "This Month")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded">
+                            <i class="feather-user-x"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("حسابات معلقة", "Pending Accounts")</span>
+                            <h3 class="fw-bolder d-block">@Model.PendingUsers.ToString("N0")</h3>
+                        </div>
+                    </div>
+                    <div class="badge bg-soft-warning text-warning">
+                        <span>@Html.T("معلق", "Pending")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section FilterDropdown {
+    <a href="javascript:void(0);" class="dropdown-item filter-all">
+        <i class="feather-eye me-3"></i>
+        <span>@Html.T("عرض الكل", "View All")</span>
+    </a>
+    <div class="dropdown-divider"></div>
+    <a href="javascript:void(0);" class="dropdown-item filter-active">
+        <i class="feather-user-check me-3"></i>
+        <span>@Html.T("نشط فقط", "Active Only")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-pending">
+        <i class="feather-user-x me-3"></i>
+        <span>@Html.T("معلق فقط", "Pending Only")</span>
+    </a>
+    <div class="dropdown-divider"></div>
+    <a href="javascript:void(0);" class="dropdown-item filter-admin">
+        <i class="feather-shield me-3"></i>
+        <span>@Html.T("المديرون", "Admins")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-instructor">
+        <i class="feather-award me-3"></i>
+        <span>@Html.T("المدرسون", "Instructors")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-student">
+        <i class="feather-users me-3"></i>
+        <span>@Html.T("الطلاب", "Students")</span>
+    </a>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header d-flex align-items-center justify-content-between" style="border-bottom: 1px solid var(--border-color-light, #f1f5f9); padding: 1rem 1.5rem;">
+                    <h5 class="card-title mb-0 fw-bold">@Html.T("قائمة المستخدمين", "User List")</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="view-toggle btn-group" role="group" style="border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                            <button type="button" class="btn btn-sm" id="tableViewBtn" onclick="switchAdminUsersView('table')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); transition: all 0.25s ease;">
+                                <i class="feather-list" style="font-size: 15px;"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm active" id="cardViewBtn" onclick="switchAdminUsersView('card')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); border-right: none; transition: all 0.25s ease;">
+                                <i class="feather-grid" style="font-size: 15px;"></i>
+                            </button>
+                        </div>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                                <i class="feather-download me-2"></i>@Html.T("تصدير", "Export")
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/users?format=csv">
+                                        <i class="feather-file-text me-2 text-success"></i>@Html.T("تصدير CSV", "Export CSV")
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/users?format=excel">
+                                        <i class="feather-file me-2 text-primary"></i>@Html.T("تصدير Excel", "Export Excel")
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/users?format=pdf">
+                                        <i class="feather-file-text me-2 text-danger"></i>@Html.T("تصدير PDF", "Export PDF")
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0)" onclick="window.print()">
+                                        <i class="feather-printer me-2 text-secondary"></i>@Html.T("طباعة", "Print")
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <!-- TABLE VIEW -->
+                    <div id="tableView" class="courses-view-panel d-none">
+                        <div class="table-responsive" style="overflow: visible;">
+                            <table class="table table-hover courses-table-modern" id="usersTable">
+                            <thead>
+                                <tr>
+                                    <th class="wd-30">
+                                        <div class="custom-control custom-checkbox ms-1">
+                                            <input type="checkbox" class="custom-control-input" id="checkAllUsers">
+                                            <label class="custom-control-label" for="checkAllUsers"></label>
+                                        </div>
+                                    </th>
+                                    <th>@Html.T("المستخدم", "User")</th>
+                                    <th>@Html.T("البريد الإلكتروني", "Email")</th>
+                                    <th>@Html.T("رقم الهاتف", "Phone")</th>
+                                    <th>@Html.T("الدور", "Role")</th>
+                                    <th>@Html.T("تاريخ التسجيل", "Registration Date")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var user in Model.Users)
+                                {
+                                    <tr class="single-item">
+                                        <td>
+                                            <div class="item-checkbox ms-1">
+                                                <div class="custom-control custom-checkbox">
+                                                    <input type="checkbox" class="custom-control-input checkbox" id="checkBox_@user.Id">
+                                                    <label class="custom-control-label" for="checkBox_@user.Id"></label>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <a href="@Url.Action("Details", "Users", new { id = user.Id })" class="hstack gap-3">
+                                                <div class="avatar-text avatar-md">
+                                                    @if (!string.IsNullOrEmpty(user.FirstName))
+                                                    {
+                                                        <span>@user.FirstName.Substring(0, 1)@(user.LastName?.Substring(0, 1) ?? "")</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="feather-user"></i>
+                                                    }
+                                                </div>
+                                                <div>
+                                                    <span class="text-truncate-1-line">@user.FirstName @user.LastName</span>
+                                                </div>
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <span class="text-truncate-1-line">@user.Email</span>
+                                            @if (user.EmailConfirmed)
+                                            {
+                                                <i class="feather-check-circle text-success ms-1" data-bs-toggle="tooltip" title="@Html.T("بريد موثق", "Email Verified")"></i>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="text-muted">@(user.PhoneNumber ?? (await SystemConfigService.GetLocalizationAsync("DefaultValues.not_specified", "ar", "غير محدد")))</span>
+                                        </td>
+                                        @{
+                                            var userRolesDict = ViewBag.UserRoles as Dictionary<string, IList<string>>;
+                                            var currentUserRoles = userRolesDict?.GetValueOrDefault(user.Id) ?? new List<string>();
+                                            var primaryRole = currentUserRoles.Contains("Admin") ? "Admin" 
+                                                : currentUserRoles.Contains("Instructor") ? "Instructor" 
+                                                : currentUserRoles.Contains("Student") ? "Student" 
+                                                : "User";
+                                        }
+                                        <td data-role="@primaryRole">
+                                            @if (currentUserRoles.Contains("Admin"))
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">@Html.T("مدير", "Admin")</span>
+                                            }
+                                            else if (currentUserRoles.Contains("Instructor"))
+                                            {
+                                                <span class="badge bg-soft-warning text-warning">@Html.T("مدرس", "Instructor")</span>
+                                                @if ((ViewBag.InstructorApproved as Dictionary<string, bool>) != null && (ViewBag.InstructorApproved as Dictionary<string, bool>).ContainsKey(user.Id) && (ViewBag.InstructorApproved as Dictionary<string, bool>)[user.Id])
+                                                {
+                                                    <span class="badge bg-soft-success text-success ms-1">@Html.T("معتمد", "Approved")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary ms-1">@Html.T("قيد المراجعة", "Under Review")</span>
+                                                }
+                                            }
+                                            else if (currentUserRoles.Contains("Student"))
+                                            {
+                                                <span class="badge bg-soft-primary text-primary">@Html.T("طالب", "Student")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-secondary text-secondary">@Html.T("مستخدم", "User")</span>
+                                            }
+                                        </td>
+                                        <td>@user.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                        <td>
+                                            @if (user.IsActive && user.EmailConfirmed)
+                                            {
+                                                <span class="badge bg-soft-success text-success status-badge">@Html.T("نشط", "Active")</span>
+                                            }
+                                            else if (!user.EmailConfirmed)
+                                            {
+                                                <span class="badge bg-soft-warning text-warning status-badge">@Html.T("بريد غير موثق", "Email Not Verified")</span>
+                                            }
+                                            else if (!user.IsActive)
+                                            {
+                                                <span class="badge bg-soft-danger text-danger status-badge">@Html.T("معطل", "Disabled")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-secondary text-secondary status-badge">@Html.T("غير محدد", "Not set")</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="@Url.Action("Details", "Users", new { id = user.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض التفاصيل", "View Details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                <a href="@Url.Action("Edit", "Users", new { id = user.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                    <i class="feather-edit"></i>
+                                                </a>
+                                                <div class="dropdown">
+                                                    <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown" data-bs-offset="0,21">
+                                                        <i class="feather-more-horizontal"></i>
+                                                    </a>
+                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        <li>
+                                                            <a class="dropdown-item" href="@Url.Action("ResetPassword", "Users", new { id = user.Id })">
+                                                                <i class="feather-lock me-3"></i>
+                                                                <span>@Html.T("تغيير كلمة المرور", "Change Password")</span>
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item" href="@Url.Action("Index", "DirectMessages", new { recipientId = user.Id })">
+                                                                <i class="feather-send me-3"></i>
+                                                                <span>@Html.T("إرسال رسالة", "Send Message")</span>
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item" href="@Url.Action("ManageRoles", "Users", new { id = user.Id })">
+                                                                <i class="feather-shield me-3"></i>
+                                                                <span>@Html.T("إدارة الأدوار", "Manage Roles")</span>
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <form asp-action="ToggleStatus" asp-route-id="@user.Id" method="post" class="d-inline">
+                                                                @Html.AntiForgeryToken()
+                                                                <button type="submit" class="dropdown-item @(user.IsActive ? "text-warning" : "text-success")" onclick="return confirm('@(user.IsActive ? Html.T("هل أنت متأكد من تعطيل هذا المستخدم؟", "Are you sure you want to disable this user?") : Html.T("هل أنت متأكد من تفعيل هذا المستخدم؟", "Are you sure you want to enable this user?"))');">
+                                                                    <i class="feather-@(user.IsActive ? "user-x" : "user-check") me-3"></i>
+                                                                    <span>@(user.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))</span>
+                                                                </button>
+                                                            </form>
+                                                        </li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <form asp-action="Delete" asp-route-id="@user.Id" method="post" class="d-inline">
+                                                                @Html.AntiForgeryToken()
+                                                                <button type="submit" class="dropdown-item text-danger" onclick="return confirm('@(Html.T("هل أنت متأكد من حذف هذا المستخدم؟", "Are you sure you want to delete this user?"))');">
+                                                                    <i class="feather-trash-2 me-3"></i>
+                                                                    <span>@Html.T("حذف", "Delete")</span>
+                                                                </button>
+                                                            </form>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        </div>
+                    </div>
+
+                    <!-- CARD VIEW (Grid - Default) -->
+                    <div id="cardView" class="courses-view-panel courses-view-active">
+                        <div class="p-4">
+                            <div class="row g-4">
+                                @foreach (var user in Model.Users)
+                                {
+                                    var userRolesDict = ViewBag.UserRoles as Dictionary<string, IList<string>>;
+                                    var currentUserRoles = userRolesDict?.GetValueOrDefault(user.Id) ?? new List<string>();
+                                    var primaryRole = currentUserRoles.Contains("Admin") ? "Admin" : currentUserRoles.Contains("Instructor") ? "Instructor" : currentUserRoles.Contains("Student") ? "Student" : "User";
+                                    <div class="col-12 col-sm-6 col-xl-4 col-xxl-3">
+                                        <div class="card stretch stretch-full border-0" style="border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06); border: 1px solid var(--border-color-light, #f1f5f9); height: 100%;">
+                                            <div class="card-body p-3 d-flex flex-column">
+                                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                                    <div class="avatar-text avatar-lg bg-soft-primary text-primary rounded-circle">
+                                                        @if (!string.IsNullOrEmpty(user.FirstName))
+                                                        { <span>@user.FirstName.Substring(0, 1)@(user.LastName?.Substring(0, 1) ?? "")</span> }
+                                                        else
+                                                        { <i class="feather-user"></i> }
+                                                    </div>
+                                                    <div class="dropdown">
+                                                        <button class="btn btn-sm btn-light" data-bs-toggle="dropdown" style="border-radius: 8px;"><i class="feather-more-vertical"></i></button>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li><a class="dropdown-item" href="@Url.Action("Details", "Users", new { id = user.Id })"><i class="feather-eye me-3"></i>@Html.T("عرض", "View")</a></li>
+                                                            <li><a class="dropdown-item" href="@Url.Action("Edit", "Users", new { id = user.Id })"><i class="feather-edit me-3"></i>@Html.T("تعديل", "Edit")</a></li>
+                                                            <li><a class="dropdown-item" href="@Url.Action("ResetPassword", "Users", new { id = user.Id })"><i class="feather-lock me-3"></i>@Html.T("كلمة المرور", "Password")</a></li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <form asp-action="Delete" asp-route-id="@user.Id" method="post" class="d-inline">
+                                                                    @Html.AntiForgeryToken()
+                                                                    <button type="submit" class="dropdown-item text-danger" onclick="return confirm('@Html.T("هل أنت متأكد من حذف هذا المستخدم؟", "Are you sure you want to delete this user?")');"><i class="feather-trash-2 me-3"></i>@Html.T("حذف", "Delete")</button>
+                                                                </form>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                                <a href="@Url.Action("Details", "Users", new { id = user.Id })" class="fw-bold text-dark d-block mb-1" style="text-decoration: none; -webkit-line-clamp: 2; overflow: hidden; text-overflow: ellipsis;">@user.FirstName @user.LastName</a>
+                                                <span class="fs-12 text-muted d-block mb-2">@user.Email</span>
+                                                <div class="mb-2">
+                                                    @if (currentUserRoles.Contains("Admin")) { <span class="badge bg-soft-danger text-danger">@Html.T("مدير", "Admin")</span> }
+                                                    else if (currentUserRoles.Contains("Instructor"))
+                                                    {
+                                                        <span class="badge bg-soft-warning text-warning">@Html.T("مدرس", "Instructor")</span>
+                                                        @if ((ViewBag.InstructorApproved as Dictionary<string, bool>) != null && (ViewBag.InstructorApproved as Dictionary<string, bool>).ContainsKey(user.Id) && (ViewBag.InstructorApproved as Dictionary<string, bool>)[user.Id])
+                                                        {
+                                                            <span class="badge bg-soft-success text-success ms-1">@Html.T("معتمد", "Approved")</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-soft-secondary text-secondary ms-1">@Html.T("قيد المراجعة", "Under Review")</span>
+                                                        }
+                                                    }
+                                                    else if (currentUserRoles.Contains("Student")) { <span class="badge bg-soft-primary text-primary">@Html.T("طالب", "Student")</span> }
+                                                    else { <span class="badge bg-soft-secondary text-secondary">@Html.T("مستخدم", "User")</span> }
+                                                </div>
+                                                <div class="mt-auto pt-3" style="border-top: 1px solid var(--border-color-light, #f1f5f9);">
+                                                    @if (user.IsActive && user.EmailConfirmed) { <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span> }
+                                                    else if (!user.EmailConfirmed) { <span class="badge bg-soft-warning text-warning">@Html.T("غير موثق", "Unverified")</span> }
+                                                    else { <span class="badge bg-soft-danger text-danger">@Html.T("معطل", "Disabled")</span> }
+                                                    <span class="fs-12 text-muted float-end">@user.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            var table = $('#usersTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[5, "desc"]],
+                "pageLength": 25,
+                "dom": '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rt<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>',
+            });
+
+            // Check all checkboxes
+            $('#checkAllUsers').on('change', function() {
+                $('.checkbox').prop('checked', $(this).prop('checked'));
+            });
+
+            // Clear all filters helper
+            function clearAllFilters() {
+                table.column(4).search('').column(6).search('').draw();
+            }
+
+            // Status filter buttons
+            $('.filter-all').on('click', function() {
+                clearAllFilters();
+            });
+
+            $('.filter-active').on('click', function() {
+                table.column(4).search('');
+                table.column(6).search('نشط').draw();
+            });
+
+            $('.filter-pending').on('click', function() {
+                table.column(4).search('');
+                // Search for users with unverified email or disabled accounts
+                table.column(6).search('غير موثق|معطل', true, false).draw();
+            });
+
+            // Role filter buttons
+            $('.filter-admin').on('click', function() {
+                table.column(6).search('');
+                table.column(4).search('مدير').draw();
+            });
+
+            $('.filter-instructor').on('click', function() {
+                table.column(6).search('');
+                table.column(4).search('مدرس').draw();
+            });
+
+            $('.filter-student').on('click', function() {
+                table.column(6).search('');
+                table.column(4).search('طالب').draw();
+            });
+
+            // Tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+
+            // Restore view preference (default is grid/card)
+            var savedView = localStorage.getItem('admin_users_index_view');
+            if (savedView === 'table') {
+                switchAdminUsersView('table');
+            } else {
+                switchAdminUsersView('card');
+            }
+
+            // Export functions - Navigate to Reports Export page
+            $('.export-pdf, .export-csv, .export-excel').on('click', function() {
+                window.location.href = '@Url.Action("CustomExport", "ReportExports", new { area = "Admin", type = "Users" })';
+            });
+        });
+
+        function switchAdminUsersView(mode) {
+            var tableView = document.getElementById('tableView');
+            var cardView = document.getElementById('cardView');
+            var tableBtn = document.getElementById('tableViewBtn');
+            var cardBtn = document.getElementById('cardViewBtn');
+            if (mode === 'card') {
+                if (tableView) { tableView.classList.add('d-none'); tableView.classList.remove('courses-view-active'); }
+                if (cardView) { cardView.classList.remove('d-none'); cardView.classList.add('courses-view-active'); }
+                if (cardBtn) cardBtn.classList.add('active');
+                if (tableBtn) tableBtn.classList.remove('active');
+            } else {
+                if (cardView) { cardView.classList.add('d-none'); cardView.classList.remove('courses-view-active'); }
+                if (tableView) { tableView.classList.remove('d-none'); tableView.classList.add('courses-view-active'); }
+                if (tableBtn) tableBtn.classList.add('active');
+                if (cardBtn) cardBtn.classList.remove('active');
+                if (typeof $ !== 'undefined' && $('#usersTable').length && $.fn.DataTable && $('#usersTable').DataTable) {
+                    try { $('#usersTable').DataTable().columns().adjust(); } catch (e) {}
+                }
+            }
+            localStorage.setItem('admin_users_index_view', mode);
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.forEach(function (el) {
+                var t = bootstrap.Tooltip.getInstance(el);
+                if (!t) new bootstrap.Tooltip(el);
+            });
+        }
+    </script>
+}
+

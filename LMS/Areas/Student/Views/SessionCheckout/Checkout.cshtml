@@ -1,0 +1,196 @@
+@model LMS.Areas.Student.ViewModels.SessionCheckoutViewModel
+@{
+    ViewData["Title"] = Html.T("شراء الجلسة", "Purchase Session");
+    var gateways = ViewBag.PaymentGateways as List<LMS.Domain.Entities.Settings.PaymentGatewaySetting> ?? new List<LMS.Domain.Entities.Settings.PaymentGatewaySetting>();
+}
+
+@section Styles {
+<style>
+    .payment-method-card {
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .payment-method-card:hover, .payment-method-card.selected {
+        border-color: #667eea;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+    .payment-method-card.selected {
+        background: #f0f4ff;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<div class="row g-4">
+    <!-- Order Summary -->
+    <div class="col-lg-5 order-lg-2">
+        <div class="card stretch stretch-full sticky-top" style="top: 20px;">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-shopping-bag me-2"></i>
+                    @Html.T("ملخص الطلب", "Order Summary")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <div class="avatar-text avatar-lg bg-soft-danger text-danger">
+                        <i class="feather-video"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-1">@Model.SessionTitle</h5>
+                        <small class="text-muted">@Model.InstructorName</small>
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(Model.Subject))
+                {
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">@Html.T("الموضوع", "Subject")</span>
+                        <strong>@Model.Subject</strong>
+                    </div>
+                }
+
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">@Html.T("التاريخ", "Date")</span>
+                    <strong>@Model.ScheduledStartTime.ToString("dd/MM/yyyy")</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">@Html.T("الوقت", "Time")</span>
+                    <strong>@Model.ScheduledStartTime.ToString("HH:mm")</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">@Html.T("المدة", "Duration")</span>
+                    <strong>@Model.DurationMinutes @Html.T("دقيقة", "minute(s)")</strong>
+                </div>
+
+                <hr />
+
+                <div class="d-flex justify-content-between pt-2">
+                    <h5 class="fw-bold">@Html.T("الإجمالي", "Total")</h5>
+                    <h5 class="fw-bold text-primary">@Model.Price.ToEGP(0)</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Form -->
+    <div class="col-lg-7 order-lg-1">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-credit-card me-2"></i>
+                    @Html.T("اختر طريقة الدفع", "Choose Payment Method")
+                </h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="ProcessPayment" method="post" id="paymentForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="liveClassId" value="@Model.LiveClassId" />
+
+                    <div class="row g-3 mb-4">
+                        @if (gateways.Any())
+                        {
+                            @foreach (var gateway in gateways)
+                            {
+                                <div class="col-md-6">
+                                    <label class="payment-method-card d-block" onclick="selectPayment('@gateway.GatewayType', this)">
+                                        <input type="radio" name="paymentMethod" value="@gateway.GatewayType" class="d-none" />
+                                        <div class="d-flex align-items-center gap-3">
+                                            @if (!string.IsNullOrEmpty(gateway.IconUrl))
+                                            {
+                                                <img src="@gateway.IconUrl" alt="@gateway.Name" style="height: 32px;" />
+                                            }
+                                            else
+                                            {
+                                                <i class="feather-credit-card fs-4 text-primary"></i>
+                                            }
+                                            <div>
+                                                <strong>@(gateway.DisplayNameAr ?? gateway.DisplayName ?? gateway.Name)</strong>
+                                                @if (!string.IsNullOrEmpty(gateway.DescriptionAr ?? gateway.Description))
+                                                {
+                                                    <small class="text-muted d-block">@(gateway.DescriptionAr ?? gateway.Description)</small>
+                                                }
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="col-md-6">
+                                <label class="payment-method-card d-block selected" onclick="selectPayment('Paymob', this)">
+                                    <input type="radio" name="paymentMethod" value="Paymob" class="d-none" checked />
+                                    <div class="d-flex align-items-center gap-3">
+                                        <i class="feather-credit-card fs-4 text-primary"></i>
+                                        <div>
+                                            <strong>@Html.T("بطاقة ائتمان / خصم", "Credit / Debit Card")</strong>
+                                            <small class="text-muted d-block">@Html.T("Visa, Mastercard", "Visa, Mastercard")</small>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="payment-method-card d-block" onclick="selectPayment('Fawry', this)">
+                                    <input type="radio" name="paymentMethod" value="Fawry" class="d-none" />
+                                    <div class="d-flex align-items-center gap-3">
+                                        <i class="feather-smartphone fs-4 text-warning"></i>
+                                        <div>
+                                            <strong>@Html.T("فوري", "Fawry")</strong>
+                                            <small class="text-muted d-block">@Html.T("ادفع من أقرب منفذ فوري", "Pay at the nearest Fawry outlet")</small>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="payment-method-card d-block" onclick="selectPayment('VodafoneCash', this)">
+                                    <input type="radio" name="paymentMethod" value="VodafoneCash" class="d-none" />
+                                    <div class="d-flex align-items-center gap-3">
+                                        <i class="feather-smartphone fs-4 text-danger"></i>
+                                        <div>
+                                            <strong>@Html.T("فودافون كاش", "Vodafone Cash")</strong>
+                                            <small class="text-muted d-block">@Html.T("محفظة إلكترونية", "E-Wallet")</small>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        }
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="submitBtn">
+                        <i class="feather-lock me-2"></i>
+                        @Html.T("ادفع", "Pay") @Model.Price.ToEGP(0)
+                    </button>
+
+                    <p class="text-muted text-center small mt-3">
+                        <i class="feather-shield me-1"></i>
+                        @Html.T("جميع المعاملات مشفرة وآمنة", "All transactions are encrypted and secure")
+                    </p>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function selectPayment(method, element) {
+        document.querySelectorAll('.payment-method-card').forEach(c => c.classList.remove('selected'));
+        element.classList.add('selected');
+        element.querySelector('input[type="radio"]').checked = true;
+    }
+
+    document.getElementById('paymentForm').addEventListener('submit', function(e) {
+        var btn = document.getElementById('submitBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="feather-loader me-2" style="animation: spin 1s linear infinite;"></i>@Html.T("جاري المعالجة...", "Processing...")';
+        }
+    });
+</script>
+}

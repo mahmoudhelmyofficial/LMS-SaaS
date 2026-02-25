@@ -1,0 +1,265 @@
+@model LMS.Domain.Entities.Social.Discussion
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل المناقشة", "Discussion Details");
+    ViewData["Subtitle"] = Model.Title;
+}
+
+@{
+    var indexUrl = Url.Action("Index");
+}
+
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="mb-1">@ViewData["Title"]</h4>
+        <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+    </div>
+    <div class="d-flex gap-2">
+        @if (!Model.IsResolved)
+        {
+            <form asp-action="MarkResolved" asp-route-id="@Model.Id" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-success">
+                    <i class="feather-check-circle me-2"></i>
+                    تحديد كمحلولة
+                </button>
+            </form>
+        }
+        <a href="@indexUrl" class="btn btn-light">
+            <i class="feather-arrow-right me-2"></i>
+            @Html.T("العودة للقائمة", "Back to list")
+        </a>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <!-- Discussion Content -->
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-start w-100">
+                        <div>
+                            <h5 class="card-title mb-2">@Model.Title</h5>
+                            <div class="d-flex align-items-center gap-3">
+                                @if (Model.IsPinned)
+                                {
+                                    <span class="badge bg-soft-info text-info">
+                                        <i class="feather-bookmark me-1"></i> مثبت
+                                    </span>
+                                }
+                                @if (Model.IsResolved)
+                                {
+                                    <span class="badge bg-soft-success text-success">
+                                        <i class="feather-check-circle me-1"></i> محلولة
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-soft-warning text-warning">
+                                        <i class="feather-clock me-1"></i> قيد الانتظار
+                                    </span>
+                                }
+                                <span class="fs-11 text-muted">
+                                    <i class="feather-calendar me-1"></i>
+                                    @Model.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Author Info -->
+                    <div class="d-flex align-items-center gap-3 mb-4 pb-4 border-bottom">
+                        <div class="avatar-text avatar-lg bg-primary text-white">
+                            @(Model.Author?.FirstName?.Substring(0, 1).ToUpper() ?? "S")
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">@Model.Author?.FullName</h6>
+                            <p class="text-muted fs-12 mb-0">@Model.Author?.Email</p>
+                        </div>
+                    </div>
+
+                    <!-- Discussion Content -->
+                    <div class="discussion-content mb-4">
+                        <div class="fs-14" style="white-space: pre-wrap; line-height: 1.8;">@Model.Content</div>
+                    </div>
+
+                    <!-- Replies Section -->
+                    <div class="replies-section">
+                        <h6 class="fw-bold mb-4">
+                            <i class="feather-message-square text-primary me-2"></i>
+                            الردود (@Model.RepliesCount)
+                        </h6>
+
+                        @if (Model.Replies != null && Model.Replies.Any())
+                        {
+                            <div class="replies-list">
+                                @foreach (var reply in Model.Replies.OrderBy(r => r.CreatedAt))
+                                {
+                                    <div class="reply-item mb-4 @(reply.IsInstructorReply ? "bg-soft-primary" : "bg-light") p-4 rounded">
+                                        <div class="d-flex align-items-start gap-3">
+                                            <div class="avatar-text avatar-md @(reply.IsInstructorReply ? "bg-primary" : "bg-secondary") text-white">
+                                                @(reply.Author?.FirstName?.Substring(0, 1).ToUpper() ?? "U")
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                                    <div>
+                                                        <h6 class="fw-bold mb-1">
+                                                            @reply.Author?.FullName
+                                                            @if (reply.IsInstructorReply)
+                                                            {
+                                                                <span class="badge bg-primary fs-10 ms-2">مدرس</span>
+                                                            }
+                                                        </h6>
+                                                        <span class="fs-11 text-muted">
+                                                            <i class="feather-clock me-1"></i>
+                                                            @reply.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div class="fs-13" style="white-space: pre-wrap; line-height: 1.6;">@reply.Content</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-4">
+                                <i class="feather-message-circle fs-1 text-muted mb-3"></i>
+                                <p class="text-muted">@Html.T("لا توجد ردود بعد", "No replies yet")</p>
+                            </div>
+                        }
+
+                        <!-- Reply Form -->
+                        @if (!Model.IsResolved)
+                        {
+                            <div class="reply-form mt-5 pt-4 border-top">
+                                <h6 class="fw-bold mb-3">
+                                    <i class="feather-edit-3 text-primary me-2"></i>
+                                    @Html.T("إضافة رد", "Add reply")
+                                </h6>
+                                <form asp-action="Reply" asp-route-id="@Model.Id" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <div class="mb-3">
+                                        <textarea name="content" class="form-control" rows="5" placeholder="@Html.T("اكتب ردك هنا...", "Write your reply here...")" required></textarea>
+                                    </div>
+                                    <div class="d-flex justify-content-end gap-2">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="feather-send me-2"></i>
+                                            إرسال الرد
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-success mt-4">
+                                <i class="feather-check-circle me-2"></i>
+                                <strong>تم حل هذه المناقشة</strong>
+                                @if (Model.ResolvedAt.HasValue)
+                                {
+                                    <span class="d-block fs-12 mt-1">تاريخ الحل: @Model.ResolvedAt.Value.ToString("dd/MM/yyyy hh:mm tt")</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Info -->
+        <div class="col-lg-4">
+            <!-- Course Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("معلومات الدورة", "Course info")</h6>
+                </div>
+                <div class="card-body">
+                    @if (Model.Course != null)
+                    {
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div class="avatar-image avatar-md">
+                                <img src="@(Model.Course.ThumbnailUrl ?? "/assets/images/general/placeholder.png")" alt="@Model.Course.Title" class="img-fluid">
+                            </div>
+                            <div>
+                                <h6 class="fw-bold mb-1">@Model.Course.Title</h6>
+                                <a href="@Url.Action("Details", "Courses", new { id = Model.Course.Id })" class="fs-11 text-primary">
+                                    عرض الدورة <i class="feather-arrow-left ms-1"></i>
+                                </a>
+                            </div>
+                        </div>
+                    }
+
+                    @if (Model.Lesson != null)
+                    {
+                        <div class="border-top pt-3">
+                            <p class="text-muted fs-11 mb-1">الدرس المرتبط:</p>
+                            <p class="fw-medium fs-13 mb-0">@Model.Lesson.Title</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Discussion Stats -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("إحصائيات", "Statistics")</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-message-square text-primary"></i>
+                            <span class="fs-13">عدد الردود</span>
+                        </div>
+                        <span class="fw-bold">@Model.RepliesCount</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-eye text-info"></i>
+                            <span class="fs-13">المشاهدات</span>
+                        </div>
+                        <span class="fw-bold">@Model.ViewsCount</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-calendar text-muted"></i>
+                            <span class="fs-13">تاريخ البدء</span>
+                        </div>
+                        <span class="fs-12">@Model.CreatedAt.ToString("dd/MM/yyyy")</span>
+                    </div>
+                    @if (Model.LastReplyAt.HasValue)
+                    {
+                        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="feather-clock text-muted"></i>
+                                <span class="fs-13">آخر رد</span>
+                            </div>
+                            <span class="fs-12">@Model.LastReplyAt.Value.ToString("dd/MM/yyyy")</span>
+                        </div>
+                    }
+                    @if (Model.IsResolved && Model.ResolvedAt.HasValue)
+                    {
+                        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="feather-check-circle text-success"></i>
+                                <span class="fs-13">تاريخ الحل</span>
+                            </div>
+                            <span class="fs-12">@Model.ResolvedAt.Value.ToString("dd/MM/yyyy")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

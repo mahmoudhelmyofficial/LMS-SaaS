@@ -1,0 +1,369 @@
+@model LMS.Areas.Student.ViewModels.MultiGatewayCheckoutViewModel
+@using LMS.Domain.Enums
+@{
+    ViewData["Title"] = Html.T("إتمام الشراء", "Complete Purchase");
+    Layout = "_StudentLayout";
+}
+
+<div class="container py-5">
+    <div class="row">
+        <!-- Order Summary -->
+        <div class="col-lg-4 order-lg-2">
+            <div class="card shadow-sm sticky-top" style="top: 100px;">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-shopping-cart me-2"></i>
+                        @Html.T("ملخص الطلب", "Order summary")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @foreach (var item in Model.Cart.Items)
+                    {
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <h6 class="mb-0">@item.Title</h6>
+                                <small class="text-muted">
+                                    @(item.Type == ProductType.Course ? Html.T("دورة تعليمية", "Course") : Html.T("كتاب", "Book"))
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                @if (item.DiscountAmount > 0)
+                                {
+                                    <span class="text-decoration-line-through text-muted small">@item.OriginalPrice.ToString("N2")</span>
+                                }
+                                <div class="fw-bold">@item.Price.ToEGP(2)</div>
+                            </div>
+                        </div>
+                    }
+
+                    <hr />
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>@Html.T("المجموع الفرعي", "Subtotal")</span>
+                        <span>@Model.Cart.SubTotal.ToEGP(2)</span>
+                    </div>
+
+                    @if (Model.Cart.DiscountAmount > 0)
+                    {
+                        <div class="d-flex justify-content-between mb-2 text-success">
+                            <span>
+                                <i class="fas fa-tag me-1"></i>
+                                @Html.T("الخصم", "Discount")
+                                @if (Model.Cart.AppliedCoupon != null)
+                                {
+                                    <small>(@Model.Cart.AppliedCoupon.Code)</small>
+                                }
+                            </span>
+                            <span>- @Model.Cart.DiscountAmount.ToEGP(2)</span>
+                        </div>
+                    }
+
+                    <hr />
+
+                    <div class="d-flex justify-content-between fs-5 fw-bold">
+                        <span>@Html.T("الإجمالي", "Total")</span>
+                        <span class="text-primary">@Model.Cart.TotalAmount.ToEGP(2)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Methods -->
+        <div class="col-lg-8 order-lg-1">
+            <h2 class="mb-4">
+                <i class="fas fa-credit-card text-primary me-2"></i>
+                @Html.T("اختر طريقة الدفع", "Choose payment method")
+            </h2>
+
+            @if (!Model.AvailablePaymentMethods.Any())
+            {
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    @Html.T("لا توجد طرق دفع متاحة حالياً. يرجى التواصل مع الدعم الفني.", "No payment methods available at the moment. Please contact support.")
+                </div>
+            }
+            else
+            {
+                <form id="paymentForm">
+                    @Html.AntiForgeryToken()
+
+                    <!-- Payment Methods Grid -->
+                    <div class="row g-3 mb-4">
+                        @foreach (var method in Model.AvailablePaymentMethods.OrderBy(m => m.DisplayOrder))
+                        {
+                            var isRecommended = method.GatewayType == Model.RecommendedGateway;
+                            var cardClass = isRecommended ? "border-primary border-2" : "";
+
+                            <div class="col-md-6">
+                                <div class="card h-100 payment-method-card @cardClass" data-gateway="@method.GatewayType">
+                                    @if (isRecommended)
+                                    {
+                                        <div class="position-absolute top-0 end-0">
+                                            <span class="badge bg-primary rounded-0 rounded-bottom-start">
+                                                <i class="fas fa-star me-1"></i>
+                                                @Html.T("موصى به", "Recommended")
+                                            </span>
+                                        </div>
+                                    }
+
+                                    <div class="card-body">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="SelectedGateway"
+                                                   id="gateway_@method.GatewayType" value="@method.GatewayType"
+                                                   @(isRecommended ? "checked" : "")>
+                                            <label class="form-check-label w-100" for="gateway_@method.GatewayType">
+                                                <div class="d-flex align-items-center gap-3">
+                                                    @if (!string.IsNullOrEmpty(method.IconUrl))
+                                                    {
+                                                        <img src="@method.IconUrl" alt="@method.DisplayName"
+                                                             style="height: 40px; width: auto;">
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="avatar-text bg-primary text-white rounded"
+                                                             style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+                                                            @GetGatewayIcon(method.GatewayType)
+                                                        </div>
+                                                    }
+                                                    <div>
+                                                        <h6 class="mb-0">@(method.DisplayNameAr ?? method.DisplayName)</h6>
+                                                        <small class="text-muted">@(method.DescriptionAr ?? method.Description)</small>
+                                                    </div>
+                                                </div>
+                                            </label>
+                                        </div>
+
+                                        <!-- Payment method features -->
+                                        <div class="mt-3 d-flex flex-wrap gap-1">
+                                            @if (method.SupportsCards)
+                                            {
+                                                <span class="badge bg-light text-dark"><i class="fas fa-credit-card me-1"></i>@Html.T("بطاقات", "Cards")</span>
+                                            }
+                                            @if (method.SupportsWallets)
+                                            {
+                                                <span class="badge bg-light text-dark"><i class="fas fa-wallet me-1"></i>@Html.T("محافظ", "Wallets")</span>
+                                            }
+                                            @if (method.SupportsCash)
+                                            {
+                                                <span class="badge bg-light text-dark"><i class="fas fa-money-bill me-1"></i>@Html.T("نقدي", "Cash")</span>
+                                            }
+                                            @if (method.SupportsInstallments)
+                                            {
+                                                <span class="badge bg-success"><i class="fas fa-calendar me-1"></i>@Html.T("تقسيط", "Installments")</span>
+                                            }
+                                        </div>
+
+                                        <!-- Fees info -->
+                                        @if (method.FeePercentage > 0 || method.FixedFee > 0)
+                                        {
+                                            <div class="mt-2">
+                                                <small class="text-muted">
+                                                    <i class="fas fa-info-circle me-1"></i>
+                                                    @Html.T("رسوم:", "Fees:")
+                                                    @if (method.FeePercentage > 0)
+                                                    {
+                                                        <span>@method.FeePercentage%</span>
+                                                    }
+                                                    @if (method.FixedFee > 0)
+                                                    {
+                                                        <span>+ @method.FixedFee.ToEGP(2)</span>
+                                                    }
+                                                    (@method.FeePayer == "Customer" ? Html.T("يتحملها المشتري", "Paid by customer") : Html.T("يتحملها البائع", "Paid by seller"))
+                                                </small>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Billing Info -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-user me-2"></i>
+                                @Html.T("معلومات الفاتورة", "Billing information")
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">@Html.T("الاسم الكامل", "Full name")</label>
+                                    <input type="text" name="BillingName" value="@Model.BillingName"
+                                           class="form-control" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">@Html.T("البريد الإلكتروني", "Email")</label>
+                                    <input type="email" name="BillingEmail" value="@Model.BillingEmail"
+                                           class="form-control" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">@Html.T("رقم الهاتف", "Phone number")</label>
+                                    <input type="tel" name="BillingPhone" value="@Model.BillingPhone"
+                                           class="form-control" placeholder="@Html.T("01xxxxxxxxx", "01xxxxxxxxx")">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">@Html.T("الدولة", "Country")</label>
+                                    <select name="UserCountry" class="form-select">
+                                        <option value="EG" selected="@(Model.UserCountry == "EG")">🇪🇬 @Html.T("مصر", "Egypt")</option>
+                                        <option value="SA" selected="@(Model.UserCountry == "SA")">🇸🇦 @Html.T("السعودية", "Saudi Arabia")</option>
+                                        <option value="AE" selected="@(Model.UserCountry == "AE")">🇦🇪 @Html.T("الإمارات", "UAE")</option>
+                                        <option value="KW" selected="@(Model.UserCountry == "KW")">🇰🇼 @Html.T("الكويت", "Kuwait")</option>
+                                        <option value="BH" selected="@(Model.UserCountry == "BH")">🇧🇭 @Html.T("البحرين", "Bahrain")</option>
+                                        <option value="QA" selected="@(Model.UserCountry == "QA")">🇶🇦 @Html.T("قطر", "Qatar")</option>
+                                        <option value="OM" selected="@(Model.UserCountry == "OM")">🇴🇲 @Html.T("عمان", "Oman")</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Save Card Option -->
+                    <div class="form-check mb-4" id="saveCardOption" style="display: none;">
+                        <input class="form-check-input" type="checkbox" name="SavePaymentMethod" id="savePaymentMethod">
+                        <label class="form-check-label" for="savePaymentMethod">
+                            <i class="fas fa-save me-1"></i>
+                            @Html.T("حفظ طريقة الدفع للمشتريات القادمة", "Save payment method for future purchases")
+                        </label>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg" id="payButton">
+                            <i class="fas fa-lock me-2"></i>
+                            <span id="payButtonText">@Html.T("ادفع الآن", "Pay now") - @Model.Cart.TotalAmount.ToEGP(2)</span>
+                            <span id="payButtonSpinner" class="spinner-border spinner-border-sm ms-2" style="display: none;"></span>
+                        </button>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-shield-alt text-success me-1"></i>
+                            @Html.T("جميع المعاملات مشفرة وآمنة 100%", "All transactions are 100% encrypted and secure")
+                        </small>
+                    </div>
+                </form>
+            }
+        </div>
+    </div>
+</div>
+
+@functions {
+    string GetGatewayIcon(PaymentGatewayType gateway)
+    {
+        return gateway switch
+        {
+            PaymentGatewayType.Stripe => "<i class='fab fa-stripe-s'></i>",
+            PaymentGatewayType.PayPal => "<i class='fab fa-paypal'></i>",
+            PaymentGatewayType.Fawry => "<i class='fas fa-store'></i>",
+            PaymentGatewayType.BankTransfer => "<i class='fas fa-university'></i>",
+            PaymentGatewayType.VodafoneCash or
+            PaymentGatewayType.OrangeCash or
+            PaymentGatewayType.EtisalatCash => "<i class='fas fa-mobile-alt'></i>",
+            _ => "<i class='fas fa-credit-card'></i>"
+        };
+    }
+}
+
+@section Scripts {
+    <script>
+        window.__T = window.__T || {};
+        window.__T.Processing = '@Html.Raw(Html.T("جاري المعالجة...", "Processing...").ToString().Replace("'", "\\'"))';
+        window.__T.PaymentError = '@Html.Raw(Html.T("حدث خطأ أثناء معالجة الدفع", "An error occurred while processing payment").ToString().Replace("'", "\\'"))';
+        window.__T.PayNow = '@Html.Raw(Html.T("ادفع الآن", "Pay now").ToString().Replace("'", "\\'"))';
+        window.__T.UnexpectedError = '@Html.Raw(Html.T("حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.", "An unexpected error occurred. Please try again.").ToString().Replace("'", "\\'"))';
+        window.__T.PaymentStarted = '@Html.Raw(Html.T("تم بدء عملية الدفع بنجاح", "Payment process started successfully").ToString().Replace("'", "\\'"))';
+        $(document).ready(function() {
+            // Handle payment method selection
+            $('.payment-method-card').on('click', function() {
+                var radio = $(this).find('input[type="radio"]');
+                radio.prop('checked', true);
+                
+                $('.payment-method-card').removeClass('border-primary border-2');
+                $(this).addClass('border-primary border-2');
+                
+                // Show/hide save card option
+                var gateway = radio.val();
+                var supportsSaveCard = ['Stripe', 'Paymob', 'Tap'].includes(gateway);
+                $('#saveCardOption').toggle(supportsSaveCard);
+            });
+
+            // Handle form submission
+            $('#paymentForm').on('submit', function(e) {
+                e.preventDefault();
+                
+                var form = $(this);
+                var button = $('#payButton');
+                var buttonText = $('#payButtonText');
+                var spinner = $('#payButtonSpinner');
+                
+                // Disable button and show spinner
+                button.prop('disabled', true);
+                buttonText.text((window.__T && window.__T.Processing) || 'Processing...');
+                spinner.show();
+                
+                $.ajax({
+                    url: '@Url.Action("ProcessPayment")',
+                    method: 'POST',
+                    data: form.serialize(),
+                    success: function(response) {
+                        if (response.success) {
+                            if (response.requiresRedirect && response.redirectUrl) {
+                                // Redirect to payment page
+                                window.location.href = response.redirectUrl;
+                            } else if (response.isFawry) {
+                                // Redirect to Fawry reference page
+                                window.location.href = response.redirectUrl;
+                            } else if (response.isBankTransfer) {
+                                // Redirect to bank transfer instructions
+                                window.location.href = response.redirectUrl;
+                            } else if (response.clientSecret) {
+                                // Handle Stripe client-side
+                                handleStripePayment(response.clientSecret);
+                            } else {
+                                window.location.href = response.redirectUrl || '@Url.Action("Success")';
+                            }
+                        } else {
+                            alert('❌ ' + (response.message || (window.__T && window.__T.PaymentError) || 'An error occurred while processing payment'));
+                            button.prop('disabled', false);
+                            buttonText.text((window.__T && window.__T.PayNow || 'Pay now') + ' - @Model.Cart.TotalAmount.ToEGP(2)');
+                            spinner.hide();
+                        }
+                    },
+                    error: function() {
+                        alert('❌ ' + ((window.__T && window.__T.UnexpectedError) || 'An unexpected error occurred. Please try again.'));
+                        button.prop('disabled', false);
+                        buttonText.text((window.__T && window.__T.PayNow || 'Pay now') + ' - @Model.Cart.TotalAmount.ToEGP(2)');
+                        spinner.hide();
+                    }
+                });
+            });
+            
+            // Function to handle Stripe payment (if using Stripe.js)
+            function handleStripePayment(clientSecret) {
+                // This would use Stripe.js to confirm the payment
+                // For now, redirect to success page
+                alert('✅ ' + ((window.__T && window.__T.PaymentStarted) || 'Payment process started successfully'));
+                window.location.href = '@Url.Action("Success")';
+            }
+        });
+    </script>
+}
+
+<style>
+    .payment-method-card {
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .payment-method-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .payment-method-card.border-primary {
+        background-color: rgba(13, 110, 253, 0.05);
+    }
+</style>
+

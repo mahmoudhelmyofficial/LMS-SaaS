@@ -1,0 +1,438 @@
+@using LMS.Common
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إحصائيات التعليقات", "Comments Statistics");
+    ViewData["Subtitle"] = Html.T("تحليل شامل لتفاعل الطلاب", "Comprehensive analysis of student engagement");
+    var indexUrl = Url.Action("Index");
+    
+    // Load platform settings
+    var thresholdExcellent = await PlatformSettings.GetIntSettingAsync("Threshold.Performance.Excellent", 90);
+    var thresholdGood = await PlatformSettings.GetIntSettingAsync("Threshold.Performance.Good", 70);
+    var thresholdFair = await PlatformSettings.GetIntSettingAsync("Threshold.Performance.Fair", 50);
+    
+    // Get dynamic data from ViewBag
+    var totalComments = ViewBag.TotalComments as int? ?? 0;
+    var repliedComments = ViewBag.RepliedComments as int? ?? 0;
+    var pendingComments = ViewBag.PendingComments as int? ?? 0;
+    var replyRate = ViewBag.ReplyRate as decimal? ?? 0;
+    var commentChangeThisMonth = ViewBag.CommentChangeThisMonth as int? ?? 0;
+    var commentsChangePercent = ViewBag.CommentsChangePercent as double? ?? 0;
+    var avgResponseTime = ViewBag.AverageResponseTime as double? ?? 0;
+    var fastestResponseTime = ViewBag.FastestResponseTime as double? ?? 0;
+    var slowestResponseTime = ViewBag.SlowestResponseTime as double? ?? 0;
+    var responseTimeImprovement = ViewBag.ResponseTimeImprovement as double? ?? 0;
+    var performanceScore = ViewBag.PerformanceScore as int? ?? 0;
+    var pinnedComments = ViewBag.PinnedComments as int? ?? 0;
+    var commentsToday = ViewBag.CommentsToday as int? ?? 0;
+    var averageLikes = ViewBag.AverageLikes as double? ?? 0;
+    var configService = Context.RequestServices.GetService<LMS.Services.Interfaces.ISystemConfigurationService>();
+    var peakActivityTime = ViewBag.PeakActivityTime as string ?? (await configService.GetLocalizationAsync("no_data", "ar", "لا توجد بيانات"));
+    
+    var topCourses = ViewBag.TopCoursesByComments as dynamic;
+    var topStudents = ViewBag.TopStudentsByComments as dynamic;
+    var maxStudentComments = ViewBag.MaxStudentComments as int? ?? 1;
+    
+    var chartLabels = ViewBag.ChartLabels as List<string> ?? new List<string>();
+    var commentsChartData = ViewBag.CommentsChartData as List<int> ?? new List<int>();
+    var repliesChartData = ViewBag.RepliesChartData as List<int> ?? new List<int>();
+    var responseDistribution = ViewBag.ResponseDistribution as List<int> ?? new List<int> { 0, 0, 0, 0, 0 }; // 5 buckets for response time distribution
+    
+    var changePrefix = commentChangeThisMonth >= 0 ? "+" : "";
+    var performanceText = performanceScore >= Constants.PerformanceThresholds.Excellent ? (await configService.GetLocalizationAsync("performance_excellent", "ar", "ممتاز! أنت تتفاعل بشكل رائع مع طلابك")) :
+                          performanceScore >= Constants.PerformanceThresholds.VeryGood ? (await configService.GetLocalizationAsync("performance_very_good", "ar", "جيد جداً! استمر في التفاعل")) :
+                          performanceScore >= Constants.PerformanceThresholds.Good ? (await configService.GetLocalizationAsync("performance_good", "ar", "جيد! يمكنك تحسين وقت الاستجابة")) :
+                          (await configService.GetLocalizationAsync("performance_needs_improvement", "ar", "يحتاج تحسين! حاول الرد بشكل أسرع"));
+    var performanceAlertClass = performanceScore >= thresholdExcellent ? "success" :
+                                 performanceScore >= thresholdGood ? "info" :
+                                 performanceScore >= thresholdFair ? "warning" : "danger";
+    
+    // Format response times
+    string FormatTime(double hours) {
+        if (hours < 1) return $"{(int)(hours * 60)} دقيقة";
+        return $"{hours:F1} ساعة";
+    }
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>العودة للتعليقات</a><button class='btn btn-primary' onclick='window.print()'><i class='feather-printer me-2'></i>طباعة التقرير</button>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Key Metrics -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "إجمالي التعليقات" },
+                { "Value", totalComments },
+                { "Icon", "message-circle" },
+                { "Color", "primary" },
+                { "Change", commentChangeThisMonth != 0 ? $"{changePrefix}{commentChangeThisMonth}" : "" },
+                { "ChangeText", commentChangeThisMonth != 0 ? "هذا الشهر" : "" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "تم الرد عليها" },
+                { "Value", repliedComments },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "بانتظار الرد" },
+                { "Value", pendingComments },
+                { "Icon", "clock" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "معدل الرد" },
+                { "Value", $"{replyRate:F0}%" },
+                { "Icon", "trending-up" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Column -->
+        <div class="col-xxl-8 col-xl-7">
+            <!-- Comments Trend -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("اتجاه التعليقات", "Comments trend")</h5>
+                    <div class="card-header-action">
+                        <span class="badge bg-soft-primary text-primary">آخر 7 أيام</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <canvas id="commentsTrendChart" height="300"></canvas>
+                </div>
+            </div>
+
+            <!-- Response Time Analysis -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تحليل وقت الاستجابة", "Response time analysis")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="text-center p-3 bg-soft-success rounded">
+                                <div class="fs-12 text-muted mb-1">متوسط وقت الرد</div>
+                                <div class="fs-3 fw-bold text-success">@FormatTime(avgResponseTime)</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center p-3 bg-soft-info rounded">
+                                <div class="fs-12 text-muted mb-1">أسرع رد</div>
+                                <div class="fs-3 fw-bold text-info">@FormatTime(fastestResponseTime)</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center p-3 bg-soft-warning rounded">
+                                <div class="fs-12 text-muted mb-1">أطول رد</div>
+                                <div class="fs-3 fw-bold text-warning">@FormatTime(slowestResponseTime)</div>
+                            </div>
+                        </div>
+                    </div>
+                    <canvas id="responseTimeChart" height="200"></canvas>
+                </div>
+            </div>
+
+            <!-- Most Active Courses -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الدورات الأكثر تفاعلاً", "Most active courses")</h5>
+                </div>
+                <div class="card-body">
+                    @if (topCourses != null && ((IEnumerable<dynamic>)topCourses).Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الدورة", "Course")</th>
+                                        <th>@Html.T("التعليقات", "Comments")</th>
+                                        <th>@Html.T("تم الرد", "Replied")</th>
+                                        <th>@Html.T("معدل الرد", "Reply rate")</th>
+                                        <th>@Html.T("متوسط الوقت", "Avg time")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var course in topCourses)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-medium">@course.CourseTitle</div>
+                                            </td>
+                                            <td><span class="fw-bold">@course.TotalComments</span></td>
+                                            <td><span class="text-success">@course.RepliedComments</span></td>
+                                            <td>
+                                                @{
+                                                    var rate = (double)course.ReplyRate;
+                                                    var badgeClass = rate >= thresholdExcellent ? "success" : rate >= thresholdGood ? "info" : rate >= thresholdFair ? "warning" : "danger";
+                                                }
+                                                <span class="badge bg-soft-@badgeClass text-@badgeClass">@rate.ToString("F0")%</span>
+                                            </td>
+                                            <td><span class="text-muted">@FormatTime((double)course.AvgResponseTime)</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4 text-muted">
+                            <i class="feather-book-open fs-1 mb-2"></i>
+                            <p>@Html.T("لا توجد تعليقات على دوراتك حتى الآن", "No comments on your courses yet")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Most Active Students -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الطلاب الأكثر تفاعلاً", "Most active students")</h5>
+                </div>
+                <div class="card-body">
+                    @if (topStudents != null && ((IEnumerable<dynamic>)topStudents).Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @{ var studentIndex = 0; }
+                            @foreach (var student in topStudents)
+                            {
+                                studentIndex++;
+                                var activityPercent = maxStudentComments > 0 ? (int)((double)student.CommentCount / maxStudentComments * 100) : 0;
+                                <div class="list-group-item d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                            @studentIndex
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">@student.StudentName</div>
+                                            <div class="fs-11 text-muted">@student.CommentCount تعليق</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="progress mb-1" style="width: 100px; height: 6px;">
+                                            <div class="progress-bar bg-primary" style="width: @activityPercent%"></div>
+                                        </div>
+                                        <div class="fs-11 text-muted">@activityPercent% نشاط</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4 text-muted">
+                            <i class="feather-users fs-1 mb-2"></i>
+                            <p>@Html.T("لا يوجد طلاب متفاعلون حتى الآن", "No engaged students yet")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="col-xxl-4 col-xl-5">
+            <!-- Performance Score -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("درجة الأداء", "Performance score")</h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="position-relative d-inline-block mb-4">
+                        <canvas id="performanceScoreChart" width="200" height="200"></canvas>
+                        <div class="position-absolute top-50 start-50 translate-middle">
+                            <div class="fs-1 fw-bold text-@performanceAlertClass">@performanceScore</div>
+                            <div class="fs-12 text-muted">من 100</div>
+                        </div>
+                    </div>
+                    <div class="alert alert-@performanceAlertClass mb-0">
+                        <i class="feather-award me-2"></i>
+                        <strong>@performanceText</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Engagement Insights -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("رؤى التفاعل", "Engagement insights")</h5>
+                </div>
+                <div class="card-body">
+                    @if (commentsChangePercent != 0)
+                    {
+                        var changeIcon = commentsChangePercent > 0 ? "trending-up" : "trending-down";
+                        var changeClass = commentsChangePercent > 0 ? "info" : "warning";
+                        var changeText = commentsChangePercent > 0 ? "زادت" : "انخفضت";
+                        <div class="alert alert-@changeClass mb-3">
+                            <i class="feather-@changeIcon me-2"></i>
+                            التعليقات @changeText بنسبة <strong>@Math.Abs(commentsChangePercent).ToString("F0")%</strong> هذا الشهر
+                        </div>
+                    }
+                    @if (responseTimeImprovement > 0)
+                    {
+                        <div class="alert alert-success mb-3">
+                            <i class="feather-clock me-2"></i>
+                            متوسط وقت الرد تحسن بنسبة <strong>@responseTimeImprovement.ToString("F0")%</strong>
+                        </div>
+                    }
+                    else if (responseTimeImprovement < 0)
+                    {
+                        <div class="alert alert-warning mb-3">
+                            <i class="feather-clock me-2"></i>
+                            متوسط وقت الرد تراجع بنسبة <strong>@Math.Abs(responseTimeImprovement).ToString("F0")%</strong>
+                        </div>
+                    }
+                    <div class="alert alert-@(pendingComments > 5 ? "warning" : "info") mb-0">
+                        <i class="feather-alert-circle me-2"></i>
+                        <strong>@pendingComments</strong> تعليق بانتظار الرد
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إحصائيات سريعة", "Quick stats")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">التعليقات المثبتة</span>
+                        <span class="fw-bold">@pinnedComments</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">التعليقات اليوم</span>
+                        <span class="fw-bold">@commentsToday</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">متوسط الإعجابات</span>
+                        <span class="fw-bold">@averageLikes.ToString("F1")</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">أكثر وقت نشاط</span>
+                        <span class="fw-bold">@peakActivityTime</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Comments Trend Chart
+        const trendCtx = document.getElementById('commentsTrendChart').getContext('2d');
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(chartLabels)),
+                datasets: [{
+                    label: 'التعليقات الجديدة',
+                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(commentsChartData)),
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }, {
+                    label: 'الردود',
+                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(repliesChartData)),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Response Time Chart
+        const responseCtx = document.getElementById('responseTimeChart').getContext('2d');
+        new Chart(responseCtx, {
+            type: 'bar',
+            data: {
+                labels: ['< 1 ساعة', '1-3 ساعات', '3-6 ساعات', '6-12 ساعة', '> 12 ساعة'],
+                datasets: [{
+                    label: 'عدد الردود',
+                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(responseDistribution)),
+                    backgroundColor: [
+                        '#10b981',
+                        '#3b82f6',
+                        '#f59e0b',
+                        '#ef4444',
+                        '#6b7280'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Performance Score Chart
+        const scoreCtx = document.getElementById('performanceScoreChart').getContext('2d');
+        new Chart(scoreCtx, {
+            type: 'doughnut',
+            data: {
+                datasets: [{
+                    data: [@performanceScore, @(100 - performanceScore)],
+                    backgroundColor: ['@(performanceScore >= thresholdExcellent ? "#10b981" : performanceScore >= thresholdGood ? "#3b82f6" : performanceScore >= thresholdFair ? "#f59e0b" : "#ef4444")', '#e5e7eb'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: false,
+                cutout: '80%',
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        enabled: false
+                    }
+                }
+            }
+        });
+    </script>
+}

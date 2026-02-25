@@ -1,0 +1,402 @@
+@model LMS.Domain.Entities.Assessments.Quiz
+@using LMS.Helpers
+
+@{
+    ViewData["Title"] = Model.Title;
+    ViewData["Subtitle"] = Html.T("تفاصيل الاختبار", "Quiz details");
+    var quiz = ViewBag.Quiz as LMS.Domain.Entities.Assessments.Quiz ?? Model;
+    var stats = ViewBag.Stats as dynamic;
+    var recentAttempts = ViewBag.RecentAttempts as List<LMS.Domain.Entities.Assessments.QuizAttempt> ?? new List<LMS.Domain.Entities.Assessments.QuizAttempt>();
+    var course = quiz.Lesson?.Module?.Course;
+    var editUrl = Url.Action("Edit", new { id = Model.Id });
+    var questionsUrl = Url.Action("Questions", new { quizId = Model.Id });
+    var attemptsUrl = Url.Action("Attempts", new { quizId = Model.Id });
+    var analyticsUrl = Url.Action("Analytics", new { quizId = Model.Id });
+    var resultsUrl = Url.Action("Results", new { id = Model.Id });
+}
+
+@await Html.PartialAsync("_PageHeader", ViewDataDictionaryHelper.CreateWith(
+    ViewData,
+    "ActionButtons",
+    Html.Raw("<a href='" + editUrl + "' class='btn btn-primary'><i class='feather-edit me-2'></i>" + Html.T("تعديل الاختبار", "Edit quiz") + "</a><a href='" + questionsUrl + "' class='btn btn-light'><i class='feather-list me-2'></i>" + Html.T("إدارة الأسئلة", "Manage questions") + "</a><div class='dropdown'><button class='btn btn-light dropdown-toggle' type='button' data-bs-toggle='dropdown'><i class='feather-more-vertical'></i></button><ul class='dropdown-menu dropdown-menu-end'><li><a class='dropdown-item' href='" + attemptsUrl + "'><i class='feather-users me-2'></i> " + Html.T("المحاولات", "Attempts") + "</a></li><li><a class='dropdown-item' href='" + analyticsUrl + "'><i class='feather-bar-chart-2 me-2'></i> " + Html.T("التحليلات", "Analytics") + "</a></li><li><a class='dropdown-item' href='" + resultsUrl + "'><i class='feather-award me-2'></i> " + Html.T("النتائج", "Results") + "</a></li></ul></div>")
+))
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("إجمالي المحاولات", "Total attempts")),
+                ("Value", stats?.TotalAttempts ?? 0),
+                ("Icon", "users"),
+                ("Color", "primary")
+            ))
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("المحاولات المكتملة", "Completed attempts")),
+                ("Value", stats?.CompletedAttempts ?? 0),
+                ("Icon", "check-circle"),
+                ("Color", "success")
+            ))
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("متوسط الدرجات", "Average score")),
+                ("Value", stats?.AverageScore != null ? $"{stats.AverageScore:F1}%" : "0%"),
+                ("Icon", "trending-up"),
+                ("Color", "info")
+            ))
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("معدل النجاح", "Pass rate")),
+                ("Value", stats?.PassRate != null ? $"{stats.PassRate:F1}%" : "0%"),
+                ("Icon", "award"),
+                ("Color", "warning")
+            ))
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Column -->
+        <div class="col-xxl-8 col-xl-7">
+            <!-- Quiz Information -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات الاختبار", "Quiz information")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <h4 class="fw-bold mb-2">@Model.Title</h4>
+                        @if (!string.IsNullOrEmpty(Model.Description))
+                        {
+                            <p class="text-muted mb-0">@Model.Description</p>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.Instructions))
+                    {
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-2">@Html.T("التعليمات", "Instructions")</h6>
+                            <div class="p-3 bg-soft-info rounded">
+                                @Html.Raw(Model.Instructions.Replace("\n", "<br/>"))
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Quiz Settings -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center justify-content-between p-3 bg-soft-primary rounded">
+                                <div>
+                                    <span class="text-muted small d-block">@Html.T("عدد الأسئلة", "Questions count")</span>
+                                    <span class="fw-bold fs-18">@(stats?.TotalQuestions ?? 0)</span>
+                                </div>
+                                <i class="feather-help-circle text-primary" style="font-size: 24px;"></i>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center justify-content-between p-3 bg-soft-success rounded">
+                                <div>
+                                    <span class="text-muted small d-block">@Html.T("إجمالي الدرجات", "Total points")</span>
+                                    <span class="fw-bold fs-18">@(stats?.TotalPoints ?? 0)</span>
+                                </div>
+                                <i class="feather-award text-success" style="font-size: 24px;"></i>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center justify-content-between p-3 bg-soft-warning rounded">
+                                <div>
+                                    <span class="text-muted small d-block">@Html.T("درجة النجاح", "Passing score")</span>
+                                    <span class="fw-bold fs-18">@Model.PassingScore%</span>
+                                </div>
+                                <i class="feather-target text-warning" style="font-size: 24px;"></i>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center justify-content-between p-3 bg-soft-info rounded">
+                                <div>
+                                    <span class="text-muted small d-block">@Html.T("الوقت المحدد", "Time limit")</span>
+                                    <span class="fw-bold fs-18">@(Model.TimeLimitMinutes?.ToString() ?? Html.T("غير محدد", "Not set")) @(Model.TimeLimitMinutes.HasValue ? Html.T("دقيقة", "min") : "")</span>
+                                </div>
+                                <i class="feather-clock text-info" style="font-size: 24px;"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quiz Features -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-3">@Html.T("إعدادات الاختبار", "Quiz settings")</h6>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i class="feather-@(Model.ShuffleQuestions ? "check-circle text-success" : "x-circle text-muted")"></i>
+                                    <span>@Html.T("خلط الأسئلة", "Shuffle questions")</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i class="feather-@(Model.ShuffleOptions ? "check-circle text-success" : "x-circle text-muted")"></i>
+                                    <span>@Html.T("خلط الخيارات", "Shuffle options")</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i class="feather-@(Model.ShowCorrectAnswers ? "check-circle text-success" : "x-circle text-muted")"></i>
+                                    <span>@Html.T("إظهار الإجابات الصحيحة", "Show correct answers")</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i class="feather-@(Model.ShowScoreImmediately ? "check-circle text-success" : "x-circle text-muted")"></i>
+                                    <span>@Html.T("إظهار النتيجة فوراً", "Show score immediately")</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i class="feather-@(Model.AllowBackNavigation ? "check-circle text-success" : "x-circle text-muted")"></i>
+                                    <span>@Html.T("السماح بالعودة للسابق", "Allow back navigation")</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i class="feather-@(Model.OneQuestionPerPage ? "check-circle text-success" : "x-circle text-muted")"></i>
+                                    <span>@Html.T("سؤال واحد بالصفحة", "One question per page")</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Availability -->
+                    @if (Model.AvailableFrom.HasValue || Model.AvailableUntil.HasValue)
+                    {
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3">@Html.T("التوفر", "Availability")</h6>
+                            <div class="p-3 bg-soft-light rounded">
+                                @if (Model.AvailableFrom.HasValue)
+                                {
+                                    <div class="mb-2">
+                                        <span class="text-muted">@Html.T("متاح من:", "Available from:")</span>
+                                        <span class="fw-medium">@Model.AvailableFrom.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                                    </div>
+                                }
+                                @if (Model.AvailableUntil.HasValue)
+                                {
+                                    <div>
+                                        <span class="text-muted">@Html.T("متاح حتى:", "Available until:")</span>
+                                        <span class="fw-medium">@Model.AvailableUntil.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Recent Attempts -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("آخر المحاولات", "Recent attempts")</h5>
+                    <div class="card-header-action">
+                        <a href="@attemptsUrl" class="btn btn-sm btn-light">@Html.T("عرض الكل", "View all")</a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @if (recentAttempts.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الطالب", "Student")</th>
+                                        <th>@Html.T("التاريخ", "Date")</th>
+                                        <th>@Html.T("الدرجة", "Score")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                        <th>@Html.T("الإجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var attempt in recentAttempts)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                        @(attempt.Student?.FullName?.Substring(0, 1) ?? "?")
+                                                    </div>
+                                                    <span>@attempt.Student?.FullName</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="text-muted">@attempt.StartedAt.ToString("dd/MM/yyyy HH:mm")</span>
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold @(attempt.IsPassed ? "text-success" : "text-danger")">
+                                                    @attempt.Score / @attempt.MaxScore
+                                                </span>
+                                                <span class="text-muted small">(@attempt.PercentageScore.ToString("F1")%)</span>
+                                            </td>
+                                            <td>
+                                                @if (attempt.CompletedAt.HasValue)
+                                                {
+                                                    <span class="badge bg-soft-@(attempt.IsPassed ? "success" : "danger") text-@(attempt.IsPassed ? "success" : "danger")">
+                                                        @(attempt.IsPassed ? Html.T("ناجح", "Passed") : Html.T("راسب", "Failed"))
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning">@Html.T("قيد التنفيذ", "In progress")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Details", "QuizAttempts", new { id = attempt.Id })" class="btn btn-sm btn-light">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-3 mx-auto">
+                                <i class="feather-users"></i>
+                            </div>
+                            <h6 class="fw-bold mb-2">@Html.T("لا توجد محاولات بعد", "No attempts yet")</h6>
+                            <p class="text-muted mb-0">@Html.T("لم يقم أي طالب بمحاولة هذا الاختبار حتى الآن", "No student has attempted this quiz yet")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="col-xxl-4 col-xl-5">
+            <!-- Quiz Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات الاختبار", "Quiz information")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-4">
+                        <div class="avatar-text avatar-lg bg-soft-warning text-warning me-3">
+                            <i class="feather-help-circle"></i>
+                        </div>
+                        <div>
+                            <h6 class="mb-1">@Model.Title</h6>
+                            <span class="badge bg-soft-@(Model.IsActive ? "success" : "secondary") text-@(Model.IsActive ? "success" : "secondary")">
+                                @(Model.IsActive ? Html.T("نشط", "Active") : Html.T("غير نشط", "Inactive"))
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("الدرس", "Lesson")</span>
+                        <a href="@Url.Action("Edit", "Lessons", new { id = Model.LessonId })" class="fw-medium">
+                            @Model.Lesson?.Title
+                        </a>
+                    </div>
+
+                    @if (course != null)
+                    {
+                        <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="text-muted">@Html.T("الدورة", "Course")</span>
+                            <a href="@Url.Action("Details", "Courses", new { id = course.Id })" class="fw-medium">
+                                @course.Title
+                            </a>
+                        </div>
+                    }
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+<span class="text-muted">@Html.T("عدد المحاولات المسموحة", "Max attempts allowed")</span>
+                                        <span class="fw-medium">@(Model.MaxAttempts?.ToString() ?? Html.T("غير محدود", "Unlimited"))</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("تاريخ الإنشاء", "Created date")</span>
+                        <span class="fw-medium">@Model.CreatedAt.ToString("dd/MM/yyyy")</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-muted">آخر تحديث</span>
+                        <span class="fw-medium">@(Model.UpdatedAt?.ToString("dd/MM/yyyy") ?? "-")</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إجراءات سريعة", "Quick actions")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="@editUrl" class="btn btn-light-brand">
+                            <i class="feather-edit me-2"></i>
+                            تعديل الاختبار
+                        </a>
+                        <a href="@questionsUrl" class="btn btn-light-brand">
+                            <i class="feather-list me-2"></i>
+                            إدارة الأسئلة
+                        </a>
+                        <a href="@attemptsUrl" class="btn btn-light-brand">
+                            <i class="feather-users me-2"></i>
+                            عرض المحاولات
+                        </a>
+                        <a href="@analyticsUrl" class="btn btn-light-brand">
+                            <i class="feather-bar-chart-2 me-2"></i>
+                            التحليلات
+                        </a>
+                        <a href="@resultsUrl" class="btn btn-light-brand">
+                            <i class="feather-award me-2"></i>
+                            النتائج
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Questions Summary -->
+            @if (Model.Questions.Any())
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("ملخص الأسئلة", "Questions summary")</h5>
+                        <div class="card-header-action">
+                            <a href="@questionsUrl" class="btn btn-sm btn-light">@Html.T("عرض الكل", "View all")</a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="text-muted">إجمالي الأسئلة</span>
+                                <span class="fw-bold">@Model.Questions.Count</span>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="text-muted">إجمالي الدرجات</span>
+                                <span class="fw-bold">@Model.Questions.Sum(q => q.Points)</span>
+                            </div>
+                        </div>
+                        <div class="progress mb-2" style="height: 8px;">
+                            <div class="progress-bar bg-primary" style="width: 100%"></div>
+                        </div>
+                        <a href="@questionsUrl" class="btn btn-sm btn-primary w-100">
+                            <i class="feather-list me-2"></i>
+                            إدارة الأسئلة
+                        </a>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+

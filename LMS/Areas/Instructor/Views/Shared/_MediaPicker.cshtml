@@ -1,0 +1,104 @@
+@*
+    Media Picker Component - Reusable component for selecting media from library or uploading new
+    
+    Usage:
+    @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+        { "FieldName", "ThumbnailUrl" },           // Name of the input field
+        { "FieldId", "thumbnailUrl" },             // ID of the input field
+        { "Label", "صورة الدورة" },               // Label text
+        { "MediaType", "Image" },                  // Filter: Image, Video, Audio, Document, All
+        { "CurrentValue", Model.ThumbnailUrl },    // Current value (URL)
+        { "Required", true },                      // Whether field is required
+        { "HelpText", "الحجم الموصى به: 1280x720" }, // Optional help text
+        { "AspectRatio", "16/9" }                  // Optional aspect ratio for preview
+    })
+*@
+
+@{
+    var fieldName = ViewData["FieldName"]?.ToString() ?? "MediaUrl";
+    var fieldId = ViewData["FieldId"]?.ToString() ?? fieldName.Replace(".", "_");
+    var label = ViewData["Label"]?.ToString() ?? Html.T("الملف", "File");
+    var mediaType = ViewData["MediaType"]?.ToString() ?? "All";
+    var currentValue = ViewData["CurrentValue"]?.ToString() ?? "";
+    var isRequired = ViewData["Required"] as bool? ?? false;
+    var helpText = ViewData["HelpText"]?.ToString();
+    var aspectRatio = ViewData["AspectRatio"]?.ToString() ?? "16/9";
+    var uniqueId = Guid.NewGuid().ToString("N")[..8];
+}
+
+<div class="media-picker-wrapper mb-4" id="mediaPicker_@uniqueId" data-field-id="@fieldId" data-media-type="@mediaType">
+    <label class="form-label fw-bold">
+        @label
+        @if (isRequired)
+        {
+            <span class="text-danger">*</span>
+        }
+    </label>
+
+    <!-- Current Selection / Preview -->
+    <div class="media-picker-preview rounded-3 border position-relative mb-3" 
+         style="aspect-ratio: @aspectRatio; background: #f8f9fa; overflow: hidden;"
+         id="preview_@uniqueId">
+        @if (!string.IsNullOrEmpty(currentValue))
+        {
+            @if (mediaType == "Image" || mediaType == "All")
+            {
+                <img src="@currentValue" alt="@label" class="w-100 h-100 object-fit-cover" id="previewImage_@uniqueId">
+            }
+            else if (mediaType == "Video")
+            {
+                <video src="@currentValue" class="w-100 h-100 object-fit-cover" id="previewVideo_@uniqueId" controls></video>
+            }
+            else
+            {
+                <div class="d-flex flex-column align-items-center justify-content-center h-100">
+                    <i class="feather-file fs-1 text-primary mb-2"></i>
+                    <span class="text-muted small">@(System.IO.Path.GetFileName(currentValue))</span>
+                </div>
+            }
+            <button type="button" class="btn btn-sm btn-danger position-absolute" style="top: 8px; left: 8px; z-index: 10;"
+                    onclick="MediaPicker.clear('@uniqueId')" title="@Html.T("إزالة", "Remove")">
+                <i class="feather-x"></i>
+            </button>
+        }
+        else
+        {
+            <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" id="placeholder_@uniqueId">
+                <i class="feather-@(mediaType == "Video" ? "video" : mediaType == "Audio" ? "music" : mediaType == "Document" ? "file-text" : "image") fs-1 mb-2"></i>
+                <span>@Html.T("لا يوجد ملف محدد", "No file selected")</span>
+            </div>
+            <img src="" alt="" class="w-100 h-100 object-fit-cover d-none" id="previewImage_@uniqueId">
+        }
+    </div>
+
+    <!-- Hidden Input for Form -->
+    <input type="hidden" name="@fieldName" id="@fieldId" value="@currentValue" @(isRequired ? "required" : "") />
+
+    <!-- Action Buttons -->
+    <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-primary flex-fill" onclick="MediaPicker.openLibrary('@uniqueId')">
+            <i class="feather-folder me-2"></i>
+            @Html.T("اختر من المكتبة", "Choose from library")
+        </button>
+        <button type="button" class="btn btn-outline-primary flex-fill" onclick="MediaPicker.openUpload('@uniqueId')">
+            <i class="feather-upload me-2"></i>
+            @Html.T("رفع جديد", "Upload new")
+        </button>
+        @if (!string.IsNullOrEmpty(currentValue))
+        {
+            <button type="button" class="btn btn-outline-secondary" onclick="MediaPicker.clear('@uniqueId')" title="@Html.T("إزالة", "Remove")">
+                <i class="feather-x"></i>
+            </button>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(helpText))
+    {
+        <div class="form-text mt-2">
+            <i class="feather-info me-1"></i>
+            @helpText
+        </div>
+    }
+</div>
+
+

@@ -1,0 +1,575 @@
+@model LMS.Areas.Admin.ViewModels.BookAdminDetailsViewModel
+@using LMS.Domain.Enums
+@{
+    ViewData["Title"] = Html.T("تفاصيل الكتاب", "Book Details") + " - " + Model.Title;
+}
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div class="d-flex align-items-center">
+            <a href="@Url.Action("Index")" class="btn btn-outline-secondary me-3">
+                <i class="fas fa-arrow-right"></i>
+            </a>
+            <div>
+                <h4 class="mb-1">@Model.Title</h4>
+                <p class="text-muted small mb-0">
+                    @{
+                        var statusText = Model.Status switch
+                        {
+                            BookStatus.Draft => "مسودة",
+                            BookStatus.PendingReview => "قيد المراجعة",
+                            BookStatus.Published => "منشور",
+                            BookStatus.Rejected => "مرفوض",
+                            BookStatus.Suspended => "معلق",
+                            _ => "غير معروف"
+                        };
+                        var statusClass = Model.Status switch
+                        {
+                            BookStatus.Draft => "bg-secondary",
+                            BookStatus.PendingReview => "bg-warning",
+                            BookStatus.Published => "bg-success",
+                            BookStatus.Rejected => "bg-danger",
+                            BookStatus.Suspended => "bg-dark",
+                            _ => "bg-secondary"
+                        };
+                    }
+                    <span class="badge @statusClass">@statusText</span>
+                    <span class="ms-2">بواسطة: @Model.InstructorName</span>
+                </p>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="btn-group">
+            @if (Model.Status == BookStatus.PendingReview)
+            {
+                <form asp-action="Publish" method="post" class="d-inline">
+                    <input type="hidden" name="id" value="@Model.Id">
+                    <button type="submit" class="btn btn-success" onclick="return confirm('@Html.Raw(Html.T("هل تريد نشر هذا الكتاب؟", "Do you want to publish this book?").Replace("'", "\\'"))')">
+                        <i class="fas fa-check me-1"></i>
+                        نشر الكتاب
+                    </button>
+                </form>
+                <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal">
+                    <i class="fas fa-times me-1"></i>
+                    رفض
+                </button>
+            }
+            @if (Model.Status == BookStatus.Published)
+            {
+                <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#suspendModal">
+                    <i class="fas fa-ban me-1"></i>
+                    تعليق
+                </button>
+            }
+            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal">
+                <i class="fas fa-edit me-1"></i>
+                تعديل الإعدادات
+            </button>
+        </div>
+    </div>
+
+    @if (Model.Status == BookStatus.Rejected && !string.IsNullOrEmpty(Model.RejectionReason))
+    {
+        <div class="alert alert-danger mb-4">
+            <h6 class="alert-heading">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                سبب الرفض
+            </h6>
+            <p class="mb-0">@Model.RejectionReason</p>
+        </div>
+    }
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Statistics -->
+            <div class="row g-3 mb-4">
+                <div class="col-md-3 col-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body text-center">
+                            <h3 class="text-primary mb-1">@Model.TotalSales</h3>
+                            <small class="text-muted">@Html.T("المبيعات", "Sales")</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body text-center">
+                            <h3 class="text-success mb-1">@Model.TotalRevenue.ToString("N0")</h3>
+                            <small class="text-muted">@Html.T("الإيرادات (EGP)", "Revenue (EGP)")</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body text-center">
+                            <h3 class="text-info mb-1">@Model.PlatformEarnings.ToString("N0")</h3>
+                            <small class="text-muted">@Html.T("حصة المنصة", "Platform share")</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body text-center">
+                            <h3 class="text-warning mb-1">@Model.InstructorEarnings.ToString("N0")</h3>
+                            <small class="text-muted">@Html.T("حصة المدرس", "Instructor share")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-0 py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-align-left text-primary me-2"></i>
+                        الوصف
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(Model.ShortDescription))
+                    {
+                        <p class="lead">@Model.ShortDescription</p>
+                        <hr>
+                    }
+                    @Html.Raw(Model.Description ?? "<p class='text-muted'>لا يوجد وصف</p>")
+                </div>
+            </div>
+
+            <!-- Files -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-0 py-3">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-alt text-primary me-2"></i>
+                        الملفات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        @if (!string.IsNullOrEmpty(Model.FullPdfUrl))
+                        {
+                            <div class="col-md-4">
+                                <div class="border rounded p-3 text-center">
+                                    <i class="fas fa-file-pdf fa-2x text-danger mb-2"></i>
+                                    <p class="mb-1">@Html.T("PDF", "PDF")</p>
+                                    <a href="@Model.FullPdfUrl" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        فتح
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.EpubUrl))
+                        {
+                            <div class="col-md-4">
+                                <div class="border rounded p-3 text-center">
+                                    <i class="fas fa-book fa-2x text-success mb-2"></i>
+                                    <p class="mb-1">@Html.T("EPUB", "EPUB")</p>
+                                    <a href="@Model.EpubUrl" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        تحميل
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.PreviewPdfUrl))
+                        {
+                            <div class="col-md-4">
+                                <div class="border rounded p-3 text-center">
+                                    <i class="fas fa-eye fa-2x text-info mb-2"></i>
+                                    <p class="mb-1">المعاينة</p>
+                                    <a href="@Model.PreviewPdfUrl" target="_blank" class="btn btn-sm btn-outline-info">
+                                        فتح
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                        @if (Model.FileSizeBytes > 0)
+                        {
+                            <div class="col-12">
+                                <small class="text-muted">
+                                    حجم الملف: @((Model.FileSizeBytes / 1024.0 / 1024.0).ToString("N2")) MB
+                                </small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Purchases -->
+            @if (Model.RecentPurchases.Any())
+            {
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-shopping-cart text-primary me-2"></i>
+                            آخر المشتريات
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th class="border-0">الطالب</th>
+                                        <th class="border-0">المبلغ</th>
+                                        <th class="border-0">التاريخ</th>
+                                        <th class="border-0">التحميلات</th>
+                                        <th class="border-0">الحالة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var purchase in Model.RecentPurchases)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div>@purchase.StudentName</div>
+                                                <small class="text-muted">@purchase.StudentEmail</small>
+                                            </td>
+                                            <td>@purchase.PaidAmount.ToString("N2") EGP</td>
+                                            <td>@purchase.PurchasedAt.ToString("dd/MM/yyyy")</td>
+                                            <td>@purchase.DownloadCount</td>
+                                            <td>
+                                                @if (purchase.IsRefunded)
+                                                {
+                                                    <span class="badge bg-danger">@Html.T("مسترد", "Refunded")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-success">@Html.T("مكتمل", "Completed")</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Reviews -->
+            @if (Model.RecentReviews.Any())
+            {
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h5 class="mb-0">
+                            <i class="fas fa-comments text-primary me-2"></i>
+                            المراجعات
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <thead class="bg-light">
+                                    <tr>
+                                        <th class="border-0">الطالب</th>
+                                        <th class="border-0">التقييم</th>
+                                        <th class="border-0">التعليق</th>
+                                        <th class="border-0">الحالة</th>
+                                        <th class="border-0">الإجراءات</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var review in Model.RecentReviews)
+                                    {
+                                        <tr>
+                                            <td>@review.StudentName</td>
+                                            <td>
+                                                @for (int i = 1; i <= 5; i++)
+                                                {
+                                                    <i class="fas fa-star small @(i <= review.Rating ? "text-warning" : "text-muted")"></i>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="text-truncate d-inline-block" style="max-width: 200px;">
+                                                    @review.Comment
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @if (review.IsReported)
+                                                {
+                                                    <span class="badge bg-danger">@Html.T("مبلغ عنها", "Reported") (@review.ReportCount)</span>
+                                                }
+                                                else if (review.IsApproved)
+                                                {
+                                                    <span class="badge bg-success">@Html.T("معتمدة", "Approved")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-warning">@Html.T("قيد المراجعة", "Pending review")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (!review.IsApproved)
+                                                {
+                                                    <form asp-action="ApproveReview" method="post" class="d-inline">
+                                                        <input type="hidden" name="id" value="@review.Id">
+                                                        <input type="hidden" name="bookId" value="@Model.Id">
+                                                        <button type="submit" class="btn btn-sm btn-success" title="@Html.T("اعتماد", "Approve")">
+                                                            <i class="fas fa-check"></i>
+                                                        </button>
+                                                    </form>
+                                                }
+                                                <form asp-action="HideReview" method="post" class="d-inline">
+                                                    <input type="hidden" name="id" value="@review.Id">
+                                                    <input type="hidden" name="bookId" value="@Model.Id">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="@Html.T("إخفاء", "Hide")">
+                                                        <i class="fas fa-eye-slash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Cover Image -->
+            <div class="card border-0 shadow-sm mb-4">
+                @if (!string.IsNullOrEmpty(Model.CoverImageUrl))
+                {
+                    <img src="@Model.CoverImageUrl" class="card-img-top" alt="@Model.Title">
+                }
+                else
+                {
+                    <div class="bg-light p-5 text-center">
+                        <i class="fas fa-book fa-4x text-muted"></i>
+                    </div>
+                }
+            </div>
+
+            <!-- Price -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body text-center">
+                    @if (Model.IsFree)
+                    {
+                        <h3 class="text-success">مجاني</h3>
+                    }
+                    else
+                    {
+                        @if (Model.DiscountPrice.HasValue)
+                        {
+                            <span class="text-decoration-line-through text-muted">@Model.Price.ToString("N2")</span>
+                            <h3 class="text-success">@Model.DiscountPrice.Value.ToString("N2") @Model.Currency</h3>
+                        }
+                        else
+                        {
+                            <h3 class="text-primary">@Model.Price.ToString("N2") @Model.Currency</h3>
+                        }
+                    }
+                    <small class="text-muted">
+                        نسبة عمولة المدرس: @Model.InstructorCommissionRate%
+                    </small>
+                </div>
+            </div>
+
+            <!-- Instructor Info -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="mb-0">المدرس</h6>
+                </div>
+                <div class="card-body">
+                    <p class="mb-1"><strong>@Model.InstructorName</strong></p>
+                    <p class="text-muted small mb-1">
+                        <i class="fas fa-envelope me-1"></i>
+                        @Model.InstructorEmail
+                    </p>
+                    @if (!string.IsNullOrEmpty(Model.InstructorPhone))
+                    {
+                        <p class="text-muted small mb-0">
+                            <i class="fas fa-phone me-1"></i>
+                            @Model.InstructorPhone
+                        </p>
+                    }
+                </div>
+            </div>
+
+            <!-- Book Details -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="mb-0">تفاصيل الكتاب</h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless mb-0">
+                        @if (!string.IsNullOrEmpty(Model.ISBN))
+                        {
+                            <tr>
+                                <td class="text-muted">@Html.T("الرقم الدولي:", "ISBN:")</td>
+                                <td>@Model.ISBN</td>
+                            </tr>
+                        }
+                        <tr>
+                            <td class="text-muted">التصنيف:</td>
+                            <td>@Model.CategoryName</td>
+                        </tr>
+                        @if (!string.IsNullOrEmpty(Model.Author))
+                        {
+                            <tr>
+                                <td class="text-muted">المؤلف:</td>
+                                <td>@Model.Author</td>
+                            </tr>
+                        }
+                        @if (Model.PageCount.HasValue)
+                        {
+                            <tr>
+                                <td class="text-muted">الصفحات:</td>
+                                <td>@Model.PageCount</td>
+                            </tr>
+                        }
+                        <tr>
+                            <td class="text-muted">@Html.T("اللغة:", "Language:")</td>
+                            <td>@(Model.Language == "ar" ? Html.T("العربية", "Arabic") : Model.Language == "en" ? Html.T("الإنجليزية", "English") : Model.Language)</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">تاريخ الإنشاء:</td>
+                            <td>@Model.CreatedAt.ToString("dd/MM/yyyy")</td>
+                        </tr>
+                        @if (Model.PublishedAt.HasValue)
+                        {
+                            <tr>
+                                <td class="text-muted">تاريخ النشر:</td>
+                                <td>@Model.PublishedAt.Value.ToString("dd/MM/yyyy")</td>
+                            </tr>
+                        }
+                    </table>
+                </div>
+            </div>
+
+            <!-- Flags -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="mb-0">الإعدادات</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2">
+                        @if (Model.IsFeatured)
+                        {
+                            <span class="badge bg-primary">@Html.T("مميز", "Featured")</span>
+                        }
+                        @if (Model.IsBestseller)
+                        {
+                            <span class="badge bg-warning text-dark">@Html.T("الأكثر مبيعاً", "Bestseller")</span>
+                        }
+                        @if (Model.EnableDRM)
+                        {
+                            <span class="badge bg-info">@Html.T("DRM مفعل", "DRM enabled")</span>
+                        }
+                        @if (Model.EnableWatermark)
+                        {
+                            <span class="badge bg-secondary">@Html.T("علامة مائية", "Watermark")</span>
+                        }
+                        @if (Model.AllowPrinting)
+                        {
+                            <span class="badge bg-success">@Html.T("يسمح بالطباعة", "Print allowed")</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">رفض الكتاب</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="Reject" method="post">
+                <div class="modal-body">
+                    <input type="hidden" name="BookId" value="@Model.Id">
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("سبب الرفض", "Rejection reason") <span class="text-danger">*</span></label>
+                        <textarea name="Reason" class="form-control" rows="4" required
+                                  placeholder="@Html.T("اشرح سبب رفض الكتاب للمدرس...", "Explain the reason for rejecting the book to the instructor...")"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-danger">@Html.T("رفض الكتاب", "Reject book")</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Suspend Modal -->
+<div class="modal fade" id="suspendModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Html.T("تعليق الكتاب", "Suspend Book")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="Suspend" method="post">
+                <div class="modal-body">
+                    <input type="hidden" name="BookId" value="@Model.Id">
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("سبب التعليق", "Suspension reason") <span class="text-danger">*</span></label>
+                        <textarea name="Reason" class="form-control" rows="4" required
+                                  placeholder="@Html.T("اشرح سبب تعليق الكتاب...", "Explain the reason for suspending the book...")"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-warning">@Html.T("تعليق الكتاب", "Suspend book")</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تعديل إعدادات الكتاب</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="Edit" method="post">
+                <div class="modal-body">
+                    <input type="hidden" name="Id" value="@Model.Id">
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" name="IsFeatured" value="true" 
+                                   class="form-check-input" id="isFeatured" 
+                                   checked="@Model.IsFeatured">
+                            <label class="form-check-label" for="isFeatured">@Html.T("كتاب مميز", "Featured book")</label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" name="IsBestseller" value="true" 
+                                   class="form-check-input" id="isBestseller"
+                                   checked="@Model.IsBestseller">
+                            <label class="form-check-label" for="isBestseller">@Html.T("الأكثر مبيعاً", "Bestseller")</label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("نسبة عمولة المدرس (%)", "Instructor commission (%)")</label>
+                        <input type="number" name="InstructorCommissionRate" class="form-control" 
+                               value="@Model.InstructorCommissionRate" min="0" max="100" step="0.1">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-primary">@Html.T("حفظ التغييرات", "Save changes")</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

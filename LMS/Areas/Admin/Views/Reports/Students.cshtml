@@ -1,0 +1,269 @@
+@{
+    ViewData["Title"] = Html.T("تقرير الطلاب", "Students report");
+    ViewData["Breadcrumbs"] = new List<(string Name, string Url)>
+    {
+        (Html.T("التقارير", "Reports"), Url.Action("Index")),
+        (Html.T("الطلاب", "Students"), "")
+    };
+}
+
+<div class="main-content">
+    <!-- Date Filter -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                    <input type="date" name="from" class="form-control" value="@(((DateTime)ViewBag.FromDate).ToString("yyyy-MM-dd"))">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                    <input type="date" name="to" class="form-control" value="@(((DateTime)ViewBag.ToDate).ToString("yyyy-MM-dd"))">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="feather-filter me-2"></i>@Html.T("تصفية", "Filter")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar avatar-lg bg-soft-primary rounded">
+                                <i class="feather-users fs-4 text-primary"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0">@ViewBag.TotalStudents</h3>
+                            <span class="text-muted fs-12">@Html.T("إجمالي الطلاب", "Total students")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar avatar-lg bg-soft-success rounded">
+                                <i class="feather-user-plus fs-4 text-success"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0">@ViewBag.NewStudents</h3>
+                            <span class="text-muted fs-12">@Html.T("طلاب جدد", "New students")</span>
+                            @if (ViewBag.GrowthRate > 0)
+                            {
+                                <small class="text-success"><i class="feather-trending-up me-1"></i>+@ViewBag.GrowthRate.ToString("N1")%</small>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar avatar-lg bg-soft-info rounded">
+                                <i class="feather-activity fs-4 text-info"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0">@ViewBag.ActiveStudents</h3>
+                            <span class="text-muted fs-12">@Html.T("طلاب نشطين", "Active students")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="avatar avatar-lg bg-soft-warning rounded">
+                                <i class="feather-award fs-4 text-warning"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h3 class="mb-0">@ViewBag.AverageCompletionRate.ToString("N1")%</h3>
+                            <span class="text-muted fs-12">@Html.T("معدل الإتمام", "Completion rate")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- New Students Chart -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0"><i class="feather-bar-chart-2 me-2"></i>@Html.T("الطلاب الجدد", "New students")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="studentsChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Students -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0"><i class="feather-star me-2"></i>@Html.T("أفضل الطلاب", "Top students")</h5>
+                </div>
+                <div class="card-body p-0">
+                    @{
+                        var topStudentsList = ViewBag.TopStudents as IEnumerable<dynamic>;
+                        var hasTopStudents = topStudentsList != null && topStudentsList.Any();
+                    }
+                    @if (hasTopStudents)
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var student in topStudentsList!)
+                            {
+                                var studentName = student.Name?.ToString() ?? Html.T("غير معروف", "Unknown").ToString();
+                                var firstChar = studentName.Length > 0 ? studentName.Substring(0, 1) : "?";
+                                <div class="list-group-item d-flex align-items-center">
+                                    <div class="avatar avatar-sm bg-light-primary rounded-circle me-3">
+                                        <span class="fw-semibold text-primary">@firstChar</span>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-0">@studentName</h6>
+                                        <small class="text-muted">@student.EnrolledCourses @Html.T("دورة", "course(s)")</small>
+                                    </div>
+                                    <span class="badge bg-success">@(((decimal)student.TotalSpent).ToString("N0")) @Html.T("ج.م", "EGP")</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center py-4">@Html.T("لا توجد بيانات", "No data")</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Details Table -->
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="feather-list me-2"></i>@Html.T("تفاصيل الطلاب", "Student details")</h5>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="feather-download me-1"></i>@Html.T("تصدير", "Export")
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" asp-action="ExportStudents" asp-route-from="@(((DateTime)ViewBag.FromDate).ToString("yyyy-MM-dd"))" asp-route-to="@(((DateTime)ViewBag.ToDate).ToString("yyyy-MM-dd"))"><i class="feather-file-text me-2"></i>@Html.T("CSV", "CSV")</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="javascript:void(0)" onclick="window.print()"><i class="feather-printer me-2"></i>@Html.T("طباعة", "Print")</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>@Html.T("الطالب", "Student")</th>
+                                    <th>@Html.T("البريد الإلكتروني", "Email")</th>
+                                    <th>@Html.T("الدورات المسجلة", "Enrolled courses")</th>
+                                    <th>@Html.T("الدورات المكتملة", "Completed courses")</th>
+                                    <th>@Html.T("إجمالي الإنفاق", "Total spent")</th>
+                                    <th>@Html.T("تاريخ التسجيل", "Join date")</th>
+                                    <th>@Html.T("آخر نشاط", "Last activity")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    var enrollmentStatsList = ViewBag.EnrollmentStats as IEnumerable<dynamic>;
+                                }
+                                @if (enrollmentStatsList != null)
+                                {
+                                    foreach (var student in enrollmentStatsList)
+                                    {
+                                        var sName = student.Name?.ToString() ?? Html.T("غير معروف", "Unknown").ToString();
+                                        var sFirstChar = sName.Length > 0 ? sName.Substring(0, 1) : "?";
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <div class="avatar avatar-sm bg-light-primary rounded-circle me-2">
+                                                        <span class="fw-semibold text-primary">@sFirstChar</span>
+                                                    </div>
+                                                    @sName
+                                                </div>
+                                            </td>
+                                            <td>@student.Email</td>
+                                            <td><span class="badge bg-primary">@student.EnrolledCourses</span></td>
+                                            <td><span class="badge bg-success">@student.CompletedCourses</span></td>
+                                            <td><strong>@(((decimal)student.TotalSpent).ToString("N0")) @Html.T("ج.م", "EGP")</strong></td>
+                                            <td>@(((DateTime)student.JoinedAt).ToString("yyyy/MM/dd"))</td>
+                                            <td>
+                                                @if (student.LastActivity != null)
+                                                {
+                                                    @(((DateTime)student.LastActivity).ToString("yyyy/MM/dd HH:mm"))
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Students Chart
+        const dailyData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.DailyStudents ?? new List<object>()));
+        const newStudentsLabel = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Html.T("طلاب جدد", "New students").ToString()));
+        if (dailyData.length > 0) {
+            const ctx = document.getElementById('studentsChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dailyData.map(d => new Date(d.Date).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' })),
+                    datasets: [{
+                        label: newStudentsLabel,
+                        data: dailyData.map(d => d.Count),
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+    </script>
+}
+

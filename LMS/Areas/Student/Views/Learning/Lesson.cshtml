@@ -1,0 +1,809 @@
+@model LMS.Domain.Entities.Courses.Lesson
+@inject LMS.Services.Interfaces.ICurrentUserService CurrentUserService
+@inject LMS.Data.ApplicationDbContext DbContext
+@{
+    ViewData["Title"] = Html.T("مشاهدة الدرس", "Watch Lesson");
+    Layout = "~/Areas/Student/Views/Shared/_Layout.cshtml";
+    var lesson = Model;
+    var enrollment = ViewBag.Enrollment as LMS.Domain.Entities.Learning.Enrollment;
+    var progress = ViewBag.Progress as LMS.Domain.Entities.Learning.LessonProgress;
+    var previousLesson = ViewBag.PreviousLesson as LMS.Domain.Entities.Courses.Lesson;
+    var nextLesson = ViewBag.NextLesson as LMS.Domain.Entities.Courses.Lesson;
+    var isInstructorAccess = ViewBag.IsInstructorAccess as bool? ?? false;
+    var course = enrollment?.Course ?? ViewBag.Course as LMS.Domain.Entities.Courses.Course;
+    
+    // Get user info for watermark
+    var userId = CurrentUserService.UserId;
+    var currentUser = await DbContext.Users
+        .Where(u => u.Id == userId)
+        .Select(u => new { u.FirstName, u.LastName, u.Email, u.PhoneNumber })
+        .FirstOrDefaultAsync();
+    var studentName = currentUser != null ? $"{currentUser.FirstName} {currentUser.LastName}" : "Student";
+    var studentEmail = currentUser?.Email ?? "";
+    var studentPhone = currentUser?.PhoneNumber ?? "";
+}
+
+@section Styles {
+<style>
+    body {
+        background-color: #000;
+    }
+    .nxl-container {
+        margin-right: 0;
+        background-color: #000;
+    }
+    .video-player-container {
+        background: #000;
+        position: relative;
+        padding-top: 56.25%; /* 16:9 Aspect Ratio */
+        width: 100%;
+    }
+    .video-player-container video {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .lesson-content .svp-container {
+        min-height: 400px;
+    }
+    .lesson-sidebar {
+        height: calc(100vh - 100px);
+        overflow-y: auto;
+        background: #1a1a1a;
+    }
+    .lesson-item {
+        padding: 12px 16px;
+        border-bottom: 1px solid #2d2d2d;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #9ca3af;
+    }
+    .lesson-item:hover {
+        background-color: #2d2d2d;
+    }
+    .lesson-item.active {
+        background-color: #667eea;
+        color: white;
+    }
+    .lesson-item.completed {
+        color: #22c55e;
+    }
+    .lesson-content {
+        background: #1a1a1a;
+        color: #e5e7eb;
+        min-height: calc(100vh - 100px);
+    }
+    .tab-content-area {
+        background: #1a1a1a;
+        border-radius: 8px;
+    }
+    .nav-tabs .nav-link {
+        color: #9ca3af;
+        border: none;
+        background: transparent;
+    }
+    .nav-tabs .nav-link.active {
+        color: #667eea;
+        border-bottom: 2px solid #667eea;
+        background: transparent;
+    }
+    .module-header {
+        background: #2d2d2d;
+        padding: 12px 16px;
+        font-weight: 600;
+        color: #e5e7eb;
+        border-bottom: 1px solid #3d3d3d;
+    }
+    .complete-btn {
+        position: sticky;
+        bottom: 0;
+        background: #1a1a1a;
+        border-top: 1px solid #2d2d2d;
+        padding: 16px;
+    }
+</style>
+}
+
+@{
+    var tutorPanel = ViewBag.TutorPanel as string ?? "lesson";
+}
+<div class="row g-0">
+    <!-- Main Video/Content Area -->
+    <div class="col-lg-9">
+        <div class="lesson-content">
+            @await Html.PartialAsync("_AlertMessage")
+            @if (tutorPanel == "quizstart" && ViewBag.QuizStartModel != null)
+            {
+                @await Html.PartialAsync("_QuizStartInLesson", (object)ViewBag.QuizStartModel)
+            }
+            else if (tutorPanel == "takequiz" && ViewBag.TakeQuizModel != null)
+            {
+                @await Html.PartialAsync("_TakeQuizInLesson", (object)ViewBag.TakeQuizModel)
+            }
+            else if (tutorPanel == "assignment" && ViewBag.AssignmentSubmission != null)
+            {
+                @await Html.PartialAsync("_AssignmentSubmitInLesson", (object)ViewBag.AssignmentSubmission)
+            }
+            else if (tutorPanel == "lesson")
+            {
+            <!-- Secure Video Player -->
+            @if (lesson.Type == LMS.Domain.Enums.LessonType.Video && !string.IsNullOrEmpty(lesson.VideoUrl))
+            {
+                ViewData["VideoUrl"] = lesson.VideoUrl;
+                ViewData["VideoProvider"] = lesson.VideoProvider;
+                ViewData["VideoId"] = lesson.VideoId;
+                ViewData["LessonId"] = lesson.Id;
+                ViewData["StudentName"] = studentName;
+                ViewData["StudentEmail"] = studentEmail;
+                ViewData["StudentPhone"] = studentPhone;
+                @await Html.PartialAsync("_SecureVideoPlayer")
+            }
+            else if (lesson.Type == LMS.Domain.Enums.LessonType.Article)
+            {
+                <div class="p-5">
+                    <div class="text-white">
+                        <h2 class="text-white mb-4">@lesson.Title</h2>
+                        <div class="article-content">
+                            @Html.Raw(lesson.Content)
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Lesson Info & Tabs -->
+            <div class="p-4">
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div>
+                        <h4 class="text-white mb-2">@lesson.Title</h4>
+                        <p class="text-muted mb-0">
+                            <i class="feather-book-open me-2"></i>
+                            @lesson.Module.Title
+                        </p>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        @if (enrollment != null)
+                        {
+                            <!-- Bookmark Button -->
+                            <button type="button" class="btn btn-outline-warning btn-icon" 
+                                    id="bookmarkBtn" 
+                                    onclick="toggleBookmark(@lesson.Id)"
+                                    data-bs-toggle="tooltip"
+                                    title="@Html.T("حفظ إشارة مرجعية", "Save Bookmark")">
+                                <i class="feather-bookmark" id="bookmarkIcon"></i>
+                            </button>
+                        }
+                        @if (enrollment != null && progress != null && !progress.IsCompleted)
+                        {
+                            @Html.AntiForgeryToken()
+                            <button type="button" class="btn btn-success" id="markCompleteBtn" onclick="markLessonComplete(@lesson.Id)">
+                                <i class="feather-check-circle me-2"></i>
+                                @Html.T("تمييز كمكتمل", "Mark as Complete")
+                            </button>
+                        }
+                        else if (progress?.IsCompleted == true)
+                        {
+                            <span class="badge bg-success px-3 py-2">
+                                <i class="feather-check-circle me-2"></i>
+                                @Html.T("تم الإكمال", "Completed")
+                            </span>
+                        }
+                        else if (isInstructorAccess)
+                        {
+                            <span class="badge bg-info px-3 py-2">
+                                <i class="feather-eye me-2"></i>
+                                @Html.T("وضع المعاينة", "Preview Mode")
+                            </span>
+                        }
+                    </div>
+                </div>
+
+                <!-- Navigation Buttons -->
+                <div class="d-flex gap-2 mb-4">
+                    @if (previousLesson != null)
+                    {
+                        <a asp-action="Lesson" asp-route-lessonId="@previousLesson.Id" class="btn btn-outline-secondary">
+                            <i class="feather-arrow-right me-2"></i>
+                            @Html.T("الدرس السابق", "Previous Lesson")
+                        </a>
+                    }
+                    @if (nextLesson != null)
+                    {
+                        <a asp-action="Lesson" asp-route-lessonId="@nextLesson.Id" class="btn btn-primary">
+                            @Html.T("الدرس التالي", "Next Lesson")
+                            <i class="feather-arrow-left ms-2"></i>
+                        </a>
+                    }
+                    @if (enrollment != null)
+                    {
+                        <a asp-controller="Courses" asp-action="Details" asp-route-id="@enrollment.Id" class="btn btn-outline-secondary ms-auto">
+                            <i class="feather-grid me-2"></i>
+                            @Html.T("عرض جميع الدروس", "View All Lessons")
+                        </a>
+                    }
+                    else if (isInstructorAccess && course != null)
+                    {
+                        <a asp-area="Instructor" asp-controller="Courses" asp-action="Details" asp-route-id="@course.Id" class="btn btn-outline-secondary ms-auto">
+                            <i class="feather-grid me-2"></i>
+                            @Html.T("العودة للدورة", "Back to Course")
+                        </a>
+                    }
+                </div>
+
+                <!-- Tabs -->
+                <div class="tab-content-area">
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overview-tab">
+                                <i class="feather-info me-2"></i>
+                                @Html.T("نظرة عامة", "Overview")
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#resources-tab">
+                                <i class="feather-download me-2"></i>
+                                @Html.T("الموارد", "Resources")
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#notes-tab">
+                                <i class="feather-file-text me-2"></i>
+                                @Html.T("ملاحظاتي", "My Notes")
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#comments-tab">
+                                <i class="feather-message-square me-2"></i>
+                                @Html.T("التعليقات", "Comments")
+                            </button>
+                        </li>
+                        @if (enrollment != null && (lesson.Quizzes?.Any(q => q.IsActive) == true || lesson.Assignments?.Any() == true))
+                        {
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#quizzes-assignments-tab">
+                                    <i class="feather-file-plus me-2"></i>
+                                    @Html.T("اختبارات وتكليفات", "Quizzes & Assignments")
+                                </button>
+                            </li>
+                        }
+                    </ul>
+
+                    <div class="tab-content p-4">
+                        <!-- Overview Tab -->
+                        <div class="tab-pane fade show active" id="overview-tab">
+                            <h5 class="text-white mb-3">@Html.T("عن هذا الدرس", "About This Lesson")</h5>
+                            <div class="text-muted">
+                                @if (!string.IsNullOrEmpty(lesson.Description))
+                                {
+                                    @Html.Raw(lesson.Description)
+                                }
+                                else
+                                {
+                                    <p>@Html.T("لا يوجد وصف لهذا الدرس.", "No description for this lesson.")</p>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Resources Tab -->
+                        <div class="tab-pane fade" id="resources-tab">
+                            <h5 class="text-white mb-3">@Html.T("المواد التعليمية", "Learning Materials")</h5>
+                            @if (lesson.Resources?.Any() == true)
+                            {
+                                <div class="list-group list-group-flush">
+                                    @foreach (var resource in lesson.Resources)
+                                    {
+                                        <a href="@resource.FileUrl" target="_blank" class="list-group-item list-group-item-action bg-transparent text-white border-secondary">
+                                            <div class="d-flex align-items-center">
+                                                <i class="feather-file fs-3 me-3 text-primary"></i>
+                                                <div class="flex-grow-1">
+                                                    <h6 class="mb-1">@resource.Title</h6>
+                                                    <small class="text-muted">@resource.FileSize</small>
+                                                </div>
+                                                <i class="feather-download text-primary"></i>
+                                            </div>
+                                        </a>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="text-muted">@Html.T("لا توجد موارد لهذا الدرس.", "No resources for this lesson.")</p>
+                            }
+                        </div>
+
+                        <!-- Notes Tab -->
+                        <div class="tab-pane fade" id="notes-tab">
+                            <h5 class="text-white mb-3">@Html.T("ملاحظاتي الخاصة", "My Private Notes")</h5>
+                            <div class="mb-3">
+                                <textarea class="form-control bg-dark text-white border-secondary" rows="4" placeholder="@Html.T("اكتب ملاحظاتك هنا...", "Write your notes here...")" id="noteContent"></textarea>
+                                <button class="btn btn-primary mt-2" onclick="saveNote()">
+                                    <i class="feather-save me-2"></i>
+                                    @Html.T("حفظ الملاحظة", "Save Note")
+                                </button>
+                            </div>
+                            <div id="notesList" class="mt-4">
+                                <!-- Notes will be loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- Comments Tab -->
+                        <div class="tab-pane fade" id="comments-tab">
+                            <h5 class="text-white mb-3">@Html.T("التعليقات والأسئلة", "Comments and Questions")</h5>
+                            <div class="mb-4">
+                                <textarea class="form-control bg-dark text-white border-secondary" rows="3" placeholder="@Html.T("اكتب سؤالاً أو تعليقاً...", "Write a question or comment...")" id="commentContent"></textarea>
+                                <button class="btn btn-primary mt-2" onclick="postComment()">
+                                    <i class="feather-send me-2"></i>
+                                    @Html.T("نشر التعليق", "Post Comment")
+                                </button>
+                            </div>
+                            <div id="commentsList">
+                                <!-- Comments will be loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- Quizzes & Assignments Tab (only from tutor - ZTP) -->
+                        @if (enrollment != null && (lesson.Quizzes?.Any(q => q.IsActive) == true || lesson.Assignments?.Any() == true))
+                        {
+                            <div class="tab-pane fade" id="quizzes-assignments-tab">
+                                <h5 class="text-white mb-3">@Html.T("اختبارات وتكليفات هذا الدرس", "Quizzes & Assignments for this lesson")</h5>
+                                <p class="text-muted small">@Html.T("يمكنك الوصول إلى الاختبارات والتكليفات من هنا فقط أثناء مشاهدة الدرس.", "You can access quizzes and assignments from here only while watching the lesson.")</p>
+                                @if (lesson.Quizzes?.Any(q => q.IsActive) == true)
+                                {
+                                    <h6 class="text-white mt-4 mb-2"><i class="feather-help-circle me-2"></i>@Html.T("الاختبارات", "Quizzes")</h6>
+                                    <div class="list-group list-group-flush mb-4">
+                                        @foreach (var quiz in lesson.Quizzes.Where(q => q.IsActive))
+                                        {
+                                            <a asp-action="Lesson" asp-controller="Learning" asp-route-lessonId="@lesson.Id" asp-route-quizId="@quiz.Id" class="list-group-item list-group-item-action bg-transparent text-white border-secondary d-flex align-items-center">
+                                                <i class="feather-file-text fs-4 me-3 text-warning"></i>
+                                                <div class="flex-grow-1">
+                                                    <strong>@quiz.Title</strong>
+                                                    @if (quiz.TimeLimit.HasValue) { <small class="text-muted ms-2">@quiz.TimeLimit @Html.T("دقيقة", "min")</small> }
+                                                </div>
+                                                <i class="feather-arrow-left"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                }
+                                @if (lesson.Assignments?.Any() == true)
+                                {
+                                    <h6 class="text-white mt-4 mb-2"><i class="feather-edit me-2"></i>@Html.T("التكليفات", "Assignments")</h6>
+                                    <div class="list-group list-group-flush">
+                                        @foreach (var assignment in lesson.Assignments)
+                                        {
+                                            <a asp-action="Lesson" asp-controller="Learning" asp-route-lessonId="@lesson.Id" asp-route-assignmentId="@assignment.Id" class="list-group-item list-group-item-action bg-transparent text-white border-secondary d-flex align-items-center">
+                                                <i class="feather-edit-3 fs-4 me-3 text-info"></i>
+                                                <div class="flex-grow-1">
+                                                    <strong>@assignment.Title</strong>
+                                                    @if (assignment.DueDate.HasValue) { <small class="text-muted ms-2">@Html.T("آخر موعد:", "Due:") @assignment.DueDate.Value.ToString("yyyy-MM-dd")</small> }
+                                                </div>
+                                                <i class="feather-arrow-left"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            }
+            else
+            {
+                @* Fallback when panel requested but model missing: show lesson content *@
+                ViewBag.TutorPanel = "lesson";
+                @if (lesson.Type == LMS.Domain.Enums.LessonType.Video && !string.IsNullOrEmpty(lesson.VideoUrl))
+                {
+                    ViewData["VideoUrl"] = lesson.VideoUrl;
+                    ViewData["VideoProvider"] = lesson.VideoProvider;
+                    ViewData["VideoId"] = lesson.VideoId;
+                    ViewData["LessonId"] = lesson.Id;
+                    ViewData["StudentName"] = studentName;
+                    ViewData["StudentEmail"] = studentEmail;
+                    ViewData["StudentPhone"] = studentPhone;
+                    @await Html.PartialAsync("_SecureVideoPlayer")
+                }
+                else if (lesson.Type == LMS.Domain.Enums.LessonType.Article)
+                {
+                    <div class="p-5"><div class="text-white"><h2 class="text-white mb-4">@lesson.Title</h2><div class="article-content">@Html.Raw(lesson.Content)</div></div></div>
+                }
+                <div class="p-4">
+                    <a asp-action="Lesson" asp-controller="Learning" asp-route-lessonId="@lesson.Id" class="btn btn-outline-secondary">@Html.T("العودة للدرس", "Back to lesson")</a>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Sidebar - Course Content -->
+    <div class="col-lg-3">
+        <div class="lesson-sidebar">
+            <div class="p-3 border-bottom border-secondary">
+                <h6 class="text-white mb-2">@course?.Title</h6>
+                @if (enrollment != null)
+                {
+                    <div class="progress ht-6 mb-2">
+                        <div class="progress-bar bg-success" style="width: @enrollment.ProgressPercentage%"></div>
+                    </div>
+                    <small class="text-muted">@enrollment.ProgressPercentage.ToString("F0")% @Html.T("مكتمل", "complete")</small>
+                }
+                else if (isInstructorAccess)
+                {
+                    <span class="badge bg-info">
+                        <i class="feather-eye me-1"></i>
+                        @Html.T("معاينة المدرس", "Instructor Preview")
+                    </span>
+                }
+            </div>
+
+            <!-- Lessons List -->
+            @if (course?.Modules != null)
+            {
+                @foreach (var module in course.Modules.OrderBy(m => m.OrderIndex))
+                {
+                    <div class="module-header">
+                        @module.Title
+                    </div>
+                    @foreach (var moduleLesson in module.Lessons.OrderBy(l => l.OrderIndex))
+                    {
+                        var lessonProgress = enrollment?.LessonProgress?.FirstOrDefault(lp => lp.LessonId == moduleLesson.Id);
+                        var isCompleted = lessonProgress?.IsCompleted ?? false;
+                        var isActive = moduleLesson.Id == lesson.Id;
+                        
+                        <a asp-action="Lesson" asp-route-lessonId="@moduleLesson.Id" 
+                           class="lesson-item d-flex align-items-center @(isActive ? "active" : "") @(isCompleted ? "completed" : "")">
+                            <div class="me-3">
+                                @if (isCompleted)
+                                {
+                                    <i class="feather-check-circle"></i>
+                                }
+                                else
+                                {
+                                    <i class="feather-@(moduleLesson.Type == LMS.Domain.Enums.LessonType.Video ? "play-circle" : moduleLesson.Type == LMS.Domain.Enums.LessonType.Article ? "file-text" : "code")"></i>
+                                }
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fs-13">@moduleLesson.Title</div>
+                                <small class="opacity-75">@moduleLesson.DurationMinutes @Html.T("دقيقة", "min")</small>
+                            </div>
+                        </a>
+                    }
+                }
+            }
+
+            <!-- Complete Button (only for enrolled students) -->
+            @if (enrollment != null && progress != null && !progress.IsCompleted)
+            {
+                <div class="complete-btn">
+                    <button type="button" class="btn btn-success w-100" onclick="markLessonComplete(@lesson.Id)">
+                        <i class="feather-check-circle me-2"></i>
+                        @Html.T("تمييز كمكتمل", "Mark as Complete")
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Anti-forgery token for AJAX requests -->
+@Html.AntiForgeryToken()
+
+@section Scripts {
+<script>
+    window.__T = window.__T || {};
+    window.__T.NoteSaved = '@Html.Raw(Html.T("تم حفظ الملاحظة بنجاح", "Note saved successfully").ToString().Replace("'", "\\'"))';
+    window.__T.NoteError = '@Html.Raw(Html.T("حدث خطأ أثناء حفظ الملاحظة", "An error occurred while saving the note").ToString().Replace("'", "\\'"))';
+    window.__T.CommentSaved = '@Html.Raw(Html.T("تم إضافة التعليق بنجاح", "Comment added successfully").ToString().Replace("'", "\\'"))';
+    window.__T.CommentError = '@Html.Raw(Html.T("حدث خطأ أثناء إضافة التعليق", "An error occurred while adding the comment").ToString().Replace("'", "\\'"))';
+    window.__T.InstructorReply = '@Html.Raw(Html.T("رد المدرس:", "Instructor reply:").ToString().Replace("'", "\\'"))';
+    window.__T.ErrorOccurred = '@Html.Raw(Html.T("حدث خطأ", "An error occurred").ToString().Replace("'", "\\'"))';
+    window.__T.ConnectionError = '@Html.Raw(Html.T("حدث خطأ في الاتصال", "Connection error").ToString().Replace("'", "\\'"))';
+    var lessonId = @lesson.Id;
+    
+    // Get current video time from SecureVideoPlayer module
+    function getCurrentVideoTime() {
+        if (window.SecureVideoPlayer && window.SecureVideoPlayer.getCurrentTime) {
+            return Math.floor(window.SecureVideoPlayer.getCurrentTime());
+        }
+        // Fallback to video element
+        var vid = document.querySelector('.svp-video-element');
+        return vid ? Math.floor(vid.currentTime) : 0;
+    }
+
+    // Save note
+    function saveNote() {
+        var content = document.getElementById('noteContent').value;
+        if (!content.trim()) {
+            alert('@Html.Raw(Html.T("الرجاء كتابة ملاحظة", "Please write a note").Replace("'", "\\'"))');
+            return;
+        }
+
+        var timestamp = getCurrentVideoTime();
+
+        var token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+        if (!token) { showToast('error', '@Html.T("جلسة غير صالحة. يرجى تحديث الصفحة والمحاولة مرة أخرى.", "Invalid session. Please refresh the page and try again.")'); return; }
+        fetch('@Url.Action("AddNote", "Notes")', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': token
+            },
+            body: JSON.stringify({
+                lessonId: lessonId,
+                content: content,
+                timestamp: timestamp
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('noteContent').value = '';
+                loadNotes();
+                showToast('success', data.message || (window.__T && window.__T.NoteSaved) || 'Note saved successfully');
+            } else {
+                showToast('error', data.message || (window.__T && window.__T.NoteError) || 'An error occurred while saving the note');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('error', (window.__T && window.__T.NoteError) || 'An error occurred while saving the note');
+        });
+    }
+
+    // Post comment
+    function postComment() {
+        var content = document.getElementById('commentContent').value;
+        if (!content.trim()) {
+            alert('@Html.Raw(Html.T("الرجاء كتابة تعليق", "Please write a comment").Replace("'", "\\'"))');
+            return;
+        }
+
+        var token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+        if (!token) { showToast('error', '@Html.T("جلسة غير صالحة. يرجى تحديث الصفحة والمحاولة مرة أخرى.", "Invalid session. Please refresh the page and try again.")'); return; }
+        fetch('@Url.Action("AddComment", "Comments")', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': token
+            },
+            body: JSON.stringify({
+                lessonId: lessonId,
+                content: content
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('commentContent').value = '';
+                loadComments();
+                showToast('success', data.message || (window.__T && window.__T.CommentSaved) || 'Comment added successfully');
+            } else {
+                showToast('error', data.message || (window.__T && window.__T.CommentError) || 'An error occurred while adding the comment');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('error', (window.__T && window.__T.CommentError) || 'An error occurred while adding the comment');
+        });
+    }
+
+    // Load notes and comments on tab switch
+    $('button[data-bs-target="#notes-tab"]').on('shown.bs.tab', loadNotes);
+    $('button[data-bs-target="#comments-tab"]').on('shown.bs.tab', loadComments);
+
+    // Load notes from API
+    function loadNotes() {
+        fetch('@Url.Action("GetNotes", "Notes")?lessonId=' + lessonId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    var notesList = document.getElementById('notesList');
+                    if (data.notes.length === 0) {
+                        notesList.innerHTML = '<p class="text-muted text-center">@Html.T("لا توجد ملاحظات بعد. ابدأ بإضافة ملاحظاتك!", "No notes yet. Start adding your notes!")</p>';
+                    } else {
+                        var html = '';
+                        data.notes.forEach(function(note) {
+                            html += '<div class="card bg-dark border-secondary mb-2">';
+                            html += '<div class="card-body py-2">';
+                            if (note.videoTimestamp) {
+                                html += '<span class="badge bg-primary me-2" onclick="seekToTime(' + note.videoTimestamp + ')" style="cursor: pointer;">' + formatTime(note.videoTimestamp) + '</span>';
+                            }
+                            if (note.isPinned) {
+                                html += '<i class="feather-bookmark text-warning me-2"></i>';
+                            }
+                            html += '<small class="text-muted float-end">' + note.createdAt + '</small>';
+                            html += '<p class="mb-0 mt-2 text-white">' + escapeHtml(note.content) + '</p>';
+                            html += '</div></div>';
+                        });
+                        notesList.innerHTML = html;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error loading notes:', error);
+            });
+    }
+
+    // Load comments from API
+    function loadComments() {
+        fetch('@Url.Action("GetComments", "Comments")?lessonId=' + lessonId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    var commentsList = document.getElementById('commentsList');
+                    if (data.comments.length === 0) {
+                        commentsList.innerHTML = '<p class="text-muted text-center">@Html.T("لا توجد تعليقات بعد. كن أول من يعلق!", "No comments yet. Be the first to comment!")</p>';
+                    } else {
+                        var html = '';
+                        data.comments.forEach(function(comment) {
+                            html += '<div class="d-flex mb-3">';
+                            html += '<img src="' + comment.authorAvatar + '" class="rounded-circle me-3" style="width: 40px; height: 40px; object-fit: cover;">';
+                            html += '<div class="flex-grow-1">';
+                            html += '<div class="d-flex justify-content-between align-items-center mb-1">';
+                            html += '<strong class="text-white">' + escapeHtml(comment.authorName) + '</strong>';
+                            html += '<small class="text-muted">' + comment.createdAt + '</small>';
+                            html += '</div>';
+                            html += '<p class="text-muted mb-1">' + escapeHtml(comment.content) + '</p>';
+                            if (comment.instructorReply) {
+                                html += '<div class="bg-secondary bg-opacity-25 p-2 rounded mt-2">';
+                                html += '<small class="text-primary"><i class="feather-user-check me-1"></i>' + (window.__T && window.__T.InstructorReply || 'Instructor reply:') + '</small>';
+                                html += '<p class="mb-0 text-white small">' + escapeHtml(comment.instructorReply) + '</p>';
+                                html += '</div>';
+                            }
+                            html += '<div class="mt-1">';
+                            html += '<button class="btn btn-sm btn-link text-muted p-0 me-3"><i class="feather-thumbs-up me-1"></i>' + comment.likeCount + '</button>';
+                            html += '</div>';
+                            html += '</div></div>';
+                        });
+                        commentsList.innerHTML = html;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error loading comments:', error);
+            });
+    }
+
+    // Helper function to format time
+    function formatTime(seconds) {
+        var mins = Math.floor(seconds / 60);
+        var secs = seconds % 60;
+        return mins + ':' + (secs < 10 ? '0' : '') + secs;
+    }
+
+    // Seek to time in video
+    function seekToTime(seconds) {
+        if (window.SecureVideoPlayer && window.SecureVideoPlayer.seekTo) {
+            window.SecureVideoPlayer.seekTo(seconds);
+            window.SecureVideoPlayer.play();
+        } else {
+            var vid = document.querySelector('.svp-video-element');
+            if (vid) { vid.currentTime = seconds; vid.play(); }
+        }
+    }
+
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(text));
+        return div.innerHTML;
+    }
+
+    // Toast notification function
+    function showToast(type, message) {
+        if (typeof toastr !== 'undefined') {
+            toastr[type === 'success' ? 'success' : 'error'](message);
+        } else {
+            if (type === 'error') console.error(message);
+            alert(message);
+        }
+    }
+
+    // Load notes and comments on page load
+    $(document).ready(function() {
+        loadNotes();
+        loadComments();
+        loadBookmarkStatus();
+    });
+    
+    // Load bookmark status
+    function loadBookmarkStatus() {
+        $.get('@Url.Action("GetBookmarkStatus", "Learning", new { area = "Student" })?lessonId=' + lessonId, function(response) {
+            if (response.success && response.isBookmarked) {
+                $('#bookmarkIcon').removeClass('feather-bookmark').addClass('feather-bookmark-fill');
+                $('#bookmarkBtn').removeClass('btn-outline-warning').addClass('btn-warning');
+            }
+        });
+    }
+    
+    // Toggle bookmark
+    function toggleBookmark(lessonId) {
+        var btn = $('#bookmarkBtn');
+        var icon = $('#bookmarkIcon');
+        var timestamp = getCurrentVideoTime();
+        
+        btn.prop('disabled', true);
+        
+        $.ajax({
+            url: '@Url.Action("ToggleBookmark", "Learning", new { area = "Student" })',
+            type: 'POST',
+            data: {
+                lessonId: lessonId,
+                timestamp: timestamp,
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            },
+            success: function(response) {
+                if (response.success) {
+                    if (response.isBookmarked) {
+                        icon.removeClass('feather-bookmark').addClass('feather-bookmark-fill');
+                        btn.removeClass('btn-outline-warning').addClass('btn-warning');
+                    } else {
+                        icon.removeClass('feather-bookmark-fill').addClass('feather-bookmark');
+                        btn.removeClass('btn-warning').addClass('btn-outline-warning');
+                    }
+                    showToast('success', response.message);
+                } else {
+                    showToast('error', response.message || (window.__T && window.__T.ErrorOccurred) || 'An error occurred');
+                }
+                btn.prop('disabled', false);
+            },
+            error: function() {
+                showToast('error', (window.__T && window.__T.ConnectionError) || 'Connection error');
+                btn.prop('disabled', false);
+            }
+        });
+    }
+    
+    // Mark lesson as complete - Simple and reliable JSON approach
+    function markLessonComplete(lessonId) {
+        // Disable all mark complete buttons
+        var buttons = document.querySelectorAll('[onclick*="markLessonComplete"]');
+        buttons.forEach(function(btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> @Html.T("جاري الحفظ...", "Saving...")';
+        });
+        
+        // Submit via jQuery AJAX (more reliable)
+        $.ajax({
+            url: '@Url.Action("MarkComplete", "Learning", new { area = "Student" })',
+            type: 'POST',
+            data: {
+                lessonId: lessonId,
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            },
+            success: function(response) {
+                console.log('MarkComplete response:', response);
+                if (response.success) {
+                    // Show success message
+                    if (response.message) {
+                        console.log('Success:', response.message);
+                    }
+                    // Redirect to next lesson or course
+                    if (response.redirect) {
+                        window.location.href = response.redirect;
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    // Show error message
+                    alert(response.message || '@Html.T("حدث خطأ أثناء حفظ التقدم", "An error occurred while saving progress")');
+                    resetButtons();
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('AJAX Error:', status, error);
+                alert('@Html.Raw(Html.T("حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى.", "A connection error occurred. Please try again.").Replace("'", "\\'"))');
+                resetButtons();
+            }
+        });
+        
+        function resetButtons() {
+            buttons.forEach(function(btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="feather-check-circle me-2"></i> @Html.T("تمييز كمكتمل", "Mark as Complete")';
+            });
+        }
+    }
+</script>
+}
+

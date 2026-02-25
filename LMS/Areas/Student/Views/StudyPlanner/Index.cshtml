@@ -1,0 +1,738 @@
+@model LMS.Areas.Student.Controllers.StudyPlannerViewModel
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("مخطط الدراسة", "Study Planner");
+    
+    // UI settings
+    var upcomingSessionsLimit = await PlatformSettings.GetIntSettingAsync("UI.UpcomingSessions.Limit", 5);
+    var upcomingDeadlinesLimit = await PlatformSettings.GetIntSettingAsync("UI.UpcomingDeadlines.Limit", 4);
+    
+    var todaySessions = Model.Sessions.Where(s => s.ScheduledDate.Date == DateTime.UtcNow.Date).ToList();
+    var upcomingSessions = Model.Sessions.Where(s => s.ScheduledDate.Date > DateTime.UtcNow.Date).Take(upcomingSessionsLimit).ToList();
+    var thisWeekSessions = Model.Sessions.Where(s => s.ScheduledDate >= DateTime.UtcNow.Date && 
+        s.ScheduledDate <= DateTime.UtcNow.Date.AddDays(7)).ToList();
+    var completedSessions = Model.Sessions.Where(s => s.IsCompleted).ToList();
+    var totalMinutes = completedSessions.Sum(s => s.ActualDurationMinutes ?? s.DurationMinutes);
+    var avgSessionMinutes = completedSessions.Any() ? completedSessions.Average(s => s.ActualDurationMinutes ?? s.DurationMinutes) : 0;
+}
+
+@section Styles {
+<style>
+    .glass-banner { position: relative; border-radius: 20px; padding: 24px 28px; margin-bottom: 1.5rem; overflow: hidden; border: 1px solid rgba(255,255,255,0.3); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); transition: all 0.4s cubic-bezier(0.16,1,0.3,1); }
+    .glass-banner::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent); }
+    .glass-banner:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,74,173,0.2); }
+    .glass-banner-welcome { background: linear-gradient(135deg, rgba(0,74,173,0.85) 0%, rgba(0,102,204,0.75) 50%, rgba(26,92,185,0.8) 100%); box-shadow: 0 8px 32px rgba(0,74,173,0.25), 0 4px 16px rgba(0,74,173,0.15), inset 0 1px 0 rgba(255,255,255,0.2); }
+    .glass-banner-welcome::after { content: ''; position: absolute; top: -50%; right: -20%; width: 60%; height: 200%; background: radial-gradient(ellipse, rgba(255,255,255,0.15) 0%, transparent 60%); pointer-events: none; }
+    .glass-banner .banner-icon { width: 64px; height: 64px; border-radius: 16px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; font-size: 28px; color: white; border: 1px solid rgba(255,255,255,0.25); }
+    .glass-banner h4, .glass-banner h5 { color: white; font-weight: 700; margin-bottom: 6px; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .glass-banner p { color: rgba(255,255,255,0.9); margin: 0; font-size: 15px; }
+    .glass-banner .btn-glass { background: rgba(255,255,255,0.25); border: 1px solid rgba(255,255,255,0.35); color: white; font-weight: 600; padding: 10px 20px; border-radius: 12px; transition: all 0.3s ease; }
+    .glass-banner .btn-glass:hover { background: rgba(255,255,255,0.35); color: white; }
+    .stats-card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); transition: transform 0.3s ease; height: 100%; }
+    .stats-card:hover { transform: translateY(-5px); box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+    .stats-icon { width: 60px; height: 60px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+    .stats-icon.primary { background: linear-gradient(135deg, #004aad 0%, #0066cc 50%, #3385d6 100%); color: white; }
+    .stats-icon.success { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; }
+    .stats-icon.warning { background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%); color: white; }
+    .stats-icon.info { background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%); color: white; }
+    .stats-number { font-size: 32px; font-weight: 700; margin: 12px 0 4px; color: #1f2937; }
+    .stats-label { color: #6b7280; font-size: 14px; margin-bottom: 8px; }
+    .content-card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); height: 100%; }
+    .study-session-card { transition: all 0.2s ease; }
+    .study-session-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+    .table-responsive { -webkit-overflow-scrolling: touch; max-width: 100%; }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Page-level antiforgery token for AJAX (complete/delete/edit session) - must be sent with credentials -->
+<div id="studyPlannerAntiforgery" style="display:none;" aria-hidden="true">@Html.AntiForgeryToken()</div>
+@{
+    var msgCompleteConfirm = Html.T("هل تريد تحديد هذه الجلسة كمكتملة؟", "Do you want to mark this session as complete?");
+    var msgInvalidSession = Html.T("جلسة غير صالحة. يرجى تحديث الصفحة والمحاولة مرة أخرى.", "Invalid session. Please refresh the page and try again.");
+    var msgInvalidResponse = Html.T("استجابة غير صالحة", "Invalid response");
+    var msgInvalidRequest = Html.T("طلب غير صالح. حدّث الصفحة وحاول مرة أخرى.", "Invalid request. Refresh the page and try again.");
+    var msgServerError = Html.T("حدث خطأ في الخادم.", "A server error occurred.");
+    var msgCompleteSuccess = Html.T("تم تحديد الجلسة كمكتملة بنجاح", "Session marked as complete successfully");
+    var msgUpdateError = Html.T("حدث خطأ أثناء تحديث الجلسة", "An error occurred while updating the session");
+    var msgDeleteConfirm = Html.T("هل أنت متأكد من حذف هذه الجلسة؟", "Are you sure you want to delete this session?");
+    var msgDeleteSuccess = Html.T("تم حذف الجلسة بنجاح", "Session deleted successfully");
+    var msgDeleteError = Html.T("حدث خطأ أثناء حذف الجلسة", "An error occurred while deleting the session");
+    var msgSaving = Html.T("جاري الحفظ...", "Saving...");
+    var msgSave = Html.T("حفظ", "Save");
+    var msgCreateError = Html.T("حدث خطأ أثناء إنشاء الجلسة. يرجى المحاولة مرة أخرى.", "An error occurred while creating the session. Please try again.");
+    var msgEditSuccess = Html.T("تم تحديث الجلسة بنجاح", "Session updated successfully");
+    var msgEditError = Html.T("حدث خطأ أثناء تحديث الجلسة", "An error occurred while updating the session");
+    var messagesJson = System.Text.Json.JsonSerializer.Serialize(new {
+        completeConfirm = msgCompleteConfirm,
+        invalidSession = msgInvalidSession,
+        invalidResponse = msgInvalidResponse,
+        invalidRequest = msgInvalidRequest,
+        serverError = msgServerError,
+        completeSuccess = msgCompleteSuccess,
+        updateError = msgUpdateError,
+        deleteConfirm = msgDeleteConfirm,
+        deleteSuccess = msgDeleteSuccess,
+        deleteError = msgDeleteError,
+        saving = msgSaving,
+        save = msgSave,
+        createError = msgCreateError,
+        editSuccess = msgEditSuccess,
+        editError = msgEditError
+    });
+}
+<script type="application/json" id="studyPlannerMessages">
+@Html.Raw(messagesJson)
+</script>
+
+<!-- Glass Welcome Banner -->
+<div class="glass-banner glass-banner-welcome mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div class="d-flex align-items-center">
+            <div class="banner-icon flex-shrink-0 me-3">
+                <i class="feather-calendar text-white"></i>
+            </div>
+            <div>
+                <h4 class="text-white mb-1">@Html.T("مخطط الدراسة", "Study Planner")</h4>
+                <p class="mb-0">@Html.T("نظم وقتك الدراسي بفعالية", "Organize your study time effectively")</p>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-action="GeneratePlan" class="btn btn-glass">
+                <i class="feather-cpu me-2"></i>
+                @Html.T("إنشاء خطة ذكية", "Generate Smart Plan")
+            </a>
+            <button type="button" class="btn btn-glass" data-bs-toggle="modal" data-bs-target="#createSessionModal">
+                <i class="feather-plus me-2"></i>
+                @Html.T("جلسة دراسة جديدة", "New Study Session")
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Row (Dashboard-style) -->
+<div class="row g-4 mb-4">
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <p class="stats-label">@Html.T("جلسات هذا الأسبوع", "This Week's Sessions")</p>
+                    <h2 class="stats-number">@thisWeekSessions.Count</h2>
+                </div>
+                <div class="stats-icon primary"><i class="feather-clock"></i></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <p class="stats-label">@Html.T("ساعات مكتملة", "Completed Hours")</p>
+                    <h2 class="stats-number">@Math.Round(totalMinutes / 60.0, 1)</h2>
+                </div>
+                <div class="stats-icon success"><i class="feather-check-circle"></i></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <p class="stats-label">@Html.T("متوسط الجلسة", "Average Session")</p>
+                    <h2 class="stats-number">@Math.Round(avgSessionMinutes / 60.0, 1)</h2>
+                    <small class="text-muted">@Html.T("ساعة", "hour")</small>
+                </div>
+                <div class="stats-icon info"><i class="feather-trending-up"></i></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <p class="stats-label">@Html.T("جلسات قادمة", "Upcoming Sessions")</p>
+                    <h2 class="stats-number">@Model.Sessions.Count(s => !s.IsCompleted && s.ScheduledDate >= DateTime.UtcNow)</h2>
+                </div>
+                <div class="stats-icon warning"><i class="feather-zap"></i></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upcoming Deadlines -->
+@if (Model.UpcomingDeadlines.Any())
+{
+    <div class="content-card mb-4">
+        <h5 class="fw-bold mb-3">
+            <i class="feather-alert-circle text-danger me-2"></i>
+            @Html.T("المواعيد النهائية القادمة", "Upcoming Deadlines")
+        </h5>
+        <div>
+            <div class="row g-3">
+                @foreach (var deadline in Model.UpcomingDeadlines.Take(upcomingDeadlinesLimit))
+                {
+                    var daysLeft = (deadline.DueDate - DateTime.UtcNow).TotalDays;
+                    var priorityColor = deadline.Priority switch {
+                        1 => "danger",
+                        2 => "warning",
+                        3 => "info",
+                        _ => "secondary"
+                    };
+                    <div class="col-md-3">
+                        <div class="card border-@priorityColor border-2">
+                            <div class="card-body p-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="badge bg-@priorityColor me-2">@deadline.Type</span>
+                                    <small class="text-muted">@(daysLeft < 1 ? Html.T("اليوم", "Today") : daysLeft < 2 ? Html.T("غداً", "Tomorrow") : Html.T($"خلال {Math.Ceiling(daysLeft)} أيام", $"In {Math.Ceiling(daysLeft)} days"))</small>
+                                </div>
+                                <h6 class="mb-1">@deadline.Title</h6>
+                                <small class="text-muted">@deadline.CourseName</small>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Today's Sessions -->
+<div class="content-card mb-4">
+    <h5 class="fw-bold mb-3">@Html.T("جلسات اليوم", "Today's Sessions") (@todaySessions.Count)</h5>
+    <div>
+        @if (todaySessions.Any())
+        {
+            <div class="row g-3">
+                @foreach (var session in todaySessions)
+                {
+                    var isCompleted = session.IsCompleted;
+                    var isPast = session.ScheduledDate < DateTime.UtcNow && !isCompleted;
+                    var statusClass = isCompleted ? "success" : isPast ? "danger" : "primary";
+                    var statusText = isCompleted ? Html.T("مكتملة", "Completed") : isPast ? Html.T("فائتة", "Missed") : Html.T("قادمة", "Upcoming");
+                    
+                    <div class="col-md-4">
+                        <div class="study-session-card card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-start mb-3">
+                                    <div class="avatar-text avatar-md bg-soft-@statusClass text-@statusClass me-3">
+                                        <i class="feather-book-open"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="fw-bold mb-1">@session.Title</h6>
+                                        <p class="text-muted fs-12 mb-0">
+                                            @session.ScheduledDate.ToString("hh:mm tt") - 
+                                            @session.ScheduledDate.AddMinutes(session.DurationMinutes).ToString("hh:mm tt")
+                                        </p>
+                                        @if (session.Course != null)
+                                        {
+                                            <small class="text-muted">@session.Course.Title</small>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <span class="badge bg-soft-@statusClass text-@statusClass flex-grow-1">@statusText</span>
+                                    @if (!isCompleted)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-secondary btn-edit-session" title="@Html.T("تعديل", "Edit")"
+                                            data-session-id="@session.Id"
+                                            data-title="@session.Title"
+                                            data-description="@(session.Description ?? "")"
+                                            data-scheduled="@session.ScheduledDate.ToString("O")"
+                                            data-duration="@session.DurationMinutes"
+                                            data-course-id="@(session.CourseId?.ToString() ?? "")">
+                                            <i class="feather-edit-2"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-success" onclick="completeSession(@session.Id)">
+                                            <i class="feather-check"></i>
+                                        </button>
+                                    }
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteSession(@session.Id)">
+                                        <i class="feather-trash-2"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-4">
+                <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                    <i class="feather-calendar"></i>
+                </div>
+                <p class="text-muted mb-3">@Html.T("لا توجد جلسات مجدولة لليوم", "No sessions scheduled for today")</p>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSessionModal">
+                    <i class="feather-plus me-2"></i>
+                    @Html.T("جدولة جلسة جديدة", "Schedule New Session")
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Upcoming Sessions -->
+@if (upcomingSessions.Any())
+{
+    <div class="content-card mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <h5 class="fw-bold mb-0">@Html.T("الجلسات القادمة", "Upcoming Sessions")</h5>
+            <a asp-action="Calendar" class="btn btn-sm btn-outline-primary">
+                <i class="feather-calendar me-2"></i>
+                @Html.T("عرض التقويم", "View Calendar")
+            </a>
+        </div>
+        <div>
+            <!-- Mobile: card list -->
+            <div class="d-md-none">
+                @foreach (var session in upcomingSessions)
+                {
+                    <div class="card study-session-card mb-3">
+                        <div class="card-body">
+                            <h6 class="fw-bold mb-1 text-break">@session.Title</h6>
+                            <p class="text-muted fs-12 mb-2">@(session.Course?.Title ?? "-")</p>
+                            <p class="fs-12 mb-2">@session.ScheduledDate.ToString("dd/MM/yyyy hh:mm tt") · @session.DurationMinutes @Html.T("دقيقة", "min")</p>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="button" class="btn btn-sm btn-outline-secondary btn-edit-session" title="@Html.T("تعديل", "Edit")"
+                                    data-session-id="@session.Id"
+                                    data-title="@session.Title"
+                                    data-description="@(session.Description ?? "")"
+                                    data-scheduled="@session.ScheduledDate.ToString("O")"
+                                    data-duration="@session.DurationMinutes"
+                                    data-course-id="@(session.CourseId?.ToString() ?? "")">
+                                    <i class="feather-edit-2"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-success" onclick="completeSession(@session.Id)" title="@Html.T("تحديد كمكتملة", "Mark as Complete")">
+                                    <i class="feather-check"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteSession(@session.Id)" title="@Html.T("حذف", "Delete")">
+                                    <i class="feather-trash-2"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <!-- Desktop: table -->
+            <div class="d-none d-md-block">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>@Html.T("الجلسة", "Session")</th>
+                                <th>@Html.T("الدورة", "Course")</th>
+                                <th>@Html.T("التاريخ", "Date")</th>
+                                <th>@Html.T("المدة", "Duration")</th>
+                                <th>@Html.T("الإجراءات", "Actions")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var session in upcomingSessions)
+                            {
+                                <tr>
+                                    <td>@session.Title</td>
+                                    <td>@(session.Course?.Title ?? "-")</td>
+                                    <td>@session.ScheduledDate.ToString("dd/MM/yyyy hh:mm tt")</td>
+                                    <td>@session.DurationMinutes @Html.T("دقيقة", "min")</td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary me-1 btn-edit-session" title="@Html.T("تعديل", "Edit")"
+                                            data-session-id="@session.Id"
+                                            data-title="@session.Title"
+                                            data-description="@(session.Description ?? "")"
+                                            data-scheduled="@session.ScheduledDate.ToString("O")"
+                                            data-duration="@session.DurationMinutes"
+                                            data-course-id="@(session.CourseId?.ToString() ?? "")">
+                                            <i class="feather-edit-2"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-success me-1" onclick="completeSession(@session.Id)" title="@Html.T("تحديد كمكتملة", "Mark as Complete")">
+                                            <i class="feather-check"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteSession(@session.Id)" title="@Html.T("حذف", "Delete")">
+                                            <i class="feather-trash-2"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Create Study Session Modal -->
+<div class="modal fade" id="createSessionModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="createSessionForm">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">@Html.T("جلسة دراسة جديدة", "New Study Session")</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="Title">@Html.T("عنوان الجلسة", "Session Title") <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="Title" name="Title" placeholder="@Html.T("مثال: دراسة دورة البرمجة", "e.g. Study programming course")" required />
+                        <span class="text-danger field-validation-error" id="TitleError"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="ScheduledDate">@Html.T("التاريخ", "Date") <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="ScheduledDate" name="ScheduledDate" required />
+                        <span class="text-danger field-validation-error" id="ScheduledDateError"></span>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label" for="StartTime">@Html.T("وقت البداية", "Start Time")</label>
+                            <input type="time" class="form-control" id="StartTime" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" for="DurationMinutes">@Html.T("المدة (بالدقائق)", "Duration (minutes)") <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="DurationMinutes" name="DurationMinutes" value="60" min="15" step="15" required />
+                            <span class="text-danger field-validation-error" id="DurationMinutesError"></span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="Description">@Html.T("الوصف (اختياري)", "Description (optional)")</label>
+                        <textarea class="form-control" id="Description" name="Description" rows="3" placeholder="@Html.T("وصف الجلسة الدراسية", "Study session description")"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="CourseId">@Html.T("الدورة (اختياري)", "Course (optional)")</label>
+                        <select class="form-select" id="CourseId" name="CourseId">
+                            <option value="">@Html.T("اختر دورة", "Select a course")</option>
+                            @if (ViewBag.Courses != null)
+                            {
+                                @foreach (var course in (List<LMS.Domain.Entities.Courses.Course>)ViewBag.Courses)
+                                {
+                                    <option value="@course.Id">@course.Title</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-primary" id="createSessionBtn">
+                        <i class="feather-save me-2"></i>
+                        @Html.T("حفظ", "Save")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Study Session Modal -->
+<div class="modal fade" id="editSessionModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="editSessionForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="EditSessionId" name="SessionId" value="" />
+                <div class="modal-header">
+                    <h5 class="modal-title">@Html.T("تعديل الجلسة", "Edit Study Session")</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="EditTitle">@Html.T("عنوان الجلسة", "Session Title") <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="EditTitle" name="Title" required />
+                        <span class="text-danger field-validation-error" id="EditTitleError"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="EditScheduledDate">@Html.T("التاريخ", "Date") <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="EditScheduledDate" name="ScheduledDate" required />
+                        <span class="text-danger field-validation-error" id="EditScheduledDateError"></span>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label" for="EditStartTime">@Html.T("وقت البداية", "Start Time")</label>
+                            <input type="time" class="form-control" id="EditStartTime" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" for="EditDurationMinutes">@Html.T("المدة (بالدقائق)", "Duration (minutes)") <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="EditDurationMinutes" name="DurationMinutes" value="60" min="15" step="15" required />
+                            <span class="text-danger field-validation-error" id="EditDurationMinutesError"></span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="EditDescription">@Html.T("الوصف (اختياري)", "Description (optional)")</label>
+                        <textarea class="form-control" id="EditDescription" name="Description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="EditCourseId">@Html.T("الدورة (اختياري)", "Course (optional)")</label>
+                        <select class="form-select" id="EditCourseId" name="CourseId">
+                            <option value="">@Html.T("اختر دورة", "Select a course")</option>
+                            @if (ViewBag.Courses != null)
+                            {
+                                @foreach (var course in (List<LMS.Domain.Entities.Courses.Course>)ViewBag.Courses)
+                                {
+                                    <option value="@course.Id">@course.Title</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-primary" id="editSessionBtn">
+                        <i class="feather-save me-2"></i>
+                        @Html.T("حفظ التغييرات", "Save changes")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    var _spMsg = (function() {
+        try {
+            var el = document.getElementById('studyPlannerMessages');
+            return el && el.textContent ? JSON.parse(el.textContent) : {};
+        } catch (e) {
+            console.warn('Study planner messages JSON invalid, using defaults.', e);
+            return {};
+        }
+    })();
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('createSessionForm');
+        const modalElement = document.getElementById('createSessionModal');
+        const modal = new bootstrap.Modal(modalElement);
+        const submitBtn = document.getElementById('createSessionBtn');
+        const dateInput = document.getElementById('ScheduledDate');
+        const startTimeInput = document.getElementById('StartTime');
+        
+        if (dateInput && !dateInput.value) {
+            const today = new Date().toISOString().split('T')[0];
+            dateInput.value = today;
+            dateInput.min = today;
+        }
+        
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            document.querySelectorAll('.field-validation-error').forEach(el => el.textContent = '');
+            
+            submitBtn.disabled = true;
+            const originalHtml = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + (_spMsg.saving || 'Saving...');
+            
+            try {
+                const dateValue = dateInput.value;
+                const timeValue = startTimeInput.value || '00:00';
+                const scheduledDateTime = new Date(dateValue + 'T' + timeValue).toISOString();
+                
+                const formData = {
+                    Title: document.getElementById('Title').value,
+                    Description: document.getElementById('Description').value || null,
+                    ScheduledDate: scheduledDateTime,
+                    DurationMinutes: parseInt(document.getElementById('DurationMinutes').value),
+                    CourseId: document.getElementById('CourseId').value ? parseInt(document.getElementById('CourseId').value) : null
+                };
+                
+                const token = document.querySelector('#studyPlannerAntiforgery input[name="__RequestVerificationToken"]')?.value;
+                if (!token) {
+                    alert(_spMsg.invalidSession || 'Invalid session.');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalHtml;
+                    return;
+                }
+                
+                const response = await fetch('@Url.Action("AddSession", "StudyPlanner", new { area = "Student" })', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': token
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                var result;
+                try {
+                    result = await response.json();
+                } catch (_) {
+                    result = { success: false, message: _spMsg.invalidResponse || 'Invalid response' };
+                }
+                
+                if (result && result.success) {
+                    modal.hide();
+                    form.reset();
+                    if (dateInput) {
+                        dateInput.value = new Date().toISOString().split('T')[0];
+                    }
+                    window.location.href = window.location.pathname + (window.location.search ? '&' : '?') + 't=' + Date.now();
+                } else {
+                    if (result.errors) {
+                        Object.keys(result.errors).forEach(key => {
+                            const errorElement = document.getElementById(key + 'Error');
+                            if (errorElement) {
+                                errorElement.textContent = Array.isArray(result.errors[key]) 
+                                    ? result.errors[key][0] 
+                                    : result.errors[key];
+                            }
+                        });
+                    }
+                    
+                    if (result.message) {
+                        alert(result.message);
+                    }
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalHtml;
+                }
+            } catch (error) {
+                console.error('Error creating session:', error);
+                alert(_spMsg.createError || 'An error occurred while creating the session.');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalHtml;
+            }
+        });
+        
+        modalElement.addEventListener('hidden.bs.modal', function() {
+            form.reset();
+            document.querySelectorAll('.field-validation-error').forEach(el => el.textContent = '');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="feather-save me-2"></i>' + (_spMsg.save || 'Save');
+            if (dateInput) {
+                dateInput.value = new Date().toISOString().split('T')[0];
+            }
+        });
+    });
+    
+    function getAntiForgeryToken() {
+        var wrap = document.getElementById('studyPlannerAntiforgery');
+        var el = wrap ? wrap.querySelector('input[name="__RequestVerificationToken"]') : null;
+        if (!el) el = document.querySelector('input[name="__RequestVerificationToken"]');
+        return el ? el.value : '';
+    }
+    function showMsg(success, text) {
+        if (typeof toastr !== 'undefined') { success ? toastr.success(text) : toastr.error(text); return; }
+        alert(text);
+    }
+    async function completeSession(sessionId) {
+        if (!confirm(_spMsg.completeConfirm || 'Do you want to mark this session as complete?')) return;
+        var token = getAntiForgeryToken();
+        if (!token) { showMsg(false, _spMsg.invalidSession || 'Invalid session.'); return; }
+        try {
+            var response = await fetch('@Url.Action("CompleteSession", "StudyPlanner", new { area = "Student" })', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token
+                },
+                body: JSON.stringify({ SessionId: sessionId })
+            });
+            var result = response.ok ? await response.json().catch(function() { return { success: false, message: _spMsg.invalidResponse }; }) : { success: false, message: response.status === 400 ? _spMsg.invalidRequest : _spMsg.serverError };
+            if (result && result.success) {
+                showMsg(true, _spMsg.completeSuccess || 'Session marked as complete successfully');
+                window.location.href = window.location.pathname + (window.location.search ? '&' : '?') + 't=' + Date.now();
+            } else { showMsg(false, result.message || _spMsg.updateError); }
+        } catch (e) {
+            console.error('Error completing session:', e);
+            showMsg(false, _spMsg.updateError || 'An error occurred while updating the session');
+        }
+    }
+    async function deleteSession(sessionId) {
+        if (!confirm(_spMsg.deleteConfirm || 'Are you sure you want to delete this session?')) return;
+        var token = getAntiForgeryToken();
+        if (!token) { showMsg(false, _spMsg.invalidSession || 'Invalid session.'); return; }
+        try {
+            var response = await fetch('@Url.Action("DeleteSession", "StudyPlanner", new { area = "Student" })', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token
+                },
+                body: JSON.stringify({ SessionId: sessionId })
+            });
+            var result = response.ok ? await response.json().catch(function() { return { success: false, message: _spMsg.invalidResponse }; }) : { success: false, message: response.status === 400 ? _spMsg.invalidRequest : _spMsg.serverError };
+            if (result && result.success) {
+                showMsg(true, _spMsg.deleteSuccess || 'Session deleted successfully');
+                window.location.href = window.location.pathname + (window.location.search ? '&' : '?') + 't=' + Date.now();
+            } else { showMsg(false, result.message || _spMsg.deleteError); }
+        } catch (e) {
+            console.error('Error deleting session:', e);
+            showMsg(false, _spMsg.deleteError || 'An error occurred while deleting the session');
+        }
+    }
+    function openEditModal(sessionId, title, description, scheduledIso, durationMinutes, courseId) {
+        document.getElementById('EditSessionId').value = sessionId;
+        document.getElementById('EditTitle').value = title || '';
+        document.getElementById('EditDescription').value = description || '';
+        document.getElementById('EditDurationMinutes').value = durationMinutes || 60;
+        document.getElementById('EditCourseId').value = courseId != null && courseId !== '' ? courseId : '';
+        var d = scheduledIso ? new Date(scheduledIso) : new Date();
+        document.getElementById('EditScheduledDate').value = d.toISOString().split('T')[0];
+        document.getElementById('EditStartTime').value = d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+        document.querySelectorAll('#editSessionForm .field-validation-error').forEach(function(el) { el.textContent = ''; });
+        new bootstrap.Modal(document.getElementById('editSessionModal')).show();
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        document.body.addEventListener('click', function(e) {
+            var btn = e.target.closest('.btn-edit-session');
+            if (!btn) return;
+            e.preventDefault();
+            var sessionId = parseInt(btn.getAttribute('data-session-id'), 10);
+            var title = btn.getAttribute('data-title') || '';
+            var description = btn.getAttribute('data-description') || '';
+            var scheduled = btn.getAttribute('data-scheduled') || '';
+            var duration = parseInt(btn.getAttribute('data-duration'), 10) || 60;
+            var courseId = btn.getAttribute('data-course-id');
+            openEditModal(sessionId, title, description, scheduled, duration, courseId === '' ? null : courseId);
+        });
+        var editForm = document.getElementById('editSessionForm');
+        if (editForm) {
+            editForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                var sessionId = parseInt(document.getElementById('EditSessionId').value, 10);
+                if (!sessionId) return;
+                var dateInput = document.getElementById('EditScheduledDate');
+                var timeInput = document.getElementById('EditStartTime');
+                var scheduledDateTime = new Date(dateInput.value + 'T' + (timeInput.value || '00:00')).toISOString();
+                var payload = {
+                    SessionId: sessionId,
+                    Title: document.getElementById('EditTitle').value,
+                    Description: document.getElementById('EditDescription').value || null,
+                    ScheduledDate: scheduledDateTime,
+                    DurationMinutes: parseInt(document.getElementById('EditDurationMinutes').value, 10),
+                    CourseId: document.getElementById('EditCourseId').value ? parseInt(document.getElementById('EditCourseId').value, 10) : null
+                };
+                var token = getAntiForgeryToken();
+                if (!token) { showMsg(false, _spMsg.invalidSession); return; }
+                var btn = document.getElementById('editSessionBtn');
+                btn.disabled = true;
+                try {
+                    var response = await fetch('@Url.Action("EditSession", "StudyPlanner", new { area = "Student" })', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token },
+                        body: JSON.stringify(payload)
+                    });
+                    var result = response.ok ? await response.json().catch(function() { return { success: false, message: _spMsg.invalidResponse }; }) : { success: false, message: _spMsg.serverError };
+                    if (result && result.success) {
+                        showMsg(true, _spMsg.editSuccess || 'Session updated successfully');
+                        bootstrap.Modal.getInstance(document.getElementById('editSessionModal')).hide();
+                        window.location.href = window.location.pathname + (window.location.search ? '&' : '?') + 't=' + Date.now();
+                    } else {
+                        showMsg(false, result.message || _spMsg.editError);
+                    }
+                } catch (err) {
+                    console.error('Error updating session:', err);
+                    showMsg(false, _spMsg.editError);
+                }
+                btn.disabled = false;
+            });
+        }
+    });
+</script>
+}
+

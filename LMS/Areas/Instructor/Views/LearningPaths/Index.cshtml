@@ -1,0 +1,199 @@
+@model IEnumerable<LMS.Domain.Entities.Learning.LearningPath>
+
+@{
+    ViewData["Title"] = Html.T("إدارة مسارات التعلم", "Learning Paths Management");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة مسارات التعلم الخاصة بك", "View and manage your learning paths");
+}
+
+@{
+    var createUrl = Url.Action("Create");
+    var actionButtonsHtml = "<a href='" + createUrl + "' class='btn btn-primary'>" +
+        "<i class='feather-plus me-2'></i>" +
+        (Html.T("إنشاء مسار تعلم", "Create Learning Path").ToString()) +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي المسارات", "Total Paths") },
+                { "Value", Model.Count() },
+                { "Icon", "map" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("المسارات المنشورة", "Published Paths") },
+                { "Value", Model.Count(lp => lp.IsPublished) },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الدورات", "Total Courses") },
+                { "Value", Model.Sum(lp => lp.CoursesCount) },
+                { "Icon", "book" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي المسجلين", "Total Enrolled") },
+                { "Value", Model.Sum(lp => lp.EnrollmentsCount) },
+                { "Icon", "users" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Learning Paths List -->
+    <div class="row">
+        @if (Model != null && Model.Any())
+        {
+            @foreach (var path in Model)
+            {
+                <div class="col-lg-6 mb-4">
+                    <div class="card stretch stretch-full">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div class="flex-grow-1">
+                                    <h5 class="fw-bold mb-2">
+                                        <a href="@Url.Action("Details", new { id = path.Id })" class="text-dark">@path.Name</a>
+                                    </h5>
+                                    <p class="text-muted mb-0 fs-13">@path.ShortDescription</p>
+                                </div>
+                                @if (path.IsPublished)
+                                {
+                                    <span class="badge bg-soft-success text-success">@Html.T("منشور", "Published")</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-soft-warning text-warning">@Html.T("مسودة", "Draft")</span>
+                                }
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <span class="badge bg-soft-primary text-primary">
+                                    <i class="feather-book me-1"></i> @path.CoursesCount @Html.T("دورة", "course(s)")
+                                </span>
+                                <span class="badge bg-soft-info text-info">
+                                    <i class="feather-clock me-1"></i> @path.EstimatedHours @Html.T("ساعة", "hrs")
+                                </span>
+                                <span class="badge bg-soft-warning text-warning">
+                                    <i class="feather-users me-1"></i> @path.EnrollmentsCount @Html.T("مسجل", "enrolled")
+                                </span>
+                                @if (!path.IsFree)
+                                {
+                                    <span class="badge bg-soft-success text-success">
+                                        @{ ViewBag.CurrencyIconClass = "me-1"; }
+                                        @await Html.PartialAsync("_CurrencyIcon")
+                                        @(path.DiscountedPrice?.ToEGP() ?? path.Price?.ToEGP() ?? Html.T("مجاني", "Free").ToString())
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-soft-secondary text-secondary">
+                                        <i class="feather-gift me-1"></i> @Html.T("مجاني", "Free")
+                                    </span>
+                                }
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <a href="@Url.Action("Details", new { id = path.Id })" class="btn btn-sm btn-light flex-grow-1">
+                                    <i class="feather-eye me-2"></i>@Html.T("عرض", "View")
+                                </a>
+                                <a href="@Url.Action("Edit", new { id = path.Id })" class="btn btn-sm btn-primary flex-grow-1">
+                                    <i class="feather-edit me-2"></i>@Html.T("تعديل", "Edit")
+                                </a>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                        <i class="feather-more-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Statistics", new { id = path.Id })">
+                                                <i class="feather-bar-chart-2 me-2"></i>@Html.T("الإحصائيات", "Statistics")
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Enrollments", new { id = path.Id })">
+                                                <i class="feather-users me-2"></i>@Html.T("المسجلين", "Enrollments")
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form asp-action="TogglePublish" asp-route-id="@path.Id" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="dropdown-item">
+                                                    <i class="feather-@(path.IsPublished ? "eye-off" : "eye") me-2"></i>
+                                                    @(path.IsPublished ? Html.T("إلغاء النشر", "Unpublish") : Html.T("نشر", "Publish"))
+                                                </button>
+                                            </form>
+                                        </li>
+                                        @if (path.EnrollmentsCount == 0)
+                                        {
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <form asp-action="Delete" asp-route-id="@path.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا المسار؟", "Are you sure you want to delete this path?").Replace("'", "\\'"))')">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="dropdown-item text-danger">
+                                                        <i class="feather-trash-2 me-2"></i>@Html.T("حذف", "Delete")
+                                                    </button>
+                                                </form>
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                            <i class="feather-map"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">@Html.T("لا توجد مسارات تعلم بعد", "No learning paths yet")</h5>
+                        <p class="text-muted mb-4">@Html.T("قم بإنشاء مسارات تعلم لتجميع دوراتك بطريقة منظمة", "Create learning paths to organize your courses")</p>
+                        <a href="@Url.Action("Create")" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إنشاء مسار تعلم", "Create Learning Path")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

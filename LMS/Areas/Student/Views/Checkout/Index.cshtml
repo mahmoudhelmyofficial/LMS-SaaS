@@ -1,0 +1,1188 @@
+@model LMS.Areas.Student.Controllers.EnhancedCheckoutViewModel
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = Html.T("إتمام الشراء", "Complete Purchase");
+    var cart = Model.Cart;
+    var cartItems = cart.Items;
+    var subtotal = cart.Totals.SubTotal;
+    var discount = cart.Totals.DiscountAmount;
+    var total = cart.Totals.Total;
+    var currency = cart.Totals.Currency;
+    var stripePublishableKey = Configuration["PaymentSettings:Stripe:PublishableKey"] ?? "";
+}
+
+@section Styles {
+<style>
+    :root {
+        --checkout-primary: #6366f1;
+        --checkout-primary-dark: #4f46e5;
+        --checkout-success: #10b981;
+        --checkout-warning: #f59e0b;
+        --checkout-danger: #ef4444;
+        --checkout-bg: #f8fafc;
+        --checkout-card-bg: #ffffff;
+        --checkout-border: #e2e8f0;
+        --checkout-text: #1e293b;
+        --checkout-text-muted: #64748b;
+    }
+    
+    .checkout-container {
+        background: var(--checkout-bg);
+        min-height: 100vh;
+        padding: 2rem 0;
+    }
+    
+    /* Progress Steps */
+    .checkout-progress {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 3rem;
+        position: relative;
+    }
+    
+    .checkout-progress::before {
+        content: '';
+        position: absolute;
+        top: 24px;
+        left: 25%;
+        right: 25%;
+        height: 3px;
+        background: linear-gradient(90deg, var(--checkout-success) 0%, var(--checkout-success) 50%, var(--checkout-border) 50%, var(--checkout-border) 100%);
+        z-index: 0;
+    }
+    
+    .progress-step {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0 2rem;
+    }
+    
+    .step-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.1rem;
+        margin-bottom: 0.75rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .step-icon.completed {
+        background: var(--checkout-success);
+        color: white;
+    }
+    
+    .step-icon.active {
+        background: var(--checkout-primary);
+        color: white;
+        transform: scale(1.1);
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+    }
+    
+    .step-icon.pending {
+        background: white;
+        color: var(--checkout-text-muted);
+        border: 2px solid var(--checkout-border);
+    }
+    
+    .step-label {
+        font-weight: 600;
+        color: var(--checkout-text);
+        font-size: 0.9rem;
+    }
+    
+    /* Cards */
+    .checkout-card {
+        background: var(--checkout-card-bg);
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+        border: 1px solid var(--checkout-border);
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+    
+    .checkout-card-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--checkout-border);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .checkout-card-header h5 {
+        margin: 0;
+        font-weight: 700;
+        color: var(--checkout-text);
+    }
+    
+    .checkout-card-header .icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--checkout-primary), var(--checkout-primary-dark));
+        color: white;
+    }
+    
+    .checkout-card-body {
+        padding: 1.5rem;
+    }
+    
+    /* Stripe Elements Container */
+    #stripe-card-element {
+        padding: 1rem;
+        background: #f8fafc;
+        border: 2px solid var(--checkout-border);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+    }
+    
+    #stripe-card-element.StripeElement--focus {
+        border-color: var(--checkout-primary);
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    }
+    
+    #stripe-card-element.StripeElement--invalid {
+        border-color: var(--checkout-danger);
+    }
+    
+    #card-errors {
+        color: var(--checkout-danger);
+        font-size: 0.875rem;
+        margin-top: 0.75rem;
+        min-height: 1.5rem;
+    }
+    
+    /* Saved Cards */
+    .saved-card {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        border: 2px solid var(--checkout-border);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 0.75rem;
+    }
+    
+    .saved-card:hover {
+        border-color: var(--checkout-primary);
+        background: rgba(99, 102, 241, 0.02);
+    }
+    
+    .saved-card.selected {
+        border-color: var(--checkout-primary);
+        background: rgba(99, 102, 241, 0.05);
+    }
+    
+    .card-brand-icon {
+        width: 48px;
+        height: 32px;
+        object-fit: contain;
+        margin-left: 1rem;
+    }
+    
+    .card-details {
+        flex: 1;
+    }
+    
+    /* Payment Method Options */
+    .payment-option {
+        display: flex;
+        align-items: center;
+        padding: 1rem 1.25rem;
+        border: 2px solid var(--checkout-border);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 0.75rem;
+    }
+    
+    .payment-option:hover {
+        border-color: var(--checkout-primary);
+    }
+    
+    .payment-option.selected {
+        border-color: var(--checkout-primary);
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(79, 70, 229, 0.08));
+    }
+    
+    .payment-option .radio-circle {
+        width: 22px;
+        height: 22px;
+        border: 2px solid var(--checkout-border);
+        border-radius: 50%;
+        margin-left: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+    }
+    
+    .payment-option.selected .radio-circle {
+        border-color: var(--checkout-primary);
+        background: var(--checkout-primary);
+    }
+    
+    .payment-option.selected .radio-circle::after {
+        content: '';
+        width: 8px;
+        height: 8px;
+        background: white;
+        border-radius: 50%;
+    }
+    
+    /* Order Summary */
+    .order-summary {
+        position: sticky;
+        top: 1rem;
+    }
+    
+    .order-item {
+        display: flex;
+        gap: 1rem;
+        padding: 1rem 0;
+        border-bottom: 1px solid var(--checkout-border);
+    }
+    
+    .order-item:last-child {
+        border-bottom: none;
+    }
+    
+    .order-item-image {
+        width: 80px;
+        height: 60px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: var(--checkout-bg);
+    }
+    
+    .order-item-placeholder {
+        width: 80px;
+        height: 60px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--checkout-text-muted);
+    }
+    
+    /* Coupon Input */
+    .coupon-input-group {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .coupon-input-group input {
+        flex: 1;
+        padding: 0.75rem 1rem;
+        border: 2px solid var(--checkout-border);
+        border-radius: 10px;
+        font-size: 0.95rem;
+        transition: all 0.3s ease;
+    }
+    
+    .coupon-input-group input:focus {
+        outline: none;
+        border-color: var(--checkout-primary);
+    }
+    
+    .coupon-input-group button {
+        padding: 0.75rem 1.5rem;
+        background: var(--checkout-primary);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .coupon-input-group button:hover {
+        background: var(--checkout-primary-dark);
+    }
+    
+    .applied-coupon {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 10px;
+    }
+    
+    /* Gift Card Input */
+    .giftcard-section {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px dashed var(--checkout-border);
+    }
+    
+    /* Price Summary */
+    .price-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        color: var(--checkout-text-muted);
+    }
+    
+    .price-row.discount {
+        color: var(--checkout-success);
+    }
+    
+    .price-row.total {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--checkout-text);
+        padding-top: 1rem;
+        border-top: 2px solid var(--checkout-border);
+        margin-top: 0.5rem;
+    }
+    
+    /* Submit Button */
+    .checkout-submit {
+        width: 100%;
+        padding: 1.25rem;
+        background: linear-gradient(135deg, var(--checkout-primary), var(--checkout-primary-dark));
+        color: white;
+        border: none;
+        border-radius: 14px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+    }
+    
+    .checkout-submit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 30px rgba(99, 102, 241, 0.4);
+    }
+    
+    .checkout-submit:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .checkout-submit .spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    /* Security Badge */
+    .security-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        justify-content: center;
+        padding: 1rem;
+        background: var(--checkout-bg);
+        border-radius: 12px;
+        margin-top: 1.5rem;
+    }
+    
+    .security-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        color: var(--checkout-text-muted);
+    }
+    
+    .security-badge i {
+        color: var(--checkout-success);
+    }
+    
+    /* Trust Icons */
+    .payment-icons {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: center;
+        padding: 1rem;
+    }
+    
+    .payment-icon {
+        height: 28px;
+        opacity: 0.7;
+        transition: opacity 0.3s ease;
+    }
+    
+    .payment-icon:hover {
+        opacity: 1;
+    }
+    
+    /* Flash Sale Badge */
+    .flash-sale-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.25rem 0.5rem;
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        font-size: 0.7rem;
+        font-weight: 600;
+        border-radius: 4px;
+        margin-right: 0.5rem;
+    }
+    
+    /* Responsive */
+    @@media (max-width: 768px) {
+        .checkout-progress::before {
+            left: 10%;
+            right: 10%;
+        }
+        
+        .progress-step {
+            padding: 0 1rem;
+        }
+        
+        .order-summary {
+            position: static;
+        }
+    }
+</style>
+}
+
+<div class="checkout-container">
+    <div class="container">
+        <!-- Progress Steps -->
+        <div class="checkout-progress">
+            <div class="progress-step">
+                <div class="step-icon completed">
+                    <i class="feather-check"></i>
+                </div>
+                <span class="step-label">@Html.T("السلة", "Cart")</span>
+            </div>
+            <div class="progress-step">
+                <div class="step-icon active">2</div>
+                <span class="step-label">@Html.T("الدفع", "Payment")</span>
+            </div>
+            <div class="progress-step">
+                <div class="step-icon pending">3</div>
+                <span class="step-label">@Html.T("التأكيد", "Confirm")</span>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <!-- Payment Form -->
+            <div class="col-lg-7">
+                <form id="payment-form">
+                    @Html.AntiForgeryToken()
+                    
+                    <!-- Billing Information -->
+                    <div class="checkout-card">
+                        <div class="checkout-card-header">
+                            <div class="icon">
+                                <i class="feather-user"></i>
+                            </div>
+                            <h5>@Html.T("معلومات الفاتورة", "Billing information")</h5>
+                        </div>
+                        <div class="checkout-card-body">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">@Html.T("الاسم الكامل", "Full name") *</label>
+                                    <input type="text" name="BillingName" id="billing-name" 
+                                           class="form-control form-control-lg" 
+                                           value="@Model.BillingName" required 
+                                           style="border-radius: 10px;" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">@Html.T("البريد الإلكتروني", "Email") *</label>
+                                    <input type="email" name="BillingEmail" id="billing-email" 
+                                           class="form-control form-control-lg" 
+                                           value="@Model.BillingEmail" required 
+                                           style="border-radius: 10px;" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">@Html.T("رقم الهاتف", "Phone")</label>
+                                    <input type="tel" name="BillingPhone" id="billing-phone" 
+                                           class="form-control form-control-lg" 
+                                           value="@Model.BillingPhone" 
+                                           style="border-radius: 10px;" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold">@Html.T("الدولة", "Country") *</label>
+                                    <select name="country" id="billing-country" class="form-select form-select-lg" required style="border-radius: 10px;">
+                                        <option value="">@Html.T("اختر الدولة", "Select country")</option>
+                                        <option value="EG" selected>@Html.T("مصر", "Egypt") 🇪🇬</option>
+                                        <option value="SA">@Html.T("السعودية", "Saudi Arabia") 🇸🇦</option>
+                                        <option value="AE">@Html.T("الإمارات", "UAE") 🇦🇪</option>
+                                        <option value="KW">@Html.T("الكويت", "Kuwait") 🇰🇼</option>
+                                        <option value="QA">@Html.T("قطر", "Qatar") 🇶🇦</option>
+                                        <option value="BH">@Html.T("البحرين", "Bahrain") 🇧🇭</option>
+                                        <option value="OM">@Html.T("عمان", "Oman") 🇴🇲</option>
+                                        <option value="JO">@Html.T("الأردن", "Jordan") 🇯🇴</option>
+                                        <option value="LB">@Html.T("لبنان", "Lebanon") 🇱🇧</option>
+                                        <option value="IQ">@Html.T("العراق", "Iraq") 🇮🇶</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Method -->
+                    <div class="checkout-card">
+                        <div class="checkout-card-header">
+                            <div class="icon">
+                                <i class="feather-credit-card"></i>
+                            </div>
+                            <h5>@Html.T("طريقة الدفع", "Payment method")</h5>
+                        </div>
+                        <div class="checkout-card-body">
+                            <!-- Available Payment Gateways -->
+                            @if (Model.AvailablePaymentGateways.Any())
+                            {
+                                <div class="mb-4">
+                                    <label class="form-label fw-semibold mb-3">@Html.T("اختر طريقة الدفع", "Choose payment method")</label>
+                                    @foreach (var gateway in Model.AvailablePaymentGateways)
+                                    {
+                                        var isSelected = gateway.IsDefault ? "selected" : "";
+                                        <div class="payment-option @isSelected" data-gateway-type="@gateway.GatewayType" data-gateway-id="@gateway.Id" onclick="selectPaymentGateway(this)">
+                                            <div class="d-flex align-items-center gap-3 flex-grow-1">
+                                                @if (!string.IsNullOrEmpty(gateway.IconUrl))
+                                                {
+                                                    <img src="@gateway.IconUrl" alt="@gateway.DisplayName" style="height: 28px; object-fit: contain;" />
+                                                }
+                                                else
+                                                {
+                                                    <div style="width: 48px; height: 32px; background: var(--checkout-bg); border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                                                        <i class="feather-credit-card text-muted"></i>
+                                                    </div>
+                                                }
+                                                <div>
+                                                    <div class="fw-semibold">@gateway.DisplayName</div>
+                                                    @if (!string.IsNullOrEmpty(gateway.Description))
+                                                    {
+                                                        <small class="text-muted">@gateway.Description</small>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                @if (gateway.SupportsInstallments)
+                                                {
+                                                    <span class="badge bg-soft-info text-info">@Html.T("تقسيط", "Installments")</span>
+                                                }
+                                                <div class="radio-circle"></div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning mb-4">
+                                    <i class="feather-alert-circle me-2"></i>
+                                    @Html.T("لا توجد طرق دفع متاحة حالياً. يرجى التواصل مع الدعم الفني.", "No payment methods available at the moment. Please contact support.")
+                                </div>
+                            }
+                            
+                            <!-- Saved Payment Methods -->
+                            @if (Model.SavedPaymentMethods.Any())
+                            {
+                                <div class="mb-4">
+                                    <label class="form-label fw-semibold mb-3">@Html.T("البطاقات المحفوظة", "Saved cards")</label>
+                                    @foreach (var method in Model.SavedPaymentMethods)
+                                    {
+                                        <div class="saved-card" data-payment-method="@method.StripePaymentMethodId" onclick="selectSavedCard(this)">
+                                            <div class="card-details">
+                                                <div class="fw-semibold">@method.CardBrand?.ToUpper() **** @method.Last4</div>
+                                                <small class="text-muted">@Html.T("تنتهي في", "Expires") @method.ExpiryMonth/@method.ExpiryYear</small>
+                                            </div>
+                                            <div class="radio-circle"></div>
+                                        </div>
+                                    }
+                                    <div class="saved-card" data-payment-method="new" onclick="selectSavedCard(this)">
+                                        <div class="card-details">
+                                            <div class="fw-semibold">
+                                                <i class="feather-plus-circle me-2"></i>
+                                                @Html.T("استخدام بطاقة جديدة", "Use new card")
+                                            </div>
+                                        </div>
+                                        <div class="radio-circle"></div>
+                                    </div>
+                                </div>
+                            }
+
+                            <!-- Stripe Card Element (PCI Compliant) -->
+                            <div id="new-card-section">
+                                <label class="form-label fw-semibold mb-3">
+                                    <i class="feather-lock me-1 text-success"></i>
+                                    @Html.T("بيانات البطاقة الائتمانية", "Card details")
+                                </label>
+                                <div id="stripe-card-element">
+                                    <!-- Stripe Elements will be inserted here -->
+                                </div>
+                                <div id="card-errors" role="alert"></div>
+                                
+                                <div class="form-check mt-3">
+                                    <input class="form-check-input" type="checkbox" id="save-card" checked>
+                                    <label class="form-check-label" for="save-card">
+                                        @Html.T("حفظ البطاقة لعمليات الشراء المستقبلية", "Save card for future purchases")
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Alternative Payment Methods -->
+                            <div class="mt-4 pt-4 border-top">
+                                <label class="form-label fw-semibold mb-3">@Html.T("أو ادفع عبر", "Or pay with")</label>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-outline-secondary" id="apple-pay-btn" style="display: none;">
+                                        <img src="https://cdn.jsdelivr.net/gh/nickytonline/ai-images@main/apple-pay.svg" alt="@Html.T("أبل باي", "Apple Pay")" height="20" />
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" id="google-pay-btn" style="display: none;">
+                                        <img src="https://cdn.jsdelivr.net/gh/nickytonline/ai-images@main/google-pay.svg" alt="@Html.T("جوجل باي", "Google Pay")" height="20" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Terms & Submit -->
+                    <div class="checkout-card">
+                        <div class="checkout-card-body">
+                            <div class="form-check mb-4">
+                                <input class="form-check-input" type="checkbox" id="agree-terms" required>
+                                <label class="form-check-label" for="agree-terms">
+                                    @Html.T("أوافق على", "I agree to")
+                                    <a href="/terms" target="_blank" class="text-primary">@Html.T("الشروط والأحكام", "Terms and Conditions")</a> 
+                                    @Html.T("و", "and")
+                                    <a href="/privacy" target="_blank" class="text-primary">@Html.T("سياسة الخصوصية", "Privacy Policy")</a>
+                                    @Html.T("و", "and")
+                                    <a href="/refund-policy" target="_blank" class="text-primary">@Html.T("سياسة الاسترداد", "Refund Policy")</a>
+                                </label>
+                            </div>
+                            
+                            <button type="submit" class="checkout-submit" id="submit-btn" @(Model.AvailablePaymentGateways.Any() && !string.IsNullOrEmpty(stripePublishableKey) ? "" : "disabled")>
+                                <i class="feather-lock"></i>
+                                <span id="submit-text">@Html.T("إتمام الدفع الآمن", "Complete Secure Payment")</span>
+                                <span class="amount-display">(@total.ToEGP(2))</span>
+                            </button>
+                            
+                            <div class="security-badges">
+                                <div class="security-badge">
+                                    <i class="feather-shield"></i>
+                                    <span>@Html.T("دفع آمن 256-bit SSL", "Secure 256-bit SSL payment")</span>
+                                </div>
+                                <div class="security-badge">
+                                    <i class="feather-check-circle"></i>
+                                    <span>@Html.T("متوافق مع PCI DSS", "PCI DSS Compliant")</span>
+                                </div>
+                                <div class="security-badge">
+                                    <i class="feather-refresh-cw"></i>
+                                    <span>@Html.T("ضمان استرداد المال", "Money-back guarantee")</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Order Summary -->
+            <div class="col-lg-5">
+                <div class="order-summary">
+                    <div class="checkout-card">
+                        <div class="checkout-card-header">
+                            <div class="icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                                <i class="feather-shopping-bag"></i>
+                            </div>
+                            <h5>@Html.T("ملخص الطلب", "Order summary")</h5>
+                            <span class="badge bg-primary rounded-pill ms-auto">@cartItems.Count</span>
+                        </div>
+                        <div class="checkout-card-body">
+                            <!-- Cart Items -->
+                            <div class="order-items mb-4">
+                                @foreach (var item in cartItems)
+                                {
+                                    <div class="order-item">
+                                        @if (!string.IsNullOrEmpty(item.ThumbnailUrl))
+                                        {
+                                            <img src="@item.ThumbnailUrl" alt="@item.Title" class="order-item-image" />
+                                        }
+                                        else
+                                        {
+                                            <div class="order-item-placeholder">
+                                                <i class="feather-@(item.ItemType.ToString().ToLower() == "book" ? "book" : "play-circle")"></i>
+                                            </div>
+                                        }
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex align-items-start justify-content-between">
+                                                <div>
+                                                    @if (item.IsFlashSale)
+                                                    {
+                                                        <span class="flash-sale-badge">
+                                                            <i class="feather-zap"></i>
+                                                            @Html.T("عرض محدود", "Limited offer")
+                                                        </span>
+                                                    }
+                                                    <h6 class="fw-bold mb-1 text-truncate" style="max-width: 200px;">@item.Title</h6>
+                                                    @if (!string.IsNullOrEmpty(item.InstructorName))
+                                                    {
+                                                        <small class="text-muted">@item.InstructorName</small>
+                                                    }
+                                                </div>
+                                                <div class="text-end">
+                                                    @if (item.DiscountPrice.HasValue && item.DiscountPrice < item.Price)
+                                                    {
+                                                        <div class="fw-bold text-primary">@item.DiscountPrice.Value.ToEGP(2)</div>
+                                                        <small class="text-decoration-line-through text-muted">@item.Price.ToEGP(2)</small>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="fw-bold">@item.Price.ToEGP(2)</div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Coupon Section -->
+                            @if (string.IsNullOrEmpty(cart.CouponCode))
+                            {
+                                <div class="mb-4">
+                                    <label class="form-label fw-semibold">
+                                        <i class="feather-tag me-1"></i>
+                                        @Html.T("رمز الخصم", "Discount code")
+                                    </label>
+                                    <div class="coupon-input-group">
+                                        <input type="text" id="coupon-code" placeholder="@Html.T("أدخل رمز الكوبون", "Enter coupon code")" />
+                                        <button type="button" id="apply-coupon-btn">@Html.T("تطبيق", "Apply")</button>
+                                    </div>
+                                    <div id="coupon-message" class="mt-2"></div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="applied-coupon mb-4">
+                                    <div>
+                                        <i class="feather-tag text-success me-2"></i>
+                                        <span class="fw-semibold">@cart.CouponCode</span>
+                                        <span class="text-success ms-2">(-@cart.DiscountAmount.ToEGP(2))</span>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-link text-danger p-0" id="remove-coupon-btn">
+                                        <i class="feather-x"></i>
+                                    </button>
+                                </div>
+                            }
+
+                            <!-- Gift Card Section -->
+                            <div class="giftcard-section">
+                                <label class="form-label fw-semibold">
+                                    <i class="feather-gift me-1"></i>
+                                    @Html.T("بطاقة هدية", "Gift Card")
+                                </label>
+                                <div class="coupon-input-group">
+                                    <input type="text" id="giftcard-code" placeholder="@Html.T("أدخل رمز بطاقة الهدية", "Enter gift card code")" />
+                                    <button type="button" id="apply-giftcard-btn">@Html.T("تطبيق", "Apply")</button>
+                                </div>
+                                <div id="giftcard-message" class="mt-2"></div>
+                            </div>
+
+                            <!-- Price Summary -->
+                            <div class="price-summary mt-4 pt-4 border-top">
+                                <div class="price-row">
+                                    <span>@Html.T("المجموع الفرعي", "Subtotal")</span>
+                                    <span class="fw-semibold">@subtotal.ToEGP(2)</span>
+                                </div>
+                                
+                                @if (discount > 0)
+                                {
+                                    <div class="price-row discount">
+                                        <span>
+                                            <i class="feather-tag me-1"></i>
+                                            @Html.T("الخصم", "Discount")
+                                        </span>
+                                        <span class="fw-semibold">-@discount.ToEGP(2)</span>
+                                    </div>
+                                }
+
+                                @if (cart.Totals.TaxAmount > 0)
+                                {
+                                    <div class="price-row">
+                                        <span>@Html.T("الضريبة", "Tax") (@cart.Totals.TaxRate.ToString("N0")%)</span>
+                                        <span class="fw-semibold">@cart.Totals.TaxAmount.ToEGP(2)</span>
+                                    </div>
+                                }
+
+                                <div class="price-row total">
+                                    <span>@Html.T("الإجمالي", "Total")</span>
+                                    <span style="color: var(--checkout-primary);">@total.ToEGP(2)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Trust Card -->
+                    <div class="checkout-card">
+                        <div class="checkout-card-body text-center">
+                            <h6 class="fw-bold mb-3">
+                                <i class="feather-shield text-success me-2"></i>
+                                @Html.T("دفع آمن ومضمون", "Secure payment")
+                            </h6>
+                            <div class="payment-icons">
+                                <img src="https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/visa.svg" alt="@Html.T("فيزا", "Visa")" class="payment-icon" style="height: 32px;" onerror="this.style.display='none'" />
+                                <img src="https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/mastercard.svg" alt="@Html.T("ماستركارد", "Mastercard")" class="payment-icon" style="height: 32px;" onerror="this.style.display='none'" />
+                                <img src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/americanexpress.svg" alt="@Html.T("أمريكان إكسبريس", "Amex")" class="payment-icon" style="height: 28px; filter: invert(0.4);" onerror="this.style.display='none'" />
+                            </div>
+                            <small class="text-muted d-block mt-2">
+                                @Html.T("بياناتك مشفرة بالكامل ولا نقوم بتخزين بيانات بطاقتك", "Your data is fully encrypted and we do not store your card details")
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Guarantee -->
+                    <div class="checkout-card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(16, 185, 129, 0.1)); border-color: rgba(16, 185, 129, 0.2);">
+                        <div class="checkout-card-body">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="flex-shrink-0">
+                                    <div style="width: 48px; height: 48px; background: rgba(16, 185, 129, 0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                                        <i class="feather-check-circle text-success" style="font-size: 1.5rem;"></i>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-1">@Html.T("ضمان استرداد المال 100%", "100% Money-back guarantee")</h6>
+                                    <small class="text-muted">
+                                        @Html.T("إذا لم تكن راضياً عن الدورة خلال 30 يوماً، سنقوم بإرجاع المبلغ كاملاً دون أي أسئلة.", "If you're not satisfied with the course within 30 days, we'll refund the full amount with no questions asked.")
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    var stripe = null;
+    var cardElement = null;
+    var hasStripeKey = @(string.IsNullOrEmpty(stripePublishableKey) ? "false" : "true");
+    if (hasStripeKey) {
+        stripe = Stripe(@Html.Raw(System.Text.Json.JsonSerializer.Serialize(stripePublishableKey)));
+        var elements = stripe.elements({
+            locale: 'ar',
+            fonts: [
+                {
+                    cssSrc: 'https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap',
+                }
+            ]
+        });
+        cardElement = elements.create('card', {
+            style: {
+                base: {
+                    fontSize: '16px',
+                    fontFamily: 'Tajawal, sans-serif',
+                    color: '#1e293b',
+                    '::placeholder': {
+                        color: '#94a3b8',
+                    },
+                },
+                invalid: {
+                    color: '#ef4444',
+                    iconColor: '#ef4444',
+                },
+            },
+            hidePostalCode: true
+        });
+        cardElement.mount('#stripe-card-element');
+        cardElement.on('change', function(event) {
+            var displayError = document.getElementById('card-errors');
+            if (event.error) {
+                displayError.textContent = event.error.message;
+            } else {
+                displayError.textContent = '';
+            }
+        });
+    } else {
+        var el = document.getElementById('stripe-card-element');
+        if (el) el.innerHTML = '<p class="text-muted small mb-0">@Html.Raw(System.Net.WebUtility.HtmlEncode(Html.T("تكوين الدفع غير متوفر. يرجى التواصل مع الدعم.", "Payment configuration is not available. Please contact support.").ToString()))</p>';
+    }
+    
+    // Selected payment method and gateway
+    let selectedPaymentMethod = null;
+    let selectedGatewayType = '@(Model.AvailablePaymentGateways.FirstOrDefault(g => g.IsDefault)?.GatewayType ?? "Stripe")';
+    let selectedGatewayId = @(Model.AvailablePaymentGateways.FirstOrDefault(g => g.IsDefault)?.Id ?? 0);
+    
+    // Select payment gateway
+    function selectPaymentGateway(element) {
+        document.querySelectorAll('.payment-option').forEach(option => {
+            option.classList.remove('selected');
+        });
+        element.classList.add('selected');
+        
+        selectedGatewayType = element.dataset.gatewayType;
+        selectedGatewayId = parseInt(element.dataset.gatewayId);
+        
+        // Show/hide card section based on gateway type
+        const cardSection = document.getElementById('new-card-section');
+        const savedCardsSection = document.querySelector('.saved-cards-section');
+        
+        if (selectedGatewayType === 'Stripe' || selectedGatewayType === 'CreditCard') {
+            if (cardSection) cardSection.style.display = 'block';
+            if (savedCardsSection) savedCardsSection.style.display = 'block';
+        } else {
+            if (cardSection) cardSection.style.display = 'none';
+            if (savedCardsSection) savedCardsSection.style.display = 'none';
+        }
+    }
+    
+    // Select saved card
+    function selectSavedCard(element) {
+        document.querySelectorAll('.saved-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        element.classList.add('selected');
+        
+        const methodId = element.dataset.paymentMethod;
+        if (methodId === 'new') {
+            selectedPaymentMethod = null;
+            document.getElementById('new-card-section').style.display = 'block';
+        } else {
+            selectedPaymentMethod = methodId;
+            document.getElementById('new-card-section').style.display = 'none';
+        }
+    }
+    
+    // Form submission
+    const form = document.getElementById('payment-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const submitText = document.getElementById('submit-text');
+    
+    form.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        // Validate terms
+        if (!document.getElementById('agree-terms').checked) {
+            alert((window.__T && window.__T.AgreeTerms) || 'You must agree to the terms and conditions');
+            return;
+        }
+        
+        // Disable submit button and show loading
+        submitBtn.disabled = true;
+        submitText.innerHTML = '<span class="spinner"></span> ' + ((window.__T && window.__T.Processing) || 'Processing...');
+        
+        try {
+            let paymentMethodId = selectedPaymentMethod;
+            
+            // If using new card, create payment method (requires Stripe to be initialized)
+            if (!paymentMethodId) {
+                if (!stripe || !cardElement) {
+                    throw new Error((window.__T && window.__T.PaymentNotConfigured) || 'Payment is not configured. Please contact support.');
+                }
+                const {paymentMethod, error} = await stripe.createPaymentMethod({
+                    type: 'card',
+                    card: cardElement,
+                    billing_details: {
+                        name: document.getElementById('billing-name').value,
+                        email: document.getElementById('billing-email').value,
+                        phone: document.getElementById('billing-phone').value,
+                    },
+                });
+                
+                if (error) {
+                    throw new Error(error.message);
+                }
+                
+                paymentMethodId = paymentMethod.id;
+            }
+            
+            // Create payment intent on server
+            const response = await fetch('@Url.Action("ProcessPayment")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? ''
+                },
+                body: JSON.stringify({
+                    PaymentMethodId: paymentMethodId,
+                    BillingName: document.getElementById('billing-name').value,
+                    BillingEmail: document.getElementById('billing-email').value,
+                    BillingPhone: document.getElementById('billing-phone').value,
+                    SavePaymentMethod: document.getElementById('save-card')?.checked ?? false
+                })
+            });
+            let result;
+            try { result = await response.json(); } catch (_) { result = {}; }
+            if (!response.ok)
+                throw new Error(result.message || (response.status === 400 ? 'طلب غير صالح. حدّث الصفحة وحاول مرة أخرى.' : 'حدث خطأ في الاتصال'));
+            if (!result.success) {
+                throw new Error(result.message || 'حدث خطأ أثناء معالجة الدفع');
+            }
+            
+            // Confirm payment with Stripe
+            const {paymentIntent, error: confirmError} = await stripe.confirmCardPayment(
+                result.clientSecret,
+                {
+                    payment_method: paymentMethodId
+                }
+            );
+            
+            if (confirmError) {
+                throw new Error(confirmError.message);
+            }
+            
+            if (paymentIntent.status === 'succeeded') {
+                // Confirm payment on server
+                const confirmResponse = await fetch('@Url.Action("ConfirmPayment")', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRF-TOKEN': document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? ''
+                    },
+                    body: 'paymentIntentId=' + encodeURIComponent(result.paymentIntentId)
+                });
+                let confirmResult;
+                try { confirmResult = await confirmResponse.json(); } catch (_) { confirmResult = {}; }
+                if (!confirmResponse.ok)
+                    throw new Error(confirmResult.message || 'حدث خطأ في الاتصال');
+                if (confirmResult.success) {
+                    // Redirect to success page
+                    window.location.href = '@Url.Action("Success")?paymentIntentId=' + encodeURIComponent(result.paymentIntentId);
+                } else {
+                    throw new Error(confirmResult.message || 'حدث خطأ أثناء تأكيد الدفع');
+                }
+            } else if (paymentIntent.status === 'requires_action') {
+                // Handle 3D Secure authentication
+                submitText.textContent = (window.__T && window.__T.Verifying) || 'Verifying...';
+            } else {
+                throw new Error('حالة الدفع غير متوقعة: ' + paymentIntent.status);
+            }
+            
+        } catch (error) {
+            console.error('Payment error:', error);
+            document.getElementById('card-errors').textContent = error.message;
+            submitBtn.disabled = false;
+            submitText.innerHTML = '<i class="feather-lock"></i> ' + ((window.__T && window.__T.SecurePayment) || 'Complete Secure Payment');
+        }
+    });
+    
+    // Apply coupon
+    document.getElementById('apply-coupon-btn')?.addEventListener('click', async function() {
+        const code = document.getElementById('coupon-code').value.trim();
+        if (!code) {
+            document.getElementById('coupon-message').innerHTML = '<small class="text-danger">' + ((window.__T && window.__T.PleaseEnterCoupon) || 'Please enter coupon code') + '</small>';
+            return;
+        }
+        
+        try {
+            const response = await fetch('@Url.Action("ApplyCoupon")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? ''
+                },
+                body: 'couponCode=' + encodeURIComponent(code)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                location.reload();
+            } else {
+                document.getElementById('coupon-message').innerHTML = '<small class="text-danger">' + (result.message || (window.__T && window.__T.InvalidCoupon) || 'Invalid coupon') + '</small>';
+            }
+        } catch (error) {
+            document.getElementById('coupon-message').innerHTML = '<small class="text-danger">' + ((window.__T && window.__T.ErrorApplyingCoupon) || 'Error applying coupon') + '</small>';
+        }
+    });
+    
+    // Remove coupon
+    document.getElementById('remove-coupon-btn')?.addEventListener('click', async function() {
+        try {
+            const response = await fetch('@Url.Action("RemoveCoupon")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? ''
+                }
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                location.reload();
+            }
+        } catch (error) {
+            console.error('Error removing coupon:', error);
+        }
+    });
+    
+    // Apply gift card
+    document.getElementById('apply-giftcard-btn')?.addEventListener('click', async function() {
+        const code = document.getElementById('giftcard-code').value.trim();
+        if (!code) {
+            document.getElementById('giftcard-message').innerHTML = '<small class="text-danger">' + ((window.__T && window.__T.PleaseEnterGiftCard) || 'Please enter gift card code') + '</small>';
+            return;
+        }
+        
+        try {
+            const response = await fetch('@Url.Action("ApplyGiftCard")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? ''
+                },
+                body: 'giftCardCode=' + encodeURIComponent(code)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                location.reload();
+            } else {
+                document.getElementById('giftcard-message').innerHTML = '<small class="text-danger">' + (result.message || (window.__T && window.__T.InvalidGiftCard) || 'Invalid gift card') + '</small>';
+            }
+        } catch (error) {
+            document.getElementById('giftcard-message').innerHTML = '<small class="text-danger">' + ((window.__T && window.__T.ErrorApplyingGiftCard) || 'Error applying gift card') + '</small>';
+        }
+    });
+    
+    // Check for Apple Pay / Google Pay support
+    const paymentRequest = stripe.paymentRequest({
+        country: 'EG',
+        currency: '@currency.ToLower()',
+        total: {
+            label: 'إجمالي الطلب',
+            amount: @((int)(total * 100)),
+        },
+        requestPayerName: true,
+        requestPayerEmail: true,
+    });
+    
+    paymentRequest.canMakePayment().then(function(result) {
+        if (result && result.applePay) {
+            document.getElementById('apple-pay-btn').style.display = 'inline-block';
+        }
+        if (result && result.googlePay) {
+            document.getElementById('google-pay-btn').style.display = 'inline-block';
+        }
+    });
+</script>
+}

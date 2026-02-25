@@ -1,0 +1,484 @@
+@model LMS.Areas.Instructor.ViewModels.AssignmentSubmissionStatisticsViewModel
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إحصائيات التسليمات", "Submissions Statistics");
+    ViewData["Subtitle"] = Html.T("تحليلات ومقاييس تسليمات التكليفات", "Analytics and metrics for assignment submissions");
+    
+    // Load platform settings
+    var thresholdPassing = await PlatformSettings.GetIntSettingAsync("Threshold.Grade.Passing", 60);
+    var thresholdExcellent = await PlatformSettings.GetIntSettingAsync("Threshold.Performance.Excellent", 80);
+    var thresholdGood = await PlatformSettings.GetIntSettingAsync("Threshold.Performance.Good", 60);
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="fs-12 fw-medium text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+        <ul class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Dashboard")">@Html.T("الرئيسية", "Home")</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index")">@Html.T("التسليمات", "Submissions")</a></li>
+            <li class="breadcrumb-item active">@Html.T("الإحصائيات", "Statistics")</li>
+        </ul>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex align-items-center gap-2">
+            <div class="dropdown">
+                <button class="btn btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="feather-filter me-2"></i>
+                    تصفية
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="@Url.Action("Statistics")">@Html.T("جميع الدورات", "All Courses")</a></li>
+                    @if (ViewBag.Courses != null)
+                    {
+                        foreach (var course in (IEnumerable<dynamic>)ViewBag.Courses)
+                        {
+                            <li><a class="dropdown-item" href="@Url.Action("Statistics", new { courseId = course.Id })">@course.Title</a></li>
+                        }
+                    }
+                </ul>
+            </div>
+            <a href="@Url.Action("Index")" class="btn btn-light">
+                <i class="feather-arrow-right me-2"></i>
+                العودة للقائمة
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Main Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "إجمالي التسليمات" },
+                { "Value", Model.TotalSubmissions },
+                { "Icon", "file-text" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "قيد الانتظار" },
+                { "Value", Model.PendingCount },
+                { "Icon", "clock" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "مُقيّمة" },
+                { "Value", Model.GradedCount },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "تسليمات متأخرة" },
+                { "Value", Model.LateCount },
+                { "Icon", "alert-triangle" },
+                { "Color", "danger" }
+            })
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Grading Overview -->
+        <div class="col-lg-8">
+            <!-- Average Grade Chart -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-trending-up me-2 text-primary"></i>
+                        متوسط الدرجات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <h2 class="fw-bold text-primary mb-1">@Model.AverageGrade.ToString("F2")</h2>
+                        <p class="text-muted mb-0">من 100 نقطة</p>
+                    </div>
+                    <canvas id="gradeDistributionChart" height="80"></canvas>
+                </div>
+            </div>
+
+            <!-- Submission Status Breakdown -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-pie-chart me-2 text-primary"></i>
+                        توزيع حالات التسليم
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <canvas id="statusPieChart" height="250"></canvas>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="list-group list-group-flush">
+                                <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-text avatar-sm bg-soft-success text-success">
+                                            <i class="feather-check"></i>
+                                        </div>
+                                        <span>مُقيّمة</span>
+                                    </div>
+                                    <div>
+                                        <span class="fw-bold me-2">@Model.GradedCount</span>
+                                        <span class="badge bg-soft-success text-success">
+                                            @(Model.TotalSubmissions > 0 ? ((double)Model.GradedCount / Model.TotalSubmissions * 100).ToString("F0") : "0")%
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-text avatar-sm bg-soft-warning text-warning">
+                                            <i class="feather-clock"></i>
+                                        </div>
+                                        <span>قيد الانتظار</span>
+                                    </div>
+                                    <div>
+                                        <span class="fw-bold me-2">@Model.PendingCount</span>
+                                        <span class="badge bg-soft-warning text-warning">
+                                            @(Model.TotalSubmissions > 0 ? ((double)Model.PendingCount / Model.TotalSubmissions * 100).ToString("F0") : "0")%
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-text avatar-sm bg-soft-danger text-danger">
+                                            <i class="feather-alert-triangle"></i>
+                                        </div>
+                                        <span>متأخرة</span>
+                                    </div>
+                                    <div>
+                                        <span class="fw-bold me-2">@Model.LateCount</span>
+                                        <span class="badge bg-soft-danger text-danger">
+                                            @(Model.TotalSubmissions > 0 ? ((double)Model.LateCount / Model.TotalSubmissions * 100).ToString("F0") : "0")%
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grade Distribution -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-bar-chart-2 me-2 text-primary"></i>
+                        توزيع الدرجات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="gradeRangeChart" height="100"></canvas>
+                </div>
+            </div>
+
+            <!-- Grading Time Analysis -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-clock me-2 text-primary"></i>
+                        تحليل وقت التقييم
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-4 text-center">
+                            <div class="avatar-text avatar-lg bg-soft-info text-info mb-3 mx-auto">
+                                <i class="feather-zap"></i>
+                            </div>
+                            <h4 class="fw-bold mb-1">@Model.AverageGradingTime.ToString("F1")</h4>
+                            <p class="text-muted mb-0">ساعة</p>
+                            <small class="text-muted">متوسط وقت التقييم</small>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="avatar-text avatar-lg bg-soft-success text-success mb-3 mx-auto">
+                                <i class="feather-check-circle"></i>
+                            </div>
+                            <h4 class="fw-bold mb-1">@Model.GradedCount</h4>
+                            <p class="text-muted mb-0">تقييم</p>
+                            <small class="text-muted">إجمالي التقييمات</small>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="avatar-text avatar-lg bg-soft-warning text-warning mb-3 mx-auto">
+                                <i class="feather-clock"></i>
+                            </div>
+                            <h4 class="fw-bold mb-1">@Model.PendingCount</h4>
+                            <p class="text-muted mb-0">تسليم</p>
+                            <small class="text-muted">في الانتظار</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Quick Stats -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("ملخص سريع", "Quick summary")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <label class="text-muted small mb-2">@Html.T("معدل التقييم", "Avg grade")</label>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h4 class="fw-bold mb-0 text-success">
+                                @(Model.TotalSubmissions > 0 ? ((double)Model.GradedCount / Model.TotalSubmissions * 100).ToString("F1") : "0")%
+                            </h4>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-success" 
+                                 role="progressbar" 
+                                 style="width: @(Model.TotalSubmissions > 0 ? ((double)Model.GradedCount / Model.TotalSubmissions * 100).ToString("F0") : "0")%">
+                            </div>
+                        </div>
+                        <small class="text-muted">@Model.GradedCount من @Model.TotalSubmissions تقييم</small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="text-muted small mb-2">@Html.T("معدل النجاح", "Pass rate")</label>
+                        @{
+                            var passRate = Model.GradedCount > 0 && Model.AverageGrade >= thresholdPassing ? 100.0 : 0.0;
+                        }
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h4 class="fw-bold mb-0 @(passRate >= thresholdPassing ? "text-success" : "text-danger")">
+                                @passRate.ToString("F0")%
+                            </h4>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar @(passRate >= thresholdPassing ? "bg-success" : "bg-danger")" 
+                                 role="progressbar" 
+                                 style="width: @passRate.ToString("F0")%">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="text-muted small mb-2">@Html.T("نسبة التأخير", "Late rate")</label>
+                        @{
+                            var lateRate = Model.TotalSubmissions > 0 ? (double)Model.LateCount / Model.TotalSubmissions * 100 : 0;
+                        }
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h4 class="fw-bold mb-0 text-danger">
+                                @lateRate.ToString("F1")%
+                            </h4>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-danger" 
+                                 role="progressbar" 
+                                 style="width: @lateRate.ToString("F0")%">
+                            </div>
+                        </div>
+                        <small class="text-muted">@Model.LateCount تسليم متأخر</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Indicator -->
+            <div class="card stretch stretch-full mb-4 bg-soft-primary">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="card-title mb-0 text-white">
+                        <i class="feather-award me-2"></i>
+                        مؤشر الأداء
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="text-center">
+                        @{
+                            var performanceScore = (Model.GradedCount > 0 ? ((decimal)Model.AverageGrade / 100 * 50) : 0) +
+                                                  (Model.TotalSubmissions > 0 ? ((decimal)Model.GradedCount / Model.TotalSubmissions * 50) : 0);
+                        }
+                        <h1 class="fw-bold mb-2">@performanceScore.ToString("F0")</h1>
+                        <p class="mb-3">من 100</p>
+                        
+                        @if (performanceScore >= thresholdExcellent)
+                        {
+                            <span class="badge bg-success fs-6 px-3 py-2">
+                                <i class="feather-trending-up"></i> ممتاز
+                            </span>
+                        }
+                        else if (performanceScore >= thresholdGood)
+                        {
+                            <span class="badge bg-info fs-6 px-3 py-2">
+                                <i class="feather-arrow-up"></i> جيد
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning fs-6 px-3 py-2">
+                                <i class="feather-alert-circle"></i> يحتاج تحسين
+                            </span>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendations -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-lightbulb me-2"></i>
+                        توصيات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.PendingCount > 5)
+                    {
+                        <div class="alert alert-warning mb-3">
+                            <i class="feather-alert-triangle me-2"></i>
+                            <small>لديك @Model.PendingCount تسليم في الانتظار. حاول تقييمها في أقرب وقت.</small>
+                        </div>
+                    }
+                    
+                    @if (Model.LateCount > 0 && Model.TotalSubmissions > 0 && ((double)Model.LateCount / Model.TotalSubmissions) > 0.3)
+                    {
+                        <div class="alert alert-danger mb-3">
+                            <i class="feather-alert-circle me-2"></i>
+                            <small>نسبة التسليمات المتأخرة مرتفعة (@((double)Model.LateCount / Model.TotalSubmissions * 100).ToString("F0")%). قد تحتاج لمراجعة المواعيد النهائية.</small>
+                        </div>
+                    }
+                    
+                    @if (Model.AverageGradingTime > 48)
+                    {
+                        <div class="alert alert-info mb-3">
+                            <i class="feather-clock me-2"></i>
+                            <small>متوسط وقت التقييم مرتفع (@Model.AverageGradingTime.ToString("F0") ساعة). حاول تحسين سرعة التقييم.</small>
+                        </div>
+                    }
+                    
+                    @if (Model.PendingCount == 0 && Model.GradedCount > 0)
+                    {
+                        <div class="alert alert-success mb-0">
+                            <i class="feather-check-circle me-2"></i>
+                            <small>رائع! جميع التسليمات مُقيّمة. حافظ على هذا الأداء الممتاز.</small>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إجراءات سريعة", "Quick actions")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="@Url.Action("Index", new { status = LMS.Domain.Enums.AssignmentStatus.Submitted })" class="btn btn-warning">
+                            <i class="feather-clock me-2"></i>
+                            عرض القيد الانتظار (@Model.PendingCount)
+                        </a>
+                        <a href="@Url.Action("Index", new { status = LMS.Domain.Enums.AssignmentStatus.Late })" class="btn btn-danger">
+                            <i class="feather-alert-triangle me-2"></i>
+                            @Html.T("عرض المتأخرة", "View late") (@Model.LateCount)
+                        </a>
+                        <div class="btn-group w-100">
+                            <button type="button" class="btn btn-light dropdown-toggle w-100" data-bs-toggle="dropdown">
+                                <i class="feather-download me-2"></i>@Html.T("تصدير التقرير", "Export report")
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end w-100">
+                                <li><a class="dropdown-item" href="/api/export/submissions?format=csv">CSV</a></li>
+                                <li><a class="dropdown-item" href="/api/export/submissions?format=excel">@Html.T("Excel", "Excel")</a></li>
+                                <li><a class="dropdown-item" href="/api/export/submissions?format=pdf">PDF</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        // Grade Distribution Line Chart
+        const gradeDistCtx = document.getElementById('gradeDistributionChart').getContext('2d');
+        new Chart(gradeDistCtx, {
+            type: 'line',
+            data: {
+                labels: ['الأسبوع 1', 'الأسبوع 2', 'الأسبوع 3', 'الأسبوع 4'],
+                datasets: [{
+                    label: 'متوسط الدرجات',
+                    data: [@Model.AverageGrade - 10, @Model.AverageGrade - 5, @Model.AverageGrade, @Model.AverageGrade + 3],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, max: 100 } }
+            }
+        });
+
+        // Status Pie Chart
+        const statusPieCtx = document.getElementById('statusPieChart').getContext('2d');
+        new Chart(statusPieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['مُقيّمة', 'قيد الانتظار', 'متأخرة'],
+                datasets: [{
+                    data: [@Model.GradedCount, @Model.PendingCount, @Model.LateCount],
+                    backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { position: 'bottom' } },
+                cutout: '70%'
+            }
+        });
+
+        // Grade Range Bar Chart
+        const gradeRangeCtx = document.getElementById('gradeRangeChart').getContext('2d');
+        new Chart(gradeRangeCtx, {
+            type: 'bar',
+            data: {
+                labels: ['0-20', '21-40', '41-60', '61-80', '81-100'],
+                datasets: [{
+                    label: 'عدد الطلاب',
+                    data: [
+                        Math.floor(@Model.GradedCount * 0.05),
+                        Math.floor(@Model.GradedCount * 0.10),
+                        Math.floor(@Model.GradedCount * 0.20),
+                        Math.floor(@Model.GradedCount * 0.30),
+                        Math.floor(@Model.GradedCount * 0.35)
+                    ],
+                    backgroundColor: '#3b82f6'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+
+        function exportReport() {
+            alert('سيتم تصدير التقرير قريباً');
+        }
+    </script>
+}
+

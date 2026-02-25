@@ -1,0 +1,316 @@
+@model LMS.Areas.Instructor.ViewModels.CourseWizardViewModel
+
+<div class="step-5-pricing">
+    <div class="form-section">
+        <h5 class="form-section-title">
+            @{ ViewBag.CurrencyIconStyle = "font-weight: bold; margin-left: 8px;"; }
+            @await Html.PartialAsync("_CurrencyIcon")
+            تسعير الدورة
+        </h5>
+        <p class="text-muted mb-4">حدد استراتيجية التسعير المناسبة لدورتك</p>
+
+        <!-- Pricing Type Toggle -->
+        <div class="pricing-toggle mb-4">
+            <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="pricingType" id="paidCourse" 
+                       @(Model.IsFree ? "" : "checked") onchange="togglePricingType(false)">
+                <label class="btn btn-outline-primary py-3" for="paidCourse">
+                    <i class="feather-credit-card me-2"></i>
+                    دورة مدفوعة
+                </label>
+
+                <input type="radio" class="btn-check" name="pricingType" id="freeCourse" 
+                       @(Model.IsFree ? "checked" : "") onchange="togglePricingType(true)">
+                <label class="btn btn-outline-success py-3" for="freeCourse">
+                    <i class="feather-gift me-2"></i>
+                    دورة مجانية
+                </label>
+            </div>
+        </div>
+
+        <input type="hidden" asp-for="IsFree" id="isFreeInput">
+
+        <!-- Paid Course Options -->
+        <div id="paidPricingSection" class="@(Model.IsFree ? "d-none" : "")">
+            <div class="row g-4">
+                <!-- Currency -->
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">
+                        <i class="feather-globe me-1"></i>
+                        العملة
+                    </label>
+                    <select asp-for="Currency" class="form-select">
+                        <option value="EGP">جنيه مصري (EGP)</option>
+                        <option value="USD">دولار أمريكي (USD)</option>
+                        <option value="SAR">ريال سعودي (SAR)</option>
+                        <option value="AED">درهم إماراتي (AED)</option>
+                        <option value="EUR">يورو (EUR)</option>
+                    </select>
+                </div>
+
+                <!-- Original Price -->
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">
+                        <i class="feather-tag me-1"></i>
+                        السعر الأصلي
+                        <span class="text-danger">*</span>
+                    </label>
+                    <div class="input-group">
+                        <input asp-for="Price" 
+                               type="number" 
+                               class="form-control form-control-lg" 
+                               min="0" 
+                               step="0.01"
+                               placeholder="99.00"
+                               id="priceInput">
+                        <span class="input-group-text" id="currencyLabel">EGP</span>
+                    </div>
+                    <span asp-validation-for="Price" class="text-danger"></span>
+                    <small class="text-muted">الحد الأدنى: 10 - الحد الأقصى: 10,000</small>
+                </div>
+
+                <!-- Discount Price -->
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">
+                        <i class="feather-percent me-1"></i>
+                        سعر الخصم
+                        <span class="text-muted">(اختياري)</span>
+                    </label>
+                    <div class="input-group">
+                        <input asp-for="DiscountPrice" 
+                               type="number" 
+                               class="form-control form-control-lg" 
+                               min="0" 
+                               step="0.01"
+                               placeholder="49.00"
+                               id="discountPriceInput">
+                        <span class="input-group-text">EGP</span>
+                    </div>
+                    <span asp-validation-for="DiscountPrice" class="text-danger"></span>
+                    <small class="text-muted">يجب أن يكون أقل من السعر الأصلي</small>
+                </div>
+            </div>
+
+            <!-- Discount Date Range -->
+            <div class="row g-4 mt-2" id="discountDatesSection" style="display: @(Model.DiscountPrice.HasValue ? "flex" : "none");">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">
+                        <i class="feather-calendar me-1"></i>
+                        بداية فترة الخصم
+                    </label>
+                    <input asp-for="DiscountStartDate" 
+                           type="datetime-local" 
+                           class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">
+                        <i class="feather-calendar me-1"></i>
+                        نهاية فترة الخصم
+                    </label>
+                    <input asp-for="DiscountEndDate" 
+                           type="datetime-local" 
+                           class="form-control">
+                </div>
+            </div>
+
+            <!-- Price Preview Card -->
+            <div class="col-12 mt-4">
+                <div class="card border-0 bg-gradient-primary text-white">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <h6 class="mb-1 opacity-75">سيظهر السعر كالتالي:</h6>
+                                <div class="d-flex align-items-baseline gap-2">
+                                    <span class="fs-2 fw-bold" id="previewCurrentPrice">0</span>
+                                    <span class="fs-5" id="previewCurrency">EGP</span>
+                                    <span class="text-decoration-line-through opacity-75 ms-2 d-none" id="previewOriginalPrice"></span>
+                                </div>
+                                <div class="d-none" id="discountBadge">
+                                    <span class="badge bg-danger fs-12 mt-2">
+                                        خصم <span id="discountPercentage">0</span>%
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="col-md-6 text-md-end">
+                                <p class="mb-1 opacity-75 fs-12">العمولة المتوقعة:</p>
+                                <p class="fs-4 mb-0 fw-bold" id="expectedEarnings">0 EGP</p>
+                                <small class="opacity-75">بعد خصم عمولة المنصة</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Free Course Info -->
+        <div id="freePricingSection" class="@(Model.IsFree ? "" : "d-none")">
+            <div class="card border-0 bg-soft-success">
+                <div class="card-body text-center py-5">
+                    <div class="avatar-text avatar-xl bg-success text-white mx-auto mb-4">
+                        <i class="feather-gift fs-1"></i>
+                    </div>
+                    <h4 class="fw-bold text-success mb-2">دورة مجانية</h4>
+                    <p class="text-muted mb-4">
+                        ستكون الدورة متاحة مجاناً لجميع الطلاب.
+                        <br>
+                        الدورات المجانية تساعد في بناء جمهورك وسمعتك كمدرب.
+                    </p>
+                    <div class="d-flex justify-content-center gap-4 text-start">
+                        <div class="d-flex align-items-center">
+                            <i class="feather-check-circle text-success me-2 fs-5"></i>
+                            <span>جذب طلاب جدد</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <i class="feather-check-circle text-success me-2 fs-5"></i>
+                            <span>بناء السمعة</span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <i class="feather-check-circle text-success me-2 fs-5"></i>
+                            <span>الترويج لدورات أخرى</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pricing Tips -->
+    <div class="form-section">
+        <h5 class="form-section-title">
+            <i class="feather-lightbulb"></i>
+            نصائح التسعير
+        </h5>
+
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card border-0 h-100">
+                    <div class="card-body">
+                        <div class="avatar-text avatar-md bg-soft-primary text-primary mb-3">
+                            <i class="feather-trending-up"></i>
+                        </div>
+                        <h6 class="fw-bold">ابدأ بسعر تنافسي</h6>
+                        <p class="text-muted fs-12 mb-0">
+                            عند إطلاق أول دورة، يفضل البدء بسعر أقل لجذب الطلاب الأوائل وبناء التقييمات.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 h-100">
+                    <div class="card-body">
+                        <div class="avatar-text avatar-md bg-soft-warning text-warning mb-3">
+                            <i class="feather-target"></i>
+                        </div>
+                        <h6 class="fw-bold">راقب المنافسين</h6>
+                        <p class="text-muted fs-12 mb-0">
+                            اطلع على أسعار الدورات المشابهة واختر سعراً يعكس جودة محتواك.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 h-100">
+                    <div class="card-body">
+                        <div class="avatar-text avatar-md bg-soft-success text-success mb-3">
+                            <i class="feather-percent"></i>
+                        </div>
+                        <h6 class="fw-bold">استخدم الخصومات بحكمة</h6>
+                        <p class="text-muted fs-12 mb-0">
+                            الخصومات المؤقتة تخلق إحساساً بالإلحاح وتزيد المبيعات.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .bg-gradient-primary {
+        background: var(--gradient-primary, linear-gradient(135deg, #004aad 0%, #0066cc 50%, #3385d6 100%));
+    }
+
+    .pricing-toggle .btn-check:checked + .btn-outline-primary {
+        background: var(--gradient-primary, linear-gradient(135deg, #004aad 0%, #0066cc 50%, #3385d6 100%));
+        border-color: transparent;
+    }
+
+    .pricing-toggle .btn-check:checked + .btn-outline-success {
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        border-color: transparent;
+    }
+</style>
+
+<script>
+    const commissionRate = 0.30; // Platform commission (example: 30%)
+
+    function togglePricingType(isFree) {
+        document.getElementById('isFreeInput').value = isFree;
+        document.getElementById('paidPricingSection').classList.toggle('d-none', isFree);
+        document.getElementById('freePricingSection').classList.toggle('d-none', !isFree);
+
+        if (isFree) {
+            document.getElementById('priceInput').value = 0;
+            document.getElementById('discountPriceInput').value = '';
+        }
+
+        updatePricePreview();
+    }
+
+    function updatePricePreview() {
+        const price = parseFloat(document.getElementById('priceInput').value) || 0;
+        const discountPrice = parseFloat(document.getElementById('discountPriceInput').value) || 0;
+        const currency = document.getElementById('Currency').value || 'EGP';
+
+        const currentPrice = discountPrice > 0 && discountPrice < price ? discountPrice : price;
+        
+        document.getElementById('previewCurrentPrice').textContent = currentPrice.toFixed(2);
+        document.getElementById('previewCurrency').textContent = currency;
+        document.getElementById('currencyLabel').textContent = currency;
+
+        const originalPriceEl = document.getElementById('previewOriginalPrice');
+        const discountBadgeEl = document.getElementById('discountBadge');
+
+        if (discountPrice > 0 && discountPrice < price) {
+            originalPriceEl.textContent = price.toFixed(2) + ' ' + currency;
+            originalPriceEl.classList.remove('d-none');
+            discountBadgeEl.classList.remove('d-none');
+            
+            const discountPercent = Math.round(((price - discountPrice) / price) * 100);
+            document.getElementById('discountPercentage').textContent = discountPercent;
+
+            document.getElementById('discountDatesSection').style.display = 'flex';
+        } else {
+            originalPriceEl.classList.add('d-none');
+            discountBadgeEl.classList.add('d-none');
+            document.getElementById('discountDatesSection').style.display = 'none';
+        }
+
+        // Calculate expected earnings
+        const earnings = currentPrice * (1 - commissionRate);
+        document.getElementById('expectedEarnings').textContent = earnings.toFixed(2) + ' ' + currency;
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        updatePricePreview();
+
+        // Add event listeners
+        document.getElementById('priceInput').addEventListener('input', updatePricePreview);
+        document.getElementById('discountPriceInput').addEventListener('input', updatePricePreview);
+        document.getElementById('Currency').addEventListener('change', updatePricePreview);
+
+        // Validate discount price
+        document.getElementById('discountPriceInput').addEventListener('blur', function() {
+            const price = parseFloat(document.getElementById('priceInput').value) || 0;
+            const discount = parseFloat(this.value) || 0;
+
+            if (discount >= price && discount > 0) {
+                this.classList.add('is-invalid');
+            } else {
+                this.classList.remove('is-invalid');
+            }
+        });
+    });
+</script>
+

@@ -1,0 +1,192 @@
+@model LMS.Areas.Student.ViewModels.FawryPaymentViewModel
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("رقم فوري المرجعي", "Fawry Reference Number");
+    Layout = "_StudentLayout";
+    
+    // Payment status check settings
+    var paymentStatusCheckIntervalMs = await PlatformSettings.GetIntSettingAsync("Payment.StatusCheckIntervalMs", 30000);
+    var paymentInitialCheckDelayMs = await PlatformSettings.GetIntSettingAsync("Payment.InitialCheckDelayMs", 5000);
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card shadow-lg border-0">
+                <div class="card-header text-center py-4" style="background: linear-gradient(135deg, #e60015 0%, #ff6b35 100%);">
+                    <img src="/assets/images/fawry-logo-white.png" alt="@Html.T("فوري", "Fawry")" style="height: 50px;" 
+                         onerror="this.outerHTML='<h3 class=\'text-white mb-0\'>@Html.T("فوري", "Fawry")</h3>'">
+                </div>
+                <div class="card-body text-center p-5">
+                    @if (Model.IsPaid)
+                    {
+                        <div class="mb-4">
+                            <div class="rounded-circle bg-success text-white d-inline-flex align-items-center justify-content-center"
+                                 style="width: 100px; height: 100px;">
+                                <i class="fas fa-check fa-3x"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-success mb-4">@Html.T("تم الدفع بنجاح! 🎉", "Payment successful! 🎉")</h3>
+                        <a href="@Url.Action("Index", "Courses", new { area = "Student" })" class="btn btn-success btn-lg">
+                            <i class="fas fa-book-open me-2"></i>
+                            @Html.T("ابدأ التعلم", "Start learning")
+                        </a>
+                    }
+                    else if (Model.IsExpired)
+                    {
+                        <div class="mb-4">
+                            <div class="rounded-circle bg-danger text-white d-inline-flex align-items-center justify-content-center"
+                                 style="width: 100px; height: 100px;">
+                                <i class="fas fa-clock fa-3x"></i>
+                            </div>
+                        </div>
+                        <h3 class="text-danger mb-3">@Html.T("انتهت صلاحية الكود", "Code expired")</h3>
+                        <p class="text-muted mb-4">@Html.T("يرجى إنشاء طلب جديد", "Please create a new order")</p>
+                        <a href="@Url.Action("Cart", "Checkout", new { area = "Student" })" class="btn btn-primary">
+                            <i class="fas fa-redo me-2"></i>
+                            @Html.T("إعادة الطلب", "Try again")
+                        </a>
+                    }
+                    else
+                    {
+                        <h5 class="text-muted mb-3">@Html.T("رقم الدفع المرجعي", "Payment reference number")</h5>
+                        
+                        <div class="bg-light rounded-3 p-4 mb-4">
+                            <h1 class="text-primary mb-0" style="letter-spacing: 0.2em; font-family: monospace;">
+                                @Model.ReferenceNumber
+                            </h1>
+                        </div>
+
+                        <button class="btn btn-outline-primary mb-4" onclick="copyReference('@Model.ReferenceNumber')">
+                            <i class="fas fa-copy me-2"></i>
+                            @Html.T("نسخ الرقم", "Copy number")
+                        </button>
+
+                        <hr />
+
+                        <div class="row g-4 text-center">
+                            <div class="col-6">
+                                <div class="text-muted small">@Html.T("المبلغ المطلوب", "Amount due")</div>
+                                <h3 class="text-success mb-0">@Model.FormattedAmount</h3>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-muted small">@Html.T("صالح حتى", "Valid until")</div>
+                                <h5 class="mb-0">@Model.ExpiresAt.ToString("dd/MM - HH:mm")</h5>
+                            </div>
+                        </div>
+
+                        <hr />
+
+                        <h5 class="mb-3">
+                            <i class="fas fa-store me-2 text-primary"></i>
+                            @Html.T("كيفية الدفع", "How to pay")
+                        </h5>
+
+                        <div class="text-start">
+                            <div class="d-flex align-items-start mb-3">
+                                <span class="badge bg-primary rounded-circle me-3">1</span>
+                                <div>
+                                    <strong>@Html.T("توجه لأقرب منفذ فوري", "Go to the nearest Fawry outlet")</strong>
+                                    <br>
+                                    <small class="text-muted">@Html.T("صيدليات، سوبر ماركت، محلات الموبايلات", "Pharmacies, supermarkets, mobile shops")</small>
+                                </div>
+                                </div>
+                            <div class="d-flex align-items-start mb-3">
+                                <span class="badge bg-primary rounded-circle me-3">2</span>
+                                <div>
+                                    <strong>@Html.T("اطلب الدفع عبر فوري", "Request payment via Fawry")</strong>
+                                    <br>
+                                    <small class="text-muted">@Html.T("أعطِ الرقم المرجعي للموظف", "Give the reference number to the staff")</small>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-start mb-3">
+                                <span class="badge bg-primary rounded-circle me-3">3</span>
+                                <div>
+                                    <strong>@Html.T("ادفع المبلغ واحتفظ بالإيصال", "Pay the amount and keep the receipt")</strong>
+                                    <br>
+                                    <small class="text-muted">@Html.T("سيتم تفعيل اشتراكك تلقائياً", "Your subscription will be activated automatically")</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info text-start mt-4">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>@Html.T("ملاحظة:", "Note:")</strong> @Html.T("بعد الدفع، سيتم تفعيل اشتراكك خلال دقائق.", "After payment, your subscription will be activated within minutes.")
+                            @Html.T("يمكنك أيضاً الدفع من تطبيق فوري أو MyFawry.", "You can also pay from the Fawry app or MyFawry.")
+                        </div>
+
+                        <div class="row g-2 mt-4">
+                            <div class="col-6">
+                                <a href="https://apps.apple.com/eg/app/myfawry/id1436666786" target="_blank" 
+                                   class="btn btn-outline-dark w-100">
+                                    <i class="fab fa-apple me-1"></i>
+                                    App Store
+                                </a>
+                            </div>
+                            <div class="col-6">
+                                <a href="https://play.google.com/store/apps/details?id=com.fawry.myfawry" target="_blank" 
+                                   class="btn btn-outline-dark w-100">
+                                    <i class="fab fa-google-play me-1"></i>
+                                    Play Store
+                                </a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="text-center mt-4">
+                <button class="btn btn-outline-primary" onclick="window.location.reload()">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    @Html.T("تحديث الحالة", "Refresh status")
+                </button>
+                <a href="@Url.Action("Index", "Dashboard", new { area = "Student" })" class="btn btn-outline-secondary ms-2">
+                    <i class="fas fa-home me-1"></i>
+                    @Html.T("العودة للرئيسية", "Back to home")
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function(){ window.__T = window.__T || {}; window.__T.CopyRefSuccess = '@Html.Raw(Html.T("تم نسخ الرقم المرجعي", "Reference number copied").Replace("\\", "\\\\").Replace("'", "\\'"))'; window.__T.CopyPrompt = '@Html.Raw(Html.T("انسخ الرقم التالي:", "Copy the following number:").Replace("\\", "\\\\").Replace("'", "\\'"))'; })();
+        function copyReference(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert('✅ ' + ((window.__T && window.__T.CopyRefSuccess) || 'Copied'));
+            }).catch(function() {
+                prompt((window.__T && window.__T.CopyPrompt) || 'Copy:', text);
+            });
+        }
+
+        // Auto-refresh every 30 seconds to check payment status
+        @if (!Model.IsPaid && !Model.IsExpired)
+        {
+            <text>
+            // Check payment status via AJAX
+            function checkPaymentStatus() {
+                fetch('@Url.Action("CheckFawryStatus", "MultiGatewayCheckout", new { referenceNumber = Model.ReferenceNumber })', {
+                    method: 'GET',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.isPaid || data.isExpired) {
+                        window.location.reload();
+                    }
+                })
+                .catch(err => console.log('Status check failed, will retry...'));
+            }
+            
+            // Check at configured interval
+            setInterval(checkPaymentStatus, @paymentStatusCheckIntervalMs);
+            
+            // Also check immediately after page loads (in case payment was just made)
+            setTimeout(checkPaymentStatus, @paymentInitialCheckDelayMs);
+            </text>
+        }
+    </script>
+}
+

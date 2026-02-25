@@ -1,0 +1,227 @@
+@using Microsoft.AspNetCore.Identity
+@using LMS.Services.Interfaces
+@inject SignInManager<LMS.Domain.Entities.Users.ApplicationUser> SignInManager
+@inject UserManager<LMS.Domain.Entities.Users.ApplicationUser> UserManager
+@inject INotificationService NotificationService
+
+@{
+    var user = await UserManager.GetUserAsync(User);
+    var userName = user != null ? $"{user.FirstName} {user.LastName}" : Html.T("المستخدم", "User");
+    var userRoles = user != null ? await UserManager.GetRolesAsync(user) : new List<string>();
+    var primaryRole = userRoles.Contains("Admin") ? Html.T("مدير النظام", "System Admin") : 
+                      userRoles.Contains("Instructor") ? Html.T("مدرس", "Instructor") : 
+                      userRoles.Contains("Student") ? Html.T("طالب", "Student") : Html.T("مستخدم", "User");
+    
+    // Get notifications
+    var unreadCount = user != null ? await NotificationService.GetUnreadCountAsync(user.Id) : 0;
+    var recentNotifications = user != null ? await NotificationService.GetUnreadNotificationsAsync(user.Id, 5) : new List<LMS.Domain.Entities.Notifications.Notification>();
+}
+
+<header class="nxl-header">
+    <div class="header-wrapper">
+        <!--! [Start] Header Left !-->
+        <div class="header-left d-flex align-items-center gap-4">
+            <!--! [Start] nxl-head-mobile-toggler !-->
+            <a href="javascript:void(0);" class="nxl-head-mobile-toggler" id="mobile-collapse">
+                <div class="hamburger hamburger--arrowturn">
+                    <div class="hamburger-box">
+                        <div class="hamburger-inner"></div>
+                    </div>
+                </div>
+            </a>
+            <!--! [End] nxl-head-mobile-toggler !-->
+            <!--! [Start] nxl-navigation-toggle - Hidden, sidebar always open !-->
+            <div class="nxl-navigation-toggle d-none">
+                <a href="javascript:void(0);" id="menu-mini-button">
+                    <i class="feather-align-right"></i>
+                </a>
+                <a href="javascript:void(0);" id="menu-expend-button" style="display: none">
+                    <i class="feather-arrow-left"></i>
+                </a>
+            </div>
+            <!--! [End] nxl-navigation-toggle !-->
+        </div>
+        <!--! [End] Header Left !-->
+        
+        <!--! [Start] Header Right !-->
+        <div class="header-right ms-auto">
+            <div class="d-flex align-items-center">
+                <!--! [Start] Search Dropdown !-->
+                <div class="dropdown nxl-h-item nxl-header-search">
+                    <a href="javascript:void(0);" class="header-dropdown-toggle" id="searchDropdownToggle">
+                        <i class="feather-search"></i>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-start nxl-h-dropdown nxl-search-dropdown">
+                        <div class="input-group search-form">
+                            <span class="input-group-text">
+                                <i class="feather-search fs-6 text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control search-input-field" placeholder="@Html.T("بحث...", "Search...")">
+                            <span class="input-group-text">
+                                <button type="button" class="btn-close"></button>
+                            </span>
+                        </div>
+                        <div class="dropdown-divider mt-0"></div>
+                        <div class="search-items-wrapper">
+                            <div class="searching-for px-4 py-2">
+                                <p class="fs-11 fw-medium text-muted">@Html.T("البحث السريع عن...", "Quick search for...")</p>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <a asp-area="Admin" asp-controller="Courses" asp-action="Index" class="flex-fill border rounded py-1 px-2 text-center fs-11 fw-semibold">@Html.T("الدورات", "Courses")</a>
+                                    <a asp-area="Admin" asp-controller="Users" asp-action="Index" class="flex-fill border rounded py-1 px-2 text-center fs-11 fw-semibold">@Html.T("المستخدمين", "Users")</a>
+                                    <a asp-area="Admin" asp-controller="Students" asp-action="Index" class="flex-fill border rounded py-1 px-2 text-center fs-11 fw-semibold">@Html.T("الطلاب", "Students")</a>
+                                    <a asp-area="Admin" asp-controller="Instructors" asp-action="Index" class="flex-fill border rounded py-1 px-2 text-center fs-11 fw-semibold">@Html.T("المدرسين", "Instructors")</a>
+                                    <a asp-area="Admin" asp-controller="Payments" asp-action="Index" class="flex-fill border rounded py-1 px-2 text-center fs-11 fw-semibold">@Html.T("المدفوعات", "Payments")</a>
+                                    <a asp-area="Admin" asp-controller="Reports" asp-action="Sales" class="flex-fill border rounded py-1 px-2 text-center fs-11 fw-semibold">@Html.T("التقارير", "Reports")</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!--! [End] Search Dropdown !-->
+                
+                <!--! [Start] Notifications Dropdown !-->
+                <div class="dropdown nxl-h-item">
+                    <a href="javascript:void(0);" class="header-dropdown-toggle" id="notificationsDropdownToggle">
+                        <i class="feather-bell"></i>
+                        @if (unreadCount > 0)
+                        {
+                            <span class="badge bg-danger nxl-h-badge">@(unreadCount > 99 ? "99+" : unreadCount.ToString())</span>
+                        }
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-start nxl-h-dropdown nxl-notifications-menu">
+                        <div class="d-flex justify-content-between align-items-center notifications-head">
+                            <h6 class="fw-bold text-dark mb-0">@Html.T("الإشعارات", "Notifications") (@unreadCount)</h6>
+                            @if (unreadCount > 0)
+                            {
+                                <form asp-area="Admin" asp-controller="Notifications" asp-action="MarkAllAsRead" method="post" style="display: inline;">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-link fs-11 text-success text-end p-0">
+                                        <i class="feather-check me-1"></i>
+                                        <span>@Html.T("تمييز الكل كمقروء", "Mark All as Read")</span>
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                        @if (recentNotifications.Any())
+                        {
+                            @foreach (var notification in recentNotifications)
+                            {
+                                <div class="notifications-item">
+                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                        <i class="feather-bell"></i>
+                                    </div>
+                                    <div class="notifications-desc">
+                                        <a href="@(notification.ActionUrl ?? "javascript:void(0);")" class="font-body text-truncate-2-line">
+                                            <span class="fw-semibold text-dark">@notification.Title</span>
+                                            @notification.Message
+                                        </a>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div class="notifications-date text-muted border-bottom border-bottom-dashed">
+                                                @{
+                                                    var timeAgo = DateTime.UtcNow - notification.CreatedAt;
+                                                    var timeDisplay = timeAgo.TotalMinutes < 60 ? string.Format(Html.T("منذ {0} دقيقة", "{0} min ago"), (int)timeAgo.TotalMinutes) :
+                                                                     timeAgo.TotalHours < 24 ? string.Format(Html.T("منذ {0} ساعة", "{0} hours ago"), (int)timeAgo.TotalHours) :
+                                                                     timeAgo.TotalDays < 7 ? string.Format(Html.T("منذ {0} يوم", "{0} days ago"), (int)timeAgo.TotalDays) :
+                                                                     notification.CreatedAt.ToString("dd/MM/yyyy");
+                                                }
+                                                @timeDisplay
+                                            </div>
+                                            <div class="d-flex align-items-center float-end gap-2">
+                                                <form asp-area="Admin" asp-controller="Notifications" asp-action="MarkAsRead" asp-route-id="@notification.Id" method="post" style="display: inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="btn btn-link p-0 d-block wd-8 ht-8 rounded-circle bg-gray-300" data-bs-toggle="tooltip" title="@Html.T("تمييز كمقروء", "Mark as Read")"></button>
+                                                </form>
+                                                <form asp-area="Admin" asp-controller="Notifications" asp-action="Delete" asp-route-id="@notification.Id" method="post" style="display: inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="btn btn-link p-0 text-danger" data-bs-toggle="tooltip" title="@Html.T("حذف", "Delete")">
+                                                        <i class="feather-x fs-12"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="p-4 text-center text-muted">
+                                <i class="feather-bell-off fs-24 mb-2"></i>
+                                <p class="mb-0">@Html.T("لا توجد إشعارات جديدة", "No new notifications")</p>
+                            </div>
+                        }
+                        <div class="text-center notifications-footer">
+                            <a asp-area="Admin" asp-controller="Notifications" asp-action="Index" class="fs-13 fw-semibold text-dark">@Html.T("عرض جميع الإشعارات", "View All Notifications")</a>
+                        </div>
+                    </div>
+                </div>
+                <!--! [End] Notifications Dropdown !-->
+                
+                <!--! [Start] User Profile Dropdown !-->
+                <div class="dropdown nxl-h-item">
+                    <a href="javascript:void(0);" class="header-dropdown-toggle" id="profileDropdownToggle">
+                        <div class="avatar-text avatar-md bg-primary text-white">
+                            @if (!string.IsNullOrEmpty(user?.FirstName))
+                            {
+                                <span>@user.FirstName.Substring(0, 1)@user.LastName?.Substring(0, 1)</span>
+                            }
+                            else
+                            {
+                                <i class="feather-user"></i>
+                            }
+                        </div>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-start nxl-h-dropdown nxl-user-dropdown">
+                        <div class="dropdown-header p-3 border-bottom">
+                            <div class="d-flex align-items-center">
+                                <div class="avatar-text avatar-md bg-primary text-white">
+                                    @if (!string.IsNullOrEmpty(user?.FirstName))
+                                    {
+                                        <span>@user.FirstName.Substring(0, 1)@user.LastName?.Substring(0, 1)</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="feather-user"></i>
+                                    }
+                                </div>
+                                <div class="ms-3">
+                                    <h6 class="text-dark mb-0">@userName</h6>
+                                    <span class="fs-12 fw-medium text-muted">@primaryRole</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="dropdown-body">
+                            <a asp-area="Admin" asp-controller="Settings" asp-action="General" class="dropdown-item d-flex align-items-center gap-2 py-2">
+                                <i class="feather-user"></i>
+                                <span>@Html.T("الملف الشخصي", "Profile")</span>
+                            </a>
+                            <a asp-area="Admin" asp-controller="Settings" asp-action="General" class="dropdown-item d-flex align-items-center gap-2 py-2">
+                                <i class="feather-settings"></i>
+                                <span>@Html.T("الإعدادات", "Settings")</span>
+                            </a>
+                            <a asp-area="Admin" asp-controller="Security" asp-action="ActivityLog" class="dropdown-item d-flex align-items-center gap-2 py-2">
+                                <i class="feather-activity"></i>
+                                <span>@Html.T("سجل النشاط", "Activity Log")</span>
+                            </a>
+                            <a asp-area="Admin" asp-controller="Help" asp-action="Index" class="dropdown-item d-flex align-items-center gap-2 py-2">
+                                <i class="feather-help-circle"></i>
+                                <span>@Html.T("مركز المساعدة", "Help Center")</span>
+                            </a>
+                            <partial name="~/Views/Shared/_LanguageSwitcher.cshtml" />
+                            <div class="dropdown-divider"></div>
+                            <form asp-area="" asp-controller="Account" asp-action="Logout" method="post" id="logoutForm">
+                                <button type="submit" class="dropdown-item d-flex align-items-center gap-2 py-2 text-danger">
+                                    <i class="feather-log-out"></i>
+                                    <span>@Html.T("تسجيل الخروج", "Logout")</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <!--! [End] User Profile Dropdown !-->
+            </div>
+        </div>
+        <!--! [End] Header Right !-->
+    </div>
+</header>
+

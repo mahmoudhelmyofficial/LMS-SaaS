@@ -1,0 +1,251 @@
+@model List<LMS.Areas.Student.ViewModels.MyLibraryViewModel>
+@using LMS.Domain.Enums
+@{
+    ViewData["Title"] = Html.T("مكتبتي", "My Library");
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<div class="container-fluid py-4">
+    <nav aria-label="@Html.T("مسار التنقل", "Breadcrumb")" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-area="Student" asp-controller="Dashboard" asp-action="Index">@Html.T("الرئيسية", "Home")</a></li>
+            <li class="breadcrumb-item"><a asp-area="Student" asp-controller="Books" asp-action="Index">@Html.T("الكتب", "Books")</a></li>
+            <li class="breadcrumb-item active">@Html.T("مكتبتي", "My Library")</li>
+        </ol>
+    </nav>
+
+    <!-- Page Header (aligned with Browse/Courses pattern) -->
+    <div class="card stretch stretch-full mb-4">
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                <div>
+                    <h3 class="fw-bold mb-2">
+                        <i class="feather-archive text-primary me-2"></i>
+                        @Html.T("مكتبتي", "My Library")
+                    </h3>
+                    <p class="text-muted mb-0">@Html.T("الكتب التي اشتريتها", "Books you have purchased")</p>
+                </div>
+                <a asp-area="Student" asp-controller="Books" asp-action="Index" class="btn btn-primary">
+                    <i class="feather-search me-2"></i>
+                    @Html.T("تصفح المزيد", "Browse more")
+                </a>
+            </div>
+        </div>
+    </div>
+
+    @if (Model.Any())
+    {
+        <div class="row g-4">
+            @foreach (var book in Model)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="card stretch border-0 shadow-sm h-100" style="border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.06);">
+                        <div class="row g-0">
+                            <div class="col-4">
+                                @if (!string.IsNullOrEmpty(book.CoverImageUrl))
+                                {
+                                    <img src="@book.CoverImageUrl" class="img-fluid rounded-start h-100" 
+                                         alt="@book.BookTitle" style="object-fit: cover;">
+                                }
+                                else
+                                {
+                                    <div class="bg-light rounded-start h-100 d-flex align-items-center justify-content-center">
+                                        <i class="fas fa-book fa-2x text-muted"></i>
+                                    </div>
+                                }
+                            </div>
+                            <div class="col-8">
+                                <div class="card-body py-3">
+                                    <h6 class="card-title mb-1 text-truncate">@book.BookTitle</h6>
+                                    @if (!string.IsNullOrEmpty(book.Author))
+                                    {
+                                        <small class="text-muted d-block mb-2">@book.Author</small>
+                                    }
+
+                                    <div class="mb-2">
+                                        <small class="text-muted">
+                                            <i class="fas fa-calendar me-1"></i>
+                                            @book.PurchasedAt.ToString("dd/MM/yyyy")
+                                        </small>
+                                    </div>
+
+                                    <!-- Download Status -->
+                                    <div class="mb-2">
+                                        @if (book.CanDownload)
+                                        {
+                                            <span class="badge bg-success-soft text-success">
+                                                <i class="fas fa-download me-1"></i>
+                                                @book.RemainingDownloads @Html.T("تحميلات متبقية", "downloads remaining")
+                                            </span>
+                                        }
+                                        else if (book.IsExpired)
+                                        {
+                                            <span class="badge bg-danger-soft text-danger">
+                                                <i class="fas fa-clock me-1"></i>
+                                                @Html.T("انتهت الصلاحية", "Expired")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-warning-soft text-warning">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                @Html.T("استنفدت التحميلات", "Downloads exhausted")
+                                            </span>
+                                        }
+                                    </div>
+
+                                    <!-- Physical Status -->
+                                    @if (book.PurchaseType == BookPurchaseType.Physical || book.PurchaseType == BookPurchaseType.Both)
+                                    {
+                                        <div class="mb-2">
+                                            @{
+                                                var physicalStatusText = book.PhysicalStatus switch
+                                                {
+                                                    PhysicalBookStatus.Pending => Html.T("قيد الانتظار", "Pending").ToString(),
+                                                    PhysicalBookStatus.Processing => Html.T("قيد التحضير", "Processing").ToString(),
+                                                    PhysicalBookStatus.Shipped => Html.T("تم الشحن", "Shipped").ToString(),
+                                                    PhysicalBookStatus.InTransit => Html.T("في الطريق", "In transit").ToString(),
+                                                    PhysicalBookStatus.Delivered => Html.T("تم التسليم", "Delivered").ToString(),
+                                                    _ => Html.T("غير معروف", "Unknown").ToString()
+                                                };
+                                                var physicalStatusClass = book.PhysicalStatus switch
+                                                {
+                                                    PhysicalBookStatus.Delivered => "bg-success",
+                                                    PhysicalBookStatus.Shipped or PhysicalBookStatus.InTransit => "bg-info",
+                                                    _ => "bg-secondary"
+                                                };
+                                            }
+                                            <span class="badge @physicalStatusClass">
+                                                <i class="fas fa-box me-1"></i>
+                                                @physicalStatusText
+                                            </span>
+                                            @if (!string.IsNullOrEmpty(book.TrackingNumber))
+                                            {
+                                                <small class="text-muted d-block mt-1">
+                                                    @Html.T("رقم التتبع:", "Tracking number:") @book.TrackingNumber
+                                                </small>
+                                            }
+                                        </div>
+                                    }
+
+                                    <div class="d-flex gap-2 mt-3">
+                                        @if (book.CanDownload)
+                                        {
+                                            <a href="@Url.Action("Download", "Books", new { area = "Student", id = book.BookId })" 
+                                               class="btn btn-primary btn-sm">
+                                                <i class="feather-download me-1"></i>
+                                                @Html.T("تحميل", "Download")
+                                            </a>
+                                        }
+                                        @if (!book.HasReviewed)
+                                        {
+                                            <button type="button" class="btn btn-outline-warning btn-sm" 
+                                                    data-bs-toggle="modal" data-bs-target="#reviewModal-@book.BookId">
+                                                <i class="feather-star me-1"></i>
+                                                @Html.T("تقييم", "Review")
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="btn btn-outline-success btn-sm disabled">
+                                                <i class="feather-check me-1"></i>
+                                                @Html.T("تم التقييم", "Reviewed") (@book.UserRating★)
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Review Modal -->
+                <div class="modal fade" id="reviewModal-@book.BookId" tabindex="-1" data-bs-backdrop="false">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">@Html.T("تقييم", "Review") "@book.BookTitle"</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <form asp-controller="Books" asp-action="AddReview" method="post">
+                                @Html.AntiForgeryToken()
+                                <div class="modal-body">
+                                    <input type="hidden" name="BookId" value="@book.BookId">
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">@Html.T("التقييم", "Rating")</label>
+                                        <div class="star-rating" id="rating-@book.BookId">
+                                            @for (int i = 5; i >= 1; i--)
+                                            {
+                                                <input type="radio" name="Rating" value="@i" id="star-@book.BookId-@i" required>
+                                                <label for="star-@book.BookId-@i">
+                                                    <i class="fas fa-star"></i>
+                                                </label>
+                                            }
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">@Html.T("تعليقك (اختياري)", "Your comment (optional)")</label>
+                                        <textarea name="Comment" class="form-control" rows="4" 
+                                                  placeholder="@Html.T("شاركنا رأيك في الكتاب...", "Share your opinion about the book...")"></textarea>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                                    <button type="submit" class="btn btn-primary">@Html.T("إرسال التقييم", "Submit review")</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="text-center py-5">
+            <i class="fas fa-book-open fa-4x text-muted mb-3"></i>
+            <h5>@Html.T("مكتبتك فارغة", "Your library is empty")</h5>
+            <p class="text-muted">@Html.T("لم تشترِ أي كتب بعد", "You haven't purchased any books yet")</p>
+            <a href="@Url.Action("Index")" class="btn btn-primary">
+                <i class="fas fa-search me-1"></i>
+                @Html.T("تصفح الكتب", "Browse books")
+            </a>
+        </div>
+    }
+</div>
+
+<style>
+    .star-rating {
+        display: flex;
+        flex-direction: row-reverse;
+        justify-content: flex-end;
+        gap: 0.25rem;
+    }
+    .star-rating input {
+        display: none;
+    }
+    .star-rating label {
+        cursor: pointer;
+        font-size: 1.5rem;
+        color: #ddd;
+    }
+    .star-rating label:hover,
+    .star-rating label:hover ~ label,
+    .star-rating input:checked ~ label {
+        color: #ffc107;
+    }
+    .bg-success-soft {
+        background-color: rgba(25, 135, 84, 0.1);
+    }
+    .bg-danger-soft {
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+    .bg-warning-soft {
+        background-color: rgba(255, 193, 7, 0.1);
+    }
+</style>
+

@@ -1,0 +1,144 @@
+@model List<LMS.Domain.Entities.Payments.Subscription>
+@{
+    ViewData["Title"] = Html.T("اشتراكاتي", "My Subscriptions");
+}
+
+@section Styles {
+<style>
+    .subscription-card {
+        transition: all 0.3s ease;
+    }
+    .subscription-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .subscription-card.active {
+        border: 2px solid #22c55e;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-zap text-warning me-2"></i>
+                    @Html.T("اشتراكاتي", "My Subscriptions")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("إدارة اشتراكاتك الحالية", "Manage your current subscriptions")</p>
+            </div>
+            <a asp-action="Plans" class="btn btn-primary">
+                <i class="feather-eye me-2"></i>
+                @Html.T("عرض الخطط المتاحة", "View available plans")
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Active Subscriptions -->
+@if (Model?.Any() == true)
+{
+    <div class="row g-4">
+        @foreach (var subscription in Model)
+        {
+            var isActive = subscription.Status == "Active";
+            var isCanceled = subscription.Status == "Cancelled" || subscription.Status == "Canceled";
+            var statusText = subscription.Status switch
+            {
+                "Active" => Html.T("فعال", "Active"),
+                "Cancelled" or "Canceled" => Html.T("ملغى", "Cancelled"),
+                "PastDue" => Html.T("متأخر", "Past due"),
+                "Trialing" => Html.T("تجريبي", "Trialing"),
+                "Paused" => Html.T("موقوف", "Paused"),
+                _ => subscription.Status
+            };
+            
+            <div class="col-lg-6">
+                <div class="card subscription-card stretch stretch-full @(isActive ? "active" : "")">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                                <h4 class="fw-bold mb-1">@subscription.Plan?.Name</h4>
+                                <p class="text-muted mb-0">@subscription.Plan?.BillingCycle</p>
+                            </div>
+                            <span class="badge bg-@(isActive ? "success" : isCanceled ? "danger" : "warning")">
+                                @statusText
+                            </span>
+                        </div>
+
+                        <div class="mb-4">
+                            <h2 class="fw-bold text-primary mb-0">
+                                @((subscription.Plan?.Price ?? 0).ToEGP())
+                                <small class="text-muted fs-6">/@subscription.Plan?.BillingCycle</small>
+                            </h2>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
+                                <span class="text-muted">@Html.T("تاريخ البدء", "Start date")</span>
+                                <strong>@subscription.StartDate.ToString("dd/MM/yyyy")</strong>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
+                                <span class="text-muted">@Html.T("تاريخ التجديد", "Renewal date")</span>
+                                <strong>@(subscription.NextBillingDate?.ToString("dd/MM/yyyy") ?? subscription.CurrentPeriodEnd.ToString("dd/MM/yyyy"))</strong>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="text-muted">@Html.T("الحالة", "Status")</span>
+                                <strong class="text-@(isActive ? "success" : "danger")">
+                                    @statusText
+                                </strong>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <a asp-action="Details" asp-route-id="@subscription.Id" class="btn btn-outline-primary flex-grow-1">
+                                <i class="feather-eye me-2"></i>
+                                @Html.T("التفاصيل", "Details")
+                            </a>
+                            @if (isActive && !subscription.CancelAtPeriodEnd)
+                            {
+                                <a asp-action="Cancel" asp-route-id="@subscription.Id" class="btn btn-outline-danger">
+                                    <i class="feather-x-circle me-2"></i>
+                                    @Html.T("إلغاء", "Cancel")
+                                </a>
+                            }
+                            else if (subscription.CancelAtPeriodEnd || isCanceled)
+                            {
+                                <form asp-action="Resume" method="post" class="d-inline">
+                                    <input type="hidden" name="id" value="@subscription.Id" />
+                                    <button type="submit" class="btn btn-outline-success">
+                                        <i class="feather-play-circle me-2"></i>
+                                        @Html.T("إعادة تفعيل", "Resume")
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            @{
+                ViewData["Icon"] = "zap";
+                ViewData["Title"] = Html.T("لا توجد اشتراكات", "No subscriptions");
+                ViewData["Message"] = Html.T("اشترك في أحد خططنا للحصول على وصول غير محدود للمحتوى", "Subscribe to one of our plans for unlimited content access");
+                ViewData["ActionText"] = "عرض الخطط";
+                ViewData["ActionArea"] = "Student";
+                ViewData["ActionController"] = "Subscriptions";
+                ViewData["ActionAction"] = "Plans";
+            }
+            @await Html.PartialAsync("_EmptyState")
+        </div>
+    </div>
+}
+

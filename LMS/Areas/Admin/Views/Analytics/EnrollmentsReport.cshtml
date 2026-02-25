@@ -1,0 +1,443 @@
+@model IEnumerable<LMS.Domain.Entities.Learning.Enrollment>
+
+@{
+    ViewData["Title"] = Html.T("تقرير التسجيلات", "Enrollments report");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("التحليلات", "Analytics"), Url.Action("Index", "Analytics")),
+        (Html.T("تقرير التسجيلات", "Enrollments report"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    
+    var totalEnrollments = ViewBag.TotalEnrollments ?? 0;
+    var freeEnrollments = ViewBag.FreeEnrollments ?? 0;
+    var paidEnrollments = ViewBag.PaidEnrollments ?? 0;
+    var completedEnrollments = ViewBag.CompletedEnrollments ?? 0;
+    var fromDate = ViewBag.From as DateTime? ?? DateTime.UtcNow.AddMonths(-1);
+    var toDate = ViewBag.To as DateTime? ?? DateTime.UtcNow;
+}
+
+@section Styles {
+    <style>
+        .enrollment-card {
+            transition: all 0.3s ease;
+            border-right: 4px solid transparent;
+        }
+        .enrollment-card:hover {
+            border-right-color: #3454d1;
+            background-color: #f8f9fa;
+        }
+        .progress-circle {
+            width: 60px;
+            height: 60px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-users"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("إجمالي التسجيلات", "Total enrollments")</span>
+                            <h3 class="fw-bold mb-0">@totalEnrollments.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-dollar-sign"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("تسجيلات مدفوعة", "Paid enrollments")</span>
+                            <h3 class="fw-bold mb-0">@paidEnrollments.ToString("N0")</h3>
+                            <small class="text-muted">@((totalEnrollments > 0 ? (paidEnrollments * 100.0 / totalEnrollments) : 0).ToString("F1"))%</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-gift"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("تسجيلات مجانية", "Free enrollments")</span>
+                            <h3 class="fw-bold mb-0">@freeEnrollments.ToString("N0")</h3>
+                            <small class="text-muted">@((totalEnrollments > 0 ? (freeEnrollments * 100.0 / totalEnrollments) : 0).ToString("F1"))%</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("تسجيلات مكتملة", "Completed enrollments")</span>
+                            <h3 class="fw-bold mb-0">@completedEnrollments.ToString("N0")</h3>
+                            <small class="text-muted">@((totalEnrollments > 0 ? (completedEnrollments * 100.0 / totalEnrollments) : 0).ToString("F1"))%</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                                <input type="date" name="from" class="form-control" value="@fromDate.ToString("yyyy-MM-dd")" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                                <input type="date" name="to" class="form-control" value="@toDate.ToString("yyyy-MM-dd")" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">@Html.T("نوع التسجيل", "Enrollment type")</label>
+                                <select class="form-select" id="enrollmentType">
+                                    <option value="">@Html.T("الكل", "All")</option>
+                                    <option value="paid">@Html.T("مدفوع", "Paid")</option>
+                                    <option value="free">@Html.T("مجاني", "Free")</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="feather-search me-2"></i>
+                                    @Html.T("بحث", "Search")
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row mb-4">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("اتجاه التسجيلات", "Enrollments trend")</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 350px;">
+                        <canvas id="enrollmentsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع الحالات", "Status distribution")</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 250px;">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                    <div class="mt-4">
+                        @{
+                            var activeCount = Model.Count(e => e.Status == LMS.Domain.Enums.EnrollmentStatus.Active);
+                            var completedCount = Model.Count(e => e.Status == LMS.Domain.Enums.EnrollmentStatus.Completed);
+                            var expiredCount = Model.Count(e => e.Status == LMS.Domain.Enums.EnrollmentStatus.Expired);
+                        }
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <div style="width: 12px; height: 12px; background: #3454d1; border-radius: 50%;"></div>
+                                <span>@Html.T("نشط", "Active")</span>
+                            </div>
+                            <span class="fw-bold">@activeCount</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <div style="width: 12px; height: 12px; background: #0ab39c; border-radius: 50%;"></div>
+                                <span>@Html.T("مكتمل", "Completed")</span>
+                            </div>
+                            <span class="fw-bold">@completedCount</span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center gap-2">
+                                <div style="width: 12px; height: 12px; background: #f06548; border-radius: 50%;"></div>
+                                <span>@Html.T("منتهي", "Expired")</span>
+                            </div>
+                            <span class="fw-bold">@expiredCount</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enrollments Table -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تفاصيل التسجيلات", "Enrollment details")</h5>
+                    <div class="card-header-action">
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" id="searchTable" placeholder="@Html.T("بحث...", "Search...")">
+                            <span class="input-group-text">
+                                <i class="feather-search"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="enrollmentsTable">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>@Html.T("الطالب", "Student")</th>
+                                    <th>@Html.T("الدورة", "Course")</th>
+                                    <th>@Html.T("تاريخ التسجيل", "Enrollment date")</th>
+                                    <th>@Html.T("نوع التسجيل", "Enrollment type")</th>
+                                    <th>@Html.T("المبلغ المدفوع", "Amount paid")</th>
+                                    <th>@Html.T("نسبة الإكمال", "Completion %")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var enrollment in Model)
+                                {
+                                    <tr class="enrollment-card">
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                    @enrollment.Student?.FirstName?.Substring(0, 1)
+                                                </div>
+                                                <div>
+                                                    <span class="d-block fw-semibold">@enrollment.Student?.FirstName @enrollment.Student?.LastName</span>
+                                                    <small class="text-muted">@enrollment.Student?.Email</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="fw-semibold">@enrollment.Course?.Title</span>
+                                        </td>
+                                        <td>
+                                            <div>
+                                                <span class="d-block">@enrollment.EnrolledAt.ToString("dd/MM/yyyy")</span>
+                                                <small class="text-muted">@enrollment.EnrolledAt.ToString("hh:mm tt")</small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (enrollment.IsFree)
+                                            {
+                                                <span class="badge bg-soft-info text-info">@Html.T("مجاني", "Free")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-success text-success">@Html.T("مدفوع", "Paid")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (enrollment.IsFree)
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="fw-bold text-success">@enrollment.PaidAmount.ToEGP()</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="progress flex-grow-1" style="height: 8px;">
+                                                    <div class="progress-bar @(enrollment.ProgressPercentage >= 75 ? "bg-success" : enrollment.ProgressPercentage >= 50 ? "bg-primary" : "bg-warning")" 
+                                                         style="width: @enrollment.ProgressPercentage%"></div>
+                                                </div>
+                                                <span class="fw-semibold">@enrollment.ProgressPercentage.ToString("F0")%</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @switch (enrollment.Status)
+                                            {
+                                                case LMS.Domain.Enums.EnrollmentStatus.Active:
+                                                    <span class="badge bg-soft-primary text-primary">@Html.T("نشط", "Active")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.EnrollmentStatus.Completed:
+                                                    <span class="badge bg-soft-success text-success">@Html.T("مكتمل", "Completed")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.EnrollmentStatus.Expired:
+                                                    <span class="badge bg-soft-danger text-danger">@Html.T("منتهي", "Expired")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.EnrollmentStatus.Suspended:
+                                                    <span class="badge bg-soft-warning text-warning">@Html.T("معلق", "Suspended")</span>
+                                                    break;
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="javascript:void(0);" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض التفاصيل", "View details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                @if (!Model.Any())
+                {
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-warning text-warning mx-auto mb-3">
+                            <i class="feather-inbox"></i>
+                        </div>
+                        <h5>@Html.T("لا توجد تسجيلات", "No enrollments")</h5>
+                        <p class="text-muted">لم يتم العثور على أي تسجيلات في الفترة المحددة</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Search functionality
+            $('#searchTable').on('keyup', function() {
+                var value = $(this).val().toLowerCase();
+                $('#enrollmentsTable tbody tr').filter(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+                });
+            });
+
+            // Filter by type
+            $('#enrollmentType').on('change', function() {
+                var type = $(this).val();
+                $('#enrollmentsTable tbody tr').show();
+                if (type === 'paid') {
+                    $('#enrollmentsTable tbody tr').filter(function() {
+                        return $(this).find('.badge').text().trim() === 'مجاني';
+                    }).hide();
+                } else if (type === 'free') {
+                    $('#enrollmentsTable tbody tr').filter(function() {
+                        return $(this).find('.badge').text().trim() === 'مدفوع';
+                    }).hide();
+                }
+            });
+
+            // Enrollments Chart
+            const enrollments = @Html.Raw(Json.Serialize(Model.Select(e => new { 
+                Date = e.EnrolledAt.ToString("yyyy-MM-dd")
+            })));
+
+            const enrollmentsByDate = {};
+            enrollments.forEach(e => {
+                if (!enrollmentsByDate[e.Date]) {
+                    enrollmentsByDate[e.Date] = 0;
+                }
+                enrollmentsByDate[e.Date]++;
+            });
+
+            const dates = Object.keys(enrollmentsByDate).sort();
+            const counts = dates.map(d => enrollmentsByDate[d]);
+
+            const ctx = document.getElementById('enrollmentsChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: dates.map(d => new Date(d).toLocaleDateString('ar-SA')),
+                    datasets: [{
+                        label: 'التسجيلات اليومية',
+                        data: counts,
+                        backgroundColor: '#3454d1',
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Status Chart
+            const statusCtx = document.getElementById('statusChart').getContext('2d');
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['نشط', 'مكتمل', 'منتهي'],
+                    datasets: [{
+                        data: [@Model.Count(e => e.Status == LMS.Domain.Enums.EnrollmentStatus.Active), 
+                               @Model.Count(e => e.Status == LMS.Domain.Enums.EnrollmentStatus.Completed),
+                               @Model.Count(e => e.Status == LMS.Domain.Enums.EnrollmentStatus.Expired)],
+                        backgroundColor: ['#3454d1', '#0ab39c', '#f06548']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            // Initialize tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+

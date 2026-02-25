@@ -1,0 +1,416 @@
+@model GoalWithProgress
+@{
+    ViewData["Title"] = Html.T("تفاصيل الهدف", "Goal Details");
+}
+
+@section Styles {
+<style>
+    .goal-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 40px;
+        color: white;
+        margin-bottom: 30px;
+    }
+    .progress-circle {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        background: conic-gradient(#22c55e 0deg @((double)Model.ProgressPercentage * 3.6)deg, #e5e7eb @((double)Model.ProgressPercentage * 3.6)deg 360deg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+    .progress-circle::before {
+        content: '';
+        width: 120px;
+        height: 120px;
+        background: white;
+        border-radius: 50%;
+        position: absolute;
+    }
+    .progress-text {
+        position: relative;
+        z-index: 1;
+        font-size: 32px;
+        font-weight: bold;
+        color: #1f2937;
+    }
+    .milestone-item {
+        padding-right: 30px;
+        position: relative;
+        border-right: 2px solid #e5e7eb;
+        padding-bottom: 24px;
+    }
+    .milestone-item:last-child {
+        border-right: none;
+    }
+    .milestone-dot {
+        position: absolute;
+        right: -9px;
+        top: 0;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 0 0 3px #e5e7eb;
+    }
+    .milestone-dot.completed {
+        background: #22c55e;
+    }
+    .milestone-dot.pending {
+        background: #9ca3af;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Goal Header -->
+<div class="goal-header">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div class="flex-grow-1">
+            <div class="d-flex align-items-center mb-3">
+                <a asp-action="Index" class="btn btn-light me-3">
+                    <i class="feather-arrow-right"></i>
+                </a>
+                <div>
+                    @if (Model.Goal.IsCompleted)
+                    {
+                        <span class="badge bg-success mb-2">✓ @Html.T("مكتمل", "Completed")</span>
+                    }
+                    else if (Model.Goal.IsCancelled)
+                    {
+                        <span class="badge bg-danger mb-2">✗ @Html.T("ملغي", "Cancelled")</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-warning mb-2">⏳ @Html.T("قيد التنفيذ", "In progress")</span>
+                    }
+                </div>
+            </div>
+            <h2 class="fw-bold text-white mb-3">@Model.Goal.Title</h2>
+            @if (!string.IsNullOrEmpty(Model.Goal.Description))
+            {
+                <p class="text-white opacity-75 mb-0">@Model.Goal.Description</p>
+            }
+        </div>
+        <div class="text-center">
+            <div class="progress-circle">
+                <div class="progress-text">
+                    @Model.ProgressPercentage<span class="fs-5">%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Goal Stats -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-3 col-md-6">
+        <div class="card stretch stretch-full text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-primary text-primary mx-auto mb-3">
+                    <i class="feather-target"></i>
+                </div>
+                <h4 class="fw-bold mb-1">@Model.Goal.TargetValue</h4>
+                <p class="text-muted mb-0">@Html.T("القيمة المستهدفة", "Target value")</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card stretch stretch-full text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-success text-success mx-auto mb-3">
+                    <i class="feather-check-circle"></i>
+                </div>
+                <h4 class="fw-bold mb-1">@Model.CurrentProgress</h4>
+                <p class="text-muted mb-0">@Html.T("التقدم الحالي", "Current progress")</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card stretch stretch-full text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-warning text-warning mx-auto mb-3">
+                    <i class="feather-calendar"></i>
+                </div>
+                <h4 class="fw-bold mb-1">@Model.DaysRemaining</h4>
+                <p class="text-muted mb-0">@Html.T("يوم متبقي", "Days remaining")</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="card stretch stretch-full text-center">
+            <div class="card-body">
+                <div class="avatar-text avatar-lg bg-soft-info text-info mx-auto mb-3">
+                    <i class="feather-trending-up"></i>
+                </div>
+                <h4 class="fw-bold mb-1">@Model.RecommendedDailyEffort</h4>
+                <p class="text-muted mb-0">@Html.T("الجهد اليومي المطلوب", "Required daily effort")</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Progress Details -->
+    <div class="col-lg-8">
+        <!-- Progress Chart -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-bar-chart-2 text-primary me-2"></i>
+                    @Html.T("تقدم الهدف", "Goal progress")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="fw-semibold">@Html.T("التقدم الإجمالي", "Total progress")</span>
+                        <span class="text-primary fw-bold">@Model.ProgressPercentage%</span>
+                    </div>
+                    <div class="progress" style="height: 12px;">
+                        <div class="progress-bar bg-primary" 
+                             style="width: @Model.ProgressPercentage%" 
+                             role="progressbar"></div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-2">
+                        <small class="text-muted">@Model.CurrentProgress / @Model.Goal.TargetValue</small>
+                        <small class="text-muted">@Html.T("متبقي", "Remaining") @(Model.Goal.TargetValue - Model.CurrentProgress)</small>
+                    </div>
+                </div>
+
+                @if (Model.IsAchievable)
+                {
+                    <div class="alert alert-success border-0 bg-soft-success">
+                        <div class="d-flex">
+                            <i class="feather-check-circle fs-4 text-success me-3"></i>
+                            <div>
+                                <h6 class="fw-bold mb-1">@Html.T("يمكنك تحقيق هذا الهدف!", "You can achieve this goal!")</h6>
+                                <p class="mb-0">@Html.T("أنت على المسار الصحيح. استمر بنفس الوتيرة لتحقيق هدفك.", "You're on track. Keep the same pace to reach your goal.")</p>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning border-0 bg-soft-warning">
+                        <div class="d-flex">
+                            <i class="feather-alert-triangle fs-4 text-warning me-3"></i>
+                            <div>
+                                <h6 class="fw-bold mb-1">@Html.T("تحتاج إلى زيادة جهدك", "You need to step up your effort")</h6>
+                                <p class="mb-0">@Html.T("قد تحتاج إلى تعديل خطتك أو زيادة الجهد اليومي لتحقيق الهدف في الوقت المحدد.", "You may need to adjust your plan or increase daily effort to meet the goal on time.")</p>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Activity Timeline -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-activity text-info me-2"></i>
+                    @Html.T("سجل النشاط", "Activity log")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="timeline">
+                    <div class="milestone-item">
+                        <div class="milestone-dot completed"></div>
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="fw-bold mb-1">@Html.T("تم إنشاء الهدف", "Goal created")</h6>
+                        </div>
+                        <p class="text-muted small mb-2">@Html.T("بدأت رحلتك نحو تحقيق هذا الهدف", "You started your journey toward this goal")</p>
+                        <small class="text-muted">
+                            <i class="feather-calendar me-1"></i>
+                            @Model.Goal.CreatedAt.ToString("dd MMMM yyyy")
+                        </small>
+                    </div>
+
+                    @if (Model.CurrentProgress > 0)
+                    {
+                        <div class="milestone-item">
+                            <div class="milestone-dot completed"></div>
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="fw-bold mb-1">@Html.T("تحديث التقدم", "Progress update")</h6>
+                            </div>
+                            <p class="text-muted small mb-2">@Html.T("التقدم الحالي:", "Current progress:") @Model.CurrentProgress @Html.T("من", "of") @Model.Goal.TargetValue</p>
+                            <small class="text-muted">
+                                <i class="feather-calendar me-1"></i>
+                                @DateTime.Now.ToString("dd MMMM yyyy")
+                            </small>
+                        </div>
+                    }
+
+                    @if (Model.Goal.TargetDate.HasValue)
+                    {
+                        <div class="milestone-item">
+                            <div class="milestone-dot pending"></div>
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="fw-bold mb-1">@Html.T("تاريخ الإنجاز المستهدف", "Target completion date")</h6>
+                            </div>
+                            <p class="text-muted small mb-2">@Html.T("الموعد النهائي المحدد لإنجاز الهدف", "Deadline set for achieving the goal")</p>
+                            <small class="text-muted">
+                                <i class="feather-calendar me-1"></i>
+                                @Model.Goal.TargetDate.Value.ToString("dd MMMM yyyy")
+                            </small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Goal Info -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">
+                    <i class="feather-info text-primary me-2"></i>
+                    @Html.T("معلومات الهدف", "Goal info")
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="text-muted small mb-1">@Html.T("نوع الهدف", "Goal type")</label>
+                    <p class="mb-0 fw-semibold">
+                        @switch (Model.Goal.GoalType)
+                        {
+                            case "CompleteCourse":
+                                <span>🎯 @Html.T("إكمال دورة", "Complete course")</span>
+                                break;
+                            case "StudyHours":
+                                <span>⏰ @Html.T("ساعات دراسة", "Study hours")</span>
+                                break;
+                            case "EarnCertificates":
+                                <span>🏆 @Html.T("الحصول على شهادات", "Earn certificates")</span>
+                                break;
+                            default:
+                                <span>✨ @Html.T("هدف مخصص", "Custom goal")</span>
+                                break;
+                        }
+                    </p>
+                </div>
+                
+                @if (Model.Goal.Course != null)
+                {
+                    <div class="mb-3">
+                        <label class="text-muted small mb-1">@Html.T("الدورة المرتبطة", "Related course")</label>
+                        <p class="mb-0 fw-semibold">
+                            <a asp-controller="Courses" asp-action="Details" asp-route-id="@Model.Goal.CourseId" class="text-primary">
+                                @Model.Goal.Course.Title
+                            </a>
+                        </p>
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label class="text-muted small mb-1">@Html.T("تاريخ الإنشاء", "Created on")</label>
+                    <p class="mb-0">@Model.Goal.CreatedAt.ToString("dd MMMM yyyy")</p>
+                </div>
+
+                @if (Model.Goal.TargetDate.HasValue)
+                {
+                    <div class="mb-3">
+                        <label class="text-muted small mb-1">@Html.T("الموعد المستهدف", "Target date")</label>
+                        <p class="mb-0">@Model.Goal.TargetDate.Value.ToString("dd MMMM yyyy")</p>
+                    </div>
+                }
+
+                <div class="mb-0">
+                    <label class="text-muted small mb-1">@Html.T("الحالة", "Status")</label>
+                    <p class="mb-0">
+                        @if (Model.Goal.IsCompleted)
+                        {
+                            <span class="badge bg-success">@Html.T("مكتمل", "Completed")</span>
+                        }
+                        else if (Model.Goal.IsCancelled)
+                        {
+                            <span class="badge bg-danger">@Html.T("ملغي", "Cancelled")</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-primary">@Html.T("نشط", "Active")</span>
+                        }
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">
+                    <i class="feather-settings text-secondary me-2"></i>
+                    الإجراءات
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    @if (!Model.Goal.IsCompleted && !Model.Goal.IsCancelled)
+                    {
+                        <form asp-action="UpdateProgress" asp-route-goalId="@Model.Goal.Id" method="post" class="d-grid">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-trending-up me-2"></i>
+                                تحديث التقدم
+                            </button>
+                        </form>
+                        
+                        <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#editModal">
+                            <i class="feather-edit me-2"></i>
+                            @Html.T("تعديل الهدف", "Edit Goal")
+                        </button>
+                        
+                        <form asp-action="Cancel" asp-route-id="@Model.Goal.Id" method="post" class="d-grid" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إلغاء هذا الهدف؟", "Are you sure you want to cancel this goal?").Replace("'", "\\'"))')">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-danger">
+                                <i class="feather-x-circle me-2"></i>
+                                @Html.T("إلغاء الهدف", "Cancel Goal")
+                            </button>
+                        </form>
+                    }
+                    else
+                    {
+                        <form asp-action="Delete" asp-route-id="@Model.Goal.Id" method="post" class="d-grid" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا الهدف؟", "Are you sure you want to delete this goal?").Replace("'", "\\'"))')">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-danger">
+                                <i class="feather-trash-2 me-2"></i>
+                                @Html.T("حذف الهدف", "Delete Goal")
+                            </button>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Motivation -->
+        <div class="alert alert-info border-0 bg-soft-info">
+            <div class="text-center">
+                <div class="fs-1 mb-2">💪</div>
+                <h6 class="fw-bold mb-2">@Html.T("استمر في التقدم!", "Keep making progress!")</h6>
+                <p class="mb-0 small">@Html.T("كل خطوة صغيرة تقربك من تحقيق هدفك الكبير", "Every small step brings you closer to your big goal")</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Add any interactive features here
+    $(document).ready(function() {
+        // Animate progress bars
+        $('.progress-bar').each(function() {
+            var width = $(this).css('width');
+            $(this).css('width', '0').animate({ width: width }, 1000);
+        });
+    });
+</script>
+}
+

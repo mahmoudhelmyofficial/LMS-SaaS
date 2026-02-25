@@ -1,0 +1,574 @@
+@model LMS.Areas.Admin.ViewModels.SecurityDashboardViewModel
+
+@{
+    ViewData["Title"] = Html.T("لوحة الأمان", "Security Dashboard");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الأمان", "Security"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+}
+
+@section Styles {
+    <style>
+        .security-stat-card {
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        .security-stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        }
+        .threat-level-high {
+            animation: pulse-red 2s infinite;
+        }
+        @@keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+        }
+        .activity-item {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            transition: all 0.3s;
+        }
+        .activity-item:hover {
+            background: #e9ecef;
+            transform: translateX(-5px);
+        }
+        .ip-address {
+            font-family: 'Courier New', monospace;
+            background: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .security-badge {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 25px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <!-- Total Active Sessions -->
+    <div class="col-xxl-3 col-md-6">
+        <a asp-action="ActiveSessions" class="text-decoration-none">
+            <div class="card stretch stretch-full security-stat-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                                <i class="feather-activity"></i>
+                            </div>
+                            <div>
+                                <span class="text-muted d-block mb-1">@Html.T("الجلسات النشطة", "Active Sessions")</span>
+                                <h3 class="fw-bold mb-0">@Model.TotalActiveSessions.ToString("N0")</h3>
+                            </div>
+                        </div>
+                        <div class="badge bg-soft-primary text-primary">
+                            <i class="feather-trending-up"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Failed Logins Today -->
+    <div class="col-xxl-3 col-md-6">
+        <a asp-action="LoginLogs" asp-route-success="false" class="text-decoration-none">
+            <div class="card stretch stretch-full security-stat-card @(Model.FailedLoginsToday > 50 ? "threat-level-high" : "")">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                                <i class="feather-alert-triangle"></i>
+                            </div>
+                            <div>
+                                <span class="text-muted d-block mb-1">@Html.T("محاولات فاشلة اليوم", "Failed Logins Today")</span>
+                                <h3 class="fw-bold mb-0">@Model.FailedLoginsToday.ToString("N0")</h3>
+                            </div>
+                        </div>
+                        @if (Model.FailedLoginsToday > 50)
+                        {
+                            <div class="badge bg-soft-danger text-danger">
+                                <i class="feather-alert-circle"></i>
+                                @Html.T("تحذير", "Warning")
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Blocked IPs -->
+    <div class="col-xxl-3 col-md-6">
+        <a asp-action="BlockedIps" class="text-decoration-none">
+            <div class="card stretch stretch-full security-stat-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                                <i class="feather-shield-off"></i>
+                            </div>
+                            <div>
+                                <span class="text-muted d-block mb-1">@Html.T("عناوين IP محظورة", "Blocked IPs")</span>
+                                <h3 class="fw-bold mb-0">@Model.BlockedIpsCount.ToString("N0")</h3>
+                            </div>
+                        </div>
+                        <div class="badge bg-soft-warning text-warning">
+                            <i class="feather-shield"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- 2FA Enabled Users -->
+    <div class="col-xxl-3 col-md-6">
+        <a asp-action="TwoFactorSettings" class="text-decoration-none">
+            <div class="card stretch stretch-full security-stat-card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                                <i class="feather-lock"></i>
+                            </div>
+                            <div>
+                                <span class="text-muted d-block mb-1">@Html.T("مستخدمي 2FA", "2FA Users")</span>
+                                <h3 class="fw-bold mb-0">@Model.TwoFactorEnabledUsers.ToString("N0")</h3>
+                            </div>
+                        </div>
+                        <div class="badge bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+}
+
+<div class="main-content">
+    <!-- Security Overview -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="metric-card">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h4 class="text-white mb-3">
+                            <i class="feather-shield me-2"></i>
+                            @Html.T("حالة الأمان", "Security Status")
+                        </h4>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="feather-check-circle"></i>
+                                    <div>
+                                        <small class="text-white-50 d-block">@Html.T("نشط", "Active")</small>
+                                        <span class="fw-bold">@Html.T("مراقبة 24/7", "24/7 Monitoring")</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="feather-zap"></i>
+                                    <div>
+                                        <small class="text-white-50 d-block">@Html.T("آخر فحص", "Last Check")</small>
+                                        <span class="fw-bold">@Html.T("منذ دقيقة", "A minute ago")</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="feather-trending-up"></i>
+                                    <div>
+                                        <small class="text-white-50 d-block">@Html.T("مستوى التهديد", "Threat Level")</small>
+                                        <span class="fw-bold">@(Model.FailedLoginsToday > 50 ? Html.T("متوسط", "Medium") : Html.T("منخفض", "Low"))</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="avatar-text avatar-xxl bg-white text-primary mx-auto">
+                            <i class="feather-shield fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recent Failed Logins -->
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-x-circle me-2"></i>
+                        @Html.T("آخر محاولات الدخول الفاشلة", "Recent Failed Logins")
+                    </h5>
+                    <div class="card-header-action">
+                        <a asp-action="LoginLogs" asp-route-success="false" class="btn btn-sm btn-light-brand">
+                            @Html.T("عرض الكل", "View All")
+                            <i class="feather-arrow-left ms-2"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @if (Model.RecentFailedLogins.Any())
+                    {
+                        <div class="vstack gap-2">
+                            @foreach (var log in Model.RecentFailedLogins.Take(10))
+                            {
+                                <div class="activity-item">
+                                    <div class="d-flex align-items-start gap-3">
+                                        <div class="avatar-text bg-soft-danger text-danger">
+                                            <i class="feather-x"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between mb-1">
+                                                <h6 class="mb-0">@(log.User != null ? $"{log.User.FirstName} {log.User.LastName}" : Html.T("مستخدم غير معروف", "Unknown user"))</h6>
+                                                <small class="text-muted">@log.LoginAt.ToString("HH:mm")</small>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2 mb-1">
+                                                <span class="ip-address">@log.IpAddress</span>
+                                                <span class="badge bg-soft-danger text-danger">@log.FailureReason</span>
+                                            </div>
+                                            <small class="text-muted">
+                                                <i class="feather-monitor me-1"></i>
+                                                @log.UserAgent
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <div class="avatar-text avatar-lg bg-soft-success text-success mx-auto mb-3">
+                                <i class="feather-check-circle"></i>
+                            </div>
+                            <p class="text-muted mb-0">@Html.T("لا توجد محاولات دخول فاشلة حديثة", "No recent failed login attempts")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Suspicious Activities -->
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-alert-triangle me-2"></i>
+                        @Html.T("نشاطات مشبوهة", "Suspicious Activity")
+                    </h5>
+                    <div class="card-header-action">
+                        <button class="btn btn-sm btn-light-brand" data-bs-toggle="modal" data-bs-target="#blockIpModal">
+                            <i class="feather-shield me-2"></i>
+                            @Html.T("حظر IP", "Block IP")
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @if (Model.SuspiciousActivities.Any())
+                    {
+                        <div class="vstack gap-2">
+                            @foreach (var activity in Model.SuspiciousActivities.Take(10))
+                            {
+                                <div class="activity-item">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <span class="ip-address">@activity.IpAddress</span>
+                                            <p class="mb-0 mt-1">
+                                                <span class="badge bg-soft-danger text-danger">
+                                                    @activity.FailedAttempts @Html.T("محاولة فاشلة", "failed attempt(s)")
+                                                </span>
+                                            </p>
+                                        </div>
+                                        <div class="text-end">
+                                            <small class="text-muted d-block mb-2">
+                                                @Html.T("آخر محاولة:", "Last attempt:") @activity.LastAttempt.ToString("HH:mm")
+                                            </small>
+                                            <a asp-action="AddBlockedIp" 
+                                               asp-route-ip="@activity.IpAddress" 
+                                               asp-route-reason="@(Html.T("محاولات دخول متعددة فاشلة", "Multiple failed login attempts") + $" ({activity.FailedAttempts})")"
+                                               class="btn btn-sm btn-danger">
+                                                <i class="feather-shield-off"></i>
+                                                @Html.T("حظر", "Block")
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <div class="avatar-text avatar-lg bg-soft-success text-success mx-auto mb-3">
+                                <i class="feather-shield"></i>
+                            </div>
+                            <p class="text-muted mb-0">@Html.T("لا توجد نشاطات مشبوهة", "No suspicious activity")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recently Blocked IPs -->
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-shield-off me-2"></i>
+                        عناوين IP محظورة مؤخراً
+                    </h5>
+                    <div class="card-header-action">
+                        <a asp-action="BlockedIps" class="btn btn-sm btn-light-brand">
+                            عرض الكل
+                            <i class="feather-arrow-left ms-2"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @if (Model.RecentBlockedIps.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("عنوان IP", "IP address")</th>
+                                        <th>@Html.T("السبب", "Reason")</th>
+                                        <th>@Html.T("التاريخ", "Date")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var blockedIp in Model.RecentBlockedIps)
+                                    {
+                                        <tr>
+                                            <td><span class="ip-address">@blockedIp.IpAddress</span></td>
+                                            <td><small class="text-muted">@blockedIp.Reason</small></td>
+                                            <td><small class="text-muted">@blockedIp.CreatedAt.ToString("dd/MM/yyyy")</small></td>
+                                            <td>
+                                                @if (blockedIp.IsActive)
+                                                {
+                                                    @if (blockedIp.IsPermanent)
+                                                    {
+                                                        <span class="badge bg-soft-danger text-danger">@Html.T("دائم", "Permanent")</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-soft-warning text-warning">@Html.T("مؤقت", "Temporary")</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">@Html.T("منتهي", "Expired")</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <div class="avatar-text avatar-lg bg-soft-info text-info mx-auto mb-3">
+                                <i class="feather-info"></i>
+                            </div>
+                            <p class="text-muted mb-0">@Html.T("لا توجد عناوين محظورة", "No blocked IP addresses")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-zap me-2"></i>
+                        @Html.T("إجراءات سريعة", "Quick actions")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-3">
+                        <a asp-action="LoginLogs" class="btn btn-light-brand d-flex align-items-center justify-content-between">
+                            <span>
+                                <i class="feather-file-text me-2"></i>
+                                @Html.T("سجلات تسجيل الدخول", "Login logs")
+                            </span>
+                            <i class="feather-arrow-left"></i>
+                        </a>
+                        <a asp-action="ActiveSessions" class="btn btn-light-brand d-flex align-items-center justify-content-between">
+                            <span>
+                                <i class="feather-activity me-2"></i>
+                                @Html.T("الجلسات النشطة", "Active sessions")
+                            </span>
+                            <i class="feather-arrow-left"></i>
+                        </a>
+                        <a asp-action="TwoFactorSettings" class="btn btn-light-brand d-flex align-items-center justify-content-between">
+                            <span>
+                                <i class="feather-lock me-2"></i>
+                                @Html.T("إعدادات المصادقة الثنائية", "Two-factor authentication settings")
+                            </span>
+                            <i class="feather-arrow-left"></i>
+                        </a>
+                        <a asp-action="CountryRestrictions" class="btn btn-light-brand d-flex align-items-center justify-content-between">
+                            <span>
+                                <i class="feather-globe me-2"></i>
+                                @Html.T("القيود الجغرافية", "Country restrictions")
+                            </span>
+                            <i class="feather-arrow-left"></i>
+                        </a>
+                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#blockIpModal">
+                            <i class="feather-shield-off me-2"></i>
+                            @Html.T("حظر عنوان IP", "Block IP address")
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security Tips -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-info me-2"></i>
+                        @Html.T("نصائح أمنية", "Security tips")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="vstack gap-2">
+                        <div class="d-flex gap-2">
+                            <i class="feather-check-circle text-success"></i>
+                            <small>@Html.T("قم بمراجعة سجلات الدخول بانتظام", "Review login logs regularly")</small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <i class="feather-check-circle text-success"></i>
+                            <small>@Html.T("شجع المستخدمين على تفعيل المصادقة الثنائية", "Encourage users to enable two-factor authentication")</small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <i class="feather-check-circle text-success"></i>
+                            <small>@Html.T("احظر عناوين IP المشبوهة فوراً", "Block suspicious IP addresses immediately")</small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <i class="feather-check-circle text-success"></i>
+                            <small>@Html.T("راقب الأنشطة غير العادية", "Monitor unusual activity")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Block IP Modal -->
+<div class="modal fade" id="blockIpModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="feather-shield-off me-2"></i>
+                    @Html.T("حظر عنوان IP", "Block IP address")
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddBlockedIp" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="form-group mb-3">
+                        <label class="form-label">@Html.T("عنوان IP", "IP address") <span class="text-danger">*</span></label>
+                        <input type="text" name="IpAddress" class="form-control" placeholder="@Html.T("مثال: 192.168.1.1", "e.g. 192.168.1.1")" required />
+                    </div>
+                    <div class="form-group mb-3">
+                        <label class="form-label">@Html.T("السبب", "Reason") <span class="text-danger">*</span></label>
+                        <textarea name="Reason" class="form-control" rows="3" placeholder="@Html.T("أدخل سبب الحظر...", "Enter the reason for blocking...")" required></textarea>
+                    </div>
+                    <div class="form-group mb-3">
+                        <div class="form-check form-switch">
+                            <input type="checkbox" class="form-check-input" id="permanentBlockModal" onchange="toggleModalExpiry()" />
+                            <label class="form-check-label" for="permanentBlockModal">
+                                @Html.T("حظر دائم", "Permanent block")
+                            </label>
+                        </div>
+                        <input type="hidden" name="IsPermanent" id="isPermanentModalField" value="false" />
+                    </div>
+                    <div class="form-group" id="expiryDateGroup">
+                        <label class="form-label">@Html.T("تاريخ انتهاء الحظر", "Block expiry date")</label>
+                        <input type="datetime-local" name="BlockedUntil" class="form-control" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-danger">@Html.T("حظر العنوان", "Block address")</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function toggleModalExpiry() {
+            const isPermanent = document.getElementById('permanentBlockModal').checked;
+            const expiryGroup = document.getElementById('expiryDateGroup');
+            const isPermanentField = document.getElementById('isPermanentModalField');
+            
+            isPermanentField.value = isPermanent ? 'true' : 'false';
+            
+            if (isPermanent) {
+                expiryGroup.style.display = 'none';
+            } else {
+                expiryGroup.style.display = 'block';
+            }
+        }
+
+        $(document).ready(function() {
+            var refreshInterval;
+            
+            function startRefresh() {
+                // Auto-refresh every 60 seconds
+                refreshInterval = setTimeout(function() {
+                    location.reload();
+                }, 60000);
+            }
+            
+            // Pause refresh when modal is open
+            $('#blockIpModal').on('show.bs.modal', function() {
+                if (refreshInterval) clearTimeout(refreshInterval);
+            });
+            
+            $('#blockIpModal').on('hide.bs.modal', function() {
+                startRefresh();
+            });
+            
+            startRefresh();
+        });
+    </script>
+}
+

@@ -1,0 +1,268 @@
+@model List<LMS.Domain.Entities.Analytics.ActivityLog>
+@{
+    ViewData["Title"] = Html.T("النشاط", "Activity");
+    var activityType = ViewBag.ActivityType as string;
+    var fromDate = ViewBag.FromDate as DateTime?;
+    var toDate = ViewBag.ToDate as DateTime?;
+}
+
+@section Styles {
+<style>
+    .activity-timeline {
+        position: relative;
+        padding-right: 30px;
+    }
+    .activity-timeline::before {
+        content: '';
+        position: absolute;
+        right: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e5e7eb;
+    }
+    .activity-item {
+        position: relative;
+        padding-bottom: 30px;
+        padding-right: 0;
+        padding-left: 0;
+    }
+    .activity-icon {
+        position: absolute;
+        right: 15px;
+        top: 0;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: white;
+        border: 2px solid #e5e7eb;
+        z-index: 1;
+        transform: translateX(50%);
+    }
+    .activity-item > div:not(.activity-icon) {
+        position: relative;
+        z-index: 0;
+        margin-right: 50px;
+    }
+    .date-header {
+        position: relative;
+        z-index: 2;
+        background: white;
+        display: inline-block;
+        padding: 5px 15px;
+        border-radius: 20px;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 20px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-activity text-primary me-2"></i>
+                    @Html.T("نشاط التعلم", "Learning Activity")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("تاريخ تقدمك الدراسي", "Your learning progress") (@Model.Count @Html.T("نشاط", "activities"))</p>
+            </div>
+            <div class="col-lg-6">
+                <form method="get" class="d-flex gap-2 justify-content-end">
+                    <select name="activityType" class="form-select w-auto">
+                        <option value="">@Html.T("جميع الأنشطة", "All activities")</option>
+                        @{
+                            var isLessonView = activityType == "LessonView";
+                            var isQuizAttempt = activityType == "QuizAttempt";
+                            var isAssignmentSubmission = activityType == "AssignmentSubmission";
+                            var isDiscussion = activityType == "Discussion";
+                            var isReview = activityType == "Review";
+                        }
+                        <option value="LessonView" selected="@isLessonView">@Html.T("عرض الدروس", "Lesson views")</option>
+                        <option value="QuizAttempt" selected="@isQuizAttempt">@Html.T("محاولات الاختبار", "Quiz attempts")</option>
+                        <option value="AssignmentSubmission" selected="@isAssignmentSubmission">@Html.T("تسليم الواجبات", "Assignment submissions")</option>
+                        <option value="Discussion" selected="@isDiscussion">@Html.T("المناقشات", "Discussions")</option>
+                        <option value="Review" selected="@isReview">@Html.T("التقييمات", "Reviews")</option>
+                    </select>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="feather-filter me-1"></i>@Html.T("تصفية", "Filter")
+                    </button>
+                    <a asp-action="Summary" class="btn btn-outline-primary">
+                        <i class="feather-bar-chart-2 me-1"></i>@Html.T("ملخص", "Summary")
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Activity Timeline -->
+<div class="card stretch stretch-full">
+    <div class="card-body">
+        @if (Model.Any())
+        {
+            <div class="activity-timeline">
+                @{
+                    DateTime? lastDate = null;
+                }
+                @foreach (var activity in Model)
+                {
+                    var activityDate = activity.Timestamp.Date;
+                    var today = DateTime.UtcNow.Date;
+                    var yesterday = today.AddDays(-1);
+                    
+                    // Show date header if date changed
+                    if (lastDate == null || lastDate != activityDate)
+                    {
+                        lastDate = activityDate;
+                        string dateLabel;
+                        if (activityDate == today)
+                            dateLabel = IsAr() ? "اليوم" : "Today";
+                        else if (activityDate == yesterday)
+                            dateLabel = IsAr() ? "أمس" : "Yesterday";
+                        else
+                            dateLabel = activityDate.ToString("dd MMMM yyyy", new System.Globalization.CultureInfo(IsAr() ? "ar-SA" : "en-US"));
+                        
+                        <div class="date-header mb-4 @(activity != Model.First() ? "mt-4" : "")">
+                            <h6 class="fw-bold text-muted mb-0">@dateLabel</h6>
+                        </div>
+                    }
+                    
+                    <div class="activity-item">
+                        <div class="activity-icon @GetActivityIconClass(activity.ActivityType)">
+                            <i class="feather-@GetActivityIcon(activity.ActivityType) fs-14"></i>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">@GetActivityTitle(activity.ActivityType)</h6>
+                            @if (!string.IsNullOrEmpty(activity.EntityName))
+                            {
+                                <p class="text-muted mb-1">@activity.EntityName</p>
+                            }
+                            else if (!string.IsNullOrEmpty(activity.Description))
+                            {
+                                <p class="text-muted mb-1">@activity.Description</p>
+                            }
+                            <div class="d-flex align-items-center gap-3">
+                                <small class="text-muted">
+                                    <i class="feather-clock me-1"></i>
+                                    @GetTimeAgo(activity.Timestamp)
+                                </small>
+                                @if (activity.DurationSeconds.HasValue && activity.DurationSeconds > 0)
+                                {
+                                    <small class="text-muted">
+                                        <i class="feather-watch me-1"></i>
+                                        @FormatDuration(activity.DurationSeconds.Value)
+                                    </small>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                    <i class="feather-activity"></i>
+                </div>
+                <h5 class="fw-bold mb-2">@Html.T("لا توجد أنشطة", "No activities")</h5>
+                <p class="text-muted mb-4">@Html.T("لم يتم تسجيل أي نشاط بعد. ابدأ التعلم الآن!", "No activity recorded yet. Start learning now!")</p>
+                <a asp-controller="Courses" asp-action="Browse" class="btn btn-primary">
+                    <i class="feather-book-open me-2"></i>
+                    @Html.T("تصفح الدورات", "Browse Courses")
+                </a>
+            </div>
+        }
+    </div>
+</div>
+
+@functions {
+    bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string Tr(string ar, string en) => IsAr() ? ar : en;
+
+    string GetActivityIcon(string activityType)
+    {
+        return activityType switch
+        {
+            "LessonView" => "play-circle",
+            "LessonComplete" => "check-circle",
+            "QuizAttempt" => "edit",
+            "QuizComplete" => "award",
+            "AssignmentSubmission" => "file-text",
+            "Discussion" => "message-square",
+            "Review" => "star",
+            "CourseEnrollment" => "book-open",
+            "CertificateEarned" => "award",
+            "BadgeEarned" => "award",
+            "Login" => "log-in",
+            "Logout" => "log-out",
+            _ => "activity"
+        };
+    }
+
+    string GetActivityIconClass(string activityType)
+    {
+        return activityType switch
+        {
+            "LessonView" => "bg-soft-info text-info",
+            "LessonComplete" => "bg-soft-success text-success",
+            "QuizAttempt" => "bg-soft-warning text-warning",
+            "QuizComplete" => "bg-soft-success text-success",
+            "AssignmentSubmission" => "bg-soft-primary text-primary",
+            "Discussion" => "bg-soft-info text-info",
+            "Review" => "bg-soft-warning text-warning",
+            "CourseEnrollment" => "bg-soft-primary text-primary",
+            "CertificateEarned" => "bg-soft-success text-success",
+            "BadgeEarned" => "bg-soft-warning text-warning",
+            "Login" => "bg-soft-secondary text-secondary",
+            "Logout" => "bg-soft-secondary text-secondary",
+            _ => "bg-soft-secondary text-secondary"
+        };
+    }
+
+    string GetActivityTitle(string activityType)
+    {
+        return activityType switch
+        {
+            "LessonView" => Tr("شاهدت درساً", "You watched a lesson"),
+            "LessonComplete" => Tr("أكملت درساً", "You completed a lesson"),
+            "QuizAttempt" => Tr("حاولت اختباراً", "You attempted a quiz"),
+            "QuizComplete" => Tr("أكملت اختباراً", "You completed a quiz"),
+            "AssignmentSubmission" => Tr("سلمت واجباً", "You submitted an assignment"),
+            "Discussion" => Tr("شاركت في مناقشة", "You participated in a discussion"),
+            "Review" => Tr("أضفت تقييماً", "You added a review"),
+            "CourseEnrollment" => Tr("سجلت في دورة", "You enrolled in a course"),
+            "CertificateEarned" => Tr("حصلت على شهادة", "You earned a certificate"),
+            "BadgeEarned" => Tr("حصلت على شارة", "You earned a badge"),
+            "Login" => Tr("تسجيل دخول", "Login"),
+            "Logout" => Tr("تسجيل خروج", "Logout"),
+            _ => Tr("نشاط", "Activity")
+        };
+    }
+
+    string GetTimeAgo(DateTime timestamp)
+    {
+        var timeSpan = DateTime.UtcNow - timestamp;
+        if (timeSpan.TotalMinutes < 1) return Tr("الآن", "Just now");
+        if (timeSpan.TotalMinutes < 60) return string.Format(Tr("منذ {0} دقيقة", "{0} min ago"), (int)timeSpan.TotalMinutes);
+        if (timeSpan.TotalHours < 24) return string.Format(Tr("منذ {0} ساعة", "{0} hours ago"), (int)timeSpan.TotalHours);
+        if (timeSpan.TotalDays < 7) return string.Format(Tr("منذ {0} يوم", "{0} days ago"), (int)timeSpan.TotalDays);
+        return timestamp.ToString("dd/MM/yyyy HH:mm", new System.Globalization.CultureInfo(IsAr() ? "ar-SA" : "en-US"));
+    }
+
+    string FormatDuration(int seconds)
+    {
+        if (seconds < 60) return string.Format(Tr("{0} ثانية", "{0} sec"), seconds);
+        if (seconds < 3600) return string.Format(Tr("{0} دقيقة", "{0} min"), seconds / 60);
+        return string.Format(Tr("{0} ساعة", "{0} hr"), seconds / 3600);
+    }
+}
+

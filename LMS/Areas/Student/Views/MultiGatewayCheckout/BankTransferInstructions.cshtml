@@ -1,0 +1,241 @@
+@model LMS.Areas.Student.ViewModels.BankTransferStatusViewModel
+@{
+    ViewData["Title"] = Html.T("تعليمات التحويل البنكي", "Bank Transfer Instructions");
+    Layout = "_StudentLayout";
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Status Card -->
+            <div class="card shadow-lg border-0 mb-4">
+                <div class="card-header bg-primary text-white py-3">
+                    <h4 class="mb-0">
+                        <i class="fas fa-university me-2"></i>
+                        @Html.T("تعليمات التحويل البنكي", "Bank Transfer Instructions")
+                    </h4>
+                </div>
+                <div class="card-body p-4">
+                    <!-- Reference Number -->
+                    <div class="text-center mb-4">
+                        <p class="text-muted mb-2">@Html.T("رقم المرجع (اذكره في التحويل)", "Reference number (mention in transfer)")</p>
+                        <div class="bg-light rounded p-3">
+                            <h2 class="text-primary mb-0">
+                                <code>@Model.ReferenceNumber</code>
+                            </h2>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="copyReference()">
+                            <i class="fas fa-copy me-1"></i>
+                            @Html.T("نسخ الرقم", "Copy number")
+                        </button>
+                    </div>
+
+                    <!-- Amount -->
+                    <div class="text-center mb-4">
+                        <p class="text-muted mb-2">@Html.T("المبلغ المطلوب", "Amount required")</p>
+                        <h3 class="text-success">@Model.Amount.ToEGP(2)</h3>
+                    </div>
+
+                    <hr />
+
+                    <!-- Bank Details -->
+                    <h5 class="mb-3">
+                        <i class="fas fa-building me-2 text-primary"></i>
+                        @Html.T("تفاصيل الحساب البنكي", "Bank account details")
+                    </h5>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-borderless">
+                            <tbody>
+                                @if (!string.IsNullOrEmpty(Model.BankName))
+                                {
+                                    <tr>
+                                        <th class="text-muted" width="40%">@Html.T("اسم البنك", "Bank name")</th>
+                                        <td class="fw-bold">@Model.BankName</td>
+                                    </tr>
+                                }
+                                @if (!string.IsNullOrEmpty(Model.AccountName))
+                                {
+                                    <tr>
+                                        <th class="text-muted">@Html.T("اسم صاحب الحساب", "Account holder name")</th>
+                                        <td class="fw-bold">@Model.AccountName</td>
+                                    </tr>
+                                }
+                                @if (!string.IsNullOrEmpty(Model.AccountNumber))
+                                {
+                                    <tr>
+                                        <th class="text-muted">@Html.T("رقم الحساب", "Account number")</th>
+                                        <td>
+                                            <code class="fs-5">@Model.AccountNumber</code>
+                                            <button class="btn btn-sm btn-link" onclick="copyToClipboard('@Model.AccountNumber')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                                @if (!string.IsNullOrEmpty(Model.IBAN))
+                                {
+                                    <tr>
+                                        <th class="text-muted">@Html.T("IBAN", "IBAN")</th>
+                                        <td>
+                                            <code>@Model.IBAN</code>
+                                            <button class="btn btn-sm btn-link" onclick="copyToClipboard('@Model.IBAN')">
+                                                <i class="fas fa-copy"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                                @if (!string.IsNullOrEmpty(Model.SwiftCode))
+                                {
+                                    <tr>
+                                        <th class="text-muted">@Html.T("رمز سويفت", "SWIFT Code")</th>
+                                        <td><code>@Model.SwiftCode</code></td>
+                                    </tr>
+                                }
+                                @if (!string.IsNullOrEmpty(Model.Branch))
+                                {
+                                    <tr>
+                                        <th class="text-muted">@Html.T("الفرع", "Branch")</th>
+                                        <td>@Model.Branch</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <hr />
+
+                    <!-- Expiry Warning -->
+                    @if (!Model.IsExpired)
+                    {
+                        <div class="alert alert-warning d-flex align-items-center">
+                            <i class="fas fa-clock fa-2x me-3"></i>
+                            <div>
+                                <strong>@Html.T("يرجى إتمام التحويل قبل:", "Please complete the transfer before:")</strong>
+                                <br />
+                                <span class="fs-5">@Model.ExpiresAt.ToString("yyyy/MM/dd HH:mm")</span>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-danger d-flex align-items-center">
+                            <i class="fas fa-exclamation-circle fa-2x me-3"></i>
+                            <div>
+                                <strong>@Html.T("انتهت صلاحية هذا الطلب", "This order has expired")</strong>
+                                <br />
+                                @Html.T("يرجى إنشاء طلب جديد من سلة التسوق", "Please create a new order from the cart")
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Instructions -->
+                    @if (!string.IsNullOrEmpty(Model.Instructions))
+                    {
+                        <div class="alert alert-info">
+                            <h6 class="mb-2"><i class="fas fa-info-circle me-1"></i> @Html.T("تعليمات مهمة:", "Important instructions:")</h6>
+                            <p class="mb-0">@Model.Instructions</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Upload Proof Form -->
+            @if (Model.CanUploadProof && !Model.IsExpired)
+            {
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-upload me-2"></i>
+                            @Html.T("رفع إثبات التحويل", "Upload transfer proof")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="SubmitPaymentProof" method="post" enctype="multipart/form-data">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="ReferenceNumber" value="@Model.ReferenceNumber" />
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">@Html.T("صورة الإيصال / إثبات التحويل *", "Receipt / transfer proof image *")</label>
+                                    <input type="file" name="proofImage" class="form-control" accept="image/*" required>
+                                    <small class="text-muted">@Html.T("صورة واضحة للإيصال أو لقطة شاشة من التطبيق البنكي", "Clear receipt image or screenshot from the bank app")</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">@Html.T("رقم مرجع التحويل", "Transfer reference number")</label>
+                                    <input type="text" name="TransferReference" class="form-control" 
+                                           placeholder="@Html.T("رقم العملية من البنك", "Transaction number from bank")">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">@Html.T("تاريخ التحويل", "Transfer date")</label>
+                                    <input type="date" name="TransferDate" class="form-control">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">@Html.T("اسم المرسل", "Sender name")</label>
+                                    <input type="text" name="SenderName" class="form-control" 
+                                           placeholder="@Html.T("الاسم كما يظهر في البنك", "Name as shown in bank")">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">@Html.T("اسم البنك المرسل منه", "Sender bank name")</label>
+                                    <input type="text" name="SenderBankName" class="form-control">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">@Html.T("ملاحظات إضافية", "Additional notes")</label>
+                                    <textarea name="Notes" class="form-control" rows="2" 
+                                              placeholder="@Html.T("أي معلومات إضافية تريد إضافتها...", "Any additional information you want to add...")"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="d-grid mt-4">
+                                <button type="submit" class="btn btn-success btn-lg">
+                                    <i class="fas fa-paper-plane me-2"></i>
+                                    @Html.T("إرسال إثبات الدفع", "Submit payment proof")
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            }
+
+            <!-- Back Button -->
+            <div class="text-center mt-4">
+                <a href="@Url.Action("BankTransferStatus", new { reference = Model.ReferenceNumber })" 
+                   class="btn btn-outline-primary">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    @Html.T("تحديث حالة الطلب", "Refresh order status")
+                </a>
+                <a href="@Url.Action("Index", "Dashboard", new { area = "Student" })" class="btn btn-outline-secondary ms-2">
+                    <i class="fas fa-home me-1"></i>
+                    @Html.T("العودة للرئيسية", "Back to home")
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        Object.assign(window.__T || {}, {
+            CopyRefSuccess: '@Html.Raw(Html.T("تم نسخ رقم المرجع", "Reference number copied").ToString().Replace("'", "\\'"))'
+        });
+        function copyReference() {
+            copyToClipboard('@Model.ReferenceNumber');
+            alert((window.__T && window.__T.CopyRefSuccess) || 'Reference number copied');
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                // Success
+            }).catch(function() {
+                // Fallback
+                var textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+            });
+        }
+    </script>
+}
+

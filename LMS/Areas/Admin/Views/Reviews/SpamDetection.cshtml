@@ -1,0 +1,451 @@
+@using LMS.Services.Interfaces
+@using System.Web
+@model IEnumerable<dynamic>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("كشف الرسائل المشبوهة", "Spam detection");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التقييمات", "Reviews"), Url.Action("Index", "Reviews")),
+        (Html.T("كشف الرسائل المشبوهة", "Spam Detection"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var page = ViewBag.Page ?? 1;
+    
+    // Load spam detection settings
+    var spamScoreHigh = await PlatformSettings.GetIntSettingAsync("Reviews.SpamScore.High", 70);
+    var spamScoreMedium = await PlatformSettings.GetIntSettingAsync("Reviews.SpamScore.Medium", 40);
+}
+
+@section Styles {
+    <style>
+        .spam-score-low {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        }
+        .spam-score-medium {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+        }
+        .spam-score-high {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+        }
+        .spam-indicator {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        .review-card {
+            transition: all 0.3s;
+            border-right: 4px solid transparent;
+        }
+        .review-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        }
+        .review-card.high-risk {
+            border-right-color: #dc3545;
+        }
+        .review-card.medium-risk {
+            border-right-color: #ffc107;
+        }
+        .review-card.low-risk {
+            border-right-color: #28a745;
+        }
+        .spam-tag {
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .detection-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl bg-soft-danger text-danger">
+                            <i class="feather-alert-triangle"></i>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted mb-1">@Html.T("مشبوهة جداً", "Highly suspicious")</span>
+                            <h4 class="fw-bold mb-0">@Model.Count(r => r.SpamScore >= spamScoreHigh)</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl bg-soft-warning text-warning">
+                            <i class="feather-alert-circle"></i>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted mb-1">@Html.T("مشبوهة متوسطة", "Medium suspicion")</span>
+                            <h4 class="fw-bold mb-0">@Model.Count(r => r.SpamScore >= spamScoreMedium && r.SpamScore < spamScoreHigh)</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted mb-1">@Html.T("مشبوهة قليلة", "Low suspicion")</span>
+                            <h4 class="fw-bold mb-0">@Model.Count(r => r.SpamScore < spamScoreMedium)</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl bg-soft-info text-info">
+                            <i class="feather-list"></i>
+                        </div>
+                        <div>
+                            <span class="d-block text-muted mb-1">@Html.T("إجمالي المراجعات", "Total reviews")</span>
+                            <h4 class="fw-bold mb-0">@Model.Count()</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Spam Detection Guide -->
+    <div class="card stretch stretch-full mb-4">
+        <div class="card-header">
+            <h5 class="card-title">
+                <i class="feather-shield me-2"></i>
+                @Html.T("دليل كشف الرسائل المشبوهة", "Spam detection guide")
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="text-center p-3 bg-soft-danger rounded">
+                        <i class="feather-alert-triangle text-danger fs-2 mb-2"></i>
+                        <h6 class="mb-1">@Html.T("خطر عالي", "High risk") (@spamScoreHigh-100)</h6>
+                        <small class="text-muted">@Html.T("احتواء روابط كثيرة، كلمات مفتاحية ضارة", "Many links, harmful keywords")</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center p-3 bg-soft-warning rounded">
+                        <i class="feather-alert-circle text-warning fs-2 mb-2"></i>
+                        <h6 class="mb-1">@Html.T("خطر متوسط", "Medium risk") (@spamScoreMedium-@(spamScoreHigh - 1))</h6>
+                        <small class="text-muted">@Html.T("أنماط مشبوهة، معلومات اتصال", "Suspicious patterns, contact info")</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center p-3 bg-soft-success rounded">
+                        <i class="feather-check-circle text-success fs-2 mb-2"></i>
+                        <h6 class="mb-1">@Html.T("خطر منخفض", "Low risk") (1-@(spamScoreMedium - 1))</h6>
+                        <small class="text-muted">@Html.T("تقييم عادي مع مؤشرات بسيطة", "Normal review with minor indicators")</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center p-3 bg-soft-info rounded">
+                        <i class="feather-info text-info fs-2 mb-2"></i>
+                        <h6 class="mb-1">@Html.T("نظيف", "Clean") (0)</h6>
+                        <small class="text-muted">@Html.T("لا توجد مؤشرات spam", "No spam indicators")</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Suspicious Reviews List -->
+    @if (!Model.Any())
+    {
+        <div class="card stretch stretch-full">
+            <div class="card-body text-center py-5">
+                <div class="avatar-text avatar-xxl bg-soft-success text-success mx-auto mb-3">
+                    <i class="feather-shield fs-1"></i>
+                </div>
+                <h4 class="mb-2">@Html.T("رائع! لا توجد تقييمات مشبوهة", "Great! No suspicious reviews")</h4>
+                <p class="text-muted">@Html.T("جميع التقييمات المعلقة تبدو آمنة", "All pending reviews look safe")</p>
+                <a asp-action="Index" class="btn btn-primary mt-3">
+                    <i class="feather-arrow-right me-2"></i>
+                    العودة إلى التقييمات
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var item in Model)
+            {
+                var review = item.Review;
+                var spamScore = (int)item.SpamScore;
+                var hasUrl = (bool)item.HasUrl;
+                var hasContactInfo = (bool)item.HasContactInfo;
+                var isExtremeRating = (bool)item.IsExtremeRating;
+                
+                var riskClass = spamScore >= spamScoreHigh ? "high-risk" : spamScore >= spamScoreMedium ? "medium-risk" : "low-risk";
+                var scoreClass = spamScore >= spamScoreHigh ? "spam-score-high" : spamScore >= spamScoreMedium ? "spam-score-medium" : "spam-score-low";
+                var badgeClass = spamScore >= spamScoreHigh ? "danger" : spamScore >= spamScoreMedium ? "warning" : "success";
+
+                <div class="col-lg-6 col-xl-4">
+                    <div class="card stretch stretch-full review-card @riskClass position-relative">
+                        <!-- Spam Score Badge -->
+                        <div class="detection-badge">
+                            <span class="badge bg-@badgeClass">
+                                درجة: @spamScore
+                            </span>
+                        </div>
+
+                        <div class="card-body">
+                            <!-- Student Info -->
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <div class="avatar-text bg-soft-primary text-primary">
+                                    @review.Student.FirstName.Substring(0, 1)
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-0">@review.Student.FirstName @review.Student.LastName</h6>
+                                    <small class="text-muted">@review.CreatedAt.ToString("dd/MM/yyyy")</small>
+                                </div>
+                                <div class="spam-indicator @scoreClass">
+                                    @spamScore
+                                </div>
+                            </div>
+
+                            <!-- Course -->
+                            <div class="mb-3">
+                                <small class="text-muted d-block mb-1">@Html.T("الدورة:", "Course:")</small>
+                                <h6 class="mb-0">@review.Course.Title</h6>
+                            </div>
+
+                            <!-- Rating -->
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                    <div class="text-warning">
+                                        @for (int i = 1; i <= 5; i++)
+                                        {
+                                            if (i <= review.Rating)
+                                            {
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-star"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                            }
+                                            else
+                                            {
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-star"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                            }
+                                        }
+                                    </div>
+                                <span class="fw-semibold">@review.Rating / 5</span>
+                                @if (isExtremeRating)
+                                {
+                                    <span class="spam-tag bg-soft-warning text-warning">
+                                        @Html.T("تقييم متطرف", "Extreme rating")
+                                    </span>
+                                }
+                            </div>
+
+                            <!-- Comment Preview -->
+                            @if (!string.IsNullOrEmpty(review.Comment))
+                            {
+                                <div class="mb-3">
+                                    <p class="text-muted mb-0" style="max-height: 80px; overflow: hidden;">
+                                        @(review.Comment.Length > 150 ? review.Comment.Substring(0, 150) + "..." : review.Comment)
+                                    </p>
+                                </div>
+                            }
+
+                            <!-- Spam Indicators -->
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                @if (hasUrl)
+                                {
+                                    <span class="spam-tag bg-soft-danger text-danger">
+                                        <i class="feather-link"></i>
+                                        @Html.T("يحتوي على روابط", "Contains links")
+                                    </span>
+                                }
+                                @if (hasContactInfo)
+                                {
+                                    <span class="spam-tag bg-soft-danger text-danger">
+                                        <i class="feather-phone"></i>
+                                        @Html.T("معلومات اتصال", "Contact info")
+                                    </span>
+                                }
+                                @if (review.Comment != null && review.Comment.Length > 500)
+                                {
+                                    <span class="spam-tag bg-soft-warning text-warning">
+                                        <i class="feather-file-text"></i>
+                                        @Html.T("نص طويل", "Long text")
+                                    </span>
+                                }
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="d-flex gap-2">
+                                <a asp-action="Details" asp-route-id="@review.Id" class="btn btn-sm btn-light-brand flex-fill">
+                                    <i class="feather-eye me-1"></i>
+                                    @Html.T("تفاصيل", "Details")
+                                </a>
+                                <form asp-action="Approve" asp-route-id="@review.Id" method="post" class="flex-fill">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-success w-100" onclick="return confirm('@(Html.T("هل أنت متأكد من الموافقة على هذا التقييم؟", "Are you sure you want to approve this review?").ToString().Replace("'", "\\'"))')">
+                                        <i class="feather-check me-1"></i>
+                                        @Html.T("موافقة", "Approve")
+                                    </button>
+                                </form>
+                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal@(review.Id)">
+                                    <i class="feather-x"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Reject Modal -->
+                    <div class="modal fade" id="rejectModal@(review.Id)" tabindex="-1" data-bs-backdrop="false">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">@Html.T("رفض التقييم", "Reject review")</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <form asp-action="Reject" asp-route-id="@review.Id" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <div class="modal-body">
+                                        <div class="form-group">
+                                            <label class="form-label">@Html.T("سبب الرفض", "Rejection reason") <span class="text-danger">*</span></label>
+                                            <textarea name="reason" class="form-control" rows="3" placeholder="@Html.T("أدخل سبب رفض التقييم...", "Enter rejection reason...")" required></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                                        <button type="submit" class="btn btn-danger">@Html.T("رفض التقييم", "Reject review")</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Pagination -->
+        @if (Model.Count() >= 20)
+        {
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <nav>
+                        <ul class="pagination justify-content-center mb-0">
+                            <li class="page-item @(page == 1 ? "disabled" : "")">
+                                <a class="page-link" href="@Url.Action("SpamDetection", new { page = page - 1 })">
+                                    <i class="feather-chevron-right"></i>
+                                </a>
+                            </li>
+                            @for (int i = Math.Max(1, page - 2); i <= Math.Min(page + 2, page + 5); i++)
+                            {
+                                <li class="page-item @(i == page ? "active" : "")">
+                                    <a class="page-link" href="@Url.Action("SpamDetection", new { page = i })">@i</a>
+                                </li>
+                            }
+                            <li class="page-item">
+                                <a class="page-link" href="@Url.Action("SpamDetection", new { page = page + 1 })">
+                                    <i class="feather-chevron-left"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        }
+
+        <!-- Bulk Actions -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="card-title">
+                    <i class="feather-layers me-2"></i>
+                    إجراءات جماعية
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="feather-alert-triangle me-2"></i>
+                    <strong>@Html.T("تحذير:", "Warning:")</strong> @Html.T("الإجراءات الجماعية سوف تتجاهل التقييمات التي تحتوي على spam بدرجة عالية", "Bulk actions will ignore reviews with high spam score") (@spamScoreHigh+)
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <form asp-action="BulkApprove" method="post">
+                            @Html.AntiForgeryToken()
+                            @foreach (var item in Model.Where(r => r.SpamScore < spamScoreHigh))
+                            {
+                                <input type="hidden" name="ids" value="@item.Review.Id" />
+                            }
+                            <button type="submit" class="btn btn-success w-100" onclick="return confirm(confirmApproveMsg)">
+                                <i class="feather-check-circle me-2"></i>
+                                @Html.T("الموافقة على التقييمات الآمنة", "Approve safe reviews") (@Model.Count(r => r.SpamScore < spamScoreHigh))
+                            </button>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <form asp-action="BulkDelete" method="post">
+                            @Html.AntiForgeryToken()
+                            @foreach (var item in Model.Where(r => r.SpamScore >= spamScoreHigh))
+                            {
+                                <input type="hidden" name="ids" value="@item.Review.Id" />
+                            }
+                            <button type="submit" class="btn btn-danger w-100" onclick="return confirm(confirmDeleteMsg)">
+                                <i class="feather-trash-2 me-2"></i>
+                                @Html.T("حذف التقييمات المشبوهة", "Delete suspicious reviews") (@Model.Count(r => r.SpamScore >= spamScoreHigh))
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        var confirmApproveMsg = '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("هل أنت متأكد من الموافقة على " + Model.Count(r => r.SpamScore < spamScoreHigh) + " تقييم؟", "Are you sure you want to approve " + Model.Count(r => r.SpamScore < spamScoreHigh) + " review(s)?").ToString()))';
+        var confirmDeleteMsg = '@Html.Raw(HttpUtility.JavaScriptStringEncode(Html.T("هل أنت متأكد من حذف " + Model.Count(r => r.SpamScore >= spamScoreHigh) + " تقييم مشبوه؟", "Are you sure you want to delete " + Model.Count(r => r.SpamScore >= spamScoreHigh) + " suspicious review(s)?").ToString()))';
+        $(document).ready(function() {
+            // Sort by spam score
+            $('#sortBySpam').change(function() {
+                window.location.href = '@Url.Action("SpamDetection")' + '?sortBy=' + $(this).val();
+            });
+
+            // Highlight keywords
+            $('.review-card').each(function() {
+                const $card = $(this);
+                const spamScore = parseInt($card.find('.spam-indicator').text());
+                
+                if (spamScore >= @spamScoreHigh) {
+                    $card.addClass('border-danger');
+                } else if (spamScore >= @spamScoreMedium) {
+                    $card.addClass('border-warning');
+                }
+            });
+        });
+    </script>
+}
+

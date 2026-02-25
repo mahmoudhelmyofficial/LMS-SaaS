@@ -1,0 +1,442 @@
+@model LMS.Areas.Admin.ViewModels.QuestionBankItemViewModel
+
+@{
+    ViewData["Title"] = Html.T("إضافة سؤال جديد", "Add new question");
+    var bankName = ViewBag.BankName as string;
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التقييمات", "Assessments"), null),
+        (Html.T("بنك الأسئلة", "Question bank"), Url.Action("Index", "QuestionBank")),
+        (bankName ?? Html.T("البنك", "Bank"), Url.Action("Details", "QuestionBank", new { id = Model.BankId })),
+        (Html.T("إضافة سؤال", "Add question"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdn.quilljs.com/1.3.6/quill.snow.css" />
+    <style>
+        .question-type-card {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .question-type-card:hover {
+            border-color: #3b82f6;
+            background: #f0f9ff;
+        }
+        .question-type-card.selected {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+        .type-icon {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 1.5rem;
+        }
+        .option-item {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+        .editor-container {
+            height: 200px;
+        }
+        .tag-item {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #e5e7eb;
+            border-radius: 20px;
+            margin: 4px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <form asp-action="AddQuestion" method="post" id="questionForm">
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+        <input asp-for="BankId" type="hidden" />
+
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Question Type -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-help-circle me-2"></i>
+                            نوع السؤال
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <input asp-for="QuestionType" type="hidden" id="questionTypeInput" />
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <div class="question-type-card" data-type="@((int)QuestionType.MultipleChoice)">
+                                    <div class="type-icon bg-soft-primary text-primary">
+                                        <i class="feather-list"></i>
+                                    </div>
+                                    <h6 class="fw-bold mb-1">اختيار متعدد</h6>
+                                    <small class="text-muted">عدة خيارات</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="question-type-card" data-type="@((int)QuestionType.TrueFalse)">
+                                    <div class="type-icon bg-soft-success text-success">
+                                        <i class="feather-check-circle"></i>
+                                    </div>
+                                    <h6 class="fw-bold mb-1">صح/خطأ</h6>
+                                    <small class="text-muted">خيارين فقط</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="question-type-card" data-type="@((int)QuestionType.Essay)">
+                                    <div class="type-icon bg-soft-info text-info">
+                                        <i class="feather-edit-3"></i>
+                                    </div>
+                                    <h6 class="fw-bold mb-1">مقالي</h6>
+                                    <small class="text-muted">إجابة طويلة</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="question-type-card" data-type="@((int)QuestionType.FillInBlank)">
+                                    <div class="type-icon bg-soft-warning text-warning">
+                                        <i class="feather-type"></i>
+                                    </div>
+                                    <h6 class="fw-bold mb-1">املأ الفراغ</h6>
+                                    <small class="text-muted">إكمال الجملة</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Question Text -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-file-text me-2"></i>
+                            نص السؤال
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label asp-for="QuestionText" class="form-label">
+                                السؤال <span class="text-danger">*</span>
+                            </label>
+                            <div id="questionEditor" class="editor-container"></div>
+                            <input asp-for="QuestionText" type="hidden" id="questionTextHidden" />
+                            <span asp-validation-for="QuestionText" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Options (for MCQ) -->
+                <div class="card stretch stretch-full mb-4" id="optionsSection" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-list me-2"></i>
+                            الخيارات
+                        </h5>
+                        <div class="card-header-action">
+                            <button type="button" class="btn btn-sm btn-light" onclick="addOption()">
+                                <i class="feather-plus me-1"></i>
+                                إضافة خيار
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="optionsContainer"></div>
+                    </div>
+                </div>
+
+                <!-- Explanation -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-message-circle me-2"></i>
+                            شرح الإجابة
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <textarea asp-for="Explanation" class="form-control" rows="3" placeholder="@Html.T("اشرح الإجابة الصحيحة (اختياري)", "Explain the correct answer (optional)")"></textarea>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons -->
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="Details" asp-route-id="@Model.BankId" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-check me-2"></i>
+                                حفظ السؤال
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-settings me-2"></i>
+                            إعدادات السؤال
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Difficulty -->
+                        <div class="form-group mb-4">
+                            <label asp-for="DifficultyLevel" class="form-label">
+                                مستوى الصعوبة <span class="text-danger">*</span>
+                            </label>
+                            <select asp-for="DifficultyLevel" class="form-select">
+                                <option value="">-- اختر المستوى --</option>
+                                <option value="1">سهلة</option>
+                                <option value="2">متوسطة</option>
+                                <option value="3">صعبة</option>
+                            </select>
+                            <span asp-validation-for="DifficultyLevel" class="text-danger"></span>
+                        </div>
+
+                        <!-- Points -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Points" class="form-label">
+                                النقاط <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Points" type="number" class="form-control" min="1" placeholder="1" />
+                            <span asp-validation-for="Points" class="text-danger"></span>
+                            <small class="form-text text-muted">
+                                <i class="feather-info"></i>
+                                عدد النقاط لهذا السؤال
+                            </small>
+                        </div>
+
+                        <!-- Tags -->
+                        <div class="form-group">
+                            <label asp-for="Tags" class="form-label">الوسوم</label>
+                            <div id="tagDisplay" class="mb-2"></div>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="tagInput" placeholder="@Html.T("أدخل وسماً", "Enter a tag")" />
+                                <button type="button" class="btn btn-light" onclick="addTag()">
+                                    <i class="feather-plus"></i>
+                                </button>
+                            </div>
+                            <input asp-for="Tags" type="hidden" id="tagsHidden" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tips -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-lightbulb me-2"></i>
+                            نصائح
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="vstack gap-2">
+                            <div class="alert alert-light mb-0">
+                                <i class="feather-check me-2 text-success"></i>
+                                <small>اكتب أسئلة واضحة ومحددة</small>
+                            </div>
+                            <div class="alert alert-light mb-0">
+                                <i class="feather-check me-2 text-success"></i>
+                                <small>تأكد من صحة الإجابات</small>
+                            </div>
+                            <div class="alert alert-light mb-0">
+                                <i class="feather-check me-2 text-success"></i>
+                                <small>استخدم الوسوم لتنظيم الأسئلة</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+    
+    <script>
+        let quill;
+        const tags = [];
+        let optionCounter = 0;
+
+        $(document).ready(function() {
+            // Initialize Quill
+            quill = new Quill('#questionEditor', {
+                theme: 'snow',
+                placeholder: 'اكتب نص السؤال هنا...',
+                modules: {
+                    toolbar: [
+                        ['bold', 'italic', 'underline'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        ['clean']
+                    ]
+                }
+            });
+
+            quill.on('text-change', function() {
+                $('#questionTextHidden').val(quill.root.innerHTML);
+            });
+
+            // Question type selection
+            $('.question-type-card').click(function() {
+                $('.question-type-card').removeClass('selected');
+                $(this).addClass('selected');
+                const type = $(this).data('type');
+                $('#questionTypeInput').val(type);
+                
+                // Show options section for MCQ and TrueFalse
+                if (type == @((int)QuestionType.MultipleChoice)) {
+                    $('#optionsSection').show();
+                    if ($('#optionsContainer .option-item').length === 0) {
+                        addOption();
+                        addOption();
+                    }
+                } else if (type == @((int)QuestionType.TrueFalse)) {
+                    $('#optionsSection').show();
+                    // Clear and add True/False options
+                    $('#optionsContainer').empty();
+                    optionCounter = 0;
+                    addTrueFalseOptions();
+                } else {
+                    $('#optionsSection').hide();
+                }
+            });
+
+            // Tag input
+            $('#tagInput').keypress(function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    addTag();
+                }
+            });
+
+            // Form submission - collect options
+            $('#questionForm').on('submit', function(e) {
+                // Update question text from Quill
+                $('#questionTextHidden').val(quill.root.innerHTML);
+                
+                // Collect options data
+                $('#optionsContainer .option-item').each(function(index) {
+                    const id = $(this).data('id');
+                    const text = $(`#optionText${id}`).val();
+                    const isCorrect = $(`#correct${id}`).is(':checked');
+                    
+                    // Add hidden fields for each option
+                    $(this).append(`<input type="hidden" name="Options[${index}].Text" value="${text}">`);
+                    $(this).append(`<input type="hidden" name="Options[${index}].IsCorrect" value="${isCorrect}">`);
+                    $(this).append(`<input type="hidden" name="Options[${index}].Order" value="${index}">`);
+                });
+            });
+
+            // Select first question type by default
+            $('.question-type-card').first().click();
+        });
+
+        function addTrueFalseOptions() {
+            addOptionWithText('صح', 1);
+            addOptionWithText('خطأ', 2);
+        }
+
+        function addOptionWithText(text, id) {
+            optionCounter = id;
+            const html = `
+                <div class="option-item" data-id="${id}">
+                    <div class="d-flex gap-2 align-items-start">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="correct${id}">
+                        </div>
+                        <div class="flex-grow-1">
+                            <input type="text" class="form-control" placeholder="نص الخيار" id="optionText${id}" value="${text}">
+                        </div>
+                    </div>
+                </div>
+            `;
+            $('#optionsContainer').append(html);
+        }
+
+        function addOption() {
+            optionCounter++;
+            const html = `
+                <div class="option-item" data-id="${optionCounter}">
+                    <div class="d-flex gap-2 align-items-start">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="correct${optionCounter}">
+                        </div>
+                        <div class="flex-grow-1">
+                            <input type="text" class="form-control" placeholder="نص الخيار" id="optionText${optionCounter}">
+                        </div>
+                        <button type="button" class="btn btn-light" onclick="removeOption(${optionCounter})">
+                            <i class="feather-x"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            $('#optionsContainer').append(html);
+        }
+
+        function removeOption(id) {
+            $(`.option-item[data-id="${id}"]`).remove();
+        }
+
+        function addTag() {
+            const tagInput = $('#tagInput');
+            const tag = tagInput.val().trim();
+            if (tag && !tags.includes(tag)) {
+                tags.push(tag);
+                updateTagDisplay();
+                updateTagsInput();
+                tagInput.val('');
+            }
+        }
+
+        function removeTag(tag) {
+            const index = tags.indexOf(tag);
+            if (index > -1) {
+                tags.splice(index, 1);
+                updateTagDisplay();
+                updateTagsInput();
+            }
+        }
+
+        function updateTagDisplay() {
+            const html = tags.map(tag => 
+                `<span class="tag-item">
+                    ${tag}
+                    <button type="button" class="btn-close btn-close-sm ms-2" onclick="removeTag('${tag}')"></button>
+                </span>`
+            ).join('');
+            $('#tagDisplay').html(html);
+        }
+
+        function updateTagsInput() {
+            $('#tagsHidden').val(tags.join(','));
+        }
+    </script>
+}
+

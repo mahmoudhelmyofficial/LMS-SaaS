@@ -1,0 +1,140 @@
+@model IEnumerable<Microsoft.AspNetCore.Identity.IdentityRole>
+
+@{
+    ViewData["Title"] = Html.T("إدارة الأدوار", "Role Management");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الأمان", "Security"), Url.Action("Index", "Security")),
+        (Html.T("الأدوار", "Roles"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var roleCounts = ViewBag.RoleCounts as Dictionary<string, int> ?? new Dictionary<string, int>();
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <!-- Role List -->
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الأدوار", "Roles")</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("اسم الدور", "Role Name")</th>
+                                    <th>@Html.T("عدد المستخدمين", "User Count")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var role in Model)
+                                {
+                                    var count = roleCounts.ContainsKey(role.Id) ? roleCounts[role.Id] : 0;
+                                    var isSystemRole = new[] { "Admin", "Instructor", "Student" }.Contains(role.Name, StringComparer.OrdinalIgnoreCase);
+                                    
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-3">
+                                                <div class="avatar-text avatar-md rounded bg-soft-primary text-primary">
+                                                    <i class="feather-shield"></i>
+                                                </div>
+                                                <div>
+                                                    <span class="fw-semibold">@role.Name</span>
+                                                    @if (isSystemRole)
+                                                    {
+                                                        <span class="badge bg-soft-warning text-warning ms-2">@Html.T("نظامي", "System")</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-primary text-primary">@count @Html.T("مستخدم", "users")</span>
+                                        </td>
+                                        <td class="text-end">
+                                            @if (!isSystemRole && count == 0)
+                                            {
+                                                <form asp-action="DeleteRole" asp-route-id="@role.Id" method="post" class="d-inline" 
+                                                      onsubmit="return confirm('@(Html.T("هل أنت متأكد من حذف هذا الدور؟", "Are you sure you want to delete this role?"))');">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                        <i class="feather-trash-2"></i>
+                                                    </button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-sm btn-outline-secondary" disabled data-bs-toggle="tooltip" title="@(isSystemRole ? Html.T("لا يمكن حذف الأدوار النظامية", "System roles cannot be deleted") : Html.T("لا يمكن حذف دور يحتوي على مستخدمين", "Cannot delete role with assigned users"))">
+                                                    <i class="feather-trash-2"></i>
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add New Role -->
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إضافة دور جديد", "Add New Role")</h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="CreateRole" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("اسم الدور", "Role Name") <span class="text-danger">*</span></label>
+                            <input type="text" name="roleName" class="form-control" required placeholder="@Html.T("مثال: Moderator", "e.g. Moderator")" />
+                            <small class="text-muted">@Html.T("يجب أن يكون الاسم باللغة الإنجليزية", "The name must be in English")</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="feather-plus me-1"></i>
+                            @Html.T("إضافة الدور", "Add Role")
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Quick Info -->
+            <div class="card stretch stretch-full mt-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات", "Information")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-0">
+                        <h6 class="alert-heading">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("الأدوار النظامية", "System Roles")
+                        </h6>
+                        <p class="mb-0 small">
+                            @Html.T("الأدوار النظامية (Admin, Instructor, Student) لا يمكن حذفها لأنها أساسية لعمل النظام.", "System roles (Admin, Instructor, Student) cannot be deleted as they are essential for the system.")
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

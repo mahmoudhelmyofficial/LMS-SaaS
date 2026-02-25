@@ -1,0 +1,437 @@
+@using LMS.Views.Shared
+@{
+    ViewData["Title"] = Html.T("لوحة التحليلات", "Analytics Overview");
+    ViewData["Subtitle"] = Html.T("تحليلات شاملة لأداء دوراتك", "Comprehensive analytics for your courses");
+    
+    // Get dynamic data from ViewBag
+    var newStudentsThisMonth = ViewBag.NewStudentsThisMonth as int? ?? 0;
+    var revenueGrowth = ViewBag.RevenueGrowth as decimal? ?? 0;
+    var completedThisMonth = ViewBag.CompletedThisMonth as int? ?? 0;
+    var totalReviews = ViewBag.TotalReviews as int? ?? 0;
+    var totalViews = ViewBag.TotalViews as int? ?? 0;
+    var completedLessons = ViewBag.CompletedLessons as int? ?? 0;
+    var totalDiscussions = ViewBag.TotalDiscussions as int? ?? 0;
+    var averageWatchTime = ViewBag.AverageWatchTime as int? ?? 0;
+    
+    // Chart data
+    var chartLabels = ViewBag.ChartLabels as List<string> ?? new List<string>();
+    var revenueChartData = ViewBag.RevenueChartData as List<decimal> ?? new List<decimal>();
+    var enrollmentChartData = ViewBag.EnrollmentChartData as List<int> ?? new List<int>();
+    var studentActivityData = ViewBag.StudentActivityData as List<int> ?? new List<int>();
+    var completedCount = ViewBag.CompletedCount as int? ?? 0;
+    var inProgressCount = ViewBag.InProgressCount as int? ?? 0;
+    var notStartedCount = ViewBag.NotStartedCount as int? ?? 0;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1">@ViewData["Title"]</h4>
+        <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+    </div>
+    <div class="d-flex gap-2">
+        <div class="btn-group">
+            <button type="button" class="btn btn-light" id="dateRangeBtn">
+                <i class="feather-calendar me-2"></i>
+                <span id="dateRangeText">@Html.T("آخر 7 أيام", "Last 7 days")</span>
+            </button>
+        </div>
+        @await Html.PartialAsync("_ExportDropdown", new ExportDropdownModel 
+        { 
+            ExportUrl = "/api/export/analytics",
+            EntityType = "analytics",
+            ButtonText = Html.T("تصدير التقرير", "Export report")
+        })
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Key Metrics -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الطلاب", "Total students") },
+                { "Value", ViewBag.TotalStudents ?? 0 },
+                { "Icon", "users" },
+                { "Color", "primary" },
+                { "Change", newStudentsThisMonth > 0 ? $"+{newStudentsThisMonth}" : "" },
+                { "ChangeText", newStudentsThisMonth > 0 ? Html.T("هذا الشهر", "this month") : "" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الإيرادات", "Total revenue") },
+                { "Value", CurrencyFormatHelper.FormatCurrency((decimal)(ViewBag.TotalRevenue ?? 0), ViewBag.DefaultCurrencySymbol as string, 2) },
+                { "Icon", "dollar-sign" },
+                { "Color", "success" },
+                { "Change", revenueGrowth != 0 ? $"{(revenueGrowth >= 0 ? "+" : "")}{revenueGrowth:F1}%" : "" },
+                { "ChangeText", revenueGrowth != 0 ? Html.T("عن الشهر الماضي", "vs last month") : "" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("معدل الإكمال", "Completion rate") },
+                { "Value", $"{ViewBag.CompletionRate ?? 0}%" },
+                { "Icon", "check-circle" },
+                { "Color", "info" },
+                { "Change", completedThisMonth > 0 ? $"+{completedThisMonth}" : "" },
+                { "ChangeText", completedThisMonth > 0 ? Html.T("مكتمل هذا الشهر", "completed this month") : "" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("متوسط التقييم", "Average rating") },
+                { "Value", ViewBag.AverageRating?.ToString("F1") ?? "0.0" },
+                { "Icon", "star" },
+                { "Color", "warning" },
+                { "ChangeText", string.Format(Html.T("من {0} تقييم", "from {0} reviews").ToString(), totalReviews) }
+            })
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <!-- Revenue Chart -->
+        <div class="col-xxl-8 col-lg-7">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الإيرادات والتسجيلات", "Revenue and enrollments")</h5>
+                    <div class="card-header-action">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-light active" onclick="changeChartPeriod('week')">@Html.T("أسبوع", "Week")</button>
+                            <button class="btn btn-light" onclick="changeChartPeriod('month')">@Html.T("شهر", "Month")</button>
+                            <button class="btn btn-light" onclick="changeChartPeriod('year')">@Html.T("سنة", "Year")</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <canvas id="revenueChart" height="350"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Course Performance -->
+        <div class="col-xxl-4 col-lg-5">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أداء الدورات", "Course performance")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="coursePerformanceChart" height="350"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Student Activity & Top Courses -->
+    <div class="row mb-4">
+        <!-- Student Activity -->
+        <div class="col-xxl-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("نشاط الطلاب", "Student activity")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="studentActivityChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Courses -->
+        <div class="col-xxl-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الدورات الأكثر مبيعاً", "Top selling courses")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        @if (ViewBag.TopCourses != null)
+                        {
+                            int rank = 1;
+                            foreach (var course in ViewBag.TopCourses)
+                            {
+                                <div class="list-group-item d-flex align-items-center justify-content-between px-0">
+                                    <div class="d-flex align-items-center gap-3 flex-grow-1">
+                                        <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                            <span class="fw-bold">@rank</span>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">@course.Title</h6>
+                                            <p class="fs-12 text-muted mb-0">@course.EnrollmentCount @Html.T("طالب", "student") • @CurrencyFormatHelper.FormatCurrency(course.Revenue, ViewBag.DefaultCurrencySymbol as string, 2)</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="fs-14 fw-bold text-success">@CurrencyFormatHelper.FormatCurrency(course.Revenue, ViewBag.DefaultCurrencySymbol as string, 2)</div>
+                                        <div class="fs-11 text-muted">+@course.GrowthPercentage%</div>
+                                    </div>
+                                </div>
+                                rank++;
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center py-4">
+                                <p class="text-muted mb-0">@Html.T("لا توجد بيانات", "No data")</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Engagement Metrics -->
+    @{
+        // Calculate dynamic progress percentages based on engagement
+        var maxViews = Math.Max(totalViews, 100);
+        var viewsProgress = totalViews > 0 ? Math.Min((totalViews * 100 / maxViews), 100) : 0;
+        var lessonsProgress = totalViews > 0 ? Math.Min((completedLessons * 100 / Math.Max(totalViews, 1)), 100) : 0;
+        var discussionsProgress = Math.Min(totalDiscussions * 5, 100); // Each discussion = 5%
+        var watchTimeProgress = Math.Min(averageWatchTime * 2, 100); // Each minute = 2%
+    }
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("مقاييس التفاعل", "Engagement metrics")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-3">
+                            <div class="border-end pe-4">
+                                <div class="d-flex align-items-center gap-3 mb-3">
+                                    <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                                        <i class="feather-eye"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="fw-bold mb-0">@totalViews.ToString("N0")</h3>
+                                        <p class="fs-12 text-muted mb-0">@Html.T("إجمالي المشاهدات", "Total views")</p>
+                                    </div>
+                                </div>
+                                <div class="progress" style="height: 4px;">
+                                    <div class="progress-bar bg-primary" style="width: @viewsProgress%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border-end pe-4">
+                                <div class="d-flex align-items-center gap-3 mb-3">
+                                    <div class="avatar-text avatar-lg bg-soft-success text-success">
+                                        <i class="feather-check-circle"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="fw-bold mb-0">@completedLessons.ToString("N0")</h3>
+                                        <p class="fs-12 text-muted mb-0">@Html.T("الدروس المكتملة", "Completed lessons")</p>
+                                    </div>
+                                </div>
+                                <div class="progress" style="height: 4px;">
+                                    <div class="progress-bar bg-success" style="width: @lessonsProgress%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border-end pe-4">
+                                <div class="d-flex align-items-center gap-3 mb-3">
+                                    <div class="avatar-text avatar-lg bg-soft-warning text-warning">
+                                        <i class="feather-message-circle"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="fw-bold mb-0">@totalDiscussions.ToString("N0")</h3>
+                                        <p class="fs-12 text-muted mb-0">@Html.T("المناقشات", "Discussions")</p>
+                                    </div>
+                                </div>
+                                <div class="progress" style="height: 4px;">
+                                    <div class="progress-bar bg-warning" style="width: @discussionsProgress%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <div class="avatar-text avatar-lg bg-soft-info text-info">
+                                    <i class="feather-clock"></i>
+                                </div>
+                                <div>
+                                    <h3 class="fw-bold mb-0">@averageWatchTime د</h3>
+                                    <p class="fs-12 text-muted mb-0">@Html.T("متوسط وقت المشاهدة", "Average watch time")</p>
+                                </div>
+                            </div>
+                            <div class="progress" style="height: 4px;">
+                                <div class="progress-bar bg-info" style="width: @watchTimeProgress%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("النشاط الأخير", "Recent activity")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        @if (ViewBag.RecentActivities != null)
+                        {
+                            foreach (var activity in ViewBag.RecentActivities)
+                            {
+                                <div class="list-group-item d-flex align-items-start gap-3 px-0">
+                                    <div class="avatar-text avatar-md bg-soft-@(activity.IconColor) text-@(activity.IconColor)">
+                                        <i class="feather-@(activity.Icon)"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">@activity.Title</h6>
+                                        <p class="fs-13 text-muted mb-0">@activity.Description</p>
+                                    </div>
+                                    <span class="fs-11 text-muted">@activity.Time</span>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Dynamic data from server
+        const chartLabels = @Html.Raw(Json.Serialize(chartLabels));
+        const revenueData = @Html.Raw(Json.Serialize(revenueChartData));
+        const enrollmentData = @Html.Raw(Json.Serialize(enrollmentChartData));
+        const studentActivityDataArr = @Html.Raw(Json.Serialize(studentActivityData));
+        const courseStatusData = [@completedCount, @inProgressCount, @notStartedCount];
+
+        // Revenue Chart
+        const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+        const revenueChart = new Chart(revenueCtx, {
+            type: 'line',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: '@Html.Raw(Html.T("الإيرادات", "Revenue").Replace("'", "\\'"))',
+                    data: revenueData,
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }, {
+                    label: '@Html.Raw(Html.T("التسجيلات", "Enrollments").Replace("'", "\\'"))',
+                    data: enrollmentData,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    yAxisID: 'y1'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        rtl: true
+                    }
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        ticks: {
+                            callback: function(value) {
+                                const currencyCode = '@(ViewBag.DefaultCurrencyCode ?? "EGP")';
+                                return value.toLocaleString('ar-SA', { style: 'currency', currency: currencyCode, minimumFractionDigits: 0 });
+                            }
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    }
+                }
+            }
+        });
+
+        // Course Performance Doughnut
+        const courseCtx = document.getElementById('coursePerformanceChart').getContext('2d');
+        new Chart(courseCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['@Html.Raw(Html.T("مكتمل", "Completed").Replace("'", "\\'"))', '@Html.Raw(Html.T("قيد التقدم", "In progress").Replace("'", "\\'"))', '@Html.Raw(Html.T("لم يبدأ", "Not started").Replace("'", "\\'"))'],
+                datasets: [{
+                    data: courseStatusData,
+                    backgroundColor: ['#22c55e', '#667eea', '#f59e0b'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        rtl: true
+                    }
+                }
+            }
+        });
+
+        // Student Activity Bar Chart
+        const activityCtx = document.getElementById('studentActivityChart').getContext('2d');
+        new Chart(activityCtx, {
+            type: 'bar',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: '@Html.Raw(Html.T("الطلاب النشطون", "Active students").Replace("'", "\\'"))',
+                    data: studentActivityDataArr,
+                    backgroundColor: '#667eea',
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        function changeChartPeriod(period) {
+            // Update chart data based on period - would need AJAX call
+            console.log('Changing to period:', period);
+            // Implementation for data refresh via AJAX
+            // window.location.href = '?period=' + period;
+        }
+    </script>
+}
+

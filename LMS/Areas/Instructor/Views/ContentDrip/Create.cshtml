@@ -1,0 +1,551 @@
+@model LMS.Areas.Instructor.ViewModels.ContentDripRuleViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء قاعدة جدولة جديدة", "Create New Scheduling Rule");
+    ViewData["Subtitle"] = Html.T("إضافة قاعدة جدولة محتوى جديدة", "Add new content scheduling rule");
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Create" method="post" id="dripRuleForm">
+        @Html.AntiForgeryToken()
+        
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger mb-4">
+                <h6 class="alert-heading mb-2">
+                    <i class="feather-alert-circle me-2"></i>
+                    @Html.T("يرجى تصحيح الأخطاء التالية:", "Please correct the following errors:")
+                </h6>
+                @Html.ValidationSummary(false, "", new { @class = "mb-0" })
+            </div>
+        }
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Course Selection -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-book me-2 text-primary"></i>
+                            @Html.T("اختيار المحتوى", "Select content")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-12">
+                                <label class="form-label">@Html.T("الدورة", "Course") <span class="text-danger">*</span></label>
+                                <select asp-for="CourseId" class="form-select" asp-items="ViewBag.Courses" id="courseSelect" required>
+                                    <option value="">-- @Html.T("اختر الدورة", "Select course") --</option>
+                                </select>
+                                <span asp-validation-for="CourseId" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="applyCourseWide" checked>
+                                    <label class="form-check-label" for="applyCourseWide">
+                                        @Html.T("تطبيق على الدورة بالكامل", "Apply to entire course")
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div id="specificContentDiv" style="display: none;">
+                                <div class="row g-4">
+                                    <div class="col-md-6">
+                                        <label class="form-label">@Html.T("الوحدة (اختياري)", "Module (optional)")</label>
+                                        <select asp-for="ModuleId" class="form-select" id="moduleSelect">
+                                            <option value="">-- @Html.T("اختر الوحدة", "Select module") --</option>
+                                        </select>
+                                        <span asp-validation-for="ModuleId" class="text-danger"></span>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <label class="form-label">@Html.T("الدرس (اختياري)", "Lesson (optional)")</label>
+                                        <select asp-for="LessonId" class="form-select" id="lessonSelect">
+                                            <option value="">-- @Html.T("اختر الدرس", "Select lesson") --</option>
+                                        </select>
+                                        <span asp-validation-for="LessonId" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drip Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-clock me-2 text-primary"></i>
+                            @Html.T("إعدادات الجدولة", "Scheduling settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-12">
+                                <label class="form-label">@Html.T("نوع الجدولة", "Schedule type") <span class="text-danger">*</span></label>
+                                <select asp-for="DripType" class="form-select form-select-lg" id="dripTypeSelect" required>
+                                    <option value="">-- @Html.T("اختر نوع الجدولة", "Select schedule type") --</option>
+                                    <option value="@LMS.Domain.Enums.ContentDripType.AllAtOnce">@Html.T("كل المحتوى فوراً", "All content at once")</option>
+                                    <option value="@LMS.Domain.Enums.ContentDripType.DaysAfterEnrollment">@Html.T("بعد أيام من التسجيل", "Days after enrollment")</option>
+                                    <option value="@LMS.Domain.Enums.ContentDripType.SpecificDate">@Html.T("تاريخ محدد", "Specific date")</option>
+                                    <option value="@LMS.Domain.Enums.ContentDripType.Weekly">@Html.T("أسبوعياً", "Weekly")</option>
+                                    <option value="@LMS.Domain.Enums.ContentDripType.Monthly">@Html.T("شهرياً", "Monthly")</option>
+                                </select>
+                                <span asp-validation-for="DripType" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-12">
+                                <div id="dripSettings" style="display: none;">
+                                    <!-- Days After Enrollment -->
+                                    <div id="daysAfterDiv" class="drip-option" style="display: none;">
+                                        <div class="alert alert-info mb-3">
+                                            <i class="feather-info me-2"></i>
+                                            @Html.T("سيكون المحتوى متاحاً بعد عدد معين من الأيام من تسجيل الطالب", "Content will be available after a set number of days from student enrollment")
+                                        </div>
+                                        <label class="form-label">@Html.T("عدد الأيام", "Number of days")</label>
+                                        <input asp-for="DaysAfterEnrollment" type="number" class="form-control" min="0" placeholder="7">
+                                        <span asp-validation-for="DaysAfterEnrollment" class="text-danger"></span>
+                                        <div class="form-text">@Html.T("أدخل 0 لإتاحة المحتوى فوراً، أو أكثر لتأخير الإطلاق", "Enter 0 to make content available immediately, or a higher number to delay release")</div>
+                                    </div>
+
+                                    <!-- Specific Date -->
+                                    <div id="specificDateDiv" class="drip-option" style="display: none;">
+                                        <div class="alert alert-info mb-3">
+                                            <i class="feather-info me-2"></i>
+                                            @Html.T("سيكون المحتوى متاحاً في تاريخ ووقت محدد", "Content will be available at a specific date and time")
+                                        </div>
+                                        <label class="form-label">@Html.T("التاريخ والوقت", "Date and time")</label>
+                                        <input asp-for="SpecificDate" type="datetime-local" class="form-control">
+                                        <span asp-validation-for="SpecificDate" class="text-danger"></span>
+                                    </div>
+
+                                    <!-- Weekly -->
+                                    <div id="weeklyDiv" class="drip-option" style="display: none;">
+                                        <div class="alert alert-info mb-3">
+                                            <i class="feather-info me-2"></i>
+                                            @Html.T("سيكون المحتوى متاحاً في يوم معين من كل أسبوع", "Content will be available on a specific day each week")
+                                        </div>
+                                        <label class="form-label">@Html.T("يوم الأسبوع", "Day of week")</label>
+                                        <select asp-for="DayOfWeek" class="form-select">
+                                            <option value="">-- @Html.T("اختر اليوم", "Select day") --</option>
+                                            <option value="0">@Html.T("الأحد", "Sunday")</option>
+                                            <option value="1">@Html.T("الإثنين", "Monday")</option>
+                                            <option value="2">@Html.T("الثلاثاء", "Tuesday")</option>
+                                            <option value="3">@Html.T("الأربعاء", "Wednesday")</option>
+                                            <option value="4">@Html.T("الخميس", "Thursday")</option>
+                                            <option value="5">@Html.T("الجمعة", "Friday")</option>
+                                            <option value="6">@Html.T("السبت", "Saturday")</option>
+                                        </select>
+                                        <span asp-validation-for="DayOfWeek" class="text-danger"></span>
+                                    </div>
+
+                                    <!-- Monthly -->
+                                    <div id="monthlyDiv" class="drip-option" style="display: none;">
+                                        <div class="alert alert-info mb-3">
+                                            <i class="feather-info me-2"></i>
+                                            @Html.T("سيكون المحتوى متاحاً في اليوم الأول من كل شهر في الساعة المحددة أدناه", "Content will be available on the first day of each month at the time set below")
+                                        </div>
+                                        <div class="alert alert-light mb-0">
+                                            <i class="feather-calendar me-2"></i>
+                                            <small>@Html.T("سيتم إطلاق المحتوى في اليوم الأول من كل شهر. استخدم خيار \"ساعة الإطلاق\" أدناه لتحديد الوقت المناسب.", "Content will be released on the first day of each month. Use the \"Release hour\" option below to set the time.")</small>
+                                        </div>
+                                    </div>
+
+                                    <!-- Release Hour (for Weekly and Monthly) -->
+                                    <div id="releaseHourDiv" class="mt-3" style="display: none;">
+                                        <label class="form-label">@Html.T("ساعة الإطلاق", "Release hour")</label>
+                                        <select asp-for="ReleaseHour" class="form-select">
+                                            <option value="">-- @Html.T("اختر الساعة", "Select hour") --</option>
+                                            @for (int i = 0; i < 24; i++)
+                                            {
+                                                <option value="@i">@i:00</option>
+                                            }
+                                        </select>
+                                        <span asp-validation-for="ReleaseHour" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">@Html.T("المنطقة الزمنية", "Time zone")</label>
+                                <select asp-for="TimeZone" class="form-select">
+                                    <option value="Africa/Cairo">@Html.T("القاهرة (GMT+2)", "Cairo (GMT+2)")</option>
+                                    <option value="Asia/Riyadh">@Html.T("الرياض (GMT+3)", "Riyadh (GMT+3)")</option>
+                                    <option value="Asia/Dubai">@Html.T("دبي (GMT+4)", "Dubai (GMT+4)")</option>
+                                    <option value="UTC">@Html.T("التوقيت العالمي (UTC)", "UTC")</option>
+                                </select>
+                                <span asp-validation-for="TimeZone" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notification Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-bell me-2 text-primary"></i>
+                            إعدادات الإشعارات
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-12">
+                                <div class="form-check form-switch">
+                                    <input asp-for="SendNotification" class="form-check-input" type="checkbox" id="sendNotification">
+                                    <label class="form-check-label" for="sendNotification">
+                                        إرسال إشعار للطلاب عند إطلاق المحتوى
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div id="notificationDetails" style="display: none;">
+                                <div class="row g-4">
+                                    <div class="col-md-12">
+                                        <label class="form-label">@Html.T("عنوان الإشعار", "Notification title")</label>
+                                        <input asp-for="NotificationTitle" class="form-control" placeholder="@Html.T("مثال: محتوى جديد متاح الآن!", "e.g. New content available now!")">
+                                        <span asp-validation-for="NotificationTitle" class="text-danger"></span>
+                                    </div>
+
+                                    <div class="col-md-12">
+                                        <label class="form-label">@Html.T("رسالة الإشعار", "Notification message")</label>
+                                        <textarea asp-for="NotificationMessage" class="form-control" rows="3" 
+                                                  placeholder="@Html.T("أضف رسالة مخصصة للإشعار...", "Add a custom message for the notification...")"></textarea>
+                                        <span asp-validation-for="NotificationMessage" class="text-danger"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Preview -->
+                <div class="card stretch stretch-full mb-4 bg-soft-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="card-title mb-0 text-white">
+                            <i class="feather-eye me-2"></i>
+                            @Html.T("معاينة القاعدة", "Rule preview")
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <small class="text-muted">@Html.T("نوع الجدولة:", "Schedule type:")</small>
+                            <p class="fw-bold mb-0" id="previewType">--</p>
+                        </div>
+                        <div class="mb-3">
+                            <small class="text-muted">@Html.T("الإعدادات:", "Settings:")</small>
+                            <p class="mb-0" id="previewSettings">--</p>
+                        </div>
+                        <div>
+                            <small class="text-muted">@Html.T("الإشعارات:", "Notifications:")</small>
+                            <p class="mb-0" id="previewNotifications">@Html.T("معطلة", "Disabled")</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activation -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("التفعيل", "Activation")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch">
+                            <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActive" checked>
+                            <label class="form-check-label" for="isActive">
+                                @Html.T("تفعيل القاعدة فوراً", "Enable rule immediately")
+                            </label>
+                        </div>
+                        <small class="text-muted">@Html.T("ستبدأ القاعدة بالعمل فور الحفظ", "The rule will take effect as soon as you save")</small>
+                    </div>
+                </div>
+
+                <!-- Help Card -->
+                <div class="card stretch stretch-full mb-4 bg-soft-info">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3">
+                            <i class="feather-help-circle me-2"></i>
+                            @Html.T("كيف تعمل الجدولة؟", "How does scheduling work?")
+                        </h6>
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                <small>@Html.T("التحكم في توقيت إطلاق المحتوى", "Control when content is released")</small>
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                <small>@Html.T("تنظيم تجربة التعلم", "Structure the learning experience")</small>
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                <small>@Html.T("إرسال إشعارات تلقائية", "Send automatic notifications")</small>
+                            </li>
+                            <li>
+                                <i class="feather-check text-success me-2"></i>
+                                <small>@Html.T("إدارة مرنة للمحتوى", "Flexible content management")</small>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Examples -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">@Html.T("أمثلة استخدام", "Usage examples")</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <strong class="d-block mb-1">@Html.T("دورة مكثفة:", "Intensive course:")</strong>
+                            <small class="text-muted">@Html.T("استخدم \"بعد أيام من التسجيل\" لإطلاق وحدة جديدة كل 3 أيام", "Use \"Days after enrollment\" to release a new module every 3 days")</small>
+                        </div>
+                        <div class="mb-3">
+                            <strong class="d-block mb-1">@Html.T("دورة موسمية:", "Seasonal course:")</strong>
+                            <small class="text-muted">@Html.T("استخدم \"تاريخ محدد\" لإطلاق المحتوى في تاريخ البدء الرسمي", "Use \"Specific date\" to release content on the official start date")</small>
+                        </div>
+                        <div>
+                            <strong class="d-block mb-1">@Html.T("دورة منتظمة:", "Regular course:")</strong>
+                            <small class="text-muted">@Html.T("استخدم \"أسبوعياً\" لإطلاق درس جديد كل أسبوع", "Use \"Weekly\" to release a new lesson every week")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between gap-3">
+                            <a href="@Url.Action("Index")" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                @Html.T("إلغاء", "Cancel")
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="feather-check me-2"></i>
+                                @Html.T("حفظ القاعدة", "Save rule")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Course selection handler
+            $('#courseSelect').on('change', function() {
+                const courseId = $(this).val();
+                if (courseId) {
+                    loadModules(courseId);
+                }
+            });
+
+            // Module selection handler
+            $('#moduleSelect').on('change', function() {
+                const moduleId = $(this).val();
+                if (moduleId) {
+                    loadLessons(moduleId);
+                } else {
+                    $('#lessonSelect').html('<option value="">-- @Html.T("اختر الدرس", "Select lesson") --</option>');
+                }
+            });
+
+            // Apply course wide checkbox
+            $('#applyCourseWide').on('change', function() {
+                $('#specificContentDiv').toggle(!this.checked);
+                if (this.checked) {
+                    $('#moduleSelect, #lessonSelect').val('');
+                }
+            });
+
+            // Drip type selection handler
+            $('#dripTypeSelect').on('change', function() {
+                const type = $(this).val();
+                updateDripSettings(type);
+                updatePreview();
+            });
+
+            // Show correct fields on page load (e.g. when returning from validation or when default is selected)
+            updateDripSettings($('#dripTypeSelect').val());
+            updatePreview();
+
+            // Notification toggle
+            $('#sendNotification').on('change', function() {
+                $('#notificationDetails').toggle(this.checked);
+                updatePreview();
+            });
+
+            // Update preview on all changes
+            $('#dripRuleForm input, #dripRuleForm select, #dripRuleForm textarea').on('change input', updatePreview);
+
+            // Form validation
+            $('#dripRuleForm').on('submit', function(e) {
+                const courseId = $('#courseSelect').val();
+                if (!courseId) {
+                    e.preventDefault();
+                    alert('يرجى اختيار الدورة');
+                    return false;
+                }
+
+                const dripType = $('#dripTypeSelect').val();
+                if (!dripType) {
+                    e.preventDefault();
+                    alert('يرجى اختيار نوع الجدولة');
+                    return false;
+                }
+
+                var typeNum = parseDripTypeValue(dripType);
+                var isValid = true;
+
+                if (typeNum === @((int)LMS.Domain.Enums.ContentDripType.DaysAfterEnrollment)) {
+                    var days = $('[name="DaysAfterEnrollment"]').val();
+                    if (days !== '0' && (!days || days === '')) {
+                        alert('يجب تحديد عدد الأيام بعد التسجيل');
+                        isValid = false;
+                    }
+                }
+                if (typeNum === @((int)LMS.Domain.Enums.ContentDripType.SpecificDate)) {
+                    var date = $('[name="SpecificDate"]').val();
+                    if (!date || date === '') {
+                        alert('يجب تحديد التاريخ المحدد');
+                        isValid = false;
+                    }
+                }
+                if (typeNum === @((int)LMS.Domain.Enums.ContentDripType.Weekly)) {
+                    var dayOfWeek = $('[name="DayOfWeek"]').val();
+                    if (dayOfWeek !== 0 && dayOfWeek !== '0' && (!dayOfWeek || dayOfWeek === '')) {
+                        alert('يجب تحديد يوم الأسبوع');
+                        isValid = false;
+                    }
+                }
+
+                if (!isValid) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+        });
+
+        function loadModules(courseId) {
+            $.get('@Url.Action("GetModules")/' + courseId, function(data) {
+                let options = '<option value="">-- @Html.T("اختر الوحدة", "Select module") --</option>';
+                data.forEach(module => {
+                    options += `<option value="${module.id}">${module.title}</option>`;
+                });
+                $('#moduleSelect').html(options);
+                    $('#lessonSelect').html('<option value="">-- @Html.T("اختر الدرس", "Select lesson") --</option>');
+            });
+        }
+
+        function loadLessons(moduleId) {
+            $.get('@Url.Action("GetLessons")/' + moduleId, function(data) {
+                let options = '<option value="">-- @Html.T("اختر الدرس", "Select lesson") --</option>';
+                data.forEach(lesson => {
+                    options += `<option value="${lesson.id}">${lesson.title}</option>`;
+                });
+                $('#lessonSelect').html(options);
+            });
+        }
+
+        function parseDripTypeValue(type) {
+            if (type === undefined || type === null || type === '') return NaN;
+            var num = parseInt(type, 10);
+            if (!isNaN(num)) return num;
+            var s = String(type);
+            if (s === 'AllAtOnce' || s === 'Immediate') return @((int)LMS.Domain.Enums.ContentDripType.AllAtOnce);
+            if (s === 'DaysAfterEnrollment' || s === 'ByDays') return @((int)LMS.Domain.Enums.ContentDripType.DaysAfterEnrollment);
+            if (s === 'SpecificDate' || s === 'ByDate') return @((int)LMS.Domain.Enums.ContentDripType.SpecificDate);
+            if (s === 'Weekly') return @((int)LMS.Domain.Enums.ContentDripType.Weekly);
+            if (s === 'Monthly') return @((int)LMS.Domain.Enums.ContentDripType.Monthly);
+            return NaN;
+        }
+
+        function updateDripSettings(type) {
+            $('.drip-option').hide();
+            $('#dripSettings').hide();
+            $('#releaseHourDiv').hide();
+
+            var typeNum = parseDripTypeValue(type);
+            if (isNaN(typeNum)) return;
+
+            $('#dripSettings').show();
+
+            switch(typeNum) {
+                case @((int)LMS.Domain.Enums.ContentDripType.AllAtOnce):
+                    break;
+                case @((int)LMS.Domain.Enums.ContentDripType.DaysAfterEnrollment):
+                    $('#daysAfterDiv').show();
+                    break;
+                case @((int)LMS.Domain.Enums.ContentDripType.SpecificDate):
+                    $('#specificDateDiv').show();
+                    break;
+                case @((int)LMS.Domain.Enums.ContentDripType.Weekly):
+                    $('#weeklyDiv').show();
+                    $('#releaseHourDiv').show();
+                    break;
+                case @((int)LMS.Domain.Enums.ContentDripType.Monthly):
+                    $('#monthlyDiv').show();
+                    $('#releaseHourDiv').show();
+                    break;
+            }
+        }
+
+        function updatePreview() {
+            const typeNum = parseDripTypeValue($('#dripTypeSelect').val());
+            let typeName = '--';
+            let settings = '--';
+
+            switch(typeNum) {
+                case @((int)LMS.Domain.Enums.ContentDripType.AllAtOnce):
+                    typeName = 'كل المحتوى فوراً';
+                    settings = 'المحتوى متاح فوراً عند التسجيل';
+                    break;
+                case @((int)LMS.Domain.Enums.ContentDripType.DaysAfterEnrollment):
+                    typeName = 'بعد أيام من التسجيل';
+                    const days = $('#DaysAfterEnrollment').val() || '0';
+                    settings = `متاح بعد ${days} يوم من التسجيل`;
+                    break;
+                case @((int)LMS.Domain.Enums.ContentDripType.SpecificDate):
+                    typeName = 'تاريخ محدد';
+                    const date = $('#SpecificDate').val();
+                    if (date && !isNaN(new Date(date).getTime())) {
+                        settings = 'يُطلق في: ' + new Date(date).toLocaleString('ar-SA');
+                    } else {
+                        settings = 'لم يُحدد التاريخ بعد';
+                    }
+                    break;
+                case @((int)LMS.Domain.Enums.ContentDripType.Weekly):
+                    typeName = 'أسبوعياً';
+                    var selectedDay = $('[name="DayOfWeek"]').val();
+                    var dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+                    settings = (selectedDay !== null && selectedDay !== '') ? 'يُطلق كل ' + dayNames[parseInt(selectedDay)] : 'يُطلق كل أسبوع';
+                    break;
+                case @((int)LMS.Domain.Enums.ContentDripType.Monthly):
+                    typeName = 'شهرياً';
+                    settings = 'يُطلق كل شهر';
+                    break;
+            }
+
+            $('#previewType').text(typeName || '--');
+            $('#previewSettings').text(settings || '--');
+
+            const notificationsEnabled = $('#sendNotification').is(':checked');
+            $('#previewNotifications').text(notificationsEnabled ? 'مفعّلة' : 'معطلة');
+        }
+    </script>
+
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

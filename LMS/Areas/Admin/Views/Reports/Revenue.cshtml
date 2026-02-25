@@ -1,0 +1,227 @@
+@using LMS.Services.Interfaces
+@inject ISystemConfigurationService SystemConfigService
+
+@{
+    ViewData["Title"] = Html.T("تقرير الإيرادات", "Revenue report");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التقارير", "Reports"), Url.Action("Index", "Reports")),
+        (Html.T("تقرير الإيرادات", "Revenue report"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    
+    // Get month names from database
+    var monthNames = await SystemConfigService.GetMonthNamesAsync("ar");
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/daterangepicker.min.css" />
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-dollar-sign"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي الإيرادات", "Total Revenue")</span>
+                            <h3 class="fw-bolder d-block">@ViewBag.TotalRevenue.ToString("N0") @Html.T("ر.س", "SAR")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-shopping-cart"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("عدد المعاملات", "Transaction Count")</span>
+                            <h3 class="fw-bolder d-block">@ViewBag.TotalTransactions.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-trending-up"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("متوسط المعاملة", "Average Transaction")</span>
+                            <h3 class="fw-bolder d-block">@ViewBag.AverageTransaction.ToString("N0") @Html.T("ر.س", "SAR")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                            <i class="feather-arrow-down-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("المبالغ المستردة", "Refunded Amount")</span>
+                            <h3 class="fw-bolder d-block">@ViewBag.RefundsTotal.ToString("N0") @Html.T("ر.س", "SAR")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                            <input type="date" class="form-control" name="from" value="@(((DateTime)ViewBag.From).ToString("yyyy-MM-dd"))" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                            <input type="date" class="form-control" name="to" value="@(((DateTime)ViewBag.To).ToString("yyyy-MM-dd"))" />
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="feather-search me-2"></i>
+                                @Html.T("بحث", "Search")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Revenue Chart -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تحليل الإيرادات الشهرية", "Monthly revenue analysis")</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 350px;">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Revenue Table -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تفاصيل الإيرادات الشهرية", "Monthly revenue details")</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("الشهر", "Month")</th>
+                                    <th>@Html.T("السنة", "Year")</th>
+                                    <th>@Html.T("عدد المعاملات", "Transaction Count")</th>
+                                    <th>@Html.T("إجمالي الإيرادات", "Total Revenue")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in (IEnumerable<dynamic>)Model)
+                                {
+                                    var monthNumber = (int)item.Month;
+                                    var monthName = monthNames.ContainsKey(monthNumber) ? monthNames[monthNumber] : $"شهر {monthNumber}";
+                                    <tr>
+                                        <td>@monthName</td>
+                                        <td>@item.Year</td>
+                                        <td><span class="badge bg-soft-primary text-primary">@item.Count</span></td>
+                                        <td><span class="fw-bold text-success">@item.Total.ToString("N0") @Html.T("ر.س", "SAR")</span></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Revenue Chart
+            const ctx = document.getElementById('revenueChart').getContext('2d');
+            const revenueData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model));
+            
+            const labels = revenueData.map(d => {
+                const months = ['', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+                return months[d.Month] + ' ' + d.Year;
+            });
+            
+            const values = revenueData.map(d => d.Total);
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'الإيرادات',
+                        data: values,
+                        backgroundColor: 'rgba(52, 84, 209, 0.7)',
+                        borderColor: '#3454d1',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toLocaleString() + ' @Html.Raw(Html.T("ر.س", "SAR"))';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+}
+

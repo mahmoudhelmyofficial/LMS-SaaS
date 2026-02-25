@@ -1,0 +1,375 @@
+@model IEnumerable<LMS.Domain.Entities.Marketing.LandingPage>
+
+@{
+    ViewData["Title"] = Html.T("إدارة الصفحات الترويجية", "Landing pages management");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الصفحات الترويجية", "Landing Pages"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إضافة صفحة", "Add Page"), "feather-plus", Url.Action("Create", "LandingPages"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+    <style>
+        .page-status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+        }
+        .page-url {
+            font-family: 'Courier New', monospace;
+            background: #f3f6f9;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-file-text"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("إجمالي الصفحات", "Total pages")</span>
+                            <h3 class="fw-bold mb-0">@Model.Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("صفحات منشورة", "Published pages")</span>
+                            <h3 class="fw-bold mb-0">@Model.Count(p => p.Status == LMS.Domain.Enums.LandingPageStatus.Published && p.IsActive).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-edit"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("مسودات", "Drafts")</span>
+                            <h3 class="fw-bold mb-0">@Model.Count(p => p.Status == LMS.Domain.Enums.LandingPageStatus.Draft).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-eye"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("إجمالي المشاهدات", "Total views")</span>
+                            <h3 class="fw-bold mb-0">@Model.Sum(p => p.ViewCount).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section FilterDropdown {
+    <a href="javascript:void(0);" class="dropdown-item filter-all">
+        <i class="feather-eye me-3"></i>
+        <span>@Html.T("الكل", "All")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-published">
+        <i class="feather-check-circle me-3"></i>
+        <span>@Html.T("منشورة", "Published")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-draft">
+        <i class="feather-edit me-3"></i>
+        <span>@Html.T("مسودات", "Drafts")</span>
+    </a>
+    <div class="dropdown-divider"></div>
+    <a href="javascript:void(0);" class="dropdown-item filter-active">
+        <i class="feather-power me-3"></i>
+        <span>@Html.T("نشطة", "Active")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-inactive">
+        <i class="feather-power me-3"></i>
+        <span>@Html.T("غير نشطة", "Inactive")</span>
+    </a>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="landingPagesTable">
+                            <thead>
+                                <tr>
+                                    <th class="wd-30">
+                                        <div class="custom-control custom-checkbox ms-1">
+                                            <input type="checkbox" class="custom-control-input" id="checkAll">
+                                            <label class="custom-control-label" for="checkAll"></label>
+                                        </div>
+                                    </th>
+                                    <th>@Html.T("العنوان", "Title")</th>
+                                    <th>@Html.T("الرابط (Slug)", "URL (Slug)")</th>
+                                    <th>@Html.T("القالب", "Template")</th>
+                                    <th>@Html.T("المشاهدات", "Views")</th>
+                                    <th>@Html.T("التحويلات", "Conversions")</th>
+                                    <th>@Html.T("معدل التحويل", "Conversion rate")</th>
+                                    <th>@Html.T("تاريخ الإنشاء", "Created date")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var landingPage in Model)
+                                {
+                                    var conversionRate = landingPage.ViewCount > 0 ? (landingPage.ConversionCount * 100.0 / landingPage.ViewCount) : 0;
+                                    <tr>
+                                        <td>
+                                            <div class="item-checkbox ms-1">
+                                                <div class="custom-control custom-checkbox">
+                                                    <input type="checkbox" class="custom-control-input checkbox" id="checkBox_@landingPage.Id">
+                                                    <label class="custom-control-label" for="checkBox_@landingPage.Id"></label>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-3">
+                                                <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                                    <i class="feather-file-text"></i>
+                                                </div>
+                                                <div>
+                                                    <span class="d-block fw-semibold">@landingPage.Title</span>
+                                                    @if (!string.IsNullOrEmpty(landingPage.Description))
+                                                    {
+                                                        <small class="text-muted text-truncate-1-line d-block" style="max-width: 300px;">@landingPage.Description</small>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="page-url">/@landingPage.Slug</span>
+                                            <button class="btn btn-sm btn-icon" onclick="copyToClipboard('/@landingPage.Slug')" data-bs-toggle="tooltip" title="@Html.T("نسخ", "Copy")">
+                                                <i class="feather-copy"></i>
+                                            </button>
+                                        </td>
+                                        <td>
+                                            @if (landingPage.Template != null)
+                                            {
+                                                <span class="badge bg-soft-info text-info">@landingPage.Template.Name</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">@Html.T("بدون قالب", "No template")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-1">
+                                                <i class="feather-eye text-muted"></i>
+                                                <span class="fw-semibold">@landingPage.ViewCount.ToString("N0")</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-1">
+                                                <i class="feather-check-circle text-success"></i>
+                                                <span class="fw-semibold">@landingPage.ConversionCount.ToString("N0")</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="progress flex-grow-1" style="height: 6px; width: 60px;">
+                                                    <div class="progress-bar @(conversionRate >= 10 ? "bg-success" : conversionRate >= 5 ? "bg-warning" : "bg-danger")" 
+                                                         style="width: @Math.Min(conversionRate * 5, 100)%"></div>
+                                                </div>
+                                                <span class="fw-semibold fs-12">@conversionRate.ToString("F1")%</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="text-muted">@landingPage.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                        </td>
+                                        <td>
+                                            @if (landingPage.Status == LMS.Domain.Enums.LandingPageStatus.Published && landingPage.IsActive)
+                                            {
+                                                <span class="badge bg-soft-success text-success">@Html.T("منشورة", "Published")</span>
+                                            }
+                                            else if (landingPage.Status == LMS.Domain.Enums.LandingPageStatus.Draft)
+                                            {
+                                                <span class="badge bg-soft-warning text-warning">@Html.T("مسودة", "Draft")</span>
+                                            }
+                                            else if (!landingPage.IsActive)
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">@Html.T("غير نشطة", "Inactive")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-secondary text-secondary">@landingPage.Status</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="/landing/@landingPage.Slug" target="_blank" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("معاينة", "Preview")">
+                                                    <i class="feather-external-link"></i>
+                                                </a>
+                                                <a href="@Url.Action("Edit", "LandingPages", new { id = landingPage.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                    <i class="feather-edit"></i>
+                                                </a>
+                                                <div class="dropdown">
+                                                    <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown" data-bs-offset="0,21">
+                                                        <i class="feather-more-horizontal"></i>
+                                                    </a>
+                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        <li>
+                                                            <a class="dropdown-item" href="javascript:void(0)" onclick="viewAnalytics('@landingPage.Id')">
+                                                                <i class="feather-bar-chart-2 me-3"></i>
+                                                                <span>@Html.T("الإحصائيات", "Statistics")</span>
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item" href="javascript:void(0)" onclick="duplicatePage('@landingPage.Id')">
+                                                                <i class="feather-copy me-3"></i>
+                                                                <span>@Html.T("نسخ الصفحة", "Copy page")</span>
+                                                            </a>
+                                                        </li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item @(landingPage.IsActive ? "text-warning" : "text-success")" href="javascript:void(0)" onclick="toggleStatus('@landingPage.Id')">
+                                                                <i class="feather-power me-3"></i>
+                                                                <span>@(landingPage.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))</span>
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@landingPage.Id')">
+                                                                <i class="feather-trash-2 me-3"></i>
+                                                                <span>@Html.T("حذف", "Delete")</span>
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            var table = $('#landingPagesTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[7, "desc"]],
+                "pageLength": 25
+            });
+
+            $('#checkAll').on('change', function() {
+                $('.checkbox').prop('checked', $(this).prop('checked'));
+            });
+
+            $('.filter-all').on('click', function() {
+                table.column(8).search('').draw();
+            });
+
+            $('.filter-published').on('click', function() {
+                table.column(8).search('@Html.Raw(Html.T("منشورة", "Published"))').draw();
+            });
+
+            $('.filter-draft').on('click', function() {
+                table.column(8).search('@Html.Raw(Html.T("مسودة", "Draft"))').draw();
+            });
+
+            $('.filter-active').on('click', function() {
+                $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+                    return data[8].indexOf('غير نشطة') === -1;
+                });
+                table.draw();
+                $.fn.dataTable.ext.search.pop();
+            });
+
+            $('.filter-inactive').on('click', function() {
+                table.column(8).search('غير نشطة').draw();
+            });
+
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+
+        window.__LandingT = { linkCopied: '@Html.Raw(Html.T("تم نسخ الرابط:", "Link copied:").Replace("'", "\\'"))' };
+        function copyToClipboard(text) {
+            var fullUrl = window.location.origin + text;
+            navigator.clipboard.writeText(fullUrl).then(function() {
+                alert(window.__LandingT.linkCopied + ' ' + fullUrl);
+            });
+        }
+
+        function viewAnalytics(pageId) {
+            console.log('Viewing analytics for:', pageId);
+            // Implement analytics view
+        }
+
+        function duplicatePage(pageId) {
+            if (confirm('@Html.Raw(Html.T("هل تريد نسخ هذه الصفحة؟", "Do you want to duplicate this page?").ToString().Replace("'", "\\'"))')) {
+                console.log('Duplicating page:', pageId);
+                // Implement duplication
+            }
+        }
+
+        function toggleStatus(pageId) {
+            if (confirm('@Html.Raw(Html.T("هل تريد تغيير حالة هذه الصفحة؟", "Do you want to change the status of this page?").ToString().Replace("'", "\\'"))')) {
+                console.log('Toggling status for:', pageId);
+                // Implement toggle
+            }
+        }
+
+        function confirmDelete(pageId) {
+            if (confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذه الصفحة؟ لا يمكن التراجع عن هذا الإجراء.", "Are you sure you want to delete this page? This action cannot be undone.").ToString().Replace("'", "\\'"))')) {
+                console.log('Deleting page:', pageId);
+                // Implement delete
+            }
+        }
+    </script>
+}
+

@@ -1,0 +1,508 @@
+@using LMS.Services.Interfaces
+@model LMS.Domain.Entities.Users.InstructorApplication
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل طلب الانضمام كمدرس", "Instructor Application Details");
+    
+    // Load commission settings
+    var commissionDefault = await PlatformSettings.GetIntSettingAsync("Instructor.Commission.DefaultRate", 70);
+    var commissionMin = await PlatformSettings.GetIntSettingAsync("Instructor.Commission.MinRate", 50);
+    var commissionMax = await PlatformSettings.GetIntSettingAsync("Instructor.Commission.MaxRate", 95);
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("إدارة المدرسين", "Instructors"), Url.Action("Index", "Instructors")),
+        (Html.T("طلبات الانضمام", "Applications"), Url.Action("Applications", "Instructors")),
+        (Html.T("تفاصيل الطلب", "Application details"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .application-status-badge {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        .document-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 15px;
+            transition: all 0.3s ease;
+        }
+        .document-card:hover {
+            border-color: #3454d1;
+            box-shadow: 0 2px 8px rgba(52, 84, 209, 0.1);
+        }
+        .approval-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .rejection-section {
+            background: #fff5f5;
+            border-radius: 8px;
+            padding: 20px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <!-- Main Content Column -->
+        <div class="col-lg-8">
+            <!-- Application Overview -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات المتقدم", "Applicant information")</h5>
+                    <div class="card-header-action">
+                        @switch (Model.Status)
+                        {
+                            case LMS.Domain.Enums.InstructorApplicationStatus.Pending:
+                                <span class="badge bg-secondary text-white application-status-badge">@Html.T("في الانتظار", "Pending")</span>
+                                break;
+                            case LMS.Domain.Enums.InstructorApplicationStatus.UnderReview:
+                                <span class="badge bg-info text-white application-status-badge">@Html.T("قيد المراجعة", "Under review")</span>
+                                break;
+                            case LMS.Domain.Enums.InstructorApplicationStatus.MoreInfoRequired:
+                                <span class="badge bg-warning text-white application-status-badge">@Html.T("مطلوب معلومات إضافية", "More info required")</span>
+                                break;
+                            case LMS.Domain.Enums.InstructorApplicationStatus.Approved:
+                                <span class="badge bg-success application-status-badge">@Html.T("تمت الموافقة", "Approved")</span>
+                                break;
+                            case LMS.Domain.Enums.InstructorApplicationStatus.Rejected:
+                                <span class="badge bg-danger application-status-badge">@Html.T("مرفوض", "Rejected")</span>
+                                break;
+                            case LMS.Domain.Enums.InstructorApplicationStatus.Suspended:
+                                <span class="badge bg-dark application-status-badge">@Html.T("موقوف", "Suspended")</span>
+                                break;
+                            case LMS.Domain.Enums.InstructorApplicationStatus.RequiresChanges:
+                                <span class="badge bg-warning text-dark application-status-badge">@Html.T("يتطلب تغييرات", "Requires changes")</span>
+                                break;
+                            case LMS.Domain.Enums.InstructorApplicationStatus.Cancelled:
+                                <span class="badge bg-secondary application-status-badge">@Html.T("ملغي", "Cancelled")</span>
+                                break;
+                        }
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <!-- User Information -->
+                        <div class="col-12">
+                            <div class="d-flex align-items-center gap-3 mb-4">
+                                <div class="avatar-text avatar-xl bg-soft-primary text-primary">
+                                    @(!string.IsNullOrEmpty(Model.User?.FirstName) ? Model.User.FirstName.Substring(0, 1) : "")@(!string.IsNullOrEmpty(Model.User?.LastName) ? Model.User.LastName.Substring(0, 1) : "")
+                                </div>
+                                <div>
+                                    <h4 class="mb-1">@Model.User?.FirstName @Model.User?.LastName</h4>
+                                    <p class="text-muted mb-1">@Model.User.Email</p>
+                                    @if (!string.IsNullOrEmpty(Model.User.PhoneNumber))
+                                    {
+                                        <p class="text-muted mb-0"><i class="feather-phone me-2"></i>@Model.User.PhoneNumber</p>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Expertise -->
+                        <div class="col-md-6">
+                            <label class="text-muted fs-12 mb-1">@Html.T("التخصص", "Specialization")</label>
+                            <p class="fw-semibold mb-0">@(Model.Expertise ?? Html.T("غير محدد", "Not set"))</p>
+                        </div>
+
+                        <!-- Years of Experience -->
+                        <div class="col-md-6">
+                            <label class="text-muted fs-12 mb-1">@Html.T("سنوات الخبرة", "Years of experience")</label>
+                            <p class="fw-semibold mb-0">@(Model.YearsOfExperience > 0 ? Model.YearsOfExperience.ToString() : Html.T("غير محدد", "Not set")) @Html.T("سنة", "years")</p>
+                        </div>
+
+                        <!-- Bio -->
+                        @if (!string.IsNullOrEmpty(Model.Bio))
+                        {
+                            <div class="col-12">
+                                <label class="text-muted fs-12 mb-2">@Html.T("السيرة الذاتية", "Resume/CV")</label>
+                                <div class="p-3 bg-light rounded">
+                                    <p class="mb-0">@Model.Bio</p>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Website -->
+                        @if (!string.IsNullOrEmpty(Model.Website))
+                        {
+                            <div class="col-md-6">
+                                <label class="text-muted fs-12 mb-1">@Html.T("الموقع الإلكتروني", "Website")</label>
+                                <p class="mb-0">
+                                    <a href="@Model.Website" target="_blank" class="text-primary">
+                                        <i class="feather-external-link me-2"></i>@Model.Website
+                                    </a>
+                                </p>
+                            </div>
+                        }
+
+                        <!-- LinkedIn -->
+                        @if (!string.IsNullOrEmpty(Model.LinkedInProfile))
+                        {
+                            <div class="col-md-6">
+                                <label class="text-muted fs-12 mb-1">@Html.T("لينكد إن", "LinkedIn")</label>
+                                <p class="mb-0">
+                                    <a href="@Model.LinkedInProfile" target="_blank" class="text-primary">
+                                        <i class="feather-linkedin me-2"></i>عرض الملف الشخصي
+                                    </a>
+                                </p>
+                            </div>
+                        }
+
+                        <!-- Application Date -->
+                        <div class="col-md-6">
+                            <label class="text-muted fs-12 mb-1">@Html.T("تاريخ التقديم", "Application date")</label>
+                            <p class="mb-0">@Model.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")</p>
+                        </div>
+
+                        <!-- Review Date -->
+                        @if (Model.ReviewedAt.HasValue)
+                        {
+                            <div class="col-md-6">
+                                <label class="text-muted fs-12 mb-1">@Html.T("تاريخ المراجعة", "Review date")</label>
+                                <p class="mb-0">@Model.ReviewedAt.Value.ToString("dd/MM/yyyy hh:mm tt")</p>
+                            </div>
+                        }
+
+                        <!-- Review Notes / Requested Info -->
+                        @if (Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.MoreInfoRequired && !string.IsNullOrEmpty(Model.ReviewNotes))
+                        {
+                            <div class="col-12">
+                                <label class="text-muted fs-12 mb-2">@Html.T("المعلومات المطلوبة", "Required information")</label>
+                                <div class="alert alert-warning mb-0">
+                                    <i class="feather-help-circle me-2"></i>
+                                    @Model.ReviewNotes
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Rejection Reason -->
+                        @if (Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.Rejected && !string.IsNullOrEmpty(Model.RejectionReason))
+                        {
+                            <div class="col-12">
+                                <label class="text-muted fs-12 mb-2">@Html.T("سبب الرفض", "Rejection reason")</label>
+                                <div class="alert alert-danger mb-0">
+                                    <i class="feather-alert-circle me-2"></i>
+                                    @Model.RejectionReason
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Documents -->
+            @if (Model.Documents != null && Model.Documents.Any())
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("المستندات المرفقة", "Attached documents")</h5>
+                        <div class="card-header-action">
+                            <span class="badge bg-soft-primary text-primary">@Model.Documents.Count @Html.T("مستند", "document(s)")</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            @foreach (var document in Model.Documents)
+                            {
+                                <div class="col-md-6">
+                                    <div class="document-card">
+                                        <div class="d-flex align-items-center justify-content-between">
+                                            <div class="d-flex align-items-center gap-3">
+                                                <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                                    <i class="feather-file-text"></i>
+                                                </div>
+                                                <div>
+                                                    <h6 class="mb-1">@document.Title</h6>
+                                                    <p class="text-muted fs-12 mb-0">@document.FileType</p>
+                                                </div>
+                                            </div>
+                                            <a href="@document.FileUrl" target="_blank" class="btn btn-sm btn-light">
+                                                <i class="feather-download"></i>
+                                            </a>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(document.Description))
+                                        {
+                                            <p class="text-muted fs-12 mb-0 mt-2">@document.Description</p>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Action Sidebar -->
+        <div class="col-lg-4">
+            @if (Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.Pending || 
+                 Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.UnderReview)
+            {
+                @if (Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.Pending)
+                {
+                    <!-- Mark as Under Review -->
+                    <div class="card stretch stretch-full mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title text-info">
+                                <i class="feather-eye me-2"></i>
+                                بدء المراجعة
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <form asp-action="MarkUnderReview" method="post">
+                                <input type="hidden" name="id" value="@Model.Id" />
+                                @Html.AntiForgeryToken()
+                                <p class="text-muted mb-3">وضع علامة على الطلب بأنه قيد المراجعة</p>
+                                <button type="submit" class="btn btn-info w-100">
+                                    <i class="feather-eye me-2"></i>
+                                    بدء المراجعة
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                }
+
+                <!-- Approve Application -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title text-success">
+                            <i class="feather-check-circle me-2"></i>
+                            الموافقة على الطلب
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="ApproveApplication" method="post">
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            @Html.AntiForgeryToken()
+                            
+                            <div class="approval-section mb-3">
+                                <label class="form-label">@Html.T("معدل العمولة (%)", "Commission rate (%)")</label>
+                                <input type="number" name="customCommissionRate" class="form-control" 
+                                       value="@commissionDefault" min="@commissionMin" max="@commissionMax" step="0.01" />
+                                <small class="text-muted">@Html.T("المعدل الافتراضي:", "Default rate:") @commissionDefault% (@Html.T("من", "From") @commissionMin% @Html.T("إلى", "to") @commissionMax%)</small>
+                            </div>
+
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="feather-check me-2"></i>
+                                الموافقة على الطلب
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Request More Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title text-warning">
+                            <i class="feather-help-circle me-2"></i>
+                            طلب معلومات إضافية
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="RequestMoreInfo" method="post">
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            @Html.AntiForgeryToken()
+                            
+                            <div class="mb-3">
+                                <label class="form-label">@Html.T("المعلومات المطلوبة", "Required information") <span class="text-danger">*</span></label>
+                                <textarea name="requestedInfo" class="form-control" rows="4" 
+                                          placeholder="@Html.T("يرجى توضيح المعلومات المطلوبة من المتقدم...", "Please specify the information required from the applicant...")" required></textarea>
+                                <small class="text-muted">@Html.T("سيتم إرسال هذا الطلب للمتقدم عبر البريد الإلكتروني", "This request will be sent to the applicant by email")</small>
+                            </div>
+
+                            <button type="submit" class="btn btn-warning w-100">
+                                <i class="feather-help-circle me-2"></i>
+                                @Html.T("طلب معلومات إضافية", "Request additional information")
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Reject Application -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title text-danger">
+                            <i class="feather-x-circle me-2"></i>
+                            @Html.T("رفض الطلب", "Reject application")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="RejectApplication" method="post">
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            @Html.AntiForgeryToken()
+                            
+                            <div class="rejection-section mb-3">
+                                <label class="form-label">@Html.T("سبب الرفض", "Rejection reason") <span class="text-danger">*</span></label>
+                                <textarea name="reason" class="form-control" rows="4" 
+                                          placeholder="@Html.T("يرجى توضيح سبب رفض الطلب...", "Please specify the reason for rejecting the application...")" required></textarea>
+                                <small class="text-muted">@Html.T("سيتم إرسال هذا السبب للمتقدم عبر البريد الإلكتروني", "This reason will be sent to the applicant by email")</small>
+                            </div>
+
+                            <button type="submit" class="btn btn-danger w-100">
+                                <i class="feather-x me-2"></i>
+                                @Html.T("رفض الطلب", "Reject application")
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            }
+            else if (Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.Approved)
+            {
+                <!-- Application Approved -->
+                <div class="card stretch stretch-full">
+                    <div class="card-body text-center">
+                        <div class="avatar-text avatar-xl bg-soft-success text-success mx-auto mb-3">
+                            <i class="feather-check-circle" style="font-size: 32px;"></i>
+                        </div>
+                        <h5 class="mb-2">@Html.T("تمت الموافقة على الطلب", "Application approved")</h5>
+                        <p class="text-muted mb-3">@Html.T("تم قبول المدرس وإنشاء حساب له", "The instructor has been accepted and an account has been created")</p>
+                        <a href="@Url.Action("Details", "Instructors", new { id = Model.User.InstructorProfile?.Id })" 
+                           class="btn btn-primary w-100">
+                            <i class="feather-user me-2"></i>
+                            @Html.T("عرض ملف المدرس", "View instructor profile")
+                        </a>
+                    </div>
+                </div>
+            }
+            else if (Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.MoreInfoRequired)
+            {
+                <!-- Application Needs More Info -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-body text-center">
+                        <div class="avatar-text avatar-xl bg-soft-warning text-warning mx-auto mb-3">
+                            <i class="feather-help-circle" style="font-size: 32px;"></i>
+                        </div>
+                        <h5 class="mb-2">@Html.T("في انتظار معلومات إضافية", "Awaiting additional information")</h5>
+                        <p class="text-muted mb-3">@Html.T("تم إرسال طلب للمتقدم للحصول على معلومات إضافية", "A request has been sent to the applicant for additional information")</p>
+                    </div>
+                </div>
+
+                <!-- Allow admin to approve/reject after receiving info -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title text-success">
+                            <i class="feather-check-circle me-2"></i>
+                            @Html.T("الموافقة على الطلب", "Approve application")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="ApproveApplication" method="post">
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            @Html.AntiForgeryToken()
+                            
+                            <div class="approval-section mb-3">
+                                <label class="form-label">@Html.T("معدل العمولة (%)", "Commission rate (%)")</label>
+                                <input type="number" name="customCommissionRate" class="form-control" 
+                                       value="@commissionDefault" min="@commissionMin" max="@commissionMax" step="0.01" />
+                                <small class="text-muted">@Html.T("من", "From") @commissionMin% @Html.T("إلى", "to") @commissionMax%</small>
+                            </div>
+
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="feather-check me-2"></i>
+                                @Html.T("الموافقة على الطلب", "Approve application")
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title text-danger">
+                            <i class="feather-x-circle me-2"></i>
+                            @Html.T("رفض الطلب", "Reject application")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <form asp-action="RejectApplication" method="post">
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            @Html.AntiForgeryToken()
+                            
+                            <div class="rejection-section mb-3">
+                                <label class="form-label">@Html.T("سبب الرفض", "Rejection reason") <span class="text-danger">*</span></label>
+                                <textarea name="reason" class="form-control" rows="3" 
+                                          placeholder="@Html.T("يرجى توضيح سبب رفض الطلب...", "Please specify the reason for rejecting the application...")" required></textarea>
+                            </div>
+
+                            <button type="submit" class="btn btn-danger w-100">
+                                <i class="feather-x me-2"></i>
+                                @Html.T("رفض الطلب", "Reject application")
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            }
+            else if (Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.Rejected)
+            {
+                <!-- Application Rejected -->
+                <div class="card stretch stretch-full">
+                    <div class="card-body text-center">
+                        <div class="avatar-text avatar-xl bg-soft-danger text-danger mx-auto mb-3">
+                            <i class="feather-x-circle" style="font-size: 32px;"></i>
+                        </div>
+                        <h5 class="mb-2">تم رفض الطلب</h5>
+                        <p class="text-muted">هذا الطلب تم رفضه</p>
+                    </div>
+                </div>
+            }
+
+            <!-- Application Statistics -->
+            <div class="card stretch stretch-full mt-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("ملخص الطلب", "Application summary")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("رقم الطلب", "Application number")</span>
+                        <span class="fw-semibold">#@Model.Id.ToString().PadLeft(5, '0')</span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("الحالة", "Status")</span>
+                        <span class="fw-semibold">@Model.Status</span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">المستندات</span>
+                        <span class="fw-semibold">@(Model.Documents?.Count ?? 0)</span>
+                    </div>
+                    @if (Model.YearsOfExperience > 0)
+                    {
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="text-muted">@Html.T("سنوات الخبرة", "Years of experience")</span>
+                            <span class="fw-semibold">@Model.YearsOfExperience سنة</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Add confirmation dialogs
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                const isApproval = this.action.includes('Approve');
+                const isRejection = this.action.includes('Reject');
+                
+                if (isApproval) {
+                    if (!confirm('@Html.Raw(Html.T("هل أنت متأكد من الموافقة على هذا الطلب؟", "Are you sure you want to approve this application?").Replace("'", "\\'"))')) {
+                        e.preventDefault();
+                    }
+                } else if (isRejection) {
+                    if (!confirm('@Html.Raw(Html.T("هل أنت متأكد من رفض هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء.", "Are you sure you want to reject this application? This action cannot be undone.").Replace("'", "\\'"))')) {
+                        e.preventDefault();
+                    }
+                }
+            });
+        });
+    </script>
+}
+

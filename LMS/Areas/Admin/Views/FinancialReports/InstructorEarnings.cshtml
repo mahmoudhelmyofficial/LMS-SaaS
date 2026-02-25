@@ -1,0 +1,212 @@
+@model LMS.Services.InstructorEarningsReport
+@{
+    ViewData["Title"] = Html.T("تقرير أرباح المدربين", "Instructor earnings report");
+    ViewData["ActiveMenu"] = "FinancialReports";
+}
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <nav aria-label="@Html.T("مسار التنقل", "Breadcrumb")">
+                        <ol class="breadcrumb mb-2">
+                            <li class="breadcrumb-item"><a asp-action="Index">@Html.T("التقارير المالية", "Financial reports")</a></li>
+                            <li class="breadcrumb-item active">@Html.T("أرباح المدربين", "Instructor earnings")</li>
+                        </ol>
+                    </nav>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-chalkboard-teacher text-primary me-2"></i>
+                        @Html.T("تقرير أرباح المدربين", "Instructor earnings report")
+                    </h1>
+                </div>
+                <form method="get" class="d-flex gap-2 align-items-center">
+                    <select name="instructorId" class="form-select form-select-sm" style="width: 200px;">
+                        <option value="">@Html.T("كل المدربين", "All instructors")</option>
+                        @foreach (var instructor in Model.InstructorsList)
+                        {
+                            <option value="@instructor.Id" selected="@(ViewBag.InstructorId == instructor.Id)">
+                                @instructor.Name
+                            </option>
+                        }
+                    </select>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter me-1"></i>@Html.T("فلترة", "Filter")
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="text-white-50 mb-2">@Html.T("إجمالي أرباح المدربين", "Total instructor earnings")</h6>
+                    <h3 class="mb-0">@Model.TotalEarnings.ToString("N0") ج.م</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">@Html.T("أرباح متاحة للسحب", "Earnings available for withdrawal")</h6>
+                    <h3 class="text-success mb-0">@Model.AvailableForWithdrawal.ToString("N0") ج.م</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">@Html.T("أرباح معلقة", "Pending earnings")</h6>
+                    <h3 class="text-warning mb-0">@Model.PendingEarnings.ToString("N0") ج.م</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">@Html.T("تم سحبها", "Withdrawn")</h6>
+                    <h3 class="text-info mb-0">@Model.WithdrawnAmount.ToString("N0") ج.م</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Earnings Chart -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-transparent">
+            <h5 class="mb-0">
+                <i class="fas fa-chart-line text-primary me-2"></i>
+                أرباح المدربين الشهرية
+            </h5>
+        </div>
+        <div class="card-body">
+            <canvas id="earningsChart" height="300"></canvas>
+        </div>
+    </div>
+
+    <!-- Instructors Table -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-users text-primary me-2"></i>
+                تفاصيل أرباح المدربين
+            </h5>
+            <span class="badge bg-primary">@Model.InstructorsData.Count مدرب</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="instructorsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>@Html.T("المدرب", "Instructor")</th>
+                            <th class="text-center">@Html.T("الدورات", "Courses")</th>
+                            <th class="text-center">@Html.T("المبيعات", "Sales")</th>
+                            <th class="text-end">@Html.T("إجمالي الأرباح", "Total earnings")</th>
+                            <th class="text-end">@Html.T("متاح للسحب", "Available")</th>
+                            <th class="text-end">@Html.T("معلق", "Pending")</th>
+                            <th class="text-end">@Html.T("تم سحبه", "Withdrawn")</th>
+                            <th class="text-center">@Html.T("نسبة العمولة", "Commission rate")</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ var rank = 1; }
+                        @foreach (var instructor in Model.InstructorsData.OrderByDescending(i => i.TotalEarnings))
+                        {
+                            <tr>
+                                <td><span class="badge bg-secondary">@rank</span></td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        @if (!string.IsNullOrEmpty(instructor.ProfilePicture))
+                                        {
+                                            <img src="@instructor.ProfilePicture" alt="@instructor.Name" 
+                                                 class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;">
+                                        }
+                                        else
+                                        {
+                                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center"
+                                                 style="width: 40px; height: 40px;">
+                                                @instructor.Name.FirstOrDefault()
+                                            </div>
+                                        }
+                                        <div>
+                                            <div class="fw-bold">@instructor.Name</div>
+                                            <small class="text-muted">@instructor.Email</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="text-center"><span class="badge bg-info">@instructor.CourseCount</span></td>
+                                <td class="text-center"><span class="badge bg-success">@instructor.TotalSales</span></td>
+                                <td class="text-end fw-bold">@instructor.TotalEarnings.ToString("N2") ج.م</td>
+                                <td class="text-end text-success">@instructor.AvailableBalance.ToString("N2") ج.م</td>
+                                <td class="text-end text-warning">@instructor.PendingBalance.ToString("N2") ج.م</td>
+                                <td class="text-end text-muted">@instructor.WithdrawnAmount.ToString("N2") ج.م</td>
+                                <td class="text-center">
+                                    <span class="badge bg-primary">@instructor.CommissionRate%</span>
+                                </td>
+                                <td>
+                                    <a asp-action="InstructorEarnings" asp-route-instructorId="@instructor.Id" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            rank++;
+                        }
+                    </tbody>
+                    <tfoot class="table-dark">
+                        <tr>
+                            <th colspan="4">@Html.T("الإجمالي", "Total")</th>
+                            <th class="text-end">@Model.InstructorsData.Sum(i => i.TotalEarnings).ToString("N2") @Html.T("ج.م", "EGP")</th>
+                            <th class="text-end">@Model.InstructorsData.Sum(i => i.AvailableBalance).ToString("N2") @Html.T("ج.م", "EGP")</th>
+                            <th class="text-end">@Model.InstructorsData.Sum(i => i.PendingBalance).ToString("N2") @Html.T("ج.م", "EGP")</th>
+                            <th class="text-end">@Model.InstructorsData.Sum(i => i.WithdrawnAmount).ToString("N2") @Html.T("ج.م", "EGP")</th>
+                            <th colspan="2"></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    new Chart(document.getElementById('earningsChart'), {
+        type: 'bar',
+        data: {
+            labels: [@Html.Raw(string.Join(",", Model.MonthlyEarnings.Select(m => $"'{m.Month}'")))],
+            datasets: [
+                {
+                    label: 'أرباح المدربين',
+                    data: [@string.Join(",", Model.MonthlyEarnings.Select(m => m.InstructorEarnings))],
+                    backgroundColor: '#198754'
+                },
+                {
+                    label: 'عمولة المنصة',
+                    data: [@string.Join(",", Model.MonthlyEarnings.Select(m => m.PlatformCommission))],
+                    backgroundColor: '#0d6efd'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { callback: function(value) { return value.toLocaleString() + ' ج.م'; } }
+                }
+            }
+        }
+    });
+</script>
+}
+

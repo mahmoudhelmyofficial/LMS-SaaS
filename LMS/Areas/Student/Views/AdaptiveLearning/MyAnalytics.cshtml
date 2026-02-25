@@ -1,0 +1,564 @@
+@model LMS.Services.Interfaces.StudentLearningStats
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("لوحة التحليلات الشخصية", "My Analytics Dashboard");
+    
+    // UI settings
+    var topCategoriesLimit = await PlatformSettings.GetIntSettingAsync("UI.TopCategories.Limit", 3);
+    var badgesPreviewLimit = await PlatformSettings.GetIntSettingAsync("UI.BadgesPreview.Limit", 4);
+}
+
+<style>
+    .analytics-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 32px;
+        color: white;
+        margin-bottom: 24px;
+    }
+    .metric-box {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+    .metric-box:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+    .metric-value {
+        font-size: 36px;
+        font-weight: 700;
+        margin: 12px 0;
+    }
+    .metric-label {
+        color: #6b7280;
+        font-size: 14px;
+    }
+    .progress-circle {
+        width: 160px;
+        height: 160px;
+        border-radius: 50%;
+        background: conic-gradient(#667eea 0deg, #764ba2 @((double)Model.AverageProgressPercentage * 3.6)deg, #f3f4f6 @((double)Model.AverageProgressPercentage * 3.6)deg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        margin: 0 auto;
+    }
+    .progress-circle::before {
+        content: '';
+        position: absolute;
+        width: 130px;
+        height: 130px;
+        background: white;
+        border-radius: 50%;
+    }
+    .progress-value {
+        position: relative;
+        z-index: 1;
+        font-size: 36px;
+        font-weight: 700;
+        color: #667eea;
+    }
+    .chart-container { height: 300px; position: relative; }
+    .milestone-item {
+        padding: 20px;
+        background: #f9fafb;
+        border-radius: 12px;
+        margin-bottom: 16px;
+        border-right: 5px solid;
+        transition: all 0.3s ease;
+    }
+    .milestone-item:hover { background: #f3f4f6; transform: translateX(-5px); }
+    .milestone-item.achieved { border-color: #22c55e; }
+    .milestone-item.in-progress { border-color: #fbbf24; }
+    .milestone-item.locked { border-color: #d1d5db; opacity: 0.6; }
+    .badge-earned {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+        margin: 0 auto 12px;
+        box-shadow: 0 4px 15px rgba(251, 191, 36, 0.3);
+    }
+    .streak-flame {
+        font-size: 60px;
+        text-align: center;
+        margin-bottom: 12px;
+        filter: drop-shadow(0 4px 10px rgba(239, 68, 68, 0.3));
+    }
+</style>
+
+<!-- Analytics Header (same approach as CourseAnalytics) -->
+<div class="analytics-header">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <div class="d-flex align-items-center mb-3">
+                <i class="feather-bar-chart-2 me-3" style="font-size: 40px;"></i>
+                <div>
+                    <h3 class="mb-1">@Html.T("لوحة التحليلات الشخصية", "My Analytics Dashboard")</h3>
+                    <p class="mb-0 opacity-75">@Html.T("تتبع تقدمك وأدائك التعليمي بالتفصيل", "Track your learning progress and performance in detail")</p>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <div class="btn-group">
+                <button type="button" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="feather-download me-2"></i>@Html.T("تصدير التقرير", "Export report")
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="/api/export/student-analytics?format=csv">@Html.T("تصدير CSV", "Export CSV")</a></li>
+                    <li><a class="dropdown-item" href="/api/export/student-analytics?format=excel">@Html.T("تصدير Excel", "Export Excel")</a></li>
+                    <li><a class="dropdown-item" href="/api/export/student-analytics?format=pdf">@Html.T("تصدير PDF", "Export PDF")</a></li>
+                </ul>
+            </div>
+            <button class="btn btn-light" onclick="refreshAnalytics()">
+                <i class="feather-refresh-cw me-2"></i>
+                @Html.T("تحديث", "Refresh")
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Main Stats (metric-box pattern like CourseAnalytics) -->
+<div class="row g-4 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-box">
+            <div class="avatar-text avatar-md bg-primary-subtle text-primary mx-auto mb-3">
+                <i class="feather-book-open"></i>
+            </div>
+            <p class="metric-label">@Html.T("إجمالي الدورات", "Total courses")</p>
+            <h2 class="metric-value text-primary">@Model.TotalCourses</h2>
+            <small class="text-muted">+@Model.CoursesThisMonth @Html.T("هذا الشهر", "this month")</small>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-box">
+            <div class="avatar-text avatar-md bg-success-subtle text-success mx-auto mb-3">
+                <i class="feather-check-circle"></i>
+            </div>
+            <p class="metric-label">@Html.T("الدورات المكتملة", "Completed courses")</p>
+            <h2 class="metric-value text-success">@Model.CompletedCourses</h2>
+            <small class="text-muted">@Html.T("معدل الإكمال:", "Completion rate:") @(Model.TotalCourses > 0 ? Math.Round((decimal)Model.CompletedCourses / (decimal)Model.TotalCourses * 100, 1) : 0)%</small>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-box">
+            <div class="avatar-text avatar-md bg-warning-subtle text-warning mx-auto mb-3">
+                <i class="feather-clock"></i>
+            </div>
+            <p class="metric-label">@Html.T("ساعات التعلم", "Learning hours")</p>
+            <h2 class="metric-value text-warning">@Math.Round((decimal)Model.TotalStudyMinutes / 60.0m, 1)</h2>
+            <small class="text-muted">+@Model.WeeklyStudyMinutes @Html.T("دقيقة أسبوعياً", "min per week")</small>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="metric-box">
+            <div class="avatar-text avatar-md bg-info-subtle text-info mx-auto mb-3">
+                <i class="feather-award"></i>
+            </div>
+            <p class="metric-label">@Html.T("النقاط المكتسبة", "Points earned")</p>
+            <h2 class="metric-value text-info">@Model.TotalPoints</h2>
+            <small class="text-muted">@Html.T("المركز", "Rank") #@Model.GlobalRank @Html.T("عالمياً", "globally")</small>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Overview & Streak -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-4">
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body text-center">
+                <h5 class="mb-4">@Html.T("متوسط التقدم الإجمالي", "Average overall progress")</h5>
+                <div class="progress-circle">
+                    <div class="progress-value">@Math.Round(Model.AverageProgressPercentage, 0)%</div>
+                </div>
+                <p class="text-muted mt-4 mb-0">@Html.T("مستواك الحالي:", "Your current level:") <strong class="text-primary">@Model.Level</strong></p>
+                <div class="mt-3">
+                    <div class="progress" style="height: 8px; border-radius: 10px;">
+                        <div class="progress-bar bg-gradient" style="width: @Model.AverageProgressPercentage%; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);"></div>
+                    </div>
+                    <small class="text-muted mt-2 d-block">@(100 - Model.AverageProgressPercentage)% @Html.T("متبقي للوصول للإنجاز الكامل", "remaining to full achievement")</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body text-center">
+                <h5 class="mb-4">🔥 @Html.T("سلسلة الإنجاز", "Achievement streak")</h5>
+                <div class="streak-flame">🔥</div>
+                <h2 class="metric-value text-primary mb-2">@Model.CurrentStreak</h2>
+                <p class="text-muted mb-3">@Html.T("يوم متواصل", "days in a row")</p>
+            <div class="d-flex justify-content-around mt-4">
+                <div>
+                    <p class="mb-1 text-muted small">@Html.T("أطول سلسلة", "Longest streak")</p>
+                    <h4 class="mb-0 text-warning">@Model.LongestStreak</h4>
+                </div>
+                <div>
+                    <p class="mb-1 text-muted small">@Html.T("الهدف", "Goal")</p>
+                    <h4 class="mb-0 text-success">@Model.StreakGoal</h4>
+                </div>
+            </div>
+            @if (Model.CurrentStreak >= 7)
+            {
+                <div class="alert alert-success mt-3 mb-0" style="border-radius: 12px;">
+                    <strong>@Html.T("ممتاز!", "Excellent!")</strong> @Html.T("استمر في الحفاظ على هذه السلسلة!", "Keep up the streak!")
+                </div>
+            }
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body">
+                <h5 class="mb-4">@Html.T("الإحصائيات السريعة", "Quick stats")</h5>
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                <div class="d-flex align-items-center">
+                    <div class="avatar-text avatar-sm bg-primary-subtle text-primary me-3">
+                        <i class="feather-video"></i>
+                    </div>
+                    <span>@Html.T("الدروس المكتملة", "Completed lessons")</span>
+                </div>
+                <strong class="text-primary">@Model.CompletedLessons</strong>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                <div class="d-flex align-items-center">
+                    <div class="avatar-text avatar-sm bg-success-subtle text-success me-3">
+                        <i class="feather-check-square"></i>
+                    </div>
+                    <span>@Html.T("الاختبارات المجتازة", "Quizzes passed")</span>
+                </div>
+                <strong class="text-success">@Model.PassedQuizzes</strong>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                <div class="d-flex align-items-center">
+                    <div class="avatar-text avatar-sm bg-warning-subtle text-warning me-3">
+                        <i class="feather-file-text"></i>
+                    </div>
+                    <span>@Html.T("الواجبات المسلمة", "Assignments submitted")</span>
+                </div>
+                <strong class="text-warning">@Model.SubmittedAssignments</strong>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <div class="avatar-text avatar-sm bg-info-subtle text-info me-3">
+                        <i class="feather-star"></i>
+                    </div>
+                    <span>@Html.T("متوسط التقييم", "Average grade")</span>
+                </div>
+                <strong class="text-info">@Model.AverageGrade.ToString("F1")%</strong>
+            </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Performance Charts -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="mb-0">@Html.T("نشاط التعلم الأسبوعي", "Weekly learning activity")</h5>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary active" onclick="changeChartPeriod('week')">@Html.T("أسبوع", "Week")</button>
+                    <button class="btn btn-outline-secondary" onclick="changeChartPeriod('month')">@Html.T("شهر", "Month")</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="learningActivityChart"></canvas>
+            </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body">
+                <h5 class="mb-4">@Html.T("توزيع الوقت حسب المجال", "Time distribution by category")</h5>
+            <div class="chart-container" style="height: 250px;">
+                <canvas id="categoryDistributionChart"></canvas>
+            </div>
+            @if (Model.CategoryDistribution.Any())
+            {
+                <div class="mt-4">
+                    @foreach (var cat in Model.CategoryDistribution.OrderByDescending(c => c.Percentage).Take(topCategoriesLimit))
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="text-muted">@cat.CategoryName</small>
+                            <strong>@cat.Percentage.ToString("F0")%</strong>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="mt-4 text-center text-muted">
+                    <small>@Html.T("ابدأ التعلم لرؤية توزيع وقتك", "Start learning to see your time distribution")</small>
+                </div>
+            }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Milestones & Badges -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body">
+            <h5 class="mb-4">
+                <i class="feather-flag text-primary me-2"></i>
+                @Html.T("المعالم والإنجازات", "Milestones & achievements")
+            </h5>
+            @foreach (var milestone in Model.Milestones)
+            {
+                <div class="milestone-item @milestone.Status">
+                    <div class="d-flex align-items-center">
+                        <div class="fs-1 me-3">@milestone.Icon</div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">@milestone.Title</h6>
+                            @if (milestone.Status == "achieved")
+                            {
+                                <small class="text-muted">@Html.T("تم الإنجاز في", "Achieved on") @(milestone.AchievedAt?.ToString("MMMM yyyy") ?? Html.T("تاريخ غير محدد", "Unknown date").ToString())</small>
+                            }
+                            else if (milestone.Status == "in-progress")
+                            {
+                                <small class="text-muted">@milestone.Current @Html.T("من", "of") @milestone.Target</small>
+                                <div class="progress mt-2" style="height: 6px;">
+                                    <div class="progress-bar bg-warning" style="width: @milestone.Progress%"></div>
+                                </div>
+                            }
+                            else
+                            {
+                                <small class="text-muted">@Html.T("أكمل", "Complete") @milestone.Target @Html.T("للحصول على هذا الإنجاز", "to unlock this achievement")</small>
+                            }
+                        </div>
+                        <span class="badge bg-@(milestone.Status == "achieved" ? "success" : milestone.Status == "in-progress" ? "warning" : "secondary")">
+                            @(milestone.Status == "achieved" ? Html.T("محقق", "Achieved") : milestone.Status == "in-progress" ? Html.T("قيد التقدم", "In progress") : Html.T("مقفل", "Locked"))
+                        </span>
+                    </div>
+                </div>
+            }
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body">
+                <h5 class="mb-4">
+                <i class="feather-award text-warning me-2"></i>
+                @Html.T("الشارات المكتسبة", "Badges earned") (@Model.TotalBadges)
+            </h5>
+            @if (Model.EarnedBadges.Any())
+            {
+                <div class="row g-3">
+                    @foreach (var badge in Model.EarnedBadges.Take(badgesPreviewLimit))
+                    {
+                        <div class="col-6">
+                            <div class="text-center p-3 bg-light rounded">
+                                <div class="badge-earned">@badge.Icon</div>
+                                <h6 class="mb-1">@badge.Name</h6>
+                                <small class="text-muted">@badge.Description</small>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-4">
+                    <div class="fs-1 mb-3">🎯</div>
+                    <p class="text-muted">@Html.T("لم تكسب أي شارات بعد", "You haven't earned any badges yet")</p>
+                    <a href="@Url.Action("Index", "Courses")" class="btn btn-sm btn-primary">@Html.T("ابدأ التعلم", "Start learning")</a>
+                </div>
+            }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Stats Table -->
+<div class="row g-4">
+    <div class="col-12">
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body">
+                <h5 class="mb-4">@Html.T("إحصائيات تفصيلية حسب الدورة", "Detailed stats by course")</h5>
+            @if (Model.CourseStats.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>@Html.T("الدورة", "Course")</th>
+                                <th class="text-center">@Html.T("التقدم", "Progress")</th>
+                                <th class="text-center">@Html.T("الوقت المستغرق", "Time spent")</th>
+                                <th class="text-center">@Html.T("التقييم", "Grade")</th>
+                                <th class="text-center">@Html.T("الحالة", "Status")</th>
+                                <th class="text-center">@Html.T("الإجراءات", "Actions")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var course in Model.CourseStats)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar-text avatar-sm bg-primary-subtle text-primary me-3">
+                                                <i class="@course.CategoryIcon"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-0">@course.CourseTitle</h6>
+                                                <small class="text-muted">@course.CategoryName</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="progress" style="height: 8px;">
+                                            <div class="progress-bar @(course.Status == "Completed" ? "bg-success" : "bg-primary")" 
+                                                 style="width: @course.ProgressPercentage%"></div>
+                                        </div>
+                                        <small class="text-muted">@course.ProgressPercentage.ToString("F0")%</small>
+                                    </td>
+                                    <td class="text-center">
+                                        <strong>@course.StudyHours @Html.T("ساعة", "hrs")</strong>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge @(course.Grade >= 80 ? "bg-success" : course.Grade >= 60 ? "bg-warning" : "bg-secondary")">
+                                            @(course.Grade > 0 ? course.Grade.ToString("F0") + "%" : "-")
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge @(course.Status == "Completed" ? "bg-success" : course.Status == "Active" ? "bg-primary" : "bg-secondary")">
+                                            @(course.Status == "Completed" ? Html.T("مكتمل", "Completed") : course.Status == "Active" ? Html.T("نشط", "Active") : course.Status)
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        @if (course.Status == "Completed")
+                                        {
+                                            <a asp-controller="Certificates" asp-action="Index" class="btn btn-sm btn-outline-success">@Html.T("الشهادة", "Certificate")</a>
+                                        }
+                                        else
+                                        {
+                                            <a asp-controller="Learning" asp-action="Continue" asp-route-enrollmentId="@course.EnrollmentId" class="btn btn-sm btn-outline-primary">@Html.T("استمر", "Continue")</a>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <div class="fs-1 mb-3">📚</div>
+                    <p class="text-muted">@Html.T("لم تسجل في أي دورة بعد", "You haven't enrolled in any course yet")</p>
+                    <a href="@Url.Action("Index", "Courses", new { Area = "" })" class="btn btn-primary">@Html.T("استعرض الدورات", "Browse courses")</a>
+                </div>
+            }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Prepare chart data from model
+    var activityLabels = @Html.Raw(Json.Serialize(Model.WeeklyActivityData.Select(w => w.DayName)));
+    var activityData = @Html.Raw(Json.Serialize(Model.WeeklyActivityData.Select(w => w.Hours)));
+    
+    var categoryLabels = @Html.Raw(Json.Serialize(Model.CategoryDistribution.Select(c => c.CategoryName)));
+    var categoryData = @Html.Raw(Json.Serialize(Model.CategoryDistribution.Select(c => c.Percentage)));
+    
+    // Learning Activity Chart
+    const activityCtx = document.getElementById('learningActivityChart').getContext('2d');
+    const learningActivityChart = new Chart(activityCtx, {
+        type: 'line',
+        data: {
+            labels: activityLabels.length > 0 ? activityLabels : ['@Html.Raw(Html.T("لا توجد بيانات", "No data").Replace("'", "\\'"))'],
+            datasets: [{
+                label: '@Html.Raw(Html.T("ساعات التعلم", "Learning hours").Replace("'", "\\'"))',
+                data: activityData.length > 0 ? activityData : [0],
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 6,
+                pointHoverRadius: 8,
+                pointBackgroundColor: '#667eea',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    titleFont: { size: 14, weight: 'bold' },
+                    bodyFont: { size: 13 },
+                    displayColors: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: value => value + ' @Html.Raw(Html.T("ساعة", "hrs").Replace("'", "\\'"))'
+                    },
+                    grid: { borderDash: [5, 5], color: '#f3f4f6' }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+    
+    // Category Distribution Chart
+    const categoryCtx = document.getElementById('categoryDistributionChart').getContext('2d');
+    new Chart(categoryCtx, {
+        type: 'doughnut',
+        data: {
+            labels: categoryLabels.length > 0 ? categoryLabels : ['@Html.Raw(Html.T("لا توجد بيانات", "No data").Replace("'", "\\'"))'],
+            datasets: [{
+                data: categoryData.length > 0 ? categoryData : [100],
+                backgroundColor: categoryData.length > 0 
+                    ? ['#667eea', '#4ade80', '#fbbf24', '#ec4899', '#3b82f6']
+                    : ['#e5e7eb'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+    
+    function changeChartPeriod(period) {
+        console.log('Changing period to:', period);
+    }
+    
+    function exportAnalytics() {
+        window.print();
+    }
+    
+    function refreshAnalytics() {
+        location.reload();
+    }
+</script>
+}

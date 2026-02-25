@@ -1,0 +1,342 @@
+@model LMS.Areas.Admin.ViewModels.SmsTemplateEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل قالب رسالة نصية", "Edit SMS Template");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("قوالب الرسائل النصية", "SMS Templates"), Url.Action("Index", "SmsTemplates")),
+        (Html.T("تعديل قالب", "Edit Template"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .char-counter {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+        .char-counter.warning {
+            color: #ffc107;
+        }
+        .char-counter.danger {
+            color: #dc3545;
+        }
+        .variable-tag {
+            display: inline-block;
+            padding: 4px 10px;
+            margin: 3px;
+            background: #e9ecef;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+        .variable-tag:hover {
+            background: #3454d1;
+            color: white;
+        }
+        .sms-preview {
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <form asp-action="Edit" method="post" id="smsTemplateForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        <div class="row">
+            <!-- Form Section -->
+            <div class="col-lg-8">
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("تعديل معلومات القالب", "Edit Template Information")</h5>
+                        <div class="card-header-action">
+                            <span class="badge bg-soft-primary text-primary">القالب #@Model.Id</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Template Name -->
+                        <div class="mb-4">
+                            <label class="form-label" for="templateName">@Html.T("اسم القالب", "Template Name") <span class="text-danger">*</span></label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="templateName" 
+                                   asp-for="TemplateName" 
+                                   placeholder="@Html.T("مثال: قالب تأكيد التسجيل", "Example: Registration Confirmation Template")"
+                                   required>
+                            <span asp-validation-for="TemplateName" class="text-danger"></span>
+                        </div>
+
+                        <!-- Template Key -->
+                        <div class="mb-4">
+                            <label class="form-label" for="templateKey">@Html.T("مفتاح القالب", "Template Key") <span class="text-danger">*</span></label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="templateKey" 
+                                   asp-for="TemplateKey" 
+                                   placeholder="@Html.T("مثال: USER_REGISTRATION", "e.g. USER_REGISTRATION")"
+                                   required
+                                   readonly>
+                            <small class="text-muted">@Html.T("المفتاح الفريد للقالب (لا يمكن تعديله)", "Unique template key (cannot be edited)")</small>
+                            <span asp-validation-for="TemplateKey" class="text-danger"></span>
+                        </div>
+
+                        <!-- Message Content -->
+                        <div class="mb-4">
+                            <label class="form-label" for="messageContent">@Html.T("محتوى الرسالة", "Message Content") <span class="text-danger">*</span></label>
+                            <textarea class="form-control" 
+                                      id="messageContent" 
+                                      asp-for="MessageContent" 
+                                      rows="6" 
+                                      placeholder="@Html.T("اكتب نص الرسالة هنا...", "Type the message text here...")"
+                                      required
+                                      maxlength="320"></textarea>
+                            <div class="d-flex justify-content-between mt-2">
+                                <small class="text-muted">@Html.T("استخدم المتغيرات مثل: {UserName}, {CourseName}", "Use variables like: {UserName}, {CourseName}")</small>
+                                <span class="char-counter" id="charCounter">0 / 320</span>
+                            </div>
+                            <span asp-validation-for="MessageContent" class="text-danger"></span>
+                        </div>
+
+                        <!-- Language -->
+                        <div class="mb-4">
+                            <label class="form-label" for="language">@Html.T("اللغة", "Language") <span class="text-danger">*</span></label>
+                            <select class="form-select" id="language" asp-for="Language" required>
+                                <option value="">@Html.T("-- اختر اللغة --", "-- Select Language --")</option>
+                                <option value="ar">@Html.T("العربية", "Arabic")</option>
+                                <option value="en">@Html.T("الإنجليزية", "English")</option>
+                                <option value="ar-en">@Html.T("ثنائية اللغة", "Bilingual")</option>
+                            </select>
+                            <span asp-validation-for="Language" class="text-danger"></span>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="mb-4">
+                            <label class="form-label" for="description">@Html.T("الوصف", "Description")</label>
+                            <textarea class="form-control" 
+                                      id="description" 
+                                      asp-for="Description" 
+                                      rows="3" 
+                                      placeholder="@Html.T("وصف القالب ومتى يتم استخدامه", "Template description and when it is used")"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <!-- Is Active -->
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="isActive" asp-for="IsActive">
+                                <label class="form-check-label" for="isActive">
+                                    @Html.T("تفعيل القالب", "Activate Template")
+                                </label>
+                            </div>
+                            <small class="text-muted">@Html.T("القوالب النشطة سيتم استخدامها في إرسال الرسائل النصية", "Active templates will be used for sending SMS messages")</small>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex justify-content-between">
+                        <div>
+                            <a asp-action="Index" class="btn btn-light">
+                                <i class="feather-arrow-right me-2"></i>@Html.T("رجوع", "Back")
+                            </a>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-secondary me-2" onclick="testSms()">
+                                <i class="feather-send me-2"></i>@Html.T("اختبار الرسالة", "Test Message")
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-2"></i>@Html.T("حفظ التعديلات", "Save Changes")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Helper Section -->
+            <div class="col-lg-4">
+                <!-- Preview Card -->
+                <div class="card stretch stretch-full sticky-top" style="top: 100px;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("معاينة الرسالة", "Message Preview")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="sms-preview mb-3">
+                            <div class="d-flex align-items-start gap-2 mb-2">
+                                <i class="feather-smartphone text-primary"></i>
+                                <strong>@Html.T("رسالة نصية (SMS)", "Text Message (SMS)")</strong>
+                            </div>
+                            <p id="previewText" class="mb-0">محتوى الرسالة سيظهر هنا...</p>
+                        </div>
+                        <small class="text-muted">
+                            <i class="feather-info me-1"></i>
+                            هذه معاينة لكيفية ظهور الرسالة على الهاتف
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Variables Card -->
+                <div class="card stretch stretch-full mt-3">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("المتغيرات المتاحة", "Available Variables")</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">@Html.T("انقر على المتغير لإضافته", "Click a variable to add it")</p>
+                        
+                        <h6 class="fw-bold mb-2">@Html.T("عامة:", "General:")</h6>
+                        <div class="mb-3">
+                            <span class="variable-tag" data-var="{PlatformName}">{PlatformName}</span>
+                            <span class="variable-tag" data-var="{Date}">{Date}</span>
+                            <span class="variable-tag" data-var="{Time}">{Time}</span>
+                        </div>
+
+                        <h6 class="fw-bold mb-2">@Html.T("المستخدم:", "User:")</h6>
+                        <div class="mb-3">
+                            <span class="variable-tag" data-var="{UserName}">{UserName}</span>
+                            <span class="variable-tag" data-var="{UserFirstName}">{UserFirstName}</span>
+                            <span class="variable-tag" data-var="{Phone}">{Phone}</span>
+                        </div>
+
+                        <h6 class="fw-bold mb-2">@Html.T("الدورات:", "Courses:")</h6>
+                        <div class="mb-3">
+                            <span class="variable-tag" data-var="{CourseName}">{CourseName}</span>
+                            <span class="variable-tag" data-var="{CourseCode}">{CourseCode}</span>
+                        </div>
+
+                        <h6 class="fw-bold mb-2">@Html.T("المدفوعات:", "Payments:")</h6>
+                        <div class="mb-3">
+                            <span class="variable-tag" data-var="{Amount}">{Amount}</span>
+                            <span class="variable-tag" data-var="{InvoiceNumber}">{InvoiceNumber}</span>
+                        </div>
+
+                        <div class="alert alert-info mt-3">
+                            <small>
+                                <i class="feather-info me-1"></i>
+                                @Html.T("سيتم استبدال المتغيرات بالقيم الفعلية عند الإرسال", "Variables will be replaced with actual values when sending")
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tips Card -->
+                <div class="card stretch stretch-full mt-3">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("نصائح مهمة", "Important Tips")</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled">
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                <small>الحد الأقصى 320 حرف للرسالة</small>
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                <small>استخدم نصاً واضحاً ومختصراً</small>
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                <small>تجنب الرموز الخاصة الزائدة</small>
+                            </li>
+                            <li class="mb-0">
+                                <i class="feather-check text-success me-2"></i>
+                                <small>اختبر الرسالة قبل الحفظ</small>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Character counter
+            function updateCharCounter() {
+                const text = $('#messageContent').val();
+                const length = text.length;
+                const counter = $('#charCounter');
+                
+                counter.text(`${length} / 320`);
+                
+                // Update color based on length
+                counter.removeClass('warning danger');
+                if (length > 280) {
+                    counter.addClass('danger');
+                } else if (length > 240) {
+                    counter.addClass('warning');
+                }
+
+                // Update preview
+                $('#previewText').text(text || 'محتوى الرسالة سيظهر هنا...');
+            }
+
+            $('#messageContent').on('input', updateCharCounter);
+            updateCharCounter(); // Initial update
+
+            // Insert variables
+            $('.variable-tag').on('click', function() {
+                const variable = $(this).data('var');
+                const textarea = $('#messageContent');
+                const currentText = textarea.val();
+                const cursorPos = textarea.prop('selectionStart');
+                
+                // Insert variable at cursor position
+                const newText = currentText.substring(0, cursorPos) + variable + currentText.substring(cursorPos);
+                textarea.val(newText);
+                
+                // Update counter and preview
+                updateCharCounter();
+                
+                // Focus back
+                textarea.focus();
+                
+                // Visual feedback
+                $(this).addClass('bg-primary text-white');
+                setTimeout(() => {
+                    $(this).removeClass('bg-primary text-white');
+                }, 300);
+            });
+
+            // Form validation
+            $('#smsTemplateForm').on('submit', function(e) {
+                const messageLength = $('#messageContent').val().length;
+                if (messageLength === 0) {
+                    e.preventDefault();
+                    alert('@Html.Raw(Html.T("يرجى كتابة محتوى الرسالة", "Please enter message content").Replace("'", "\\'"))');
+                    return false;
+                }
+                if (messageLength > 320) {
+                    e.preventDefault();
+                    alert('@Html.Raw(Html.T("محتوى الرسالة طويل جداً. الحد الأقصى 320 حرف", "Message content is too long. Maximum 320 characters").Replace("'", "\\'"))');
+                    return false;
+                }
+            });
+        });
+
+        function testSms() {
+            const message = $('#messageContent').val();
+            const templateName = $('#templateName').val();
+            
+            if (!message) {
+                alert('@Html.Raw(Html.T("يرجى كتابة محتوى الرسالة أولاً", "Please enter message content first").Replace("'", "\\'"))');
+                return;
+            }
+
+            const phone = prompt('@Html.Raw(Html.T("أدخل رقم الهاتف لإرسال رسالة تجريبية:", "Enter phone number to send test message:").Replace("'", "\\'"))');
+            if (phone) {
+                // Simulate sending test SMS
+                alert('@Html.Raw(Html.T("سيتم إرسال رسالة تجريبية إلى:", "A test message will be sent to:").Replace("'", "\\'"))' + ' ' + phone + ':\n\n"' + message + '"');
+                // Here you would make an AJAX call to send the SMS
+            }
+        }
+    </script>
+}
+

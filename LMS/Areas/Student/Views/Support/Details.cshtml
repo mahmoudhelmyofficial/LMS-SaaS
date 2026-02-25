@@ -1,0 +1,380 @@
+@model LMS.Domain.Entities.Support.SupportTicket
+@{
+    ViewData["Title"] = Html.T("تفاصيل التذكرة", "Ticket Details");
+}
+
+@section Styles {
+<style>
+    .ticket-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 30px;
+    }
+    .reply-message {
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 15px;
+        border: 1px solid #e5e7eb;
+    }
+    .reply-message.admin {
+        background: #f0fdf4;
+        border-color: #86efac;
+    }
+    .reply-message.student {
+        background: #eff6ff;
+        border-color: #93c5fd;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Back Button -->
+<div class="mb-4">
+    <a asp-action="Index" class="btn btn-outline-secondary">
+        <i class="feather-arrow-right me-2"></i>
+        @Html.T("العودة لتذاكر الدعم", "Back to Support Tickets")
+    </a>
+</div>
+
+<!-- Ticket Header -->
+<div class="ticket-header mb-4">
+    <div class="d-flex align-items-start justify-content-between mb-3">
+        <div>
+            <div class="mb-2">
+                <span class="badge bg-white bg-opacity-25 text-white">
+                    @switch (Model.Category)
+                    {
+                        case LMS.Domain.Enums.TicketCategory.Technical:
+                            @Html.T("مشكلة تقنية", "Technical Issue")
+                            break;
+                        case LMS.Domain.Enums.TicketCategory.Billing:
+                            @Html.T("الفواتير والمدفوعات", "Billing & Payments")
+                            break;
+                        case LMS.Domain.Enums.TicketCategory.CourseContent:
+                            @Html.T("محتوى الدورة", "Course Content")
+                            break;
+                        case LMS.Domain.Enums.TicketCategory.AccountIssue:
+                            @Html.T("مشكلة في الحساب", "Account Issue")
+                            break;
+                        case LMS.Domain.Enums.TicketCategory.FeatureRequest:
+                            @Html.T("طلب ميزة جديدة", "Feature Request")
+                            break;
+                        default:
+                            @Html.T("أخرى", "Other")
+                            break;
+                    }
+                </span>
+                <span class="badge bg-@(Model.Priority == LMS.Domain.Enums.TicketPriority.High ? "danger" : Model.Priority == LMS.Domain.Enums.TicketPriority.Medium ? "warning" : "secondary")">
+                    @switch (Model.Priority)
+                    {
+                        case LMS.Domain.Enums.TicketPriority.High:
+                            @Html.T("أولوية عالية", "High Priority")
+                            break;
+                        case LMS.Domain.Enums.TicketPriority.Medium:
+                            @Html.T("أولوية متوسطة", "Medium Priority")
+                            break;
+                        default:
+                            @Html.T("أولوية منخفضة", "Low Priority")
+                            break;
+                    }
+                </span>
+            </div>
+            <h3 class="text-white fw-bold mb-2">@Model.Subject</h3>
+            <p class="text-white opacity-75 mb-0">@Html.T("تذكرة", "Ticket") #@Model.TicketNumber</p>
+        </div>
+        @{
+            var headerStatusClass = Model.Status switch
+            {
+                LMS.Domain.Enums.TicketStatus.New => "info",
+                LMS.Domain.Enums.TicketStatus.Open => "success",
+                LMS.Domain.Enums.TicketStatus.InProgress => "warning",
+                LMS.Domain.Enums.TicketStatus.Resolved => "success",
+                LMS.Domain.Enums.TicketStatus.Closed => "secondary",
+                _ => "secondary"
+            };
+            var headerStatusText = Model.Status switch
+            {
+                LMS.Domain.Enums.TicketStatus.New => Html.T("جديدة", "New"),
+                LMS.Domain.Enums.TicketStatus.Open => Html.T("مفتوحة", "Open"),
+                LMS.Domain.Enums.TicketStatus.InProgress => Html.T("قيد المعالجة", "In Progress"),
+                LMS.Domain.Enums.TicketStatus.Resolved => Html.T("تم الحل", "Resolved"),
+                LMS.Domain.Enums.TicketStatus.Closed => Html.T("مغلقة", "Closed"),
+                _ => Html.T("غير معروف", "Unknown")
+            };
+        }
+        <span class="badge bg-@headerStatusClass fs-6">@headerStatusText</span>
+    </div>
+    
+    <div class="d-flex align-items-center gap-3 text-white">
+        <div>
+            <i class="feather-calendar me-1"></i>
+            @Html.T("تم الإنشاء:", "Created:") @Model.CreatedAt.ToString("dd MMMM yyyy", new System.Globalization.CultureInfo(System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "ar-SA" : "en-US"))
+        </div>
+        <div>
+            <i class="feather-clock me-1"></i>
+            @Html.T("آخر تحديث:", "Last Updated:") @(Model.UpdatedAt?.ToString("dd MMMM yyyy, HH:mm", new System.Globalization.CultureInfo(System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "ar-SA" : "en-US")) ?? Html.T("لا يوجد", "None").ToString())
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Conversation -->
+    <div class="col-lg-8">
+        <!-- Original Message -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-message-circle me-2"></i>
+                    @Html.T("التفاصيل الأصلية", "Original Details")
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">@Model.Description</p>
+            </div>
+        </div>
+
+        <!-- Conversation Thread -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-message-square me-2"></i>
+                    @Html.T("المحادثة", "Conversation") (@Model.Replies.Count)
+                </h5>
+            </div>
+            <div class="card-body">
+                @if (Model.Replies.Any())
+                {
+                    @foreach (var reply in Model.Replies.OrderBy(r => r.CreatedAt))
+                    {
+                        <div class="reply-message @(reply.IsFromSupport ? "admin" : "student")">
+                            <div class="d-flex align-items-start mb-3">
+                                <div class="avatar-text avatar-md @(reply.IsFromSupport ? "bg-success" : "bg-primary") text-white me-3">
+                                    <i class="feather-user"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <strong class="d-block">@(reply.IsFromSupport ? Html.T("فريق الدعم", "Support Team") : Model.Student.FullName)</strong>
+                                            <small class="text-muted">
+                                                @reply.CreatedAt.ToString("dd MMMM yyyy, HH:mm", new System.Globalization.CultureInfo(System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "ar-SA" : "en-US"))
+                                                @if (reply.IsFromSupport)
+                                                {
+                                                    <span class="badge bg-success ms-2">@Html.T("فريق الدعم", "Support Team")</span>
+                                                }
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="mb-0">@reply.Message</p>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center text-muted py-4">
+                        <i class="feather-message-circle fs-1 mb-2 d-block"></i>
+                        <p class="mb-0">@Html.T("بانتظار رد فريق الدعم", "Waiting for support team response")</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Reply Form -->
+        @if (Model.Status != LMS.Domain.Enums.TicketStatus.Closed)
+        {
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">
+                        <i class="feather-edit me-2"></i>
+                        @Html.T("أضف رداً", "Add Reply")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="AddReply" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="ticketId" value="@Model.Id" />
+                        <div class="mb-3">
+                            <textarea name="message" class="form-control" rows="5" placeholder="@Html.T("اكتب ردك هنا...", "Write your reply here...")" required></textarea>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary flex-grow-1">
+                                <i class="feather-send me-2"></i>
+                                @Html.T("إرسال الرد", "Send Reply")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-info d-flex align-items-center justify-content-between">
+                <span>
+                    <i class="feather-info me-2"></i>
+                    @Html.T("هذه التذكرة مغلقة.", "This ticket is closed.")
+                </span>
+                <form asp-action="Reopen" asp-route-id="@Model.Id" method="post" class="d-inline">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-link p-0 alert-link">@Html.T("إعادة فتح التذكرة", "Reopen Ticket")</button>
+                </form>
+            </div>
+        }
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Ticket Info -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">@Html.T("معلومات التذكرة", "Ticket Information")</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3 pb-3 border-bottom">
+                    <small class="text-muted d-block mb-1">@Html.T("رقم التذكرة", "Ticket Number")</small>
+                    <strong>@Model.TicketNumber</strong>
+                </div>
+                <div class="mb-3 pb-3 border-bottom">
+                    <small class="text-muted d-block mb-1">@Html.T("الحالة", "Status")</small>
+                    @{
+                        var sidebarStatusClass = Model.Status switch
+                        {
+                            LMS.Domain.Enums.TicketStatus.New => "info",
+                            LMS.Domain.Enums.TicketStatus.Open => "success",
+                            LMS.Domain.Enums.TicketStatus.InProgress => "warning",
+                            LMS.Domain.Enums.TicketStatus.Resolved => "success",
+                            LMS.Domain.Enums.TicketStatus.Closed => "secondary",
+                            _ => "secondary"
+                        };
+                        var sidebarStatusText = Model.Status switch
+                        {
+                            LMS.Domain.Enums.TicketStatus.New => Html.T("جديدة", "New"),
+                            LMS.Domain.Enums.TicketStatus.Open => Html.T("مفتوحة", "Open"),
+                            LMS.Domain.Enums.TicketStatus.InProgress => Html.T("قيد المعالجة", "In Progress"),
+                            LMS.Domain.Enums.TicketStatus.Resolved => Html.T("تم الحل", "Resolved"),
+                            LMS.Domain.Enums.TicketStatus.Closed => Html.T("مغلقة", "Closed"),
+                            _ => Html.T("غير معروف", "Unknown")
+                        };
+                    }
+                    <span class="badge bg-@sidebarStatusClass">@sidebarStatusText</span>
+                </div>
+                <div class="mb-3 pb-3 border-bottom">
+                    <small class="text-muted d-block mb-1">@Html.T("الفئة", "Category")</small>
+                    <strong>
+                        @switch (Model.Category)
+                        {
+                            case LMS.Domain.Enums.TicketCategory.Technical:
+                                @Html.T("مشكلة تقنية", "Technical Issue")
+                                break;
+                            case LMS.Domain.Enums.TicketCategory.Billing:
+                                @Html.T("الفواتير والمدفوعات", "Billing & Payments")
+                                break;
+                            case LMS.Domain.Enums.TicketCategory.CourseContent:
+                                @Html.T("محتوى الدورة", "Course Content")
+                                break;
+                            case LMS.Domain.Enums.TicketCategory.AccountIssue:
+                                @Html.T("مشكلة في الحساب", "Account Issue")
+                                break;
+                            case LMS.Domain.Enums.TicketCategory.FeatureRequest:
+                                @Html.T("طلب ميزة جديدة", "Feature Request")
+                                break;
+                            default:
+                                @Html.T("أخرى", "Other")
+                                break;
+                        }
+                    </strong>
+                </div>
+                <div class="mb-3 pb-3 border-bottom">
+                    <small class="text-muted d-block mb-1">@Html.T("الأولوية", "Priority")</small>
+                    <span class="badge bg-@(Model.Priority == LMS.Domain.Enums.TicketPriority.High ? "danger" : Model.Priority == LMS.Domain.Enums.TicketPriority.Medium ? "warning" : "secondary")">
+                        @switch (Model.Priority)
+                        {
+                            case LMS.Domain.Enums.TicketPriority.High:
+                                @Html.T("عالية", "High")
+                                break;
+                            case LMS.Domain.Enums.TicketPriority.Medium:
+                                @Html.T("متوسطة", "Medium")
+                                break;
+                            default:
+                                @Html.T("منخفضة", "Low")
+                                break;
+                        }
+                    </span>
+                </div>
+                <div>
+                    <small class="text-muted d-block mb-1">@Html.T("تم الإنشاء", "Created")</small>
+                    <strong>@Model.CreatedAt.ToString("dd MMMM yyyy", new System.Globalization.CultureInfo(System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "ar-SA" : "en-US"))</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        @if (Model.Status != LMS.Domain.Enums.TicketStatus.Closed && Model.Status != LMS.Domain.Enums.TicketStatus.Resolved)
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="fw-bold mb-0">@Html.T("إجراءات", "Actions")</h6>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Close" asp-route-id="@Model.Id" method="post" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إغلاق هذه التذكرة؟", "Are you sure you want to close this ticket?").Replace("'", "\\'"))')">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-outline-danger w-100">
+                            <i class="feather-x-circle me-2"></i>
+                            @Html.T("إغلاق التذكرة", "Close Ticket")
+                        </button>
+                    </form>
+                </div>
+            </div>
+        }
+
+        <!-- Rating -->
+        @if (Model.Status == LMS.Domain.Enums.TicketStatus.Resolved && !Model.Rating.HasValue)
+        {
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h6 class="fw-bold mb-0">@Html.T("تقييم الدعم", "Rate Support")</h6>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">@Html.T("ساعدنا في تحسين خدمتنا", "Help us improve our service")</p>
+                    <form asp-action="Rate" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <div class="mb-3">
+                            <select name="rating" class="form-select" required>
+                                <option value="">@Html.T("-- اختر التقييم --", "-- Select Rating --")</option>
+                                <option value="5">@Html.T("ممتاز - 5 نجوم", "Excellent - 5 Stars")</option>
+                                <option value="4">@Html.T("جيد جداً - 4 نجوم", "Very Good - 4 Stars")</option>
+                                <option value="3">@Html.T("جيد - 3 نجوم", "Good - 3 Stars")</option>
+                                <option value="2">@Html.T("مقبول - 2 نجمة", "Fair - 2 Stars")</option>
+                                <option value="1">@Html.T("ضعيف - 1 نجمة", "Poor - 1 Star")</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <textarea name="feedback" class="form-control" rows="3" placeholder="@Html.T("ملاحظاتك (اختياري)", "Your feedback (optional)")"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="feather-star me-2"></i>
+                            @Html.T("إرسال التقييم", "Submit Rating")
+                        </button>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Auto-dismiss success messages
+    setTimeout(function() {
+        var alert = document.querySelector('.alert-success');
+        if (alert) {
+            var bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }
+    }, 5000);
+</script>
+}

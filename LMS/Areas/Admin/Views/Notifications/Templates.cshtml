@@ -1,0 +1,407 @@
+@model IEnumerable<LMS.Domain.Entities.Notifications.EmailTemplate>
+
+@{
+    ViewData["Title"] = Html.T("قوالب الإشعارات", "Notification templates");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإشعارات", "Notifications"), null),
+        (Html.T("القوالب", "Templates"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إنشاء قالب جديد", "Create Template"), "feather-plus", Url.Action("CreateTemplate", "Notifications"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+    <style>
+        .template-card {
+            transition: all 0.3s ease;
+            border: 1px solid #e9ecef;
+        }
+        .template-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-5px);
+        }
+        .event-type-badge {
+            font-size: 0.75rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-file-text"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي القوالب", "Total Templates")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("قوالب نشطة", "Active Templates")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(t => t.IsActive).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-pause-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("قوالب معطلة", "Disabled Templates")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(t => !t.IsActive).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-layers"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("أنواع الأحداث", "Event Types")</span>
+                            <h3 class="fw-bolder d-block">@Model.Select(t => t.EventType).Distinct().Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة القوالب", "Templates list")</h5>
+                    <div class="card-header-action">
+                        <div class="dropdown">
+                            <a href="javascript:void(0);" class="btn btn-sm btn-light-brand" data-bs-toggle="dropdown">
+                                <i class="feather-filter me-2"></i>
+                                @Html.T("تصفية", "Filter")
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-end">
+                                <a href="javascript:void(0);" class="dropdown-item filter-all">
+                                    <i class="feather-eye me-3"></i>
+                                    عرض الكل
+                                </a>
+                                <a href="javascript:void(0);" class="dropdown-item filter-active">
+                                    <i class="feather-check-circle me-3"></i>
+                                    النشطة فقط
+                                </a>
+                                <a href="javascript:void(0);" class="dropdown-item filter-inactive">
+                                    <i class="feather-x-circle me-3"></i>
+                                    المعطلة فقط
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="templatesTable">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("القالب", "Template")</th>
+                                    <th>@Html.T("نوع الحدث", "Event type")</th>
+                                    <th>@Html.T("العنوان", "Title")</th>
+                                    <th>@Html.T("المحتوى", "Content")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th>@Html.T("تاريخ الإنشاء", "Created")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var template in Model)
+                                {
+                                    <tr class="single-item" data-status="@(template.IsActive ? "active" : "inactive")">
+                                        <td>
+                                            <div class="hstack gap-3">
+                                                <div class="avatar-text avatar-md @(template.IsActive ? "bg-soft-primary text-primary" : "bg-soft-secondary text-secondary")">
+                                                    <i class="feather-file-text"></i>
+                                                </div>
+                                                <div>
+                                                    <span class="text-truncate-1-line fw-bold">@template.Name</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge event-type-badge @GetEventTypeClass(template.EventType)">
+                                                @GetEventTypeText(template.EventType)
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="text-truncate-1-line d-inline-block" style="max-width: 200px;">
+                                                @template.Title
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="text-muted text-truncate-1-line d-inline-block" style="max-width: 250px;">
+                                                @template.Content
+                                            </span>
+                                        </td>
+                                        <td>
+                                            @if (template.IsActive)
+                                            {
+                                                <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-secondary text-secondary">@Html.T("معطل", "Disabled")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">@template.CreatedAt.ToString("dd/MM/yyyy")</small>
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="@Url.Action("EditTemplate", "Notifications", new { id = template.Id })" 
+                                                   class="avatar-text avatar-md" 
+                                                   data-bs-toggle="tooltip" 
+                                                   title="@Html.T("تعديل", "Edit")">
+                                                    <i class="feather-edit"></i>
+                                                </a>
+                                                <div class="dropdown">
+                                                    <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown" data-bs-offset="0,21">
+                                                        <i class="feather-more-horizontal"></i>
+                                                    </a>
+                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        @if (template.IsActive)
+                                                        {
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)" onclick="toggleStatus(@template.Id, false)">
+                                                                    <i class="feather-pause-circle me-3"></i>
+                                                                    <span>@Html.T("تعطيل", "Disable")</span>
+                                                                </a>
+                                                            </li>
+                                                        }
+                                                        else
+                                                        {
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)" onclick="toggleStatus(@template.Id, true)">
+                                                                    <i class="feather-play-circle me-3"></i>
+                                                                    <span>@Html.T("تفعيل", "Enable")</span>
+                                                                </a>
+                                                            </li>
+                                                        }
+                                                        <li>
+                                                            <a class="dropdown-item" href="javascript:void(0)" onclick="duplicateTemplate(@template.Id)">
+                                                                <i class="feather-copy me-3"></i>
+                                                                <span>@Html.T("نسخ القالب", "Copy Template")</span>
+                                                            </a>
+                                                        </li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <form asp-action="DeleteTemplate" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا القالب؟", "Are you sure you want to delete this template?").Replace("'", "\\'"))')">
+                                                                <input type="hidden" name="id" value="@template.Id" />
+                                                                <button type="submit" class="dropdown-item text-danger">
+                                                                    <i class="feather-trash-2 me-3"></i>
+                                                                    <span>@Html.T("حذف", "Delete")</span>
+                                                                </button>
+                                                            </form>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Event Types Reference -->
+    <div class="row mt-4">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أنواع الأحداث المتاحة", "Available event types")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <h6 class="fw-bold mb-2">
+                                    <i class="feather-user-check text-primary me-2"></i>
+                                    تسجيل مستخدم جديد
+                                </h6>
+                                <small class="text-muted">@Html.T("تسجيل مستخدم", "UserRegistration")</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <h6 class="fw-bold mb-2">
+                                    <i class="feather-book text-success me-2"></i>
+                                    تسجيل في دورة
+                                </h6>
+                                <small class="text-muted">@Html.T("تسجيل في دورة", "CourseEnrollment")</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <h6 class="fw-bold mb-2">
+                                    <i class="feather-award text-warning me-2"></i>
+                                    إكمال دورة
+                                </h6>
+                                <small class="text-muted">@Html.T("إكمال الدورة", "CourseCompletion")</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <h6 class="fw-bold mb-2">
+                                    <i class="feather-credit-card text-info me-2"></i>
+                                    دفعة ناجحة
+                                </h6>
+                                <small class="text-muted">@Html.T("دفعة ناجحة", "PaymentSuccess")</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <h6 class="fw-bold mb-2">
+                                    <i class="feather-x-circle text-danger me-2"></i>
+                                    دفعة فاشلة
+                                </h6>
+                                <small class="text-muted">@Html.T("دفعة فاشلة", "PaymentFailed")</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <h6 class="fw-bold mb-2">
+                                    <i class="feather-message-circle text-primary me-2"></i>
+                                    رسالة جديدة
+                                </h6>
+                                <small class="text-muted">@Html.T("رسالة جديدة", "NewMessage")</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            var table = $('#templatesTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[5, "desc"]],
+                "pageLength": 25
+            });
+
+            // Filter buttons
+            $('.filter-all').on('click', function() {
+                table.search('').draw();
+            });
+
+            $('.filter-active').on('click', function() {
+                table.column(4).search('نشط').draw();
+            });
+
+            $('.filter-inactive').on('click', function() {
+                table.column(4).search('معطل').draw();
+            });
+
+            // Tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+
+        function toggleStatus(templateId, activate) {
+            const msg = activate ? '@Html.Raw(Html.T("هل أنت متأكد من تفعيل هذا القالب؟", "Are you sure you want to enable this template?").ToString().Replace("'", "\\'"))' : '@Html.Raw(Html.T("هل أنت متأكد من تعطيل هذا القالب؟", "Are you sure you want to disable this template?").ToString().Replace("'", "\\'"))';
+            if (confirm(msg)) {
+                // Implement AJAX call to toggle status
+                console.log(`Toggling status for template ${templateId} to ${activate}`);
+                // Reload page or update UI
+                location.reload();
+            }
+        }
+
+        function duplicateTemplate(templateId) {
+            if (confirm('@Html.Raw(Html.T("هل تريد نسخ هذا القالب؟", "Do you want to copy this template?").Replace("'", "\\'"))')) {
+                // Implement duplication logic
+                console.log(`Duplicating template ${templateId}`);
+                window.location.href = `/Admin/Notifications/DuplicateTemplate?id=${templateId}`;
+            }
+        }
+    </script>
+}
+
+@functions {
+    string GetEventTypeClass(string eventType)
+    {
+        return eventType switch
+        {
+            "UserRegistration" => "bg-soft-primary text-primary",
+            "CourseEnrollment" => "bg-soft-success text-success",
+            "CourseCompletion" => "bg-soft-warning text-warning",
+            "PaymentSuccess" => "bg-soft-info text-info",
+            "PaymentFailed" => "bg-soft-danger text-danger",
+            "NewMessage" => "bg-soft-primary text-primary",
+            _ => "bg-soft-secondary text-secondary"
+        };
+    }
+
+    string GetEventTypeText(string eventType)
+    {
+        return eventType switch
+        {
+            "UserRegistration" => "تسجيل مستخدم",
+            "CourseEnrollment" => "تسجيل دورة",
+            "CourseCompletion" => "إكمال دورة",
+            "PaymentSuccess" => "دفعة ناجحة",
+            "PaymentFailed" => "دفعة فاشلة",
+            "NewMessage" => "رسالة جديدة",
+            _ => eventType
+        };
+    }
+}
+

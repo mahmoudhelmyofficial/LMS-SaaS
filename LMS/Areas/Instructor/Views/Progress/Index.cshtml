@@ -1,0 +1,294 @@
+@model IEnumerable<LMS.Domain.Entities.Learning.Enrollment>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("تحليل الأداء", "Performance Analysis");
+    ViewData["Subtitle"] = Html.T("نظرة عامة على تقدم الطلاب في دوراتك", "Overview of student progress in your courses");
+    
+    var totalStudents = ViewBag.TotalStudents as int? ?? 0;
+    var totalEnrollments = ViewBag.TotalEnrollments as int? ?? 0;
+    var completedEnrollments = ViewBag.CompletedEnrollments as int? ?? 0;
+    var averageProgress = ViewBag.AverageProgress as string ?? "0";
+    var completionRate = ViewBag.CompletionRate as string ?? "0";
+    var courseId = ViewBag.CourseId as int?;
+    var courses = ViewBag.Courses ?? new List<dynamic>();
+    
+    // Load platform settings
+    var thresholdExcellent = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Excellent", 80);
+    var thresholdGood = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Good", 50);
+    var thresholdFair = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Fair", 25);
+}
+
+@{
+    var indexUrl = Url.Action("Index");
+    // Only show Export when a course is selected (prevents 404)
+    var actionButtonsHtml = courseId.HasValue && courseId.Value > 0
+        ? "<a href='" + Url.Action("Export", "Progress", new { area = "Instructor", courseId = courseId.Value, format = "csv" }) + "' class='btn btn-success'><i class='feather-download me-2'></i>" + Html.T("تصدير التقرير", "Export report") + "</a>"
+        : "<span class='btn btn-success disabled' title='" + Html.T("يرجى اختيار دورة أولاً", "Please select a course first") + "'><i class='feather-download me-2'></i>" + Html.T("تصدير التقرير", "Export report") + "</span>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-6 col-lg-3 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الطلاب", "Total students") },
+                { "Value", totalStudents },
+                { "Icon", "users" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-md-6 col-lg-3 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي التسجيلات", "Total enrollments") },
+                { "Value", totalEnrollments },
+                { "Icon", "user-check" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-md-6 col-lg-3 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("معدل الإكمال", "Completion rate") },
+                { "Value", completionRate + "%" },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-md-6 col-lg-3 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("متوسط التقدم", "Average progress") },
+                { "Value", averageProgress + "%" },
+                { "Icon", "trending-up" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Filter and Table -->
+    <div class="card stretch stretch-full">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center w-100 flex-wrap gap-3">
+                <h5 class="card-title mb-0">
+                    <i class="feather-bar-chart-2 me-2 text-primary"></i>
+                    @Html.T("تقدم الطلاب", "Student progress")
+                </h5>
+                
+                <!-- Course Filter -->
+                <form method="get" class="d-flex gap-2">
+                    <select name="courseId" class="form-select" onchange="this.form.submit()" style="min-width: 200px;">
+                        <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                        @foreach (var course in courses)
+                        {
+                            var isSelected = courseId.HasValue && courseId.Value == (int)course.Id;
+                            <option value="@course.Id" selected="@isSelected">@course.Title</option>
+                        }
+                    </select>
+                </form>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            @if (Model.Any())
+            {
+                <div class="d-md-none p-3">
+                    @foreach (var enrollment in Model)
+                    {
+                        var progressColor = enrollment.ProgressPercentage >= thresholdExcellent ? "success" :
+                                           enrollment.ProgressPercentage >= thresholdGood ? "info" :
+                                           enrollment.ProgressPercentage >= thresholdFair ? "warning" : "danger";
+                        var statusBadge = enrollment.Status switch
+                        {
+                            LMS.Domain.Enums.EnrollmentStatus.Completed => "success",
+                            LMS.Domain.Enums.EnrollmentStatus.Active => "primary",
+                            LMS.Domain.Enums.EnrollmentStatus.Suspended => "warning",
+                            LMS.Domain.Enums.EnrollmentStatus.Cancelled => "danger",
+                            _ => "secondary"
+                        };
+                        var statusText = enrollment.Status switch
+                        {
+                            LMS.Domain.Enums.EnrollmentStatus.Completed => Html.T("مكتمل", "Completed").ToString(),
+                            LMS.Domain.Enums.EnrollmentStatus.Active => Html.T("نشط", "Active").ToString(),
+                            LMS.Domain.Enums.EnrollmentStatus.Suspended => Html.T("معلق", "Suspended").ToString(),
+                            LMS.Domain.Enums.EnrollmentStatus.Cancelled => Html.T("ملغي", "Cancelled").ToString(),
+                            _ => enrollment.Status.ToString()
+                        };
+                        <div class="card mb-3 border">
+                            <div class="card-body">
+                                <a href="@Url.Action("Details", "Students", new { enrollmentId = enrollment.Id })" class="fw-bold text-dark text-break d-block">@enrollment.Student?.FullName</a>
+                                <p class="text-muted fs-12 mb-1">@enrollment.Student?.Email</p>
+                                <a href="@Url.Action("Details", "Courses", new { id = enrollment.CourseId })" class="text-break d-block mb-2">@enrollment.Course?.Title</a>
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <div class="progress flex-grow-1" style="height: 8px;">
+                                        <div class="progress-bar bg-@progressColor" role="progressbar" style="width: @enrollment.ProgressPercentage%"></div>
+                                    </div>
+                                    <span class="fw-bold text-@progressColor">@enrollment.ProgressPercentage.ToString("F0")%</span>
+                                </div>
+                                <span class="badge bg-soft-@statusBadge text-@statusBadge">@statusText</span>
+                                <span class="text-muted fs-12 ms-2">@enrollment.EnrolledAt.ToString("dd/MM/yyyy")</span>
+                                <div class="hstack gap-2 mt-2">
+                                    <a href="@Url.Action("Progress", "Students", new { enrollmentId = enrollment.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-eye"></i></a>
+                                    <a href="@Url.Action("Compose", "Messages", new { receiverId = enrollment.StudentId })" class="btn btn-sm btn-outline-secondary"><i class="feather-mail"></i></a>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="d-none d-md-block">
+                    <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("الطالب", "Student")</th>
+                                    <th>@Html.T("الدورة", "Course")</th>
+                                    <th>@Html.T("التقدم", "Progress")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th>@Html.T("تاريخ التسجيل", "Enrolled")</th>
+                                    <th>@Html.T("آخر نشاط", "Last activity")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var enrollment in Model)
+                            {
+                                var progressColor = enrollment.ProgressPercentage >= thresholdExcellent ? "success" :
+                                                   enrollment.ProgressPercentage >= thresholdGood ? "info" :
+                                                   enrollment.ProgressPercentage >= thresholdFair ? "warning" : "danger";
+                                
+                                var statusBadge = enrollment.Status switch
+                                {
+                                    LMS.Domain.Enums.EnrollmentStatus.Completed => "success",
+                                    LMS.Domain.Enums.EnrollmentStatus.Active => "primary",
+                                    LMS.Domain.Enums.EnrollmentStatus.Suspended => "warning",
+                                    LMS.Domain.Enums.EnrollmentStatus.Cancelled => "danger",
+                                    _ => "secondary"
+                                };
+                                
+                                var statusText = enrollment.Status switch
+                                {
+                                    LMS.Domain.Enums.EnrollmentStatus.Completed => Html.T("مكتمل", "Completed").ToString(),
+                                    LMS.Domain.Enums.EnrollmentStatus.Active => Html.T("نشط", "Active").ToString(),
+                                    LMS.Domain.Enums.EnrollmentStatus.Suspended => Html.T("معلق", "Suspended").ToString(),
+                                    LMS.Domain.Enums.EnrollmentStatus.Cancelled => Html.T("ملغي", "Cancelled").ToString(),
+                                    _ => enrollment.Status.ToString()
+                                };
+                                
+                                var lastActivity = enrollment.LessonProgress?.OrderByDescending(lp => lp.LastAccessedAt).FirstOrDefault()?.LastAccessedAt;
+                                
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                                @enrollment.Student?.FirstName?.Substring(0, 1)
+                                            </div>
+                                            <div>
+                                                <a href="@Url.Action("Details", "Students", new { enrollmentId = enrollment.Id })" class="fw-bold text-dark">
+                                                    @enrollment.Student?.FullName
+                                                </a>
+                                                <p class="text-muted fs-12 mb-0">@enrollment.Student?.Email</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <a href="@Url.Action("Details", "Courses", new { id = enrollment.CourseId })" class="text-dark">
+                                            @enrollment.Course?.Title
+                                        </a>
+                                    </td>
+                                    <td style="min-width: 150px;">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="progress flex-grow-1" style="height: 8px;">
+                                                <div class="progress-bar bg-@progressColor" 
+                                                     role="progressbar" 
+                                                     style="width: @enrollment.ProgressPercentage%" 
+                                                     aria-valuenow="@enrollment.ProgressPercentage" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                </div>
+                                            </div>
+                                            <span class="fw-bold text-@progressColor" style="min-width: 45px;">
+                                                @enrollment.ProgressPercentage.ToString("F0")%
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-soft-@statusBadge text-@statusBadge">@statusText</span>
+                                    </td>
+                                    <td>
+                                        <span class="text-muted fs-12">@enrollment.EnrolledAt.ToString("dd/MM/yyyy")</span>
+                                    </td>
+                                    <td>
+                                        @if (lastActivity.HasValue)
+                                        {
+                                            var timeAgo = DateTime.UtcNow - lastActivity.Value;
+                                            var timeDisplay = timeAgo.TotalMinutes < 60 ? Html.T("منذ", "ago").ToString() + " " + (int)timeAgo.TotalMinutes + " " + Html.T("دقيقة", "min") :
+                                                             timeAgo.TotalHours < 24 ? Html.T("منذ", "ago").ToString() + " " + (int)timeAgo.TotalHours + " " + Html.T("ساعة", "hr") :
+                                                             timeAgo.TotalDays < 7 ? Html.T("منذ", "ago").ToString() + " " + (int)timeAgo.TotalDays + " " + Html.T("يوم", "days") :
+                                                             lastActivity.Value.ToString("dd/MM/yyyy");
+                                            <span class="text-muted fs-12">@timeDisplay</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted fs-12">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="hstack gap-2 justify-content-end">
+                                            <a href="@Url.Action("Progress", "Students", new { enrollmentId = enrollment.Id })" 
+                                               class="avatar-text avatar-md" 
+                                               data-bs-toggle="tooltip" 
+                                               title="@Html.T("تفاصيل التقدم", "Progress details")">
+                                                <i class="feather-eye"></i>
+                                            </a>
+                                            <a href="@Url.Action("Compose", "Messages", new { receiverId = enrollment.StudentId })" 
+                                               class="avatar-text avatar-md" 
+                                               data-bs-toggle="tooltip" 
+                                               title="@Html.T("إرسال رسالة", "Send message")">
+                                                <i class="feather-mail"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                </div>
+            }
+            else
+            {
+                <div class="p-5 text-center">
+                    <div class="avatar-text avatar-xl bg-soft-secondary text-secondary mb-4 mx-auto">
+                        <i class="feather-bar-chart-2"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">@Html.T("لا توجد بيانات تقدم", "No progress data")</h5>
+                    <p class="text-muted mb-4">@Html.T("لا يوجد طلاب مسجلين في دوراتك بعد", "No students enrolled in your courses yet")</p>
+                    <a href="@Url.Action("Index", "Courses")" class="btn btn-outline-primary">
+                        <i class="feather-book me-2"></i>
+                        @Html.T("عرض الدورات", "View courses")
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

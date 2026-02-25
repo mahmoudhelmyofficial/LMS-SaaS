@@ -1,0 +1,278 @@
+@model LMS.Areas.Student.ViewModels.SecuritySettingsViewModel
+@{
+    ViewData["Title"] = Html.T("الأمان", "Security");
+    // Calculate security score based on current settings
+    var securityScore = 0;
+    var totalPoints = 4;
+    if (Model.HasPassword) securityScore += 1;
+    if (Model.EmailConfirmed) securityScore += 1;
+    if (Model.TwoFactorEnabled) securityScore += 1;
+    if (Model.PhoneNumberConfirmed) securityScore += 1;
+    
+    var securityPercentage = (securityScore * 100) / totalPoints;
+    var securityLevel = securityPercentage >= 75 ? Html.T("قوي", "Strong") : (securityPercentage >= 50 ? Html.T("جيد", "Good") : Html.T("ضعيف", "Weak"));
+    var securityColor = securityPercentage >= 75 ? "success" : (securityPercentage >= 50 ? "warning" : "danger");
+}
+
+@section Styles {
+<style>
+    .security-card {
+        border-right: 4px solid transparent;
+        transition: all 0.2s ease;
+    }
+    .security-card:hover {
+        border-right-color: var(--bs-primary);
+        transform: translateX(-5px);
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <h3 class="fw-bold mb-2">
+            <i class="feather-shield text-warning me-2"></i>
+            @Html.T("الأمان وكلمة المرور", "Security & Password")
+        </h3>
+        <p class="text-muted mb-0">@Html.T("حافظ على حسابك آمناً", "Keep your account secure")</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <!-- Change Password -->
+        <div class="card security-card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-lock me-2"></i>
+                    @Html.T("تغيير كلمة المرور", "Change Password")
+                </h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="ChangePassword" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("كلمة المرور الحالية *", "Current Password *")</label>
+                        <input type="password" name="CurrentPassword" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("كلمة المرور الجديدة *", "New Password *")</label>
+                        <input type="password" name="NewPassword" class="form-control" id="newPassword" required />
+                        <div id="passwordStrength" class="mt-2"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("تأكيد كلمة المرور *", "Confirm Password *")</label>
+                        <input type="password" name="ConfirmPassword" class="form-control" required />
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="feather-save me-2"></i>
+                        @Html.T("تحديث كلمة المرور", "Update Password")
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Two-Factor Authentication -->
+        <div class="card security-card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-smartphone me-2"></i>
+                    @Html.T("المصادقة الثنائية (2FA)", "Two-Factor Authentication (2FA)")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div class="flex-grow-1">
+                        <h6 class="fw-bold mb-2">@Html.T("حماية إضافية لحسابك", "Additional protection for your account")</h6>
+                        <p class="text-muted mb-0">@Html.T("أضف طبقة أمان إضافية عن طريق المصادقة الثنائية", "Add an extra security layer via two-factor authentication")</p>
+                    </div>
+                    <form asp-action="ToggleTwoFactor" method="post" id="twoFactorForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="enable" id="twoFactorValue" value="@(!Model.TwoFactorEnabled ? "true" : "false")" />
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="enable2FA" @(Model.TwoFactorEnabled ? "checked" : "") onchange="toggle2FA(this.checked)">
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Sessions -->
+        <div class="card security-card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-monitor me-2"></i>
+                    @Html.T("محاولات تسجيل الدخول الأخيرة", "Recent Login Attempts")
+                </h5>
+            </div>
+            <div class="card-body">
+                @if (Model.RecentLoginAttempts != null && Model.RecentLoginAttempts.Any())
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var attempt in Model.RecentLoginAttempts)
+                        {
+                            var isRecent = (DateTime.UtcNow - attempt.Timestamp).TotalHours < 1;
+                            var icon = attempt.DeviceInfo?.Contains("Mobile") == true ? "smartphone" : "monitor";
+                            
+                            <div class="list-group-item px-0">
+                                <div class="d-flex align-items-start justify-content-between">
+                                    <div class="d-flex align-items-start">
+                                        <div class="avatar-text avatar-md bg-soft-@(attempt.Success ? "success" : "danger") text-@(attempt.Success ? "success" : "danger") me-3">
+                                            <i class="feather-@icon"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="fw-bold mb-1">@attempt.DeviceInfo</h6>
+                                            <p class="text-muted fs-12 mb-0">
+                                                @attempt.IpAddress • 
+                                                @if (isRecent)
+                                                {
+                                                    <span>@Html.T("نشط الآن", "Active Now")</span>
+                                                }
+                                                else
+                                                {
+                                                    @attempt.Timestamp.ToRelativeTime()
+                                                }
+                                            </p>
+                                        </div>
+                                    </div>
+                                    @if (isRecent)
+                                    {
+                                        <span class="badge bg-success">@Html.T("الحالية", "Current")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-@(attempt.Success ? "soft-success text-success" : "soft-danger text-danger")">
+                                            @(attempt.Success ? Html.T("ناجح", "Successful") : Html.T("فاشل", "Failed"))
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-4">
+                        <i class="feather-monitor fs-1 text-muted mb-2 d-block"></i>
+                        <p class="text-muted mb-0">@Html.T("لا توجد محاولات تسجيل دخول مسجلة", "No login attempts recorded")</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Security Status -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">
+                    <i class="feather-shield me-2"></i>
+                    @Html.T("حالة الأمان", "Security Status")
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted fs-12">@Html.T("قوة الحساب", "Account Strength")</span>
+                        <span class="fw-semibold text-@securityColor">@securityLevel</span>
+                    </div>
+                    <div class="progress ht-8">
+                        <div class="progress-bar bg-@securityColor" style="width: @securityPercentage%"></div>
+                    </div>
+                </div>
+
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="feather-@(Model.HasPassword ? "check" : "x") text-@(Model.HasPassword ? "success" : "danger") me-2"></i>
+                        @(Model.HasPassword ? Html.T("كلمة مرور مُعدّة", "Password set") : Html.T("لا توجد كلمة مرور", "No password set"))
+                    </li>
+                    <li class="mb-2">
+                        <i class="feather-@(Model.EmailConfirmed ? "check" : "x") text-@(Model.EmailConfirmed ? "success" : "danger") me-2"></i>
+                        @(Model.EmailConfirmed ? Html.T("البريد الإلكتروني مؤكد", "Email confirmed") : Html.T("البريد غير مؤكد", "Email not confirmed"))
+                    </li>
+                    <li class="mb-2">
+                        <i class="feather-@(Model.TwoFactorEnabled ? "check" : "x") text-@(Model.TwoFactorEnabled ? "success" : "danger") me-2"></i>
+                        @(Model.TwoFactorEnabled ? Html.T("2FA مفعل", "2FA enabled") : Html.T("2FA غير مفعل", "2FA not enabled"))
+                    </li>
+                    <li>
+                        <i class="feather-@(Model.PhoneNumberConfirmed ? "check" : "x") text-@(Model.PhoneNumberConfirmed ? "success" : "danger") me-2"></i>
+                        @(Model.PhoneNumberConfirmed ? Html.T("رقم الهاتف مؤكد", "Phone number confirmed") : Html.T("الهاتف غير مؤكد", "Phone not confirmed"))
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Security Tips -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">
+                    <i class="feather-lightbulb text-warning me-2"></i>
+                    @Html.T("نصائح أمنية", "Security Tips")
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0 ps-3">
+                    <li class="mb-2">@Html.T("استخدم كلمة مرور قوية وفريدة", "Use a strong and unique password")</li>
+                    <li class="mb-2">@Html.T("فعّل المصادقة الثنائية", "Enable two-factor authentication")</li>
+                    <li class="mb-2">@Html.T("لا تشارك معلومات حسابك", "Do not share your account information")</li>
+                    <li class="mb-0">@Html.T("راجع الجلسات النشطة بانتظام", "Review active sessions regularly")</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    var _strengthLabels = [
+        @Html.Raw(Json.Serialize(Html.T("ضعيفة جداً", "Very weak"))),
+        @Html.Raw(Json.Serialize(Html.T("ضعيفة", "Weak"))),
+        @Html.Raw(Json.Serialize(Html.T("متوسطة", "Medium"))),
+        @Html.Raw(Json.Serialize(Html.T("جيدة", "Good"))),
+        @Html.Raw(Json.Serialize(Html.T("قوية جداً", "Very strong")))
+    ];
+    // Password strength indicator
+    document.getElementById('newPassword').addEventListener('input', function(e) {
+        const password = e.target.value;
+        const strengthDiv = document.getElementById('passwordStrength');
+        
+        let strength = 0;
+        if (password.length >= 8) strength++;
+        if (password.match(/[a-z]/)) strength++;
+        if (password.match(/[A-Z]/)) strength++;
+        if (password.match(/[0-9]/)) strength++;
+        if (password.match(/[^a-zA-Z0-9]/)) strength++;
+        
+        const strengthText = _strengthLabels;
+        const strengthColor = ['danger', 'warning', 'info', 'success', 'success'];
+        
+        if (strength > 0) {
+            strengthDiv.innerHTML = `
+                <div class="progress ht-5 mb-1">
+                    <div class="progress-bar bg-${strengthColor[strength - 1]}" style="width: ${strength * 20}%"></div>
+                </div>
+                <small class="text-${strengthColor[strength - 1]}">${strengthText[strength - 1]}</small>
+            `;
+        } else {
+            strengthDiv.innerHTML = '';
+        }
+    });
+
+    function toggle2FA(enabled) {
+        if (enabled) {
+            $('#twoFactorValue').val('true');
+        } else {
+            if (!confirm('@Html.Raw(Html.T("هل أنت متأكد من تعطيل المصادقة الثنائية؟", "Are you sure you want to disable two-factor authentication?").Replace("'", "\\'"))')) {
+                document.getElementById('enable2FA').checked = true;
+                return;
+            }
+            $('#twoFactorValue').val('false');
+        }
+        $('#twoFactorForm').submit();
+    }
+</script>
+}

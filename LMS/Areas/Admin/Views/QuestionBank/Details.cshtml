@@ -1,0 +1,505 @@
+@model LMS.Domain.Entities.Assessments.QuestionBank
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل بنك الأسئلة", "Question Bank Details");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التقييمات", "Assessments"), null),
+        (Html.T("بنك الأسئلة", "Question Bank"), Url.Action("Index", "QuestionBank")),
+        (Html.T("تفاصيل البنك", "Bank Details"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إضافة سؤال", "Add Question"), "feather-plus", Url.Action("AddQuestion", "QuestionBank", new { bankId = Model.Id }), "btn-primary"),
+        (Html.T("تعديل البنك", "Edit Bank"), "feather-edit", Url.Action("Edit", "QuestionBank", new { id = Model.Id }), "btn-secondary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .bank-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+        .question-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+            background: white;
+        }
+        .question-card:hover {
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+            transform: translateY(-2px);
+            border-color: #3b82f6;
+        }
+        .difficulty-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .question-type-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Bank Header -->
+    <div class="bank-header">
+        <div class="d-flex align-items-start justify-content-between mb-3">
+            <div>
+                <h2 class="text-white mb-2">@Model.Name</h2>
+                <p class="text-white-50 mb-0">@Model.Description</p>
+            </div>
+            @if (Model.IsActive)
+            {
+                <span class="badge bg-white text-success px-3 py-2">
+                    <i class="feather-check-circle me-1"></i>
+                    @Html.T("نشط", "Active")
+                </span>
+            }
+            else
+            {
+                <span class="badge bg-white text-secondary px-3 py-2">
+                    <i class="feather-x-circle me-1"></i>
+                    @Html.T("غير نشط", "Inactive")
+                </span>
+            }
+        </div>
+        <div class="d-flex gap-3">
+            @if (Model.Category != null)
+            {
+                <span class="badge bg-white bg-opacity-25 px-3 py-2">
+                    <i class="feather-folder me-1"></i>
+                    @Model.Category.Name
+                </span>
+            }
+            @if (Model.IsPublic)
+            {
+                <span class="badge bg-white bg-opacity-25 px-3 py-2">
+                    <i class="feather-globe me-1"></i>
+                    @Html.T("عام", "Public")
+                </span>
+            }
+            else
+            {
+                <span class="badge bg-white bg-opacity-25 px-3 py-2">
+                    <i class="feather-lock me-1"></i>
+                    @Html.T("خاص", "Private")
+                </span>
+            }
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted mb-1">@Html.T("إجمالي الأسئلة", "Total Questions")</div>
+                            <h3 class="fw-bold mb-0">@Model.Items.Count</h3>
+                        </div>
+                        <div class="avatar-text bg-soft-primary text-primary avatar-lg">
+                            <i class="feather-help-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted mb-1">@Html.T("سهلة", "Easy")</div>
+                            <h3 class="fw-bold mb-0 text-success">@Model.Items.Count(i => i.DifficultyLevel == 1)</h3>
+                        </div>
+                        <div class="avatar-text bg-soft-success text-success avatar-lg">
+                            <i class="feather-smile"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted mb-1">@Html.T("متوسطة", "Medium")</div>
+                            <h3 class="fw-bold mb-0 text-warning">@Model.Items.Count(i => i.DifficultyLevel == 2)</h3>
+                        </div>
+                        <div class="avatar-text bg-soft-warning text-warning avatar-lg">
+                            <i class="feather-meh"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted mb-1">@Html.T("صعبة", "Hard")</div>
+                            <h3 class="fw-bold mb-0 text-danger">@Model.Items.Count(i => i.DifficultyLevel == 3)</h3>
+                        </div>
+                        <div class="avatar-text bg-soft-danger text-danger avatar-lg">
+                            <i class="feather-frown"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Questions List -->
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-list me-2"></i>
+                        @Html.T("الأسئلة", "Questions") (@Model.Items.Count)
+                    </h5>
+                    <div class="card-header-action">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-light" onclick="filterQuestions('all')">@Html.T("الكل", "All")</button>
+                            <button type="button" class="btn btn-light" onclick="filterQuestions('easy')">@Html.T("سهلة", "Easy")</button>
+                            <button type="button" class="btn btn-light" onclick="filterQuestions('medium')">@Html.T("متوسطة", "Medium")</button>
+                            <button type="button" class="btn btn-light" onclick="filterQuestions('hard')">@Html.T("صعبة", "Hard")</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @if (Model.Items.Any())
+                    {
+                        <div id="questionsContainer">
+                            @foreach (var item in Model.Items.OrderBy(i => i.DisplayOrder))
+                            {
+                                <div class="question-card" data-difficulty="@(item.DifficultyLevel == 1 ? "easy" : item.DifficultyLevel == 2 ? "medium" : "hard")">
+                                    <div class="d-flex align-items-start gap-3">
+                                        <div class="question-type-icon @(item.QuestionType switch
+                                        {
+                                            QuestionType.MultipleChoice => "bg-soft-primary text-primary",
+                                            QuestionType.TrueFalse => "bg-soft-success text-success",
+                                            QuestionType.Essay => "bg-soft-info text-info",
+                                            QuestionType.FillInBlank => "bg-soft-warning text-warning",
+                                            _ => "bg-soft-secondary text-secondary"
+                                        })">
+                                            <i class="@(item.QuestionType switch
+                                            {
+                                                QuestionType.MultipleChoice => "feather-list",
+                                                QuestionType.TrueFalse => "feather-check-circle",
+                                                QuestionType.Essay => "feather-edit-3",
+                                                QuestionType.FillInBlank => "feather-type",
+                                                _ => "feather-help-circle"
+                                            })"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <h6 class="fw-bold mb-1">@item.QuestionText</h6>
+                                                <div class="dropdown">
+                                                    <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                        <i class="feather-more-vertical"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        <li>
+                                                            <a class="dropdown-item" asp-action="EditQuestion" asp-route-id="@item.Id">
+                                                                <i class="feather-edit me-2"></i>
+                                                                @Html.T("تعديل", "Edit")
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <form asp-action="DuplicateQuestion" asp-route-id="@item.Id" method="post" class="d-inline">
+                                                                @Html.AntiForgeryToken()
+                                                                <button type="submit" class="dropdown-item">
+                                                                    <i class="feather-copy me-2"></i>
+                                                                    @Html.T("نسخ", "Duplicate")
+                                                                </button>
+                                                            </form>
+                                                        </li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <form asp-action="DeleteQuestion" asp-route-id="@item.Id" method="post" class="d-inline"
+                                                                  onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا السؤال؟", "Are you sure you want to delete this question?").Replace("'", "\\'"))');">
+                                                                @Html.AntiForgeryToken()
+                                                                <button type="submit" class="dropdown-item text-danger">
+                                                                    <i class="feather-trash-2 me-2"></i>
+                                                                    @Html.T("حذف", "Delete")
+                                                                </button>
+                                                            </form>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex gap-2 flex-wrap mb-2">
+                                                <span class="difficulty-badge @(item.DifficultyLevel switch
+                                                {
+                                                    1 => "bg-soft-success text-success",
+                                                    2 => "bg-soft-warning text-warning",
+                                                    3 => "bg-soft-danger text-danger",
+                                                    _ => "bg-soft-secondary text-secondary"
+                                                })">
+                                                    @(item.DifficultyLevel switch
+                                                    {
+                                                        1 => Html.T("سهلة", "Easy"),
+                                                        2 => Html.T("متوسطة", "Medium"),
+                                                        3 => Html.T("صعبة", "Hard"),
+                                                        _ => item.DifficultyLevel.ToString()
+                                                    })
+                                                </span>
+                                                <span class="badge bg-soft-primary text-primary">
+                                                    @(item.QuestionType switch
+                                                    {
+                                                        QuestionType.MultipleChoice => Html.T("اختيار متعدد", "Multiple Choice"),
+                                                        QuestionType.TrueFalse => Html.T("صح/خطأ", "True/False"),
+                                                        QuestionType.Essay => Html.T("مقالي", "Essay"),
+                                                        QuestionType.FillInBlank => Html.T("املأ الفراغ", "Fill in Blank"),
+                                                        _ => Html.T("غير محدد", "Unspecified")
+                                                    })
+                                                </span>
+                                                <span class="badge bg-soft-secondary text-secondary">
+                                                    <i class="feather-award me-1"></i>
+                                                    @item.Points @Html.T("نقطة", "pts")
+                                                </span>
+                                                @if (!string.IsNullOrEmpty(item.Tags))
+                                                {
+                                                    @foreach (var tag in item.Tags.Split(',').Take(2))
+                                                    {
+                                                        <span class="badge bg-soft-info text-info">
+                                                            <i class="feather-tag"></i>
+                                                            @tag.Trim()
+                                                        </span>
+                                                    }
+                                                }
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(item.Options))
+                                            {
+                                                try
+                                                {
+                                                    var optionsList = System.Text.Json.JsonSerializer.Deserialize<List<object>>(item.Options);
+                                                    <div class="small text-muted">
+                                                        <i class="feather-list me-1"></i>
+                                                        @optionsList?.Count @Html.T("خيارات", "options")
+                                                    </div>
+                                                }
+                                                catch
+                                                {
+                                                    <div class="small text-muted">
+                                                        <i class="feather-list me-1"></i>
+                                                        @Html.T("يوجد خيارات", "Has options")
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <div class="avatar-text bg-soft-secondary text-secondary avatar-xl mx-auto mb-3">
+                                <i class="feather-help-circle" style="font-size: 3rem;"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد أسئلة", "No questions")</h5>
+                            <p class="text-muted mb-4">@Html.T("ابدأ بإضافة أسئلة إلى هذا البنك", "Start by adding questions to this bank")</p>
+                            <a asp-action="AddQuestion" asp-route-bankId="@Model.Id" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إضافة سؤال", "Add Question")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Bank Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-info me-2"></i>
+                        @Html.T("معلومات البنك", "Bank Info")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="vstack gap-3">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">@Html.T("المعرف", "ID"):</span>
+                            <span class="fw-semibold">#@Model.Id</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">@Html.T("الحالة", "Status"):</span>
+                            @if (Model.IsActive)
+                            {
+                                <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-soft-secondary text-secondary">@Html.T("غير نشط", "Inactive")</span>
+                            }
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">@Html.T("الخصوصية", "Privacy"):</span>
+                            @if (Model.IsPublic)
+                            {
+                                <span class="badge bg-soft-info text-info">@Html.T("عام", "Public")</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-soft-warning text-warning">@Html.T("خاص", "Private")</span>
+                            }
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">@Html.T("تاريخ الإنشاء", "Created"):</span>
+                            <span class="fw-semibold">@Model.CreatedAt.ToString("dd/MM/yyyy")</span>
+                        </div>
+                        @if (Model.UpdatedAt.HasValue)
+                        {
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">@Html.T("آخر تحديث", "Last Updated"):</span>
+                                <span class="fw-semibold">@Model.UpdatedAt.Value.ToString("dd/MM/yyyy")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-zap me-2"></i>
+                        @Html.T("إجراءات سريعة", "Quick Actions")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a asp-action="AddQuestion" asp-route-bankId="@Model.Id" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إضافة سؤال", "Add Question")
+                        </a>
+                        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-light-brand">
+                            <i class="feather-edit me-2"></i>
+                            @Html.T("تعديل البنك", "Edit Bank")
+                        </a>
+                        <button type="button" class="btn btn-light-brand" onclick="exportBank()">
+                            <i class="feather-download me-2"></i>
+                            @Html.T("تصدير الأسئلة", "Export Questions")
+                        </button>
+                        <button type="button" class="btn btn-light-brand" onclick="importQuestions()">
+                            <i class="feather-upload me-2"></i>
+                            @Html.T("استيراد أسئلة", "Import Questions")
+                        </button>
+                        <hr class="my-2">
+                        <button type="button" class="btn btn-danger" onclick="deleteBank()">
+                            <i class="feather-trash-2 me-2"></i>
+                            @Html.T("حذف البنك", "Delete Bank")
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-pie-chart me-2"></i>
+                        @Html.T("توزيع الأسئلة", "Question Distribution")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="difficultyChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Bank Form -->
+<form id="deleteBankForm" asp-action="Delete" asp-route-id="@Model.Id" method="post" style="display: none;">
+    @Html.AntiForgeryToken()
+</form>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    
+    <script>
+        // Difficulty Distribution Chart
+        const ctx = document.getElementById('difficultyChart');
+        if (ctx) {
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['@Html.T("سهلة", "Easy")', '@Html.T("متوسطة", "Medium")', '@Html.T("صعبة", "Hard")'],
+                    datasets: [{
+                        data: [
+                            @Model.Items.Count(i => i.DifficultyLevel == 1),
+                            @Model.Items.Count(i => i.DifficultyLevel == 2),
+                            @Model.Items.Count(i => i.DifficultyLevel == 3)
+                        ],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        function filterQuestions(difficulty) {
+            const questions = document.querySelectorAll('.question-card');
+            questions.forEach(q => {
+                if (difficulty === 'all' || q.dataset.difficulty === difficulty) {
+                    q.style.display = '';
+                } else {
+                    q.style.display = 'none';
+                }
+            });
+        }
+
+        function deleteBank() {
+            if (confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف بنك الأسئلة؟ سيتم حذف جميع الأسئلة المرتبطة به.", "Are you sure you want to delete this question bank? All associated questions will be deleted.").Replace("'", "\\'"))')) {
+                document.getElementById('deleteBankForm').submit();
+            }
+        }
+
+        function exportBank() {
+            // TODO: Implement export functionality
+            alert('@Html.Raw(Html.T("ميزة التصدير قيد التطوير - يمكنك استخدامها قريباً", "Export feature is under development - coming soon").Replace("'", "\\'"))');
+        }
+
+        function importQuestions() {
+            // TODO: Implement import functionality
+            alert('@Html.Raw(Html.T("ميزة الاستيراد قيد التطوير - يمكنك استخدامها قريباً", "Import feature is under development - coming soon").Replace("'", "\\'"))');
+        }
+    </script>
+}
+

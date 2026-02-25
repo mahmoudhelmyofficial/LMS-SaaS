@@ -1,0 +1,422 @@
+@model LMS.Areas.Instructor.ViewModels.MessageComposeViewModel
+@using LMS.Areas.Instructor.ViewModels
+
+@{
+    ViewData["Title"] = Model.ParentMessageId.HasValue ? Html.T("الرد على الرسالة", "Reply to Message") : Html.T("إرسال رسالة جديدة", "Send New Message");
+    ViewData["Subtitle"] = Html.T("تواصل مع طلابك", "Communicate with your students");
+    var originalMessage = ViewBag.OriginalMessage as LMS.Domain.Entities.Social.DirectMessage;
+    var studentsList = (ViewBag.Students as IEnumerable<StudentDropdownItem>) ?? Enumerable.Empty<StudentDropdownItem>();
+}
+
+@{
+    var cancelUrl = Model.ParentMessageId.HasValue ? Url.Action("Details", new { id = Model.ParentMessageId }) : Url.Action("Index");
+    var actionButtonsHtml = "<a href='" + cancelUrl + "' class='btn btn-light'>" +
+        "<i class='feather-arrow-right me-2'></i>" +
+        Html.T("إلغاء", "Cancel") +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @if (originalMessage != null)
+    {
+        <!-- Original Message Display -->
+        var originalSender = originalMessage.Sender;
+        var originalSenderName = originalSender?.FullName ?? Html.T("مستخدم", "User");
+        var originalSenderInitial = !string.IsNullOrEmpty(originalSender?.FirstName) && originalSender.FirstName.Length > 0
+            ? originalSender.FirstName.Substring(0, 1)
+            : (!string.IsNullOrEmpty(originalSenderName) && originalSenderName.Length > 0
+                ? originalSenderName.Substring(0, 1)
+                : "?");
+        var originalBody = originalMessage.Message ?? originalMessage.Body ?? string.Empty;
+        var originalPreview = !string.IsNullOrEmpty(originalBody) && originalBody.Length > 150
+            ? originalBody.Substring(0, 150) + "..."
+            : originalBody;
+        <div class="alert alert-info mb-4">
+            <div class="d-flex align-items-start gap-3">
+                <div class="avatar-text avatar-md bg-primary text-white">
+                    @originalSenderInitial
+                </div>
+                <div class="flex-grow-1">
+                    <h6 class="fw-bold mb-1">@Html.T("رد على رسالة من:", "Reply to message from:") @originalSenderName</h6>
+                    <p class="mb-2"><strong>@Html.T("الموضوع:", "Subject:")</strong> @(originalMessage.Subject ?? Html.T("بدون موضوع", "No Subject"))</p>
+                    @if (!string.IsNullOrEmpty(originalPreview))
+                    {
+                        <p class="mb-0 fs-13 text-muted">@originalPreview</p>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <form asp-action="Compose" method="post" id="composeForm"
+          data-msg-select-recipient="@(Html.T("يرجى اختيار المستلم", "Please select a recipient"))"
+          data-msg-subject-min="@(Html.T("الموضوع يجب أن يكون 5 أحرف على الأقل", "Subject must be at least 5 characters"))"
+          data-msg-subject-max="@(Html.T("الموضوع يجب ألا يتجاوز 200 حرف", "Subject must not exceed 200 characters"))"
+          data-msg-body-min="@(Html.T("الرسالة يجب أن تكون 10 أحرف على الأقل", "Message must be at least 10 characters"))"
+          data-msg-body-max="@(Html.T("الرسالة يجب ألا تتجاوز 2000 حرف", "Message must not exceed 2000 characters"))">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="ParentMessageId" />
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Message Form -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-send me-2 text-primary"></i>
+                            @(Model.ParentMessageId.HasValue ? Html.T("اكتب ردك", "Write Your Reply") : Html.T("رسالة جديدة", "New Message"))
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <!-- Recipient -->
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("إلى (الطالب)", "To (Student)") <span class="text-danger">*</span></label>
+                                @if (Model.ParentMessageId.HasValue)
+                                {
+                                    var replyStudent = studentsList.FirstOrDefault(s => s.StudentId == Model.ReceiverId);
+                                    var studentName = replyStudent?.FullName ?? Html.T("مستخدم", "User");
+                                    <input type="text" class="form-control" value="@studentName" readonly />
+                                    <input type="hidden" asp-for="ReceiverId" />
+                                }
+                                else
+                                {
+                                    <select asp-for="ReceiverId" class="form-select" id="studentSelect">
+                                        <option value="">@Html.T("-- اختر الطالب --", "-- Select Student --")</option>
+                                        @foreach (var student in studentsList)
+                                        {
+                                            <option value="@student.StudentId" data-email="@student.Email" data-course="@student.CourseName">
+                                                @student.FullName - @student.CourseName
+                                            </option>
+                                        }
+                                    </select>
+                                }
+                                <span asp-validation-for="ReceiverId" class="text-danger"></span>
+                                <div class="form-text">
+                                    <i class="feather-info me-1"></i>
+                                    @Html.T("يمكنك فقط إرسال رسائل للطلاب المسجلين في دوراتك", "You can only send messages to students enrolled in your courses")
+                                </div>
+                            </div>
+
+                            <!-- Subject -->
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("الموضوع", "Subject") <span class="text-danger">*</span></label>
+                                <input asp-for="Subject" class="form-control" placeholder="@Html.T("مثال: استفسار عن الدرس الخامس", "Example: Inquiry about lesson five")">
+                                <span asp-validation-for="Subject" class="text-danger"></span>
+                                <div id="charCountSubject" class="form-text text-end">0 / 200 @Html.T("حرف", "chars")</div>
+                            </div>
+
+                            <!-- Message Body -->
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("الرسالة", "Message") <span class="text-danger">*</span></label>
+                                <textarea asp-for="Body" class="form-control" rows="12" placeholder="@Html.T("اكتب رسالتك هنا...", "Write your message here...")"></textarea>
+                                <span asp-validation-for="Body" class="text-danger"></span>
+                                <div id="charCountBody" class="form-text text-end">0 / 2000 @Html.T("حرف", "chars")</div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <div class="col-lg-12">
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="feather-send me-2"></i>
+                                        @Html.T("إرسال الرسالة", "Send Message")
+                                    </button>
+                                    <a href="@(Model.ParentMessageId.HasValue ? Url.Action("Details", new { id = Model.ParentMessageId }) : Url.Action("Index"))" class="btn btn-light">
+                                        <i class="feather-x me-2"></i>
+                                        @Html.T("إلغاء", "Cancel")
+                                    </a>
+                                    <button type="button" class="btn btn-light" id="clearBtn">
+                                        <i class="feather-refresh-cw me-2"></i>
+                                        @Html.T("مسح", "Clear")
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Selected Student Info -->
+                <div class="card stretch stretch-full mb-4" id="studentInfoCard" style="display: none;">
+                    <div class="card-header">
+                        <h6 class="card-title">@Html.T("معلومات الطالب", "Student Information")</h6>
+                    </div>
+                    <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                            <span id="studentInitial">?</span>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1" id="studentName">-</h6>
+                            <p class="text-muted fs-13 mb-0" id="studentEmail">-</p>
+                        </div>
+                    </div>
+                        <div class="alert alert-light mb-0">
+                            <p class="fs-13 mb-0"><strong>@Html.T("الدورة:", "Course:")</strong> <span id="studentCourse">-</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Message Preview -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-eye me-2"></i>
+                            @Html.T("معاينة", "Preview")
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="fs-11 text-muted mb-1">@Html.T("الموضوع:", "Subject:")</div>
+                            <h6 class="fw-bold" id="previewSubject">
+                                <em class="text-muted fs-14">@Html.T("اكتب الموضوع...", "Type the subject...")</em>
+                            </h6>
+                        </div>
+                        <hr />
+                        <div>
+                            <div class="fs-11 text-muted mb-2">@Html.T("الرسالة:", "Message:")</div>
+                            <div class="bg-soft-light p-3 rounded" style="min-height: 100px;">
+                                <p id="previewBody" class="mb-0 fs-13" style="white-space: pre-wrap;">
+                                    <em class="text-muted">@Html.T("اكتب رسالتك...", "Write your message...")</em>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Templates -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-zap me-2"></i>
+                            @Html.T("قوالب سريعة", "Quick Templates")
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn" 
+                                    data-subject="@Html.T("تحية طيبة", "Warm Greetings")"
+                                    data-body="@Html.T("السلام عليكم،\n\nأتمنى أن تكون بخير وأن دراستك تسير بشكل جيد.\n\nأردت التواصل معك بخصوص...\n\nمع أطيب التمنيات،\nالمدرب", "Hello,\n\nI hope you are doing well and your studies are going smoothly.\n\nI wanted to reach out to you regarding...\n\nBest wishes,\nInstructor")">
+                                <i class="feather-mail me-2 text-primary"></i>
+                                @Html.T("رسالة ترحيبية", "Welcome Message")
+                            </button>
+
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn"
+                                    data-subject="@Html.T("استفسار عن تقدمك", "Inquiry About Your Progress")"
+                                    data-body="@Html.T("مرحباً،\n\nلاحظت أنك لم تكمل بعض الدروس. هل تواجه أي صعوبات؟\n\nأنا هنا للمساعدة في أي وقت.\n\nبالتوفيق", "Hello,\n\nI noticed you haven't completed some lessons. Are you facing any difficulties?\n\nI'm here to help anytime.\n\nGood luck")">
+                                <i class="feather-help-circle me-2 text-info"></i>
+                                @Html.T("متابعة التقدم", "Progress Follow-up")
+                            </button>
+
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn"
+                                    data-subject="@Html.T("تهنئة بالإنجاز", "Congratulations on Achievement")"
+                                    data-body="@Html.T("مبروك!\n\nأحسنت العمل في إكمال الدرس/الوحدة. أداؤك رائع واستمر على هذا المستوى.\n\nفخور بتقدمك!", "Congratulations!\n\nGreat job completing the lesson/module. Your performance is excellent, keep it up.\n\nProud of your progress!")">
+                                <i class="feather-award me-2 text-success"></i>
+                                @Html.T("تهنئة", "Congratulations")
+                            </button>
+
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn"
+                                    data-subject="@Html.T("رد على استفسار", "Reply to Inquiry")"
+                                    data-body="@Html.T("شكراً على تواصلك،\n\nبخصوص استفسارك...\n\nلا تتردد في السؤال عن أي شيء آخر.\n\nتحياتي", "Thank you for reaching out,\n\nRegarding your inquiry...\n\nDon't hesitate to ask about anything else.\n\nBest regards")">
+                                <i class="feather-message-circle me-2 text-warning"></i>
+                                @Html.T("رد عام", "General Reply")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tips -->
+                <div class="card stretch stretch-full bg-soft-success">
+                    <div class="card-body">
+                        <h6 class="fw-bold text-success mb-3">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("نصائح للرسائل الفعالة", "Tips for Effective Messages")
+                        </h6>
+                        <ul class="list-unstyled mb-0 fs-13">
+                            <li class="mb-2">
+                                <i class="feather-check me-2 text-success"></i>
+                                @Html.T("اكتب موضوعاً واضحاً", "Write a clear subject")
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check me-2 text-success"></i>
+                                @Html.T("كن مهذباً ومحترفاً", "Be polite and professional")
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check me-2 text-success"></i>
+                                @Html.T("اشرح بوضوح وإيجاز", "Explain clearly and concisely")
+                            </li>
+                            <li class="mb-0">
+                                <i class="feather-check me-2 text-success"></i>
+                                @Html.T("راجع قبل الإرسال", "Review before sending")
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        $(document).ready(function () {
+            const subjectInput = $('#Subject');
+            const bodyTextarea = $('#Body');
+            const previewSubject = $('#previewSubject');
+            const previewBody = $('#previewBody');
+            const charCountSubject = $('#charCountSubject');
+            const charCountBody = $('#charCountBody');
+
+            // Update preview and character count
+            function updatePreview() {
+                // Subject preview
+                const subject = subjectInput.val().trim();
+                if (subject) {
+                    previewSubject.text(subject).removeClass('text-muted');
+                } else {
+                    previewSubject.html('<em class="text-muted fs-14">@Html.T("اكتب الموضوع...", "Type the subject...")</em>');
+                }
+
+                // Body preview
+                const body = bodyTextarea.val();
+                if (body.trim()) {
+                    previewBody.text(body).removeClass('text-muted');
+                } else {
+                    previewBody.html('<em class="text-muted">@Html.T("اكتب رسالتك...", "Write your message...")</em>');
+                }
+
+                // Character counts
+                charCountSubject.text(subject.length + ' / 200 @Html.T("حرف", "chars")');
+                charCountBody.text(body.length + ' / 2000 @Html.T("حرف", "chars")');
+
+                // Color coding
+                if (subject.length > 200) {
+                    charCountSubject.addClass('text-danger');
+                } else {
+                    charCountSubject.removeClass('text-danger');
+                }
+
+                if (body.length > 2000) {
+                    charCountBody.addClass('text-danger');
+                } else {
+                    charCountBody.removeClass('text-danger');
+                }
+            }
+
+            subjectInput.on('input', updatePreview);
+            bodyTextarea.on('input', updatePreview);
+            updatePreview();
+
+            // Student selection
+            $('#studentSelect').on('change', function() {
+                const selectedOption = $(this).find(':selected');
+                const fullText = selectedOption.text();
+                const studentName = fullText.split(' - ')[0] || '-';
+                const studentEmail = selectedOption.data('email') || '-';
+                const studentCourse = selectedOption.data('course') || '-';
+
+                if ($(this).val()) {
+                    const initial = studentName && studentName.length > 0 ? studentName.charAt(0) : '?';
+                    $('#studentInitial').text(initial);
+                    $('#studentName').text(studentName);
+                    $('#studentEmail').text(studentEmail);
+                    $('#studentCourse').text(studentCourse);
+                    $('#studentInfoCard').slideDown();
+                } else {
+                    $('#studentInitial').text('?');
+                    $('#studentName').text('-');
+                    $('#studentEmail').text('-');
+                    $('#studentCourse').text('-');
+                    $('#studentInfoCard').slideUp();
+                }
+            });
+
+            // Quick templates
+            $('.template-btn').on('click', function() {
+                const subject = $(this).data('subject');
+                const body = $(this).data('body');
+                
+                subjectInput.val(subject);
+                bodyTextarea.val(body);
+                updatePreview();
+
+                $('html, body').animate({
+                    scrollTop: bodyTextarea.offset().top - 100
+                }, 500);
+            });
+
+            // Clear button
+            $('#clearBtn').on('click', function() {
+                if (confirm('@Html.T("هل تريد مسح جميع الحقول؟", "Do you want to clear all fields?")')) {
+                    subjectInput.val('');
+                    bodyTextarea.val('');
+                    updatePreview();
+                }
+            });
+
+            // Form validation (use #studentSelect in compose mode, #ReceiverId in reply mode)
+            var $form = $('#composeForm');
+            $form.on('submit', function(e) {
+                var receiverId = $('#studentSelect').length ? $('#studentSelect').val() : $('#ReceiverId').val();
+                var subject = subjectInput.val().trim();
+                var body = bodyTextarea.val().trim();
+
+                if (!receiverId) {
+                    e.preventDefault();
+                    alert($form.attr('data-msg-select-recipient') || 'Please select a recipient');
+                    if ($('#studentSelect').length) $('#studentSelect').focus();
+                    return false;
+                }
+
+                if (!subject || subject.length < 5) {
+                    e.preventDefault();
+                    alert($form.attr('data-msg-subject-min') || 'Subject must be at least 5 characters');
+                    subjectInput.focus();
+                    return false;
+                }
+
+                if (subject.length > 200) {
+                    e.preventDefault();
+                    alert($form.attr('data-msg-subject-max') || 'Subject must not exceed 200 characters');
+                    subjectInput.focus();
+                    return false;
+                }
+
+                if (!body || body.length < 10) {
+                    e.preventDefault();
+                    alert($form.attr('data-msg-body-min') || 'Message must be at least 10 characters');
+                    bodyTextarea.focus();
+                    return false;
+                }
+
+                if (body.length > 2000) {
+                    e.preventDefault();
+                    alert($form.attr('data-msg-body-max') || 'Message must not exceed 2000 characters');
+                    bodyTextarea.focus();
+                    return false;
+                }
+
+                return true;
+            });
+        });
+    </script>
+
+    <style>
+        .template-btn {
+            text-align: right !important;
+            white-space: normal;
+            line-height: 1.4;
+        }
+    </style>
+}

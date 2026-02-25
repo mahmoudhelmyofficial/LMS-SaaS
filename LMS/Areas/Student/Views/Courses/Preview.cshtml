@@ -1,0 +1,802 @@
+@model LMS.Domain.Entities.Courses.Course
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Model.Title;
+    var isInWishlist = ViewBag.IsInWishlist as bool? ?? false;
+    var isInCart = ViewBag.IsInCart as bool? ?? false;
+    var similarCourses = ViewBag.SimilarCourses as List<LMS.Services.Interfaces.CourseRecommendation> ?? new List<LMS.Services.Interfaces.CourseRecommendation>();
+    var recentReviews = ViewBag.RecentReviews as List<LMS.Domain.Entities.Social.Review> ?? new List<LMS.Domain.Entities.Social.Review>();
+    var ratingDistribution = ViewBag.RatingDistribution as Dictionary<int, int> ?? new Dictionary<int, int>();
+    
+    // UI settings
+    var learningOutcomesLimit = await PlatformSettings.GetIntSettingAsync("UI.LearningOutcomes.Limit", 8);
+    var lessonPreviewLimit = await PlatformSettings.GetIntSettingAsync("UI.LessonPreview.Limit", 5);
+    var recentReviewsLimit = await PlatformSettings.GetIntSettingAsync("UI.RecentReviews.Limit", 3);
+    var similarCoursesLimit = await PlatformSettings.GetIntSettingAsync("UI.SimilarCourses.Limit", 3);
+}
+
+@section Styles {
+<style>
+    .course-preview-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 60px 0;
+        margin-bottom: 30px;
+    }
+    .course-thumbnail-large {
+        width: 100%;
+        height: 350px;
+        object-fit: cover;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    .price-card {
+        position: sticky;
+        top: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+    .module-preview {
+        border-inline-start: 3px solid var(--bs-primary);
+        padding-inline-start: 15px;
+        margin-bottom: 20px;
+    }
+    .lesson-preview-item {
+        padding: 12px;
+        border-radius: 8px;
+        background: #f8f9fa;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .lesson-preview-item.free-preview {
+        background: rgba(34, 197, 94, 0.05);
+        border-inline-start: 3px solid #22c55e;
+    }
+    .rating-bar {
+        height: 8px;
+        background: #e5e7eb;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .rating-bar-fill {
+        height: 100%;
+        background: #fbbf24;
+    }
+    .instructor-card {
+        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        border-radius: 12px;
+        padding: 20px;
+    }
+
+    /* مشغل الفيديو - Video Player Styles */
+    .video-player-container {
+        position: relative;
+        width: 100%;
+        height: 350px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #000;
+    }
+    .video-poster-overlay {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .video-poster-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .video-poster-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        color: #fff;
+    }
+    .video-gradient-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.5) 100%);
+        transition: background 0.3s ease;
+    }
+    .video-poster-overlay:hover .video-gradient-overlay {
+        background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%);
+    }
+    .video-play-button {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.95);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+        z-index: 2;
+    }
+    .video-play-button i {
+        font-size: 28px;
+        color: var(--bs-primary);
+        margin-inline-end: -2px;
+    }
+    .video-poster-overlay:hover .video-play-button {
+        transform: translate(-50%, -50%) scale(1.1);
+        box-shadow: 0 12px 35px rgba(0,0,0,0.4);
+        background: #fff;
+    }
+    .video-play-label {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #fff;
+        font-weight: 600;
+        font-size: 14px;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        z-index: 2;
+    }
+    .video-embed-wrapper {
+        width: 100%;
+        height: 100%;
+    }
+    .video-iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+    .video-html5 {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #000;
+    }
+
+    /* دروس المعاينة المجانية - Free Preview Lesson Styles */
+    a.lesson-preview-item.free-preview {
+        cursor: pointer;
+        transition: all 0.25s ease;
+        border: 1px solid transparent;
+    }
+    a.lesson-preview-item.free-preview:hover {
+        background: rgba(34, 197, 94, 0.12);
+        border-color: rgba(34, 197, 94, 0.3);
+        transform: translateX(-4px);
+        box-shadow: 0 2px 8px rgba(34, 197, 94, 0.1);
+    }
+    .lesson-play-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: rgba(34, 197, 94, 0.15);
+        color: #22c55e;
+        transition: all 0.25s ease;
+    }
+    .lesson-play-btn i {
+        font-size: 12px;
+        margin-inline-end: -1px;
+    }
+    a.lesson-preview-item.free-preview:hover .lesson-play-btn {
+        background: #22c55e;
+        color: #fff;
+    }
+
+    /* دروس مقفلة - Locked Lesson Styles */
+    .lesson-preview-item.locked {
+        opacity: 0.7;
+        background: #f1f3f5;
+    }
+    .lesson-preview-item.locked span {
+        color: #6c757d;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Course Preview Header -->
+<div class="course-preview-header">
+    <div class="container-fluid">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <div class="mb-3">
+                    <span class="badge bg-white bg-opacity-25 text-white">@Model.Category?.Name</span>
+                    @if (Model.SubCategory != null)
+                    {
+                        <span class="badge bg-white bg-opacity-25 text-white">@Model.SubCategory.Name</span>
+                    }
+                    <span class="badge bg-white bg-opacity-25 text-white">@Model.Level</span>
+                    @if (Model.IsBestseller)
+                    {
+                        <span class="badge bg-warning text-dark">@Html.T("الأكثر مبيعاً", "Bestseller")</span>
+                    }
+                    @if (Model.IsFeatured)
+                    {
+                        <span class="badge bg-success">@Html.T("مميزة", "Featured")</span>
+                    }
+                </div>
+                <h1 class="text-white fw-bold mb-3">@Model.Title</h1>
+                @if (!string.IsNullOrEmpty(Model.ShortDescription))
+                {
+                    <p class="text-white opacity-75 fs-5 mb-4">@Model.ShortDescription</p>
+                }
+                <div class="d-flex align-items-center gap-4 flex-wrap mb-3">
+                    <div class="text-white">
+                        <i class="feather-user me-2"></i>
+                        <a href="#" class="text-white text-decoration-none">@Model.Instructor.FullName</a>
+                    </div>
+                    <div class="text-white">
+                        <i class="feather-star me-1"></i>
+                        <strong>@Model.AverageRating.ToString("F1")</strong>
+                        <span class="opacity-75">(@Model.TotalReviews @Html.T("تقييم", "reviews"))</span>
+                    </div>
+                    <div class="text-white">
+                        <i class="feather-users me-1"></i>
+                        @Model.TotalStudents @Html.T("طالب", "students")
+                    </div>
+                    <div class="text-white">
+                        <i class="feather-clock me-1"></i>
+                        @Model.DurationHours.ToString("F1") @Html.T("ساعة", "hours")
+                    </div>
+                    <div class="text-white">
+                        <i class="feather-globe me-1"></i>
+                        @(Model.Language == "ar" ? Html.T("العربية", "Arabic") : Html.T("الإنجليزية", "English"))
+                    </div>
+                </div>
+                @if (Model.PublishedAt.HasValue)
+                {
+                    <div class="text-white opacity-75">
+                        <small>@Html.T("آخر تحديث:", "Last updated:") @Model.PublishedAt.Value.ToString("dd MMMM yyyy")</small>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Main Content -->
+    <div class="col-lg-8">
+        <!-- Preview Video / فيديو المعاينة -->
+        @if (!string.IsNullOrEmpty(Model.PreviewVideoUrl))
+        {
+            var videoProvider = ViewBag.PreviewVideoProvider as string ?? "Local";
+            var videoId = ViewBag.PreviewVideoId as string;
+
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-body p-0">
+                    <div class="video-player-container" id="videoPlayerContainer">
+                        <!-- صورة مصغرة مع زر التشغيل - Thumbnail with play overlay -->
+                        <div class="video-poster-overlay" id="videoPosterOverlay" onclick="playPreviewVideo()">
+                            @if (!string.IsNullOrEmpty(Model.ThumbnailUrl))
+                            {
+                                <img src="@Model.ThumbnailUrl" alt="@Model.Title" class="video-poster-image" />
+                            }
+                            else
+                            {
+                                <div class="video-poster-placeholder">
+                                    <i class="feather-film" style="font-size: 48px; opacity: 0.5;"></i>
+                                </div>
+                            }
+                            <div class="video-gradient-overlay"></div>
+                            <div class="video-play-button">
+                                <i class="feather-play"></i>
+                            </div>
+                            <div class="video-play-label">@Html.T("تشغيل المعاينة", "Play Preview")</div>
+                        </div>
+                        <!-- مشغل الفيديو الفعلي - Actual video player (hidden initially) -->
+                        <div class="video-embed-wrapper" id="videoEmbedWrapper" style="display: none;">
+                            @if (videoProvider == "YouTube" && !string.IsNullOrEmpty(videoId))
+                            {
+                                <iframe id="videoIframe"
+                                        src=""
+                                        data-src="https://www.youtube.com/embed/@videoId?autoplay=1&rel=0"
+                                        frameborder="0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowfullscreen
+                                        class="video-iframe"></iframe>
+                            }
+                            else if (videoProvider == "Vimeo" && !string.IsNullOrEmpty(videoId))
+                            {
+                                <iframe id="videoIframe"
+                                        src=""
+                                        data-src="https://player.vimeo.com/video/@videoId?autoplay=1"
+                                        frameborder="0"
+                                        allow="autoplay; fullscreen; picture-in-picture"
+                                        allowfullscreen
+                                        class="video-iframe"></iframe>
+                            }
+                            else
+                            {
+                                <video id="videoPlayer"
+                                       controls
+                                       class="video-html5"
+                                       poster="@(Model.ThumbnailUrl ?? "")">
+                                    <source src="@Model.PreviewVideoUrl" type="video/mp4" />
+                                    @Html.T("متصفحك لا يدعم تشغيل الفيديو.", "Your browser does not support the video tag.")
+                                </video>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(Model.ThumbnailUrl))
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-body p-0">
+                    <img src="@Model.ThumbnailUrl" alt="@Model.Title" class="course-thumbnail-large" />
+                </div>
+            </div>
+        }
+
+        <!-- Description -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-file-text me-2"></i>
+                    @Html.T("وصف الدورة", "Course Description")
+                </h5>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(Model.Description))
+                {
+                    @Html.Raw(Model.Description)
+                }
+                else
+                {
+                    <p class="text-muted">@Html.T("لا يوجد وصف متاح للدورة.", "No description available for this course.")</p>
+                }
+            </div>
+        </div>
+
+        <!-- What You Will Learn -->
+        @if (Model.LearningOutcomes.Any())
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">
+                        <i class="feather-check-circle me-2"></i>
+                        @Html.T("ماذا ستتعلم", "What You'll Learn")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        @foreach (var outcome in Model.LearningOutcomes.Take(learningOutcomesLimit))
+                        {
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start">
+                                    <i class="feather-check text-success me-2 mt-1"></i>
+                                    <span>@outcome.Description</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Course Content -->
+        @if (Model.Modules.Any())
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">
+                        <i class="feather-list me-2"></i>
+                        @Html.T("محتوى الدورة", "Course Content")
+                    </h5>
+                    <div class="text-muted">
+                        @Model.TotalModules @Html.T("وحدة", "modules") • @Model.TotalLessons @Html.T("درس", "lessons") • @Model.DurationHours.ToString("F1") @Html.T("ساعة إجمالي", "total hours")
+                    </div>
+                </div>
+                <div class="card-body">
+                    @foreach (var module in Model.Modules.OrderBy(m => m.OrderIndex))
+                    {
+                        <div class="module-preview">
+                            <h6 class="fw-bold mb-2">@module.Title</h6>
+                            @if (!string.IsNullOrEmpty(module.Description))
+                            {
+                                <p class="text-muted fs-12 mb-3">@module.Description</p>
+                            }
+                            @foreach (var lesson in module.Lessons.OrderBy(l => l.OrderIndex).Take(lessonPreviewLimit))
+                            {
+                                @if (lesson.IsFreePreview || lesson.IsPreviewable)
+                                {
+                                    <!-- درس معاينة مجانية - قابل للنقر -->
+                                    <a href="@Url.Action("Lesson", "Learning", new { area = "Student", lessonId = lesson.Id })"
+                                       class="lesson-preview-item free-preview text-decoration-none d-flex align-items-center justify-content-between">
+                                        <div class="d-flex align-items-center">
+                                            <i class="feather-play-circle me-2 text-success"></i>
+                                            <span class="text-dark">@lesson.Title</span>
+                                            <span class="badge bg-success ms-2">@Html.T("معاينة مجانية", "Free Preview")</span>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="text-muted fs-12">@lesson.DurationMinutes @Html.T("دقيقة", "min")</span>
+                                            <span class="lesson-play-btn">
+                                                <i class="feather-play"></i>
+                                            </span>
+                                        </div>
+                                    </a>
+                                }
+                                else
+                                {
+                                    <!-- درس مقفل - غير قابل للنقر -->
+                                    <div class="lesson-preview-item locked">
+                                        <div class="d-flex align-items-center">
+                                            <i class="feather-lock me-2 text-muted"></i>
+                                            <span>@lesson.Title</span>
+                                        </div>
+                                        <span class="text-muted fs-12">@lesson.DurationMinutes @Html.T("دقيقة", "min")</span>
+                                    </div>
+                                }
+                            }
+                            @if (module.Lessons.Count > 5)
+                            {
+                                <div class="text-muted fs-12 mt-2">
+                                    + @(module.Lessons.Count - 5) @Html.T("دروس أخرى", "more lessons")
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Requirements -->
+        @if (Model.Requirements.Any())
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">
+                        <i class="feather-alert-circle me-2"></i>
+                        @Html.T("المتطلبات", "Requirements")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var requirement in Model.Requirements)
+                        {
+                            <li class="mb-2">
+                                <i class="feather-chevron-left me-2 text-primary"></i>
+                                @requirement.Description
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        <!-- Instructor Info -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-user me-2"></i>
+                    @Html.T("المدرب", "Instructor")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="instructor-card">
+                    <div class="d-flex align-items-center mb-3">
+                        @if (!string.IsNullOrEmpty(Model.Instructor.ProfileImageUrl))
+                        {
+                            <img src="@Model.Instructor.ProfileImageUrl" alt="@Model.Instructor.FullName" class="rounded-circle me-3" style="width: 80px; height: 80px; object-fit: cover;" />
+                        }
+                        else
+                        {
+                            <div class="avatar avatar-xl me-3">
+                                <div class="avatar-text bg-primary">
+                                    @Model.Instructor.FirstName.Substring(0, 1)@Model.Instructor.LastName.Substring(0, 1)
+                                </div>
+                            </div>
+                        }
+                        <div>
+                            <h6 class="fw-bold mb-1">@Model.Instructor.FullName</h6>
+                            @if (!string.IsNullOrEmpty(Model.Instructor.Title))
+                            {
+                                <p class="text-muted mb-2">@Model.Instructor.Title</p>
+                            }
+                            <div class="d-flex align-items-center gap-3 fs-12">
+                                <span><i class="feather-star text-warning me-1"></i> @Model.Instructor.AverageRating.ToString("F1")</span>
+                                <span><i class="feather-users me-1"></i> @Model.Instructor.TotalStudents @Html.T("طالب", "students")</span>
+                                <span><i class="feather-book me-1"></i> @Model.Instructor.TotalCourses @Html.T("دورة", "courses")</span>
+                            </div>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(Model.Instructor.Bio))
+                    {
+                        <p class="mb-0">@Model.Instructor.Bio</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Reviews -->
+        @if (recentReviews.Any())
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">
+                        <i class="feather-message-square me-2"></i>
+                        @Html.T("تقييمات الطلاب", "Student Reviews")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Rating Summary -->
+                    <div class="row mb-4">
+                        <div class="col-md-4 text-center">
+                            <div class="display-3 fw-bold text-primary">@Model.AverageRating.ToString("F1")</div>
+                            <div class="text-warning mb-2">
+                                @for (int i = 1; i <= 5; i++)
+                                {
+                                    <i class="feather-star @(i <= Model.AverageRating ? "fill" : "")"></i>
+                                }
+                            </div>
+                            <div class="text-muted">@Model.TotalReviews @Html.T("تقييم", "reviews")</div>
+                        </div>
+                        <div class="col-md-8">
+                            @for (int stars = 5; stars >= 1; stars--)
+                            {
+                                var count = ratingDistribution.ContainsKey(stars) ? ratingDistribution[stars] : 0;
+                                var percentage = Model.TotalReviews > 0 ? (count * 100.0 / Model.TotalReviews) : 0;
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="me-2" style="min-width: 40px;">@stars @Html.T("نجوم", "stars")</span>
+                                    <div class="rating-bar flex-grow-1">
+                                        <div class="rating-bar-fill" style="width: @percentage%"></div>
+                                    </div>
+                                    <span class="ms-2 text-muted" style="min-width: 40px;">@count</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Recent Reviews -->
+                    @foreach (var review in recentReviews.Take(recentReviewsLimit))
+                    {
+                        <div class="border-bottom pb-3 mb-3">
+                            <div class="d-flex align-items-center mb-2">
+                                @if (!string.IsNullOrEmpty(review.Student.ProfileImageUrl))
+                                {
+                                    <img src="@review.Student.ProfileImageUrl" alt="@review.Student.FullName" class="rounded-circle me-2" style="width: 40px; height: 40px; object-fit: cover;" />
+                                }
+                                else
+                                {
+                                    <div class="avatar avatar-sm me-2">
+                                        <div class="avatar-text bg-soft-primary text-primary">
+                                            @review.Student.FirstName.Substring(0, 1)
+                                        </div>
+                                    </div>
+                                }
+                                <div>
+                                    <h6 class="fw-semibold mb-0">@review.Student.FullName</h6>
+                                    <div class="text-warning fs-12">
+                                        @for (int i = 1; i <= 5; i++)
+                                        {
+                                            <i class="feather-star @(i <= review.Rating ? "fill" : "")"></i>
+                                        }
+                                    </div>
+                                </div>
+                                <span class="ms-auto text-muted fs-12">@review.CreatedAt.ToString("dd/MM/yyyy")</span>
+                            </div>
+                            <p class="mb-0">@review.Comment</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Price Card -->
+        <div class="card price-card stretch stretch-full mb-4">
+            <div class="card-body">
+                @if (Model.IsFree)
+                {
+                    <div class="display-5 fw-bold text-success mb-3">@Html.T("مجاني", "Free")</div>
+                }
+                else
+                {
+                    <div class="mb-3">
+                        @if (Model.DiscountPrice.HasValue)
+                        {
+                            <div class="display-5 fw-bold text-primary mb-1">
+                                @Model.DiscountPrice.Value.ToEGP(2)
+                            </div>
+                            <div class="text-muted text-decoration-line-through">
+                                @Model.Price.ToEGP(2)
+                            </div>
+                            <span class="badge bg-danger">@Html.T("خصم", "Discount") @Model.DiscountPercentage%</span>
+                        }
+                        else
+                        {
+                            <div class="display-5 fw-bold text-primary">
+                                @Model.Price.ToEGP(2)
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Action Buttons -->
+                <div class="d-grid gap-2 mb-3">
+                    @if (isInCart && !(Model.IsFree || Model.FinalPrice == 0))
+                    {
+                        <a asp-area="Student" asp-controller="Checkout" asp-action="Cart" class="btn btn-success btn-lg">
+                            <i class="feather-shopping-cart me-2"></i>
+                            @Html.T("عرض السلة", "View Cart")
+                        </a>
+                    }
+                    else if (Model.IsFree || Model.FinalPrice == 0)
+                    {
+                        <a asp-area="Student" asp-controller="Checkout" asp-action="FreeEnroll" asp-route-courseId="@Model.Id" class="btn btn-success btn-lg w-100">
+                            <i class="feather-play-circle me-2"></i>
+                            @Html.T("سجل الآن", "Enroll Now")
+                        </a>
+                    }
+                    else
+                    {
+                        <form asp-area="Student" asp-controller="Checkout" asp-action="AddToCartPost" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="courseId" value="@Model.Id" />
+                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                                <i class="feather-shopping-cart me-2"></i>
+                                @Html.T("أضف إلى السلة", "Add to Cart")
+                            </button>
+                        </form>
+                    }
+                    
+                    @if (isInWishlist)
+                    {
+                        <button type="button" class="btn btn-outline-danger" onclick="removeFromWishlist(@Model.Id)">
+                            <i class="feather-heart-off me-2"></i>
+                            @Html.T("إزالة من المفضلة", "Remove from Wishlist")
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-outline-primary" onclick="addToWishlist(@Model.Id)">
+                            <i class="feather-heart me-2"></i>
+                            @Html.T("أضف إلى المفضلة", "Add to Wishlist")
+                        </button>
+                    }
+                </div>
+
+                <!-- Course Includes -->
+                <div class="border-top pt-3">
+                    <h6 class="fw-bold mb-3">@Html.T("تتضمن هذه الدورة:", "This course includes:")</h6>
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <i class="feather-play-circle text-primary me-2"></i>
+                            @Model.DurationHours.ToString("F1") @Html.T("ساعة فيديو حسب الطلب", "hours of on-demand video")
+                        </li>
+                        <li class="mb-2">
+                            <i class="feather-file-text text-primary me-2"></i>
+                            @Model.TotalLessons @Html.T("درس", "lessons")
+                        </li>
+                        <li class="mb-2">
+                            <i class="feather-smartphone text-primary me-2"></i>
+                            @Html.T("وصول عبر الجوال والكمبيوتر", "Access on mobile and desktop")
+                        </li>
+                        @if (Model.HasCertificate)
+                        {
+                            <li class="mb-2">
+                                <i class="feather-award text-primary me-2"></i>
+                                @Html.T("شهادة إتمام", "Certificate of completion")
+                            </li>
+                        }
+                        <li class="mb-2">
+                            <i class="feather-clock text-primary me-2"></i>
+                            @Html.T("وصول كامل مدى الحياة", "Full lifetime access")
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Similar Courses -->
+        @if (similarCourses.Any())
+        {
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h6 class="fw-bold mb-0">
+                        <i class="feather-book me-2"></i>
+                        @Html.T("دورات مشابهة", "Similar Courses")
+                    </h6>
+                </div>
+                <div class="card-body">
+                    @foreach (var course in similarCourses.Take(similarCoursesLimit))
+                    {
+                        var finalPrice = course.DiscountPrice ?? course.Price;
+                        <div class="d-flex align-items-start mb-3 pb-3 border-bottom">
+                            @if (!string.IsNullOrEmpty(course.ThumbnailUrl))
+                            {
+                                <img src="@course.ThumbnailUrl" alt="@course.Title" class="rounded me-3" style="width: 80px; height: 60px; object-fit: cover;" />
+                            }
+                            <div class="flex-grow-1">
+                                <a asp-action="Preview" asp-route-id="@course.CourseId" class="text-dark text-decoration-none">
+                                    <h6 class="fw-semibold mb-1 text-truncate-2-line">@course.Title</h6>
+                                </a>
+                                <div class="fs-12 text-muted mb-1">@course.InstructorName</div>
+                                <div class="d-flex align-items-center">
+                                    <span class="text-warning fs-12 me-2">
+                                        <i class="feather-star fill"></i>
+                                        @course.AverageRating.ToString("F1")
+                                    </span>
+                                    <span class="fw-bold text-primary">@finalPrice.ToEGP(0)</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function addToWishlist(courseId) {
+        $.post('@Url.Action("AddToWishlist", "Courses")', { courseId: courseId }, function(response) {
+            if (response.success) {
+                toastr.success(response.message);
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                toastr.error(response.message);
+            }
+        });
+    }
+
+    function removeFromWishlist(courseId) {
+        $.post('@Url.Action("RemoveFromWishlist", "Courses")', { courseId: courseId }, function(response) {
+            if (response.success) {
+                toastr.success(response.message);
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                toastr.error(response.message);
+            }
+        });
+    }
+
+    // تشغيل فيديو المعاينة - Play preview video
+    function playPreviewVideo() {
+        var overlay = document.getElementById('videoPosterOverlay');
+        var embedWrapper = document.getElementById('videoEmbedWrapper');
+
+        if (!overlay || !embedWrapper) return;
+
+        // إخفاء الصورة المصغرة وإظهار المشغل
+        overlay.style.display = 'none';
+        embedWrapper.style.display = 'block';
+
+        // تحميل iframe بشكل كسول (YouTube / Vimeo)
+        var iframe = document.getElementById('videoIframe');
+        if (iframe && iframe.dataset.src) {
+            iframe.src = iframe.dataset.src;
+        }
+
+        // تشغيل فيديو HTML5 محلي
+        var video = document.getElementById('videoPlayer');
+        if (video) {
+            video.play().catch(function() {
+                // المتصفح قد يمنع التشغيل التلقائي
+            });
+        }
+    }
+</script>
+}
+

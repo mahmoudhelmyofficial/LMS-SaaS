@@ -1,0 +1,386 @@
+@model LMS.Domain.Entities.Learning.Enrollment
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل الطالب", "Student Details");
+    ViewData["Subtitle"] = Model.Student?.FullName;
+    
+    var completedLessons = ViewBag.CompletedLessons ?? 0;
+    var totalLessons = ViewBag.TotalLessons ?? 0;
+    var completionPercentage = ViewBag.CompletionPercentage ?? 0;
+    
+    var progressUrl = Url.Action("Progress", new { enrollmentId = Model.Id });
+    var composeUrl = Url.Action("Compose", "Messages", new { receiverId = Model.StudentId });
+    var indexUrl = Url.Action("Index");
+    
+    // Load platform settings
+    var thresholdExcellent = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Excellent", 80);
+    var thresholdGood = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Good", 60);
+    var thresholdFair = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Fair", 40);
+    var recentItemsLimit = await PlatformSettings.GetIntSettingAsync("UI.RecentItems.Limit", 5);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + progressUrl + "' class='btn btn-primary'><i class='feather-activity me-2'></i>" + Html.T("عرض التقدم", "View progress") + "</a><a href='" + composeUrl + "' class='btn btn-light'><i class='feather-mail me-2'></i>" + Html.T("إرسال رسالة", "Send message") + "</a><a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة", "Back") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Student Info Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-body">
+                    <div class="d-flex align-items-start gap-4 mb-4">
+                        <div class="avatar-text avatar-xxl @(Model.Status == LMS.Domain.Enums.EnrollmentStatus.Completed ? "bg-soft-success text-success" : "bg-soft-primary text-primary")">
+                            @Model.Student?.FirstName?.Substring(0, 1)
+                        </div>
+                        <div class="flex-grow-1">
+                            <h3 class="fw-bold mb-2">@Model.Student?.FullName</h3>
+                            <p class="text-muted mb-3">
+                                <i class="feather-mail me-2"></i>@Model.Student?.Email
+                            </p>
+                            <div class="d-flex flex-wrap gap-2">
+                                @if (Model.Status == LMS.Domain.Enums.EnrollmentStatus.Completed)
+                                {
+                                    <span class="badge bg-soft-success text-success">
+                                        <i class="feather-check-circle me-1"></i>
+                                        مكتمل
+                                    </span>
+                                }
+                                else if (Model.Status == LMS.Domain.Enums.EnrollmentStatus.Active)
+                                {
+                                    <span class="badge bg-soft-primary text-primary">
+                                        <i class="feather-activity me-1"></i>
+                                        نشط
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-soft-secondary text-secondary">@Model.Status</span>
+                                }
+                                
+                                <span class="badge bg-soft-info text-info">
+                                    <i class="feather-calendar me-1"></i>
+                                    انضم في @Model.EnrolledAt.ToString("dd MMM yyyy")
+                                </span>
+
+                                @if (Model.CompletedAt.HasValue)
+                                {
+                                    <span class="badge bg-soft-success text-success">
+                                        <i class="feather-award me-1"></i>
+                                        أكمل في @Model.CompletedAt.Value.ToString("dd MMM yyyy")
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Overview -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-3">@Html.T("نظرة عامة على التقدم", "Progress overview")</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="bg-soft-primary text-primary p-3 rounded text-center">
+                                    <div class="fs-11 mb-1">نسبة الإكمال</div>
+                                    <div class="fs-3 fw-bold">@completionPercentage.ToString("F0")%</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="bg-soft-success text-success p-3 rounded text-center">
+                                    <div class="fs-11 mb-1">الدروس المكتملة</div>
+                                    <div class="fs-3 fw-bold">@completedLessons</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="bg-soft-info text-info p-3 rounded text-center">
+                                    <div class="fs-11 mb-1">إجمالي الدروس</div>
+                                    <div class="fs-3 fw-bold">@totalLessons</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="fw-bold">@Html.T("التقدم الكلي:", "Overall progress:")</span>
+                            <span class="fw-bold text-primary">@Model.ProgressPercentage.ToString("F0")%</span>
+                        </div>
+                        <div class="progress" style="height: 25px;">
+                            <div class="progress-bar @(Model.ProgressPercentage >= thresholdExcellent ? "bg-success" : Model.ProgressPercentage >= 50 ? "bg-info" : Model.ProgressPercentage >= 25 ? "bg-warning" : "bg-danger")" 
+                                 role="progressbar" 
+                                 style="width: @Model.ProgressPercentage%" 
+                                 aria-valuenow="@Model.ProgressPercentage" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                                @Model.ProgressPercentage.ToString("F0")%
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Course Info -->
+                    <div class="alert alert-light border">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-md bg-primary text-white">
+                                <i class="feather-book"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="fw-bold mb-1">@Html.T("الدورة:", "Course:") @Model.Course?.Title</h6>
+                                <p class="text-muted fs-13 mb-0">@Model.Course?.ShortDescription</p>
+                            </div>
+                            <a href="@Url.Action("Details", "Courses", new { id = Model.CourseId })" class="btn btn-sm btn-light">
+                                عرض الدورة
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quiz Attempts -->
+            @if (Model.QuizAttempts != null && Model.QuizAttempts.Any())
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("محاولات الاختبارات", "Quiz attempts")</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الاختبار", "Quiz")</th>
+                                        <th>@Html.T("التاريخ", "Date")</th>
+                                        <th>@Html.T("الدرجة", "Score")</th>
+                                        <th>@Html.T("النتيجة", "Result")</th>
+                                        <th>@Html.T("إجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var attempt in Model.QuizAttempts.OrderByDescending(a => a.StartedAt).Take(recentItemsLimit))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <h6 class="fw-bold mb-0">@attempt.Quiz?.Title</h6>
+                                                <p class="text-muted fs-12 mb-0">@attempt.Quiz?.Lesson?.Title</p>
+                                            </td>
+                                            <td>
+                                                <span class="text-muted fs-13">@attempt.StartedAt.ToString("dd MMM yyyy")</span>
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold">@attempt.Score.ToString("F0")%</span>
+                                            </td>
+                                            <td>
+                                                @if (attempt.IsPassed)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-check-circle me-1"></i>
+                                                        ناجح
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger">
+                                                        <i class="feather-x-circle me-1"></i>
+                                                        راسب
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Details", "QuizAttempts", new { id = attempt.Id })" class="btn btn-sm btn-light">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Assignment Submissions -->
+            @if (Model.AssignmentSubmissions != null && Model.AssignmentSubmissions.Any())
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("تسليمات الواجبات", "Assignment submissions")</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الواجب", "Assignment")</th>
+                                        <th>@Html.T("تاريخ التسليم", "Submit date")</th>
+                                        <th>@Html.T("الدرجة", "Score")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                        <th>@Html.T("إجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var submission in Model.AssignmentSubmissions.OrderByDescending(s => s.SubmittedAt).Take(recentItemsLimit))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <h6 class="fw-bold mb-0">@submission.Assignment?.Title</h6>
+                                            </td>
+                                            <td>
+                                                <span class="text-muted fs-13">@submission.SubmittedAt.ToString("dd MMM yyyy")</span>
+                                            </td>
+                                            <td>
+                                                @if (submission.Grade.HasValue)
+                                                {
+                                                    <span class="fw-bold">@submission.Grade / @submission.Assignment?.MaxGrade</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">لم يُصحح</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (submission.Status == LMS.Domain.Enums.AssignmentStatus.Graded)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">مُصحح</span>
+                                                }
+                                                else if (submission.Status == LMS.Domain.Enums.AssignmentStatus.Submitted)
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning">قيد التصحيح</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">@submission.Status</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Details", "AssignmentSubmissions", new { id = submission.Id })" class="btn btn-sm btn-light">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Enrollment Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("معلومات التسجيل", "Enrollment info")</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">تاريخ التسجيل:</span>
+                        <span class="fw-bold fs-13">@Model.EnrolledAt.ToString("dd/MM/yyyy")</span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">المبلغ المدفوع:</span>
+                        <span class="fw-bold text-success">@Model.PaidAmount.ToEGP()</span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">التقدم:</span>
+                        <span class="fw-bold">@Model.ProgressPercentage.ToString("F0")%</span>
+                    </div>
+
+                    @if (Model.CompletedAt.HasValue)
+                    {
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="text-muted">تاريخ الإكمال:</span>
+                            <span class="fw-bold fs-13">@Model.CompletedAt.Value.ToString("dd/MM/yyyy")</span>
+                        </div>
+                    }
+
+                    @if (Model.CertificateIssuedAt.HasValue)
+                    {
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="text-muted">تاريخ إصدار الشهادة:</span>
+                            <span class="fw-bold fs-13">@Model.CertificateIssuedAt.Value.ToString("dd/MM/yyyy")</span>
+                        </div>
+                    }
+
+                    @if (Model.FinalGrade.HasValue)
+                    {
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">الدرجة النهائية:</span>
+                            <span class="badge bg-soft-success text-success fs-14">@Model.FinalGrade.Value.ToString("F1")%</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("إجراءات سريعة", "Quick actions")</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="@Url.Action("Progress", new { enrollmentId = Model.Id })" class="btn btn-primary">
+                            <i class="feather-activity me-2"></i>
+                            عرض التقدم التفصيلي
+                        </a>
+                        <a href="@Url.Action("Compose", "Messages", new { receiverId = Model.StudentId })" class="btn btn-light">
+                            <i class="feather-mail me-2"></i>
+                            إرسال رسالة
+                        </a>
+                        <a href="@Url.Action("Index", "Courses", new { id = Model.CourseId })" class="btn btn-light">
+                            <i class="feather-book me-2"></i>
+                            عرض الدورة
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Card -->
+            <div class="card stretch stretch-full bg-soft-info">
+                <div class="card-body">
+                    <h6 class="fw-bold text-info mb-3">
+                        <i class="feather-bar-chart-2 me-2"></i>
+                        تقييم الأداء
+                    </h6>
+                    @{
+                        var performanceLevel = Model.ProgressPercentage >= thresholdExcellent ? "ممتاز" : 
+                                              Model.ProgressPercentage >= thresholdGood ? "جيد جداً" :
+                                              Model.ProgressPercentage >= thresholdFair ? "جيد" :
+                                              Model.ProgressPercentage >= 20 ? "مقبول" : "يحتاج تحسين";
+                        
+                        var performanceColor = Model.ProgressPercentage >= thresholdExcellent ? "success" : 
+                                              Model.ProgressPercentage >= thresholdGood ? "info" :
+                                              Model.ProgressPercentage >= thresholdFair ? "warning" : "danger";
+                    }
+                    <div class="text-center mb-3">
+                        <h3 class="fw-bold text-@performanceColor mb-2">@performanceLevel</h3>
+                        <p class="text-muted fs-13 mb-0">مستوى الأداء الحالي</p>
+                    </div>
+                    <ul class="list-unstyled mb-0 fs-13">
+                        <li class="mb-2">
+                            <i class="feather-check me-2 text-success"></i>
+                            الدروس المكتملة: @completedLessons
+                        </li>
+                        <li class="mb-2">
+                            <i class="feather-file-text me-2 text-info"></i>
+                            الاختبارات: @Model.QuizAttempts?.Count()
+                        </li>
+                        <li class="mb-0">
+                            <i class="feather-edit me-2 text-warning"></i>
+                            الواجبات: @Model.AssignmentSubmissions?.Count()
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+

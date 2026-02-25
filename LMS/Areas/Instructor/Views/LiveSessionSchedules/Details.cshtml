@@ -1,0 +1,293 @@
+@model LMS.Domain.Entities.LiveSessions.LiveSessionSchedule
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل جدول الحصص", "Session Schedule Details");
+    ViewData["Subtitle"] = Model.Title;
+    var enrollmentCount = (int)(ViewBag.EnrollmentCount ?? 0);
+    var revenue = (decimal)(ViewBag.Revenue ?? 0m);
+}
+
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="mb-1">@ViewData["Title"]</h4>
+        <p class="text-muted mb-0">@(Model.TitleAr ?? Model.Title)</p>
+    </div>
+    <div class="d-flex gap-2">
+        @if (Model.Status == LMS.Domain.Enums.LiveScheduleStatus.Draft || Model.Status == LMS.Domain.Enums.LiveScheduleStatus.Published)
+        {
+            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-light">
+                <i class="feather-edit me-2"></i>@Html.T("تعديل", "Edit")
+            </a>
+        }
+        <a asp-action="Index" class="btn btn-light">
+            <i class="feather-arrow-right me-2"></i>@Html.T("العودة للقائمة", "Back to List")
+        </a>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Stats Row -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("الجلسات", "Sessions") },
+                { "Value", Model.TotalSessions },
+                { "Icon", "video" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("المشتركون", "Subscribers") },
+                { "Value", enrollmentCount },
+                { "Icon", "users" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("الإيرادات", "Revenue") },
+                { "Value", revenue.ToString("N0") + " " + Html.T("ج.م", "EGP") },
+                { "Icon", "dollar-sign" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("السعر", "Price") },
+                { "Value", Model.Price > 0 ? Model.Price.ToString("N0") + " " + Html.T("ج.م", "EGP") : Html.T("مجاني", "Free") },
+                { "Icon", "tag" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main -->
+        <div class="col-lg-8">
+            <!-- Schedule Info -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات الجدول", "Schedule Information")</h5>
+                    <div class="card-header-action">
+                        @switch (Model.Status)
+                        {
+                            case LMS.Domain.Enums.LiveScheduleStatus.Draft:
+                                <span class="badge bg-soft-secondary text-secondary fs-12">@Html.T("مسودة", "Draft")</span>
+                                break;
+                            case LMS.Domain.Enums.LiveScheduleStatus.Published:
+                                <span class="badge bg-soft-primary text-primary fs-12">@Html.T("منشور", "Published")</span>
+                                break;
+                            case LMS.Domain.Enums.LiveScheduleStatus.Active:
+                                <span class="badge bg-soft-success text-success fs-12">@Html.T("نشط", "Active")</span>
+                                break;
+                            case LMS.Domain.Enums.LiveScheduleStatus.Completed:
+                                <span class="badge bg-soft-info text-info fs-12">@Html.T("مكتمل", "Completed")</span>
+                                break;
+                            case LMS.Domain.Enums.LiveScheduleStatus.Cancelled:
+                                <span class="badge bg-soft-danger text-danger fs-12">@Html.T("ملغي", "Cancelled")</span>
+                                break;
+                        }
+                    </div>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(Model.Description))
+                    {
+                        <p class="text-muted mb-4">@Model.Description</p>
+                    }
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-3 p-3 bg-soft-primary rounded">
+                                <div class="avatar-text bg-primary text-white"><i class="feather-calendar"></i></div>
+                                <div>
+                                    <div class="text-muted fs-12">@Html.T("تاريخ البداية", "Start Date")</div>
+                                    <div class="fw-bold">@Model.StartDate.ToString("dd MMMM yyyy")</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-3 p-3 bg-soft-success rounded">
+                                <div class="avatar-text bg-success text-white"><i class="feather-calendar"></i></div>
+                                <div>
+                                    <div class="text-muted fs-12">@Html.T("تاريخ النهاية", "End Date")</div>
+                                    <div class="fw-bold">@Model.EndDate.ToString("dd MMMM yyyy")</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sessions Table -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الجلسات", "Sessions") (@Model.Sessions.Count)</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model.Sessions.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>@Html.T("العنوان", "Title")</th>
+                                        <th>@Html.T("الموضوع", "Subject")</th>
+                                        <th>@Html.T("التاريخ", "Date")</th>
+                                        <th>@Html.T("المدة", "Duration")</th>
+                                        <th>@Html.T("المنصة", "Platform")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                        <th class="text-end">@Html.T("إجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{ var idx = 0; }
+                                    @foreach (var session in Model.Sessions.OrderBy(s => s.ScheduleOrder))
+                                    {
+                                        idx++;
+                                        <tr>
+                                            <td>@idx</td>
+                                            <td>
+                                                <a href="@Url.Action("Details", "LiveClasses", new { id = session.Id })" class="fw-medium text-dark">@session.Title</a>
+                                            </td>
+                                            <td class="text-muted">@(session.Subject ?? "-")</td>
+                                            <td>
+                                                <div>@session.ScheduledStartTime.ToLocalTime().ToString("dd/MM/yyyy")</div>
+                                                <div class="fs-12 text-muted">@session.ScheduledStartTime.ToLocalTime().ToString("hh:mm tt")</div>
+                                            </td>
+                                            <td><span class="badge bg-soft-info text-info">@session.DurationMinutes @Html.T("دقيقة", "min")</span></td>
+                                            <td>@session.Platform</td>
+                                            <td>
+                                                @switch (session.Status)
+                                                {
+                                                    case LMS.Domain.Enums.LiveClassStatus.Scheduled:
+                                                        <span class="badge bg-soft-warning text-warning">@Html.T("مجدولة", "Scheduled")</span>
+                                                        break;
+                                                    case LMS.Domain.Enums.LiveClassStatus.Live:
+                                                        <span class="badge bg-soft-danger text-danger">@Html.T("مباشرة", "Live")</span>
+                                                        break;
+                                                    case LMS.Domain.Enums.LiveClassStatus.Completed:
+                                                        <span class="badge bg-soft-success text-success">@Html.T("مكتملة", "Completed")</span>
+                                                        break;
+                                                    case LMS.Domain.Enums.LiveClassStatus.Cancelled:
+                                                        <span class="badge bg-soft-secondary text-secondary">@Html.T("ملغية", "Cancelled")</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <a href="@Url.Action("Details", "LiveClasses", new { id = session.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <p class="text-muted">@Html.T("لا توجد جلسات مضافة", "No sessions added")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Actions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("الإجراءات", "Actions")</h6>
+                </div>
+                <div class="card-body">
+                    @if (Model.Status == LMS.Domain.Enums.LiveScheduleStatus.Draft)
+                    {
+                        <form method="post" asp-action="Publish" asp-route-id="@Model.Id" class="mb-2">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="feather-globe me-2"></i>@Html.T("نشر الجدول", "Publish Schedule")
+                            </button>
+                        </form>
+                    }
+
+                    <a href="@Url.Action("Enrollments", new { id = Model.Id })" class="btn btn-info w-100 mb-2">
+                        <i class="feather-users me-2"></i>@Html.T("عرض المشتركين", "View Subscribers")
+                    </a>
+
+                    <a href="@Url.Action("AttendanceReport", new { id = Model.Id })" class="btn btn-primary w-100 mb-2">
+                        <i class="feather-bar-chart-2 me-2"></i>@Html.T("تقرير الحضور", "Attendance Report")
+                    </a>
+
+                    @if (Model.Status != LMS.Domain.Enums.LiveScheduleStatus.Completed && Model.Status != LMS.Domain.Enums.LiveScheduleStatus.Cancelled)
+                    {
+                        <hr />
+                        <form method="post" asp-action="Cancel" asp-route-id="@Model.Id" class="mb-2" onsubmit="return confirm('@Html.T("هل أنت متأكد من إلغاء هذا الجدول؟", "Are you sure you want to cancel this schedule?")')">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-outline-warning w-100">
+                                <i class="feather-x-circle me-2"></i>@Html.T("إلغاء الجدول", "Cancel Schedule")
+                            </button>
+                        </form>
+                    }
+
+                    @if (Model.Status == LMS.Domain.Enums.LiveScheduleStatus.Draft && enrollmentCount == 0)
+                    {
+                        <form method="post" asp-action="Delete" asp-route-id="@Model.Id" onsubmit="return confirm('@Html.T("هل أنت متأكد من حذف هذا الجدول نهائياً؟", "Are you sure you want to permanently delete this schedule?")')">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-outline-danger w-100">
+                                <i class="feather-trash-2 me-2"></i>@Html.T("حذف الجدول", "Delete Schedule")
+                            </button>
+                        </form>
+                    }
+                </div>
+            </div>
+
+            <!-- Pricing Details -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("التسعير", "Pricing")</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                            <span class="text-muted">@Html.T("السعر", "Price")</span>
+                            <span class="fw-bold text-success">@(Model.Price > 0 ? Model.Price.ToString("N0") + " " + Model.Currency : Html.T("مجاني", "Free"))</span>
+                        </li>
+                        @if (Model.OriginalPrice.HasValue && Model.OriginalPrice > Model.Price)
+                        {
+                            <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                                <span class="text-muted">@Html.T("السعر الأصلي", "Original Price")</span>
+                                <span class="text-decoration-line-through">@Model.OriginalPrice.Value.ToString("N0") @Model.Currency</span>
+                            </li>
+                        }
+                        <li class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                            <span class="text-muted">@Html.T("الحد الأقصى", "Max Capacity")</span>
+                            <span class="fw-bold">@(Model.MaxStudents?.ToString() ?? Html.T("غير محدود", "Unlimited"))</span>
+                        </li>
+                        <li class="d-flex justify-content-between align-items-center py-2">
+                            <span class="text-muted">@Html.T("تاريخ الإنشاء", "Created Date")</span>
+                            <span>@Model.CreatedAt.ToString("dd/MM/yyyy")</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
+        });
+    </script>
+}

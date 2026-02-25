@@ -1,0 +1,328 @@
+@model LMS.Areas.Instructor.ViewModels.InstructorSecurityViewModel
+
+@{
+    ViewData["Title"] = Html.T("إعدادات الأمان", "Security Settings");
+    ViewData["Subtitle"] = Html.T("إدارة أمان حسابك وكلمة المرور", "Manage account security and password");
+}
+
+@{
+    var indexUrl = Url.Action("Index");
+    var actionButtonsHtml = "<a href='" + indexUrl + "' class='btn btn-light'>" +
+        "<i class='feather-arrow-right me-2'></i>" +
+        (Html.T("العودة للملف الشخصي", "Back to profile")) +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content" data-msg-password-min="@Html.Raw(Html.T("كلمة المرور يجب أن تكون 8 أحرف على الأقل", "Password must be at least 8 characters").Replace("'", "\\'"))" data-msg-password-strength="@Html.Raw(Html.T("كلمة المرور يجب أن تحتوي على حرف كبير وصغير ورقم", "Password must contain uppercase, lowercase and number").Replace("'", "\\'"))" data-msg-password-match="@Html.Raw(Html.T("كلمة المرور غير متطابقة", "Passwords do not match").Replace("'", "\\'"))">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Change Password -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-lock me-2 text-primary"></i>
+                        @Html.T("تغيير كلمة المرور", "Change password")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="ChangePassword" method="post" id="changePasswordForm">
+                        @Html.AntiForgeryToken()
+                        
+                        <div class="mb-3">
+                            <label class="form-label" for="CurrentPassword">
+                                @Html.T("كلمة المرور الحالية", "Current password") <span class="text-danger">*</span>
+                            </label>
+                            <input type="password" name="CurrentPassword" id="CurrentPassword" class="form-control" required />
+                            <span class="text-danger" id="currentPasswordError"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label" for="NewPassword">
+                                @Html.T("كلمة المرور الجديدة", "New password") <span class="text-danger">*</span>
+                            </label>
+                            <input type="password" name="NewPassword" id="NewPassword" class="form-control" required minlength="8" />
+                            <div class="form-text">
+                                <i class="feather-info me-1"></i>
+                                @Html.T("يجب أن تكون 8 أحرف على الأقل وتحتوي على حرف كبير وصغير ورقم", "At least 8 characters with uppercase, lowercase and number")
+                            </div>
+                            <span class="text-danger" id="newPasswordError"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label" for="ConfirmPassword">
+                                @Html.T("تأكيد كلمة المرور", "Confirm password") <span class="text-danger">*</span>
+                            </label>
+                            <input type="password" name="ConfirmPassword" id="ConfirmPassword" class="form-control" required />
+                            <span class="text-danger" id="confirmPasswordError"></span>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input type="checkbox" name="LogoutOtherSessions" id="LogoutOtherSessions" class="form-check-input" value="true" checked />
+                            <label class="form-check-label" for="LogoutOtherSessions">
+                                @Html.T("تسجيل الخروج من جميع الأجهزة الأخرى", "Log out from all other devices")
+                            </label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="feather-save me-2"></i>
+                            @Html.T("تغيير كلمة المرور", "Change password")
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Two-Factor Authentication -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-shield me-2 text-primary"></i>
+                        @Html.T("المصادقة الثنائية", "Two-factor authentication")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div>
+                            <h6 class="mb-1">@Html.T("المصادقة الثنائية (2FA)", "Two-factor authentication (2FA)")</h6>
+                            <p class="fs-13 text-muted mb-0">
+                                @Html.T("أضف طبقة إضافية من الأمان لحسابك باستخدام تطبيق المصادقة", "Add an extra layer of security using an authenticator app")
+                            </p>
+                        </div>
+                        <div>
+                            @if (Model.TwoFactorEnabled)
+                            {
+                                <span class="badge bg-soft-success text-success">
+                                    <i class="feather-check-circle me-1"></i>
+                                    @Html.T("مفعّل", "Enabled")
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-soft-warning text-warning">
+                                    <i class="feather-alert-circle me-1"></i>
+                                    @Html.T("غير مفعّل", "Disabled")
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    @if (!Model.TwoFactorEnabled)
+                    {
+                        <form asp-action="EnableTwoFactor" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-shield me-2"></i>
+                                @Html.T("تفعيل المصادقة الثنائية", "Enable two-factor authentication")
+                            </button>
+                        </form>
+                    }
+                    else
+                    {
+                        <div class="alert alert-success">
+                            <i class="feather-check-circle me-2"></i>
+                            @Html.T("المصادقة الثنائية مفعّلة على حسابك", "Two-factor authentication is enabled on your account")
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Login History -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-clock me-2 text-primary"></i>
+                        @Html.T("سجل تسجيل الدخول", "Login history")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.LoginHistory != null && Model.LoginHistory.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("التاريخ والوقت", "Date & time")</th>
+                                        <th>@Html.T("عنوان IP", "IP address")</th>
+                                        <th>@Html.T("الموقع", "Location")</th>
+                                        <th>@Html.T("المتصفح", "Browser")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var login in Model.LoginHistory)
+                                    {
+                                        <tr>
+                                            <td>@login.LoginTime.ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td>@login.IpAddress</td>
+                                            <td>@(login.Location ?? Html.T("غير محدد", "Not set"))</td>
+                                            <td>@(login.Browser ?? Html.T("غير محدد", "Not set"))</td>
+                                            <td>
+                                                @if (login.IsSuccessful)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-check-circle me-1"></i>
+                                                        @Html.T("نجح", "Success")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger">
+                                                        <i class="feather-x-circle me-1"></i>
+                                                        @Html.T("فشل", "Failed")
+                                                    </span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted text-center py-4">@Html.T("لا يوجد سجل تسجيل دخول", "No login history")</p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Security Status -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("حالة الأمان", "Security status")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3 pb-3 border-bottom">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fs-13">@Html.T("البريد الإلكتروني", "Email")</span>
+                            @if (Model.IsEmailVerified)
+                            {
+                                <span class="badge bg-soft-success text-success">
+                                    <i class="feather-check-circle me-1"></i>
+                                    @Html.T("محقق", "Verified")
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-soft-warning text-warning">
+                                    <i class="feather-alert-circle me-1"></i>
+                                    @Html.T("غير محقق", "Not verified")
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="mb-3 pb-3 border-bottom">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fs-13">@Html.T("رقم الهاتف", "Phone number")</span>
+                            @if (Model.IsPhoneVerified)
+                            {
+                                <span class="badge bg-soft-success text-success">
+                                    <i class="feather-check-circle me-1"></i>
+                                    @Html.T("محقق", "Verified")
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-soft-warning text-warning">
+                                    <i class="feather-alert-circle me-1"></i>
+                                    @Html.T("غير محقق", "Not verified")
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="mb-3 pb-3 border-bottom">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fs-13">@Html.T("المصادقة الثنائية", "Two-factor auth")</span>
+                            @if (Model.TwoFactorEnabled)
+                            {
+                                <span class="badge bg-soft-success text-success">
+                                    <i class="feather-check-circle me-1"></i>
+                                    @Html.T("مفعّل", "Enabled")
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-soft-warning text-warning">
+                                    <i class="feather-alert-circle me-1"></i>
+                                    @Html.T("غير مفعّل", "Disabled")
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    @if (Model.LastLoginDate.HasValue)
+                    {
+                        <div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fs-13">@Html.T("آخر تسجيل دخول", "Last login")</span>
+                            </div>
+                            <p class="fs-12 text-muted mb-1">@Model.LastLoginDate.Value.ToString("dd/MM/yyyy HH:mm")</p>
+                            @if (!string.IsNullOrEmpty(Model.LastLoginIp))
+                            {
+                                <p class="fs-12 text-muted mb-0">IP: @Model.LastLoginIp</p>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Security Tips -->
+            <div class="card stretch stretch-full bg-soft-warning border-0">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <i class="feather-shield text-warning" style="font-size: 48px;"></i>
+                    </div>
+                    <h6 class="text-center mb-3">@Html.T("نصائح الأمان", "Security tips")</h6>
+                    <ul class="fs-13 mb-0">
+                        <li class="mb-2">@Html.T("استخدم كلمة مرور قوية وفريدة", "Use a strong, unique password")</li>
+                        <li class="mb-2">@Html.T("فعّل المصادقة الثنائية", "Enable two-factor authentication")</li>
+                        <li class="mb-2">@Html.T("لا تشارك كلمة المرور مع أحد", "Never share your password")</li>
+                        <li class="mb-0">@Html.T("راقب سجل تسجيل الدخول بانتظام", "Monitor login history regularly")</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        // Password validation (messages from server for i18n)
+        var mainContent = document.querySelector('.main-content');
+        var msgMin = mainContent && mainContent.getAttribute('data-msg-password-min') ? mainContent.getAttribute('data-msg-password-min') : 'Password must be at least 8 characters';
+        var msgStrength = mainContent && mainContent.getAttribute('data-msg-password-strength') ? mainContent.getAttribute('data-msg-password-strength') : 'Password must contain uppercase, lowercase and number';
+        var msgMatch = mainContent && mainContent.getAttribute('data-msg-password-match') ? mainContent.getAttribute('data-msg-password-match') : 'Passwords do not match';
+        document.getElementById('changePasswordForm').addEventListener('submit', function(e) {
+            const newPassword = document.getElementById('NewPassword').value;
+            const confirmPassword = document.getElementById('ConfirmPassword').value;
+            document.getElementById('newPasswordError').textContent = '';
+            document.getElementById('confirmPasswordError').textContent = '';
+            if (newPassword.length < 8) {
+                e.preventDefault();
+                document.getElementById('newPasswordError').textContent = msgMin;
+                return false;
+            }
+            if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
+                e.preventDefault();
+                document.getElementById('newPasswordError').textContent = msgStrength;
+                return false;
+            }
+            if (newPassword !== confirmPassword) {
+                e.preventDefault();
+                document.getElementById('confirmPasswordError').textContent = msgMatch;
+                return false;
+            }
+            return true;
+        });
+    </script>
+}

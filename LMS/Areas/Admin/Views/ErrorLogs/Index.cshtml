@@ -1,0 +1,366 @@
+@model List<LMS.Domain.Entities.Settings.ApplicationError>
+@{
+    ViewData["Title"] = Html.T("سجل الأخطاء", "Error logs");
+    ViewData["Breadcrumbs"] = new List<(string Name, string? Url)>
+    {
+        (Html.T("النظام", "System"), null),
+        (Html.T("سجل الأخطاء", "Error logs"), null)
+    };
+}
+
+<div class="main-content">
+    <!-- Search and Filter Card -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">@Html.T("البحث في الأخطاء", "Search errors")</label>
+                    <input type="text" name="search" class="form-control" 
+                           placeholder="@Html.T("ابحث بالمسار، نوع الخطأ، الرسالة...", "Search by path, error type, message...")" value="@ViewBag.Search" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">@Html.T("الفترة الزمنية", "Time period")</label>
+                    @{
+                        var selectedDays = (int)(ViewBag.Days ?? 7);
+                    }
+                    <select name="days" class="form-select">
+                        <option value="1" selected="@(selectedDays == 1)">@Html.T("اليوم فقط", "Today only")</option>
+                        <option value="3" selected="@(selectedDays == 3)">@Html.T("آخر 3 أيام", "Last 3 days")</option>
+                        <option value="7" selected="@(selectedDays == 7)">@Html.T("آخر أسبوع", "Last week")</option>
+                        <option value="14" selected="@(selectedDays == 14)">@Html.T("آخر أسبوعين", "Last 2 weeks")</option>
+                        <option value="30" selected="@(selectedDays == 30)">@Html.T("آخر شهر", "Last month")</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">@Html.T("الحالة", "Status")</label>
+                    @{
+                        var resolvedFilter = ViewBag.Resolved as bool?;
+                    }
+                    <select name="resolved" class="form-select">
+                        <option value="" selected="@(resolvedFilter == null)">@Html.T("الكل", "All")</option>
+                        <option value="false" selected="@(resolvedFilter == false)">@Html.T("غير محلول", "Unresolved")</option>
+                        <option value="true" selected="@(resolvedFilter == true)">@Html.T("محلول", "Resolved")</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="feather-search me-1"></i> @Html.T("بحث", "Search")
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown">
+                            <i class="feather-more-vertical me-1"></i> @Html.T("إجراءات", "Actions")
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <form method="post" asp-action="MarkAllResolved" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="dropdown-item text-success" onclick="return confirm('@Html.Raw(Html.T("هل تريد تحديد كل الأخطاء كمحلولة؟", "Do you want to mark all errors as resolved?").ToString().Replace("'", "\\'"))')">
+                                        <i class="feather-check-circle me-2"></i> @Html.T("تحديد الكل كمحلول", "Mark all as resolved")
+                                    </button>
+                                </form>
+                            </li>
+                            <li>
+                                <form method="post" asp-action="ClearResolvedErrors" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="dropdown-item text-warning" onclick="return confirm('@Html.Raw(Html.T("هل تريد حذف كل الأخطاء المحلولة؟", "Do you want to delete all resolved errors?").ToString().Replace("'", "\\'"))')">
+                                        <i class="feather-trash me-2"></i> @Html.T("حذف المحلولة", "Delete resolved")
+                                    </button>
+                                </form>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="post" asp-action="ClearOldErrors" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="olderThanDays" value="30" />
+                                    <button type="submit" class="dropdown-item text-danger" onclick="return confirm('@Html.Raw(Html.T("هل تريد حذف الأخطاء الأقدم من 30 يوم؟", "Do you want to delete errors older than 30 days?").ToString().Replace("'", "\\'"))')">
+                                        <i class="feather-trash-2 me-2"></i> @Html.T("حذف الأخطاء القديمة", "Delete old errors")
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Stats Summary -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-danger bg-opacity-10 border-0">
+                <div class="card-body text-center py-3">
+                    <h3 class="text-danger mb-1">@ViewBag.TotalErrors</h3>
+                    <p class="mb-0 text-muted">@Html.T("إجمالي الأخطاء", "Total errors")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning bg-opacity-10 border-0">
+                <div class="card-body text-center py-3">
+                    <h3 class="text-warning mb-1">@ViewBag.TodayErrors</h3>
+                    <p class="mb-0 text-muted">@Html.T("أخطاء اليوم", "Today's errors")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-primary bg-opacity-10 border-0">
+                <div class="card-body text-center py-3">
+                    <h3 class="text-primary mb-1">@ViewBag.UnresolvedErrors</h3>
+                    <p class="mb-0 text-muted">@Html.T("غير محلول", "Unresolved")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info bg-opacity-10 border-0">
+                <div class="card-body text-center py-3">
+                    <h3 class="text-info mb-1">@ViewBag.UniqueTypes</h3>
+                    <p class="mb-0 text-muted">@Html.T("أنواع مختلفة", "Different types")</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Errors List -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="feather-alert-triangle text-danger me-2"></i>
+                @Html.T("قائمة الأخطاء", "Error list")
+            </h5>
+            @if (!string.IsNullOrEmpty(ViewBag.Search as string))
+            {
+                <span class="badge bg-primary">@Html.T("نتائج البحث", "Search results"): @Model.Count</span>
+            }
+        </div>
+        <div class="card-body p-0">
+            @if (!Model.Any())
+            {
+                <div class="text-center py-5">
+                    <i class="feather-check-circle text-success" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3 text-success">@Html.T("لا توجد أخطاء مسجلة!", "No errors recorded!")</h4>
+                    <p class="text-muted">@Html.T("النظام يعمل بشكل طبيعي", "System is running normally")</p>
+                </div>
+            }
+            else
+            {
+                <div class="accordion" id="errorAccordion">
+                    @foreach (var error in Model)
+                    {
+                        var errorId = $"error-{error.Id}";
+                        var badgeClass = error.IsResolved ? "bg-success" : (error.Level == "Fatal" ? "bg-dark" : "bg-danger");
+                        var resolvedLabel = Html.T("محلول", "Resolved");
+                        var statusBadge = error.IsResolved ? "<span class='badge bg-success ms-2'>✓ " + resolvedLabel + "</span>" : "";
+                        <div class="accordion-item border-0 border-bottom">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-3" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#@errorId">
+                                    <div class="d-flex flex-wrap align-items-center gap-2 w-100 me-3">
+                                        <span class="badge @badgeClass">
+                                            @(error.ExceptionType?.Split('.').Last() ?? error.Level)
+                                        </span>
+                                        @if (error.IsResolved)
+                                        {
+                                            <span class="badge bg-success">✓ @Html.T("محلول", "Resolved")</span>
+                                        }
+                                        <span class="text-muted small">
+                                            <i class="feather-clock me-1"></i>
+                                            @error.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                                        </span>
+                                        @if (!string.IsNullOrEmpty(error.Path))
+                                        {
+                                            <span class="badge bg-secondary">
+                                                <i class="feather-link me-1"></i>
+                                                @error.Path
+                                            </span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(error.UserName) && error.UserName != "Anonymous")
+                                        {
+                                            <span class="badge bg-info">
+                                                <i class="feather-user me-1"></i>
+                                                @error.UserName
+                                            </span>
+                                        }
+                                    </div>
+                                </button>
+                            </h2>
+                            <div id="@errorId" class="accordion-collapse collapse">
+                                <div class="accordion-body bg-light">
+                                    <!-- Error Summary -->
+                                    <div class="row mb-3">
+                                        <div class="col-md-4 mb-2">
+                                            <strong><i class="feather-link me-1 text-primary"></i> @Html.T("المسار (Path)", "Path"):</strong>
+                                            <code class="d-block mt-1 p-2 bg-white rounded">@(error.Path ?? Html.T("غير محدد", "Not set"))</code>
+                                        </div>
+                                        <div class="col-md-2 mb-2">
+                                            <strong><i class="feather-send me-1 text-primary"></i> @Html.T("الطريقة", "Method"):</strong>
+                                            <span class="d-block mt-1 badge bg-secondary">@(error.HttpMethod ?? "N/A")</span>
+                                        </div>
+                                        <div class="col-md-3 mb-2">
+                                            <strong><i class="feather-user me-1 text-primary"></i> @Html.T("المستخدم", "User"):</strong>
+                                            <span class="d-block mt-1">@(error.UserName ?? "Anonymous")</span>
+                                            <small class="text-muted">@(error.UserRoles ?? "")</small>
+                                        </div>
+                                        <div class="col-md-3 mb-2">
+                                            <strong><i class="feather-globe me-1 text-primary"></i> @Html.T("عنوان IP", "IP"):</strong>
+                                            <span class="d-block mt-1">@(error.IpAddress ?? "N/A")</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Error Message -->
+                                    <div class="mb-3">
+                                        <strong><i class="feather-alert-circle me-1 text-danger"></i> @Html.T("رسالة الخطأ", "Error message"):</strong>
+                                        <div class="alert alert-danger mt-2 mb-0">
+                                            <strong>@(error.ExceptionType?.Split('.').Last() ?? "Error"):</strong>
+                                            <p class="mb-0 mt-1">@error.Message</p>
+                                            @if (!string.IsNullOrEmpty(error.InnerException))
+                                            {
+                                                <hr />
+                                                <small><strong>@Html.T("الاستثناء الداخلي", "Inner Exception"):</strong> @error.InnerException</small>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <!-- Stack Trace -->
+                                    @if (!string.IsNullOrEmpty(error.StackTrace))
+                                    {
+                                        <div class="mb-3">
+                                            <strong><i class="feather-code me-1 text-warning"></i> @Html.T("تتبع الخطأ (Stack Trace)", "Stack Trace"):</strong>
+                                            <div class="position-relative mt-2">
+                                                <button class="btn btn-sm btn-outline-secondary position-absolute end-0 top-0 m-2 copy-btn" 
+                                                        onclick="copyToClipboard(this, `@error.StackTrace?.Replace("`", "\\`").Replace("\r", "").Replace("\n", "\\n")`)" title="@Html.T("نسخ", "Copy")">
+                                                    <i class="feather-copy"></i>
+                                                </button>
+                                                <pre class="bg-dark text-light p-3 rounded" 
+                                                     style="max-height: 400px; overflow-y: auto; font-size: 12px; white-space: pre-wrap; word-break: break-all;">@error.StackTrace</pre>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <!-- Actions -->
+                                    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                                        <div>
+                                            @if (!error.IsResolved)
+                                            {
+                                                <form method="post" asp-action="MarkResolved" class="d-inline">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="id" value="@error.Id" />
+                                                    <button type="submit" class="btn btn-success btn-sm">
+                                                        <i class="feather-check me-1"></i> @Html.T("تحديد كمحلول", "Mark as resolved")
+                                                    </button>
+                                                </form>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-success">
+                                                    <i class="feather-check-circle me-1"></i>
+                                                    @Html.T("تم الحل", "Resolved"): @error.ResolvedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                                                </span>
+                                            }
+                                        </div>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="copyFullError(@error.Id)">
+                                            <i class="feather-clipboard me-1"></i>
+                                            @Html.T("نسخ للمشاركة مع AI", "Copy to share with AI")
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Instructions Card -->
+    <div class="card mt-4">
+        <div class="card-header bg-info bg-opacity-10">
+            <h5 class="mb-0 text-info">
+                <i class="feather-info me-2"></i>
+                @Html.T("كيفية إصلاح الأخطاء", "How to fix errors")
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6><i class="feather-search text-primary me-2"></i> @Html.T("فهم الأخطاء", "Understanding errors"):</h6>
+                    <ul class="mb-3">
+                        <li><strong>@Html.T("المسار (Path)", "Path"):</strong> @Html.T("الصفحة التي حدث فيها الخطأ", "The page where the error occurred")</li>
+                        <li><strong>@Html.T("نوع الخطأ (Exception Type)", "Exception Type"):</strong> @Html.T("نوع المشكلة التقنية", "Technical problem type")</li>
+                        <li><strong>@Html.T("رسالة الخطأ (Message)", "Error Message"):</strong> @Html.T("وصف المشكلة", "Problem description")</li>
+                        <li><strong>@Html.T("تتبع المكدس (Stack Trace)", "Stack Trace"):</strong> @Html.T("الملف والسطر الذي حدث فيه الخطأ", "File and line where the error occurred")</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6><i class="feather-share-2 text-success me-2"></i> @Html.T("للحصول على حل", "To get a solution"):</h6>
+                    <ol class="mb-0">
+                        <li>@Html.T("اضغط على الخطأ لعرض التفاصيل", "Click the error to view details")</li>
+                        <li>@Html.T("اضغط \"نسخ للمشاركة مع AI\"", "Click \"Copy to share with AI\"")</li>
+                        <li>@Html.T("الصق التفاصيل في المحادثة مع AI Agent", "Paste the details in the AI Agent conversation")</li>
+                        <li>@Html.T("بعد الحل اضغط \"تحديد كمحلول\"", "After fixing, click \"Mark as resolved\"")</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function copyToClipboard(btn, text) {
+            // Unescape the newlines
+            text = text.replace(/\\n/g, '\n');
+            navigator.clipboard.writeText(text).then(() => {
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="feather-check"></i>';
+                btn.classList.remove('btn-outline-secondary');
+                btn.classList.add('btn-success');
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-outline-secondary');
+                }, 2000);
+            });
+        }
+
+        function copyFullError(errorId) {
+            fetch(`/Admin/ErrorLogs/GetErrorJson/${errorId}`)
+                .then(response => response.json())
+                .then(error => {
+                    const text = `
+=== خطأ في التطبيق - Application Error ===
+الوقت (Timestamp): ${error.timestamp}
+المسار (Path): ${error.path || 'N/A'}
+الطريقة (Method): ${error.httpMethod || 'N/A'}
+المستخدم (User): ${error.userName || 'Anonymous'}
+الأدوار (Roles): ${error.userRoles || 'N/A'}
+كود الحالة (Status): ${error.statusCode}
+
+=== نوع الخطأ (Exception Type) ===
+${error.exceptionType || 'Unknown'}
+
+=== رسالة الخطأ (Error Message) ===
+${error.message || 'No message'}
+
+=== Inner Exception ===
+${error.innerException || 'None'}
+
+=== Stack Trace ===
+${error.stackTrace || 'No stack trace available'}
+
+=== معلومات إضافية ===
+IP: ${error.ipAddress || 'N/A'}
+Request: ${error.requestInfo || 'N/A'}
+`;
+                    navigator.clipboard.writeText(text).then(() => {
+                        alert('@(Html.Raw(Html.T("✅ تم نسخ تفاصيل الخطأ!\n\nالصق التفاصيل في المحادثة مع AI للحصول على الحل.", "✅ Error details copied!\n\nPaste the details in the AI chat to get a solution.").Replace("'", "\\'").Replace("\n", "\\n")))'.replace(/\\n/g, '\n'));
+                    });
+                })
+                .catch(err => {
+                    console.error('Failed to fetch error:', err);
+                    alert('@Html.Raw(Html.T("حدث خطأ أثناء النسخ", "Error while copying").Replace("'", "\\'"))');
+                });
+        }
+    </script>
+}

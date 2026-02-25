@@ -1,0 +1,103 @@
+@model IEnumerable<LMS.Domain.Entities.Payments.Payment>
+@using LMS.Domain.Enums
+@{
+    ViewData["Title"] = Html.T("الدفعات الفاشلة", "Failed Payments");
+    Layout = "_StudentLayout";
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1">
+                <i class="feather-alert-triangle text-warning me-2"></i>
+                الدفعات الفاشلة
+            </h4>
+            <p class="text-muted mb-0">@Html.T("يمكنك إعادة محاولة الدفع للطلبات التي لم تكتمل", "You can retry payment for orders that did not complete")</p>
+        </div>
+        <a asp-area="Student" asp-controller="Checkout" asp-action="Index" class="btn btn-primary">
+            <i class="feather-shopping-cart me-1"></i>
+            سلة التسوق
+        </a>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="feather-check-circle text-success mb-3" style="font-size: 4rem;"></i>
+                <h5>@Html.T("لا توجد دفعات فاشلة", "No failed payments")</h5>
+                <p class="text-muted">@Html.T("جميع مدفوعاتك تمت بنجاح", "All your payments have been completed successfully")</p>
+                <a asp-area="Student" asp-controller="Courses" asp-action="Index" class="btn btn-primary">
+                    تصفح الدورات
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4">
+            @foreach (var payment in Model)
+            {
+                var productName = payment.Course?.Title ?? payment.Book?.Title ?? "منتج غير معروف";
+                var productImage = payment.Course?.ThumbnailUrl ?? payment.Book?.CoverImageUrl ?? "/images/placeholder.jpg";
+                var statusClass = payment.Status == PaymentStatus.Failed ? "danger" : "warning";
+                var statusText = payment.Status == PaymentStatus.Failed ? "فشل الدفع" : "منتهي الصلاحية";
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 shadow-sm">
+                        <div class="position-relative">
+                            <img src="@productImage" class="card-img-top" style="height: 150px; object-fit: cover;" alt="@productName">
+                            <span class="badge bg-@statusClass position-absolute top-0 start-0 m-2">
+                                @statusText
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <h6 class="card-title text-truncate" title="@productName">@productName</h6>
+                            <div class="d-flex justify-content-between text-muted small mb-2">
+                                <span>@Html.T("رقم الطلب:", "Order #") #@payment.Id</span>
+                                <span>@payment.CreatedAt.ToString("dd/MM/yyyy")</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="fw-bold text-primary fs-5">
+                                    @payment.TotalAmount.ToEGP(2)
+                                </span>
+                                @if (payment.RetryCount > 0)
+                                {
+                                    <span class="badge bg-secondary">
+                                        محاولة @payment.RetryCount
+                                    </span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrEmpty(payment.FailureReason))
+                            {
+                                <div class="alert alert-danger py-2 small mb-3">
+                                    <i class="feather-info me-1"></i>
+                                    @payment.FailureReason
+                                </div>
+                            }
+                        </div>
+                        <div class="card-footer bg-transparent">
+                            <div class="d-grid gap-2">
+                                <a asp-action="Details" asp-route-id="@payment.Id" class="btn btn-primary">
+                                    <i class="feather-refresh-cw me-1"></i>
+                                    @Html.T("إعادة المحاولة", "Retry")
+                                </a>
+                                <form asp-action="Cancel" asp-route-id="@payment.Id" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-outline-secondary w-100"
+                                            onclick="return confirm('@Html.Raw(Html.T("هل تريد إلغاء هذه الدفعة؟", "Do you want to cancel this payment?").ToString().Replace("'", "\\'"))')">
+                                        @Html.T("إلغاء", "Cancel")
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+

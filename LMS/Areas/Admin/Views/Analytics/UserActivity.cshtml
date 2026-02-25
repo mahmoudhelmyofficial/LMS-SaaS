@@ -1,0 +1,416 @@
+@using LMS.Services.Interfaces
+@inject ISystemConfigurationService SystemConfigService
+@model List<LMS.Domain.Entities.Users.ApplicationUser>
+
+@{
+    ViewData["Title"] = Html.T("تقرير نشاط المستخدمين", "User activity report");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("التحليلات", "Analytics"), Url.Action("Index", "Analytics")),
+        (Html.T("نشاط المستخدمين", "User activity"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    
+    var days = ViewBag.Days ?? 7;
+    var totalActive = ViewBag.TotalActive ?? 0;
+    
+    // Get time period options from database
+    var timePeriods = await SystemConfigService.GetConfigurationsByCategoryAsync("TimePeriods", "ar");
+}
+
+@section Styles {
+    <style>
+        .user-activity-card {
+            transition: all 0.3s ease;
+            border-right: 3px solid transparent;
+        }
+        .user-activity-card:hover {
+            border-right-color: #3454d1;
+            background-color: #f8f9fa;
+        }
+        .activity-badge {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .online {
+            background-color: #0ab39c;
+            box-shadow: 0 0 10px #0ab39c;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                        <i class="feather-activity"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("مستخدمون نشطون", "Active users")</span>
+                        <h3 class="fw-bold mb-0">@totalActive</h3>
+                        <small class="text-muted">@Html.T("آخر", "Last") @days @Html.T("أيام", "days")</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                        <i class="feather-users"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("متصل الآن", "Online now")</span>
+                        <h3 class="fw-bold mb-0">@Model.Count(u => u.LastLoginAt >= DateTime.UtcNow.AddMinutes(-15))</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                        <i class="feather-clock"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("نشط خلال 24 ساعة", "Active in last 24h")</span>
+                        <h3 class="fw-bold mb-0">@Model.Count(u => u.LastLoginAt >= DateTime.UtcNow.AddDays(-1))</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                        <i class="feather-trending-up"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("نشط هذا الأسبوع", "Active this week")</span>
+                        <h3 class="fw-bold mb-0">@Model.Count(u => u.LastLoginAt >= DateTime.UtcNow.AddDays(-7))</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("الفترة الزمنية", "Time period")</label>
+                            <select class="form-select" id="daysFilter" onchange="changeDays(this.value)">
+                                @foreach (var period in timePeriods)
+                                {
+                                    var periodValue = int.TryParse(period.Value, out var val) ? val : 30;
+                                    var isSelected = days == periodValue;
+                                    <option value="@period.Value" selected="@(isSelected ? "selected" : null)">@period.DisplayText</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("حالة الاتصال", "Connection status")</label>
+                            <select class="form-select" id="statusFilter">
+                                @{
+                                    var activityFilters = await SystemConfigService.GetConfigurationsByCategoryAsync("FilterOptions", "ar");
+                                    var activityFilterOptions = activityFilters.Where(f => f.Key.StartsWith("activity_")).ToList();
+                                }
+                                @foreach (var filter in activityFilterOptions)
+                                {
+                                    <option value="@filter.Value">@filter.DisplayText</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("البحث", "Search")</label>
+                            <input type="text" class="form-control" id="searchUser" placeholder="@Html.T("ابحث عن مستخدم...", "Search for user...")">
+                        </div>
+                        <div class="col-md-2">
+                            <div class="btn-group w-100">
+                                <button type="button" class="btn btn-success dropdown-toggle w-100" data-bs-toggle="dropdown">
+                                    <i class="feather-download me-2"></i>@Html.T("تصدير", "Export")
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" asp-controller="Reports" asp-action="Users"><i class="feather-file-text me-2"></i>@Html.T("تقرير المستخدمين", "Users report")</a></li>
+                                    <li><a class="dropdown-item" asp-action="StudentsReport"><i class="feather-users me-2"></i>@Html.T("تقرير الطلاب", "Students report")</a></li>
+                                    <li><a class="dropdown-item" asp-action="InstructorsReport"><i class="feather-user-check me-2"></i>@Html.T("تقرير المدرسين", "Instructors report")</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="window.print()"><i class="feather-printer me-2"></i>@Html.T("طباعة", "Print")</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activity Chart -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("نشاط المستخدمين بمرور الوقت", "User activity over time")</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 300px;">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("المستخدمون النشطون", "Active users")</h5>
+                    <div class="card-header-action">
+                        <span class="badge bg-soft-primary text-primary">@Model.Count() @Html.T("مستخدم", "user(s)")</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="usersTable">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>@Html.T("المستخدم", "User")</th>
+                                    <th>@Html.T("البريد الإلكتروني", "Email")</th>
+                                    <th>@Html.T("آخر نشاط", "Last activity")</th>
+                                    <th>@Html.T("منذ", "Since")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th>@Html.T("عدد الجلسات", "Sessions")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var user in Model)
+                                {
+                                    var onlineMinutes = await SystemConfigService.GetThresholdAsync("user", "online_minutes", 15);
+                                    var isOnline = user.LastLoginAt.HasValue && user.LastLoginAt.Value >= DateTime.UtcNow.AddMinutes(-(int)onlineMinutes);
+                                    var minutesAgo = user.LastLoginAt.HasValue ? (int)(DateTime.UtcNow - user.LastLoginAt.Value).TotalMinutes : 0;
+                                    
+                                    <tr class="user-activity-card" data-status="@(isOnline ? "online" : "offline")">
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="avatar-text avatar-sm bg-soft-primary text-primary position-relative">
+                                                    @user.FirstName?.Substring(0, 1)
+                                                    @if (isOnline)
+                                                    {
+                                                        <span class="activity-badge online position-absolute" style="bottom: 0; left: 0;"></span>
+                                                    }
+                                                </div>
+                                                <div>
+                                                    <span class="d-block fw-semibold">@user.FirstName @user.LastName</span>
+                                                    <small class="text-muted">@Html.T("عضو منذ", "Member since") @user.CreatedAt.ToString("dd/MM/yyyy")</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>@user.Email</td>
+                                        <td>
+                                            @if (user.LastLoginAt.HasValue)
+                                            {
+                                                <div>
+                                                    <span class="d-block">@user.LastLoginAt.Value.ToString("dd/MM/yyyy")</span>
+                                                    <small class="text-muted">@user.LastLoginAt.Value.ToString("hh:mm tt")</small>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">لم يسجل دخول</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (user.LastLoginAt.HasValue)
+                                            {
+                                                if (minutesAgo < 60)
+                                                {
+                                                    <span class="text-success fw-semibold">@minutesAgo @Html.T("دقيقة", "min")</span>
+                                                }
+                                                else if (minutesAgo < 1440)
+                                                {
+                                                    <span>@((int)(minutesAgo / 60)) @Html.T("ساعة", "hr")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>@((int)(minutesAgo / 1440)) @Html.T("يوم", "day(s)")</span>
+                                                }
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (isOnline)
+                                            {
+                                                <span class="badge bg-soft-success text-success">
+                                                    <i class="feather-circle" style="font-size: 8px;"></i>
+                                                    @Html.T("متصل الآن", "Online now")
+                                                </span>
+                                            }
+                                            else if (minutesAgo < 1440)
+                                            {
+                                                <span class="badge bg-soft-warning text-warning">@Html.T("نشط اليوم", "Active today")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-secondary text-secondary">@Html.T("غير متصل", "Offline")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <a asp-controller="UserSessions" asp-action="Index" asp-route-userId="@user.Id"
+                                               class="badge bg-soft-primary text-primary text-decoration-none" data-bs-toggle="tooltip" title="@Html.T("عرض جلسات المستخدم", "View user sessions")">
+                                                <i class="feather-monitor me-1"></i>@Html.T("عرض الجلسات", "View sessions")
+                                            </a>
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a asp-controller="Users" asp-action="Details" asp-route-id="@user.Id" 
+                                                   class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض التفاصيل", "View details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                <a asp-controller="UserActivity" asp-action="Index" asp-route-userId="@user.Id"
+                                                   class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("سجل النشاط", "Activity log")">
+                                                    <i class="feather-activity"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                @if (!Model.Any())
+                {
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-warning text-warning mx-auto mb-3">
+                            <i class="feather-inbox"></i>
+                        </div>
+                        <h5>@Html.T("لا يوجد نشاط", "No activity")</h5>
+                        <p class="text-muted">@Html.T("لم يتم العثور على مستخدمين نشطين في الفترة المحددة", "No active users found in the selected period")</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function changeDays(value) {
+            window.location.href = '@Url.Action("UserActivity")?days=' + value;
+        }
+
+        function exportData() {
+            alert('@(await SystemConfigService.GetLocalizationAsync("DefaultValues.export_under_development", "ar", "وظيفة التصدير قيد التطوير"))');
+        }
+
+        $(document).ready(function() {
+            // Search functionality
+            $('#searchUser').on('keyup', function() {
+                var value = $(this).val().toLowerCase();
+                $('#usersTable tbody tr').filter(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+                });
+            });
+
+            // Status filter
+            $('#statusFilter').on('change', function() {
+                var status = $(this).val();
+                if (status === '' || status === 'all') {
+                    $('#usersTable tbody tr').show();
+                } else if (status === 'online') {
+                    $('#usersTable tbody tr').hide();
+                    $('#usersTable tbody tr[data-status="online"]').show();
+                } else if (status === 'offline') {
+                    $('#usersTable tbody tr').hide();
+                    $('#usersTable tbody tr[data-status="offline"]').show();
+                } else if (status === 'today') {
+                    // Filter for users active today - show all that aren't marked offline for > 24 hours
+                    $('#usersTable tbody tr').each(function() {
+                        var dataStatus = $(this).attr('data-status');
+                        $(this).toggle(dataStatus === 'online' || $(this).find('.badge.bg-soft-warning').length > 0);
+                    });
+                } else {
+                    $('#usersTable tbody tr').show();
+                }
+            });
+
+            // Activity Chart
+            const users = @Html.Raw(Json.Serialize(Model.Where(u => u.LastLoginAt.HasValue).Select(u => new { 
+                Date = u.LastLoginAt.Value.ToString("yyyy-MM-dd")
+            })));
+
+            const activityByDate = {};
+            users.forEach(u => {
+                if (!activityByDate[u.Date]) {
+                    activityByDate[u.Date] = 0;
+                }
+                activityByDate[u.Date]++;
+            });
+
+            const dates = Object.keys(activityByDate).sort();
+            const counts = dates.map(d => activityByDate[d]);
+
+            const ctx = document.getElementById('activityChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates.map(d => new Date(d).toLocaleDateString('ar-SA')),
+                    datasets: [{
+                        label: 'نشاط يومي',
+                        data: counts,
+                        borderColor: '#0ab39c',
+                        backgroundColor: 'rgba(10, 179, 156, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Initialize tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+

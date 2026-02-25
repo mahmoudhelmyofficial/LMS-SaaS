@@ -1,0 +1,516 @@
+@model LMS.Domain.Entities.Security.UserSession
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل الجلسة", "Session Details");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الأمان", "Security"), null),
+        (Html.T("الجلسات", "Sessions"), Url.Action("Index", "UserSessions")),
+        (Html.T("تفاصيل الجلسة", "Session Details"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .session-active-pulse {
+            animation: pulse-active 2s infinite;
+        }
+        @@keyframes pulse-active {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4); }
+            50% { opacity: 0.8; box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+        }
+        .info-label {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-bottom: 0.25rem;
+        }
+        .info-value {
+            font-weight: 600;
+            color: #333;
+        }
+        .detail-card {
+            border-radius: 0.75rem;
+            border: 1px solid #e9ecef;
+            transition: box-shadow 0.3s ease;
+        }
+        .detail-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .user-avatar-lg {
+            width: 80px;
+            height: 80px;
+            font-size: 2rem;
+        }
+        .timeline-item {
+            position: relative;
+            padding-right: 2rem;
+            padding-bottom: 1.5rem;
+            border-right: 2px solid #e9ecef;
+        }
+        .timeline-item:last-child {
+            border-right: 2px solid transparent;
+            padding-bottom: 0;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            right: -6px;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #004aad;
+            border: 2px solid #fff;
+        }
+        .device-icon {
+            font-size: 3rem;
+            color: #004aad;
+        }
+    </style>
+}
+
+<!-- Page Header Actions -->
+@{
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>();
+    if (Model.IsActive)
+    {
+        actions.Add((Html.T("إنهاء الجلسة", "Terminate Session"), "feather-x-circle", "#", "btn-danger terminate-btn"));
+    }
+    actions.Add((Html.T("العودة للقائمة", "Back to List"), "feather-arrow-right", Url.Action("Index")!, "btn-light-brand"));
+    ViewData["HeaderActions"] = actions;
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <!-- Session Status Card -->
+        <div class="col-lg-4">
+            <div class="card detail-card stretch stretch-full mb-4">
+                <div class="card-body text-center p-4">
+                    <!-- Status Badge -->
+                    <div class="mb-4">
+                        @if (Model.IsActive && !Model.IsExpired)
+                        {
+                            <div class="avatar-text user-avatar-lg rounded-circle bg-soft-success text-success mx-auto session-active-pulse">
+                                <i class="feather-check"></i>
+                            </div>
+                            <h4 class="mt-3 mb-1 text-success">@Html.T("جلسة نشطة", "Active Session")</h4>
+                            <p class="text-muted small">@Html.T("الجلسة تعمل حالياً", "Session is currently active")</p>
+                        }
+                        else if (Model.IsExpired)
+                        {
+                            <div class="avatar-text user-avatar-lg rounded-circle bg-soft-warning text-warning mx-auto">
+                                <i class="feather-clock"></i>
+                            </div>
+                            <h4 class="mt-3 mb-1 text-warning">@Html.T("منتهية الصلاحية", "Expired")</h4>
+                            <p class="text-muted small">@Html.T("انتهت صلاحية الجلسة", "Session has expired")</p>
+                        }
+                        else
+                        {
+                            <div class="avatar-text user-avatar-lg rounded-circle bg-soft-secondary text-secondary mx-auto">
+                                <i class="feather-x"></i>
+                            </div>
+                            <h4 class="mt-3 mb-1 text-secondary">@Html.T("جلسة منتهية", "Terminated Session")</h4>
+                            <p class="text-muted small">@Html.T("تم إنهاء الجلسة", "Session was terminated")</p>
+                        }
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Session ID -->
+                    <div class="mb-3">
+                        <span class="info-label d-block">@Html.T("معرف الجلسة", "Session ID")</span>
+                        <code class="small">@Model.SessionId</code>
+                    </div>
+
+                    <!-- Quick Stats -->
+                    <div class="row g-3 mt-3">
+                        <div class="col-6">
+                            <div class="bg-light rounded p-3">
+                                <span class="info-label d-block">@Html.T("مدة الجلسة", "Session Duration")</span>
+                                <span class="info-value">
+                                    @{
+                                        var endTime = Model.TerminatedAt ?? DateTime.UtcNow;
+                                        var duration = endTime - Model.StartedAt;
+                                        if (duration.TotalDays >= 1)
+                                        {
+                                            @(((int)duration.TotalDays).ToString() + " " + Html.T("يوم", "day(s)"))
+                                        }
+                                        else if (duration.TotalHours >= 1)
+                                        {
+                                            @(((int)duration.TotalHours).ToString() + " " + Html.T("ساعة", "hour(s)"))
+                                        }
+                                        else
+                                        {
+                                            @(((int)duration.TotalMinutes).ToString() + " " + Html.T("دقيقة", "minute(s)"))
+                                        }
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="bg-light rounded p-3">
+                                <span class="info-label d-block">@Html.T("الثقة", "Trust")</span>
+                                <span class="info-value">
+                                    @if (Model.IsTrusted)
+                                    {
+                                        <span class="text-success"><i class="feather-shield me-1"></i>@Html.T("موثوق", "Trusted")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">@Html.T("غير موثوق", "Not trusted")</span>
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Info Card -->
+            @if (Model.User != null)
+            {
+                <div class="card detail-card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="feather-user me-2"></i>
+                            @Html.T("المستخدم", "User")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3 mb-4">
+                            <div class="avatar-text avatar-lg rounded-circle bg-primary text-white">
+                                @(Model.User.FirstName?.Substring(0, 1).ToUpper())@(Model.User.LastName?.Substring(0, 1).ToUpper())
+                            </div>
+                            <div>
+                                <h6 class="mb-1">@Model.User.FirstName @Model.User.LastName</h6>
+                                <small class="text-muted">@Model.User.Email</small>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <a href="@Url.Action("Details", "Users", new { id = Model.UserId })" class="btn btn-soft-primary btn-sm">
+                                <i class="feather-external-link me-2"></i>
+                                @Html.T("عرض الملف الشخصي", "View Profile")
+                            </a>
+                            <a href="@Url.Action("Index", "UserSessions", new { userId = Model.UserId })" class="btn btn-soft-secondary btn-sm">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("جميع جلسات المستخدم", "All User Sessions")
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Session Details -->
+        <div class="col-lg-8">
+            <!-- Device & Location Info -->
+            <div class="card detail-card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="feather-monitor me-2"></i>
+                        @Html.T("معلومات الجهاز والموقع", "Device & Location Info")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <!-- Device Type -->
+                        <div class="col-md-4 text-center">
+                            <div class="p-4 bg-soft-primary rounded-3 mb-3">
+                                @switch (Model.DeviceType?.ToLower())
+                                {
+                                    case "mobile":
+                                        <i class="feather-smartphone device-icon"></i>
+                                        break;
+                                    case "tablet":
+                                        <i class="feather-tablet device-icon"></i>
+                                        break;
+                                    default:
+                                        <i class="feather-monitor device-icon"></i>
+                                        break;
+                                }
+                            </div>
+                            <h6 class="mb-1">@(Model.DeviceType ?? Html.T("غير محدد", "Not specified"))</h6>
+                            <small class="text-muted">@Html.T("نوع الجهاز", "Device Type")</small>
+                        </div>
+
+                        <!-- Browser -->
+                        <div class="col-md-4">
+                            <div class="bg-light rounded p-3 mb-3">
+                                <span class="info-label d-block">@Html.T("المتصفح", "Browser")</span>
+                                <span class="info-value">@(Model.Browser ?? Html.T("غير محدد", "Not specified"))</span>
+                            </div>
+                            <div class="bg-light rounded p-3">
+                                <span class="info-label d-block">@Html.T("نظام التشغيل", "Operating System")</span>
+                                <span class="info-value">@(Model.OperatingSystem ?? Html.T("غير محدد", "Not specified"))</span>
+                            </div>
+                        </div>
+
+                        <!-- Location -->
+                        <div class="col-md-4">
+                            <div class="bg-light rounded p-3 mb-3">
+                                <span class="info-label d-block">@Html.T("الدولة", "Country")</span>
+                                <span class="info-value">
+                                    @if (!string.IsNullOrEmpty(Model.Country))
+                                    {
+                                        @Model.Country
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">@Html.T("غير محدد", "Not specified")</span>
+                                    }
+                                </span>
+                            </div>
+                            <div class="bg-light rounded p-3">
+                                <span class="info-label d-block">@Html.T("المدينة", "City")</span>
+                                <span class="info-value">
+                                    @if (!string.IsNullOrEmpty(Model.City))
+                                    {
+                                        @Model.City
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">@Html.T("غير محدد", "Not specified")</span>
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="row g-4">
+                        <!-- IP Address -->
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="avatar-text avatar-md bg-soft-info text-info rounded">
+                                    <i class="feather-globe"></i>
+                                </div>
+                                <div>
+                                    <span class="info-label d-block">@Html.T("عنوان IP", "IP Address")</span>
+                                    <code class="info-value">@Model.IpAddress</code>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- User Agent -->
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="avatar-text avatar-md bg-soft-warning text-warning rounded">
+                                    <i class="feather-info"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <span class="info-label d-block">@Html.T("وكيل المستخدم", "User Agent")</span>
+                                    <small class="text-muted text-break">@(Model.UserAgent ?? Html.T("غير متوفر", "Not available"))</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timeline -->
+            <div class="card detail-card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="feather-clock me-2"></i>
+                        @Html.T("الجدول الزمني", "Timeline")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <!-- Session Started -->
+                        <div class="timeline-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">@Html.T("بدء الجلسة", "Session Started")</h6>
+                                    <p class="text-muted small mb-0">@Html.T("تم إنشاء الجلسة وتسجيل الدخول", "Session was created and user logged in")</p>
+                                </div>
+                                <span class="badge bg-soft-primary text-primary">
+                                    @Model.StartedAt.ToString("dd/MM/yyyy hh:mm:ss tt")
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Last Activity -->
+                        <div class="timeline-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">@Html.T("آخر نشاط", "Last Activity")</h6>
+                                    <p class="text-muted small mb-0">@Html.T("آخر تفاعل مسجل للمستخدم", "Last recorded user interaction")</p>
+                                </div>
+                                <span class="badge bg-soft-info text-info">
+                                    @Model.LastActivityAt.ToString("dd/MM/yyyy hh:mm:ss tt")
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Expiry -->
+                        <div class="timeline-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">@Html.T("تاريخ الانتهاء", "Expiry Date")</h6>
+                                    <p class="text-muted small mb-0">@Html.T("موعد انتهاء صلاحية الجلسة", "Session expiry time")</p>
+                                </div>
+                                <span class="badge @(Model.ExpiresAt < DateTime.UtcNow ? "bg-soft-danger text-danger" : "bg-soft-warning text-warning")">
+                                    @Model.ExpiresAt.ToString("dd/MM/yyyy hh:mm:ss tt")
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Termination (if applicable) -->
+                        @if (Model.TerminatedAt.HasValue)
+                        {
+                            <div class="timeline-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h6 class="mb-1">@Html.T("إنهاء الجلسة", "Session Terminated")</h6>
+                                        <p class="text-muted small mb-0">
+                                            @if (!string.IsNullOrEmpty(Model.TerminationReason))
+                                            {
+                                                @Model.TerminationReason
+                                            }
+                                            else
+                                            {
+                                                <span>@Html.T("تم إنهاء الجلسة", "Session was terminated")</span>
+                                            }
+                                        </p>
+                                    </div>
+                                    <span class="badge bg-soft-danger text-danger">
+                                        @Model.TerminatedAt.Value.ToString("dd/MM/yyyy hh:mm:ss tt")
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security Info -->
+            <div class="card detail-card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="feather-shield me-2"></i>
+                        @Html.T("معلومات الأمان", "Security Info")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center gap-3 p-3 bg-light rounded">
+                                <div class="avatar-text avatar-md @(Model.IsTrusted ? "bg-soft-success text-success" : "bg-soft-secondary text-secondary") rounded">
+                                    <i class="feather-@(Model.IsTrusted ? "check-circle" : "alert-circle")"></i>
+                                </div>
+                                <div>
+                                    <span class="info-label d-block">@Html.T("حالة الثقة", "Trust Status")</span>
+                                    <span class="info-value @(Model.IsTrusted ? "text-success" : "text-muted")">
+                                        @(Model.IsTrusted ? Html.T("جهاز موثوق", "Trusted device") : Html.T("غير موثوق", "Not trusted"))
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center gap-3 p-3 bg-light rounded">
+                                <div class="avatar-text avatar-md @(Model.IsActive ? "bg-soft-success text-success" : "bg-soft-danger text-danger") rounded">
+                                    <i class="feather-@(Model.IsActive ? "activity" : "x-circle")"></i>
+                                </div>
+                                <div>
+                                    <span class="info-label d-block">@Html.T("الحالة", "Status")</span>
+                                    <span class="info-value @(Model.IsActive ? "text-success" : "text-danger")">
+                                        @(Model.IsActive ? Html.T("نشطة", "Active") : Html.T("منتهية", "Terminated"))
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex align-items-center gap-3 p-3 bg-light rounded">
+                                <div class="avatar-text avatar-md @(Model.IsExpired ? "bg-soft-warning text-warning" : "bg-soft-primary text-primary") rounded">
+                                    <i class="feather-clock"></i>
+                                </div>
+                                <div>
+                                    <span class="info-label d-block">@Html.T("الصلاحية", "Validity")</span>
+                                    <span class="info-value @(Model.IsExpired ? "text-warning" : "text-primary")">
+                                        @(Model.IsExpired ? Html.T("منتهية", "Expired") : Html.T("سارية", "Valid"))
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.RefreshToken))
+                    {
+                        <div class="mt-4 p-3 bg-soft-warning rounded">
+                            <div class="d-flex align-items-center gap-2 text-warning">
+                                <i class="feather-key"></i>
+                                <span class="fw-semibold">@Html.T("توكن التحديث", "Refresh Token")</span>
+                            </div>
+                            <p class="text-muted small mt-2 mb-0">
+                                @Html.T("تم تخزين توكن تحديث مشفر لهذه الجلسة", "An encrypted refresh token is stored for this session")
+                            </p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Terminate Session Modal -->
+@if (Model.IsActive)
+{
+    <div class="modal fade" id="terminateModal" tabindex="-1" data-bs-backdrop="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title">
+                        <i class="feather-alert-triangle text-danger me-2"></i>
+                        @Html.T("إنهاء الجلسة", "Terminate Session")
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center mb-4">
+                        <div class="avatar-text avatar-xl rounded-circle bg-soft-danger text-danger mx-auto mb-3">
+                            <i class="feather-x-circle"></i>
+                        </div>
+                        <h5>@Html.T("هل أنت متأكد؟", "Are you sure?")</h5>
+                        <p class="text-muted">
+                            @Html.T("سيتم إنهاء جلسة المستخدم", "The user session for") <strong>@Model.User?.FirstName @Model.User?.LastName</strong> 
+                            @Html.T("وسيُطلب منه تسجيل الدخول مرة أخرى.", "will be terminated and they will be required to log in again.")
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <form asp-action="Terminate" asp-route-id="@Model.Id" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-danger">
+                            <i class="feather-x-circle me-2"></i>
+                            @Html.T("تأكيد الإنهاء", "Confirm Terminate")
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+
+            // Terminate button click handler
+            $('.terminate-btn').on('click', function(e) {
+                e.preventDefault();
+                var modal = new bootstrap.Modal(document.getElementById('terminateModal'));
+                modal.show();
+            });
+        });
+    </script>
+}
+

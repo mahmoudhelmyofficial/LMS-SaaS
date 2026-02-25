@@ -1,0 +1,425 @@
+@model IEnumerable<LMS.Domain.Entities.Assessments.AssignmentSubmission>
+
+@{
+    ViewData["Title"] = Html.T("إدارة تسليمات التكليفات", "Assignment Submissions Management");
+    ViewData["Subtitle"] = Html.T("عرض ومراجعة تسليمات الطلاب", "View and review student submissions");
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="fs-12 fw-medium text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+        <ul class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Dashboard")">@Html.T("الرئيسية", "Home")</a></li>
+            <li class="breadcrumb-item active">@Html.T("التسليمات", "Submissions")</li>
+        </ul>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex align-items-center gap-2">
+            <div class="dropdown">
+                <button class="btn btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="feather-filter me-2"></i>
+                    @Html.T("تصفية", "Filter")
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="@Url.Action("Index")">@Html.T("جميع التسليمات", "All submissions")</a></li>
+                    <li><a class="dropdown-item" href="@Url.Action("Index", new { status = LMS.Domain.Enums.AssignmentStatus.Submitted })">@Html.T("قيد الانتظار", "Pending")</a></li>
+                    <li><a class="dropdown-item" href="@Url.Action("Index", new { status = LMS.Domain.Enums.AssignmentStatus.Graded })">@Html.T("مُقيّمة", "Graded")</a></li>
+                    <li><a class="dropdown-item" href="@Url.Action("Index", new { status = LMS.Domain.Enums.AssignmentStatus.Late })">@Html.T("متأخرة", "Late")</a></li>
+                    <li><a class="dropdown-item" href="@Url.Action("Index", new { status = LMS.Domain.Enums.AssignmentStatus.Resubmit })">@Html.T("إعادة تسليم", "Resubmit")</a></li>
+                </ul>
+            </div>
+            <a href="@Url.Action("Statistics")" class="btn btn-light">
+                <i class="feather-bar-chart-2 me-2"></i>
+                @Html.T("الإحصائيات", "Statistics")
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Filters Bar -->
+    <div class="card stretch stretch-full mb-4">
+        <div class="card-body">
+            <form method="get" asp-action="Index" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">@Html.T("الدورة", "Course")</label>
+                    <select name="courseId" class="form-select">
+                        <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                        @if (ViewBag.Courses != null)
+                        {
+                            @foreach (var course in ViewBag.Courses)
+                            {
+                                <option value="@course.Id" selected="@(ViewBag.CourseId == course.Id)">@course.Title</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">@Html.T("التكليف", "Assignment")</label>
+                    <select name="assignmentId" class="form-select">
+                        <option value="">@Html.T("جميع التكليفات", "All assignments")</option>
+                        @if (ViewBag.Assignments != null)
+                        {
+                            @foreach (var assignment in ViewBag.Assignments)
+                            {
+                                <option value="@assignment.Id" selected="@(ViewBag.AssignmentId == assignment.Id)">
+                                    @assignment.Title - @assignment.Lesson.Module.Course.Title
+                                </option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">@Html.T("الحالة", "Status")</label>
+                    <select name="status" class="form-select">
+                        <option value="">@Html.T("جميع الحالات", "All statuses")</option>
+                        <option value="@LMS.Domain.Enums.AssignmentStatus.Submitted" selected="@(ViewBag.Status == LMS.Domain.Enums.AssignmentStatus.Submitted)">@Html.T("قيد الانتظار", "Pending")</option>
+                        <option value="@LMS.Domain.Enums.AssignmentStatus.Graded" selected="@(ViewBag.Status == LMS.Domain.Enums.AssignmentStatus.Graded)">@Html.T("مُقيّمة", "Graded")</option>
+                        <option value="@LMS.Domain.Enums.AssignmentStatus.Late" selected="@(ViewBag.Status == LMS.Domain.Enums.AssignmentStatus.Late)">@Html.T("متأخرة", "Late")</option>
+                        <option value="@LMS.Domain.Enums.AssignmentStatus.Resubmit" selected="@(ViewBag.Status == LMS.Domain.Enums.AssignmentStatus.Resubmit)">@Html.T("إعادة تسليم", "Resubmit")</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="feather-search me-2"></i>
+                        @Html.T("بحث", "Search")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي التسليمات", "Total submissions") },
+                { "Value", Model?.Count() ?? 0 },
+                { "Icon", "file-text" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("قيد الانتظار", "Pending") },
+                { "Value", Model?.Count(s => s.Status == LMS.Domain.Enums.AssignmentStatus.Submitted) ?? 0 },
+                { "Icon", "clock" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("مُقيّمة", "Graded") },
+                { "Value", Model?.Count(s => s.Status == LMS.Domain.Enums.AssignmentStatus.Graded) ?? 0 },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("متأخرة", "Late") },
+                { "Value", Model?.Count(s => s.IsLate) ?? 0 },
+                { "Icon", "alert-triangle" },
+                { "Color", "danger" }
+            })
+        </div>
+    </div>
+
+    <!-- Submissions List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة التسليمات", "Submissions list")</h5>
+                    <div class="card-header-action">
+                        <div class="card-header-btn">
+                            <div data-bs-toggle="tooltip" title="@Html.T("تحديث", "Refresh")">
+                                <a href="@Url.Action("Index")" class="avatar-text avatar-xs bg-warning">
+                                    <i class="feather-refresh-cw"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var submission in Model)
+                            {
+                                var gradePercent = submission.Grade.HasValue && submission.Assignment.MaxPoints > 0 ? (double)submission.Grade.Value / submission.Assignment.MaxPoints * 100 : 0;
+                                var isPassing = gradePercent >= submission.Assignment.PassingScore;
+                                <div class="card mb-3 border @(submission.IsLate ? "border-warning" : "")">
+                                    <div class="card-body">
+                                        <p class="fw-medium mb-1 text-break">@submission.Enrollment?.Student?.FullName</p>
+                                        <a href="@Url.Action("Details", new { id = submission.Id })" class="text-dark text-break d-block">@submission.Assignment?.Title</a>
+                                        <p class="fs-12 text-muted mb-2">@submission.Assignment?.Lesson?.Module?.Course?.Title</p>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="fs-12">@submission.SubmittedAt.ToString("dd/MM/yyyy")</span>
+                                            @if (submission.Grade.HasValue)
+                                            { <span class="badge @(isPassing ? "bg-soft-success text-success" : "bg-soft-danger text-danger")">@submission.Grade.Value/@submission.Assignment.MaxPoints</span> }
+                                            else
+                                            { <span class="badge bg-soft-warning text-warning">@Html.T("قيد الانتظار", "Pending")</span> }
+                                        </div>
+                                        <a href="@Url.Action("Details", new { id = submission.Id })" class="btn btn-sm btn-primary w-100"><i class="feather-eye me-1"></i>@Html.T("عرض", "View")</a>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th class="wd-30">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="selectAll">
+                                                </div>
+                                            </th>
+                                            <th>@Html.T("الطالب", "Student")</th>
+                                            <th>@Html.T("التكليف", "Assignment")</th>
+                                        <th>@Html.T("الدورة", "Course")</th>
+                                        <th>@Html.T("تاريخ التسليم", "Submitted")</th>
+                                        <th>@Html.T("الموعد النهائي", "Deadline")</th>
+                                        <th>@Html.T("التقييم", "Grade")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                        <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var submission in Model)
+                                    {
+                                        var gradePercent = submission.Grade.HasValue && submission.Assignment.MaxPoints > 0
+                                            ? (double)submission.Grade.Value / submission.Assignment.MaxPoints * 100
+                                            : 0;
+                                        var isPassing = gradePercent >= submission.Assignment.PassingScore;
+                                        
+                                        <tr class="@(submission.IsLate ? "table-warning" : "")">
+                                            <td>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" value="@submission.Id">
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                        <i class="feather-user"></i>
+                                                    </div>
+                                                    <div>
+                                                        <span class="fw-medium">@submission.Enrollment?.Student?.FullName</span>
+                                                        <br />
+                                                        <small class="text-muted">@submission.Enrollment?.Student?.Email</small>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Details", new { id = submission.Id })" class="fw-medium text-dark">
+                                                    @submission.Assignment?.Title
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="text-muted">@submission.Assignment?.Lesson?.Module?.Course?.Title</span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="feather-calendar text-muted"></i>
+                                                    <span>@submission.SubmittedAt.ToString("dd/MM/yyyy")</span>
+                                                </div>
+                                                <small class="text-muted">@submission.SubmittedAt.ToString("hh:mm tt")</small>
+                                            </td>
+                                            <td>
+                                                @if (submission.Assignment?.DueDate.HasValue == true)
+                                                {
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <i class="feather-clock @(submission.IsLate ? "text-danger" : "text-muted")"></i>
+                                                        <span class="@(submission.IsLate ? "text-danger" : "")">
+                                                            @submission.Assignment.DueDate.Value.ToString("dd/MM/yyyy")
+                                                        </span>
+                                                    </div>
+                                                    @if (submission.IsLate)
+                                                    {
+                                                        var lateDays = (submission.SubmittedAt - submission.Assignment.DueDate.Value).Days;
+                                                        <small class="text-danger">@Html.T("متأخر", "Late") @lateDays @Html.T("يوم", "days")</small>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">@Html.T("غير محدد", "Not set")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (submission.Grade.HasValue)
+                                                {
+                                                    <div>
+                                                        <span class="fw-bold @(isPassing ? "text-success" : "text-danger")">
+                                                            @submission.Grade.Value / @submission.Assignment.MaxPoints
+                                                        </span>
+                                                        <br />
+                                                        <span class="badge bg-soft-@(isPassing ? "success" : "danger") text-@(isPassing ? "success" : "danger")">
+                                                            @gradePercent.ToString("F0")%
+                                                        </span>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning">@Html.T("غير مُقيّم", "Not graded")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (submission.Status)
+                                                {
+                                                    case LMS.Domain.Enums.AssignmentStatus.Submitted:
+                                                        <span class="badge bg-soft-warning text-warning">
+                                                            <i class="feather-clock"></i> @Html.T("قيد الانتظار", "Pending")
+                                                        </span>
+                                                        break;
+                                                    case LMS.Domain.Enums.AssignmentStatus.Graded:
+                                                        <span class="badge bg-soft-success text-success">
+                                                            <i class="feather-check-circle"></i> @Html.T("مُقيّم", "Graded")
+                                                        </span>
+                                                        break;
+                                                    case LMS.Domain.Enums.AssignmentStatus.Resubmit:
+                                                        <span class="badge bg-soft-info text-info">
+                                                            <i class="feather-repeat"></i> @Html.T("إعادة تسليم", "Resubmit")
+                                                        </span>
+                                                        break;
+                                                    case LMS.Domain.Enums.AssignmentStatus.Late:
+                                                        <span class="badge bg-soft-danger text-danger">
+                                                            <i class="feather-alert-triangle"></i> @Html.T("متأخر", "Late")
+                                                        </span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { id = submission.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض", "View")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    @if (submission.Status == LMS.Domain.Enums.AssignmentStatus.Submitted || submission.Status == LMS.Domain.Enums.AssignmentStatus.Late)
+                                                    {
+                                                        <a href="@Url.Action("Grade", new { id = submission.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تقييم", "Grade")">
+                                                            <i class="feather-edit-3"></i>
+                                                        </a>
+                                                    }
+                                                    <div class="dropdown">
+                                                        <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown">
+                                                            <i class="feather-more-horizontal"></i>
+                                                        </a>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li>
+                                                                <a class="dropdown-item" href="@Url.Action("Details", new { id = submission.Id })">
+                                                                    <i class="feather-eye me-3"></i>
+                                                                    <span>@Html.T("عرض التفاصيل", "View details")</span>
+                                                                </a>
+                                                            </li>
+                                                            @if (submission.Status != LMS.Domain.Enums.AssignmentStatus.Graded)
+                                                            {
+                                                                <li>
+                                                                    <a class="dropdown-item" href="@Url.Action("Grade", new { id = submission.Id })">
+                                                                        <i class="feather-edit-3 me-3"></i>
+<span>@Html.T("تقييم", "Grade")</span>
+                                                                </a>
+                                                                </li>
+                                                            }
+                                                            @if (!string.IsNullOrEmpty(submission.AttachmentUrls))
+                                                            {
+                                                                <li>
+                                                                    <a class="dropdown-item" href="@submission.AttachmentUrls" target="_blank">
+                                                                        <i class="feather-download me-3"></i>
+                                                                        <span>@Html.T("تحميل المرفق", "Download attachment")</span>
+                                                                    </a>
+                                                                </li>
+                                                            }
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <a class="dropdown-item text-info" href="javascript:void(0)" onclick="allowResubmit(@submission.Id)">
+                                                                    <i class="feather-repeat me-3"></i>
+                                                                    <span>@Html.T("السماح بإعادة التسليم", "Allow resubmission")</span>
+                                                                </a>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-file-text"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد تسليمات", "No submissions")</h5>
+                            <p class="text-muted mb-4">@Html.T("لا توجد تسليمات تطابق معايير البحث المحددة", "No submissions match the selected search criteria")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resubmit Modal -->
+<div class="modal fade" id="resubmitModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="resubmitForm" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">@Html.T("السماح بإعادة التسليم", "Allow resubmission")</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("سبب طلب إعادة التسليم", "Reason for resubmission request") <span class="text-danger">*</span></label>
+                        <textarea name="reason" class="form-control" rows="4" required placeholder="@Html.T("اشرح للطالب سبب طلب إعادة التسليم...", "Explain to the student why you are requesting resubmission...")"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-info">@Html.T("إرسال الطلب", "Send request")</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Select all checkbox
+            $('#selectAll').on('change', function () {
+                $('tbody input[type="checkbox"]').prop('checked', this.checked);
+            });
+
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+
+        function allowResubmit(id) {
+            $('#resubmitForm').attr('action', '@Url.Action("AllowResubmission")/' + id);
+            new bootstrap.Modal(document.getElementById('resubmitModal')).show();
+        }
+    </script>
+}
+

@@ -1,0 +1,376 @@
+@model IEnumerable<LMS.Domain.Entities.Analytics.ScheduledReport>
+
+@{
+    ViewData["Title"] = Html.T("التقارير المجدولة", "Scheduled reports");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التقارير المتقدمة", "Advanced reports"), null),
+        (Html.T("التقارير المجدولة", "Scheduled reports"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("جدولة تقرير جديد", "Schedule new report"), "feather-plus", Url.Action("CreateScheduledReport"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+    var page = ViewBag.Page ?? 1;
+}
+
+@section Styles {
+    <link rel="stylesheet" type="text/css" href="~/assets/vendors/css/datatables.min.css" />
+    <style>
+        .schedule-card {
+            transition: all 0.3s;
+            border-left: 4px solid #e5e7eb;
+        }
+        .schedule-card:hover {
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+            transform: translateX(-3px);
+        }
+        .schedule-card.active {
+            border-left-color: #10b981;
+            background: #f0fdf4;
+        }
+        .schedule-card.inactive {
+            border-left-color: #6b7280;
+            background: #f9fafb;
+        }
+        .frequency-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .next-run {
+            background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%));
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Statistics Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted mb-1">@Html.T("إجمالي المجدولة", "Total scheduled")</div>
+                            <h3 class="fw-bold mb-0">@Model.Count()</h3>
+                        </div>
+                        <div class="avatar-text bg-soft-primary text-primary avatar-lg">
+                            <i class="feather-clock"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted mb-1">@Html.T("النشطة", "Active")</div>
+                            <h3 class="fw-bold mb-0 text-success">@Model.Count(r => r.IsActive)</h3>
+                        </div>
+                        <div class="avatar-text bg-soft-success text-success avatar-lg">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted mb-1">@Html.T("تقارير اليوم", "Reports today")</div>
+                            <h3 class="fw-bold mb-0 text-info">@Model.Count(r => r.NextRunAt.HasValue && r.NextRunAt.Value.Date == DateTime.Today)</h3>
+                        </div>
+                        <div class="avatar-text bg-soft-info text-info avatar-lg">
+                            <i class="feather-calendar"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="text-muted mb-1">@Html.T("مكتملة هذا الشهر", "Completed this month")</div>
+                            <h3 class="fw-bold mb-0 text-warning">@Model.Count(r => r.LastRunAt.HasValue && r.LastRunAt.Value.Month == DateTime.Now.Month)</h3>
+                        </div>
+                        <div class="avatar-text bg-soft-warning text-warning avatar-lg">
+                            <i class="feather-trending-up"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scheduled Reports List -->
+    <div class="card stretch stretch-full">
+        <div class="card-header">
+            <h5 class="card-title">
+                <i class="feather-list me-2"></i>
+                @Html.T("التقارير المجدولة", "Scheduled reports")
+            </h5>
+            <div class="card-header-action">
+                <div class="dropdown">
+                    <button class="btn btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="feather-filter me-2"></i>
+                        @Html.T("تصفية", "Filter")
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="@Url.Action("ScheduledReports")">@Html.T("الكل", "All")</a></li>
+                        <li><a class="dropdown-item" href="@Url.Action("ScheduledReports", new { active = true })">@Html.T("النشطة فقط", "Active only")</a></li>
+                        <li><a class="dropdown-item" href="@Url.Action("ScheduledReports", new { active = false })">@Html.T("المعطلة فقط", "Inactive only")</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="@Url.Action("ScheduledReports", new { frequency = "Daily" })">@Html.T("اليومية", "Daily")</a></li>
+                        <li><a class="dropdown-item" href="@Url.Action("ScheduledReports", new { frequency = "Weekly" })">@Html.T("الأسبوعية", "Weekly")</a></li>
+                        <li><a class="dropdown-item" href="@Url.Action("ScheduledReports", new { frequency = "Monthly" })">@Html.T("الشهرية", "Monthly")</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            @if (Model.Any())
+            {
+                <div class="vstack gap-3">
+                    @foreach (var report in Model)
+                    {
+                        <div class="schedule-card card @(report.IsActive ? "active" : "inactive")">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-start gap-3">
+                                            <div class="avatar-text @(report.IsActive ? "bg-soft-success text-success" : "bg-soft-secondary text-secondary") avatar-lg">
+                                                <i class="@(report.Frequency switch
+                                                {
+                                                    "Daily" => "feather-sun",
+                                                    "Weekly" => "feather-calendar",
+                                                    "Monthly" => "feather-repeat",
+                                                    _ => "feather-clock"
+                                                })"></i>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <h6 class="fw-bold mb-1">@report.Name</h6>
+                                                <p class="text-muted small mb-2">@report.Description</p>
+                                                <div class="d-flex gap-2 flex-wrap">
+                                                    <span class="frequency-badge @(report.Frequency switch
+                                                    {
+                                                        "Daily" => "bg-soft-primary text-primary",
+                                                        "Weekly" => "bg-soft-success text-success",
+                                                        "Monthly" => "bg-soft-warning text-warning",
+                                                        _ => "bg-soft-secondary text-secondary"
+                                                    })">
+                                                        @(report.Frequency switch
+                                                        {
+                                                            "Daily" => Html.T("يومي", "Daily"),
+                                                            "Weekly" => Html.T("أسبوعي", "Weekly"),
+                                                            "Monthly" => Html.T("شهري", "Monthly"),
+                                                            _ => report.Frequency
+                                                        })
+                                                    </span>
+                                                    <span class="badge bg-soft-info text-info">
+                                                        <i class="feather-file-text me-1"></i>
+                                                        @report.Format
+                                                    </span>
+                                                    @if (report.Template != null)
+                                                    {
+                                                        <span class="badge bg-soft-secondary text-secondary">
+                                                            <i class="feather-layers me-1"></i>
+                                                            @report.Template.Name
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="vstack gap-2 small">
+                                            @if (report.LastRunAt.HasValue)
+                                            {
+                                                <div class="d-flex justify-content-between">
+                                                    <span class="text-muted">@Html.T("آخر تنفيذ:", "Last run:")</span>
+                                                    <span class="fw-semibold">@report.LastRunAt.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                                                </div>
+                                            }
+                                            @if (report.NextRunAt.HasValue)
+                                            {
+                                                <div class="d-flex justify-content-between">
+                                                    <span class="text-muted">@Html.T("التنفيذ القادم:", "Next run:")</span>
+                                                    <span class="fw-semibold text-primary">@report.NextRunAt.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                                                </div>
+                                            }
+                                            <div class="d-flex justify-content-between">
+                                                <span class="text-muted">@Html.T("الوقت:", "Time:")</span>
+                                                <span class="fw-semibold">@($"{report.TimeOfDay?.Hours:00}:{report.TimeOfDay?.Minutes:00}")</span>
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(report.Recipients))
+                                            {
+                                                <div class="d-flex justify-content-between">
+                                                    <span class="text-muted">@Html.T("المستلمون:", "Recipients:")</span>
+                                                    <span class="fw-semibold">@report.Recipients.Split(',').Length</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2 text-end">
+                                        <div class="dropdown">
+                                            <button class="btn btn-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                <i class="feather-more-vertical"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li>
+                                                    <a class="dropdown-item" asp-action="EditScheduledReport" asp-route-id="@report.Id">
+                                                        <i class="feather-edit me-2"></i>
+                                                        @Html.T("تعديل", "Edit")
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <form asp-action="RunNow" asp-route-id="@report.Id" method="post" class="d-inline">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="dropdown-item">
+                                                            <i class="feather-play me-2"></i>
+                                                            @Html.T("تنفيذ الآن", "Run now")
+                                                        </button>
+                                                    </form>
+                                                </li>
+                                                <li>
+                                                    <form asp-action="ToggleScheduledReport" asp-route-id="@report.Id" method="post" class="d-inline">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="dropdown-item">
+                                                            <i class="feather-@(report.IsActive ? "pause" : "play")-circle me-2"></i>
+                                                            @(report.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))
+                                                        </button>
+                                                    </form>
+                                                </li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li>
+                                                    <button type="button" class="dropdown-item text-danger" onclick="deleteSchedule(@report.Id)">
+                                                        <i class="feather-trash-2 me-2"></i>
+                                                        @Html.T("حذف", "Delete")
+                                                    </button>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                @if (report.IsActive && report.NextRunAt.HasValue)
+                                {
+                                    var timeUntilNext = report.NextRunAt.Value - DateTime.UtcNow;
+                                    @if (timeUntilNext.TotalHours < 24 && timeUntilNext.TotalHours > 0)
+                                    {
+                                        <div class="next-run mt-3">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div>
+                                                    <i class="feather-clock me-2"></i>
+                                                    <strong>@Html.T("سيتم التنفيذ قريباً", "Running soon")</strong>
+                                                </div>
+                                                <span class="badge bg-white text-primary">
+                                                    @Html.T("خلال", "In") @((int)timeUntilNext.TotalHours) @Html.T("ساعة", "hr") @Html.T("و", "and") @timeUntilNext.Minutes @Html.T("دقيقة", "min")
+                                                </span>
+                                            </div>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Pagination -->
+                @if (Model.Count() >= 20)
+                {
+                    <div class="mt-4">
+                        <nav aria-label="@Html.T("تنقل الصفحة", "Page navigation")">
+                            <ul class="pagination justify-content-center">
+                                <li class="page-item @(page == 1 ? "disabled" : "")">
+                                    <a class="page-link" href="@Url.Action("ScheduledReports", new { page = page - 1 })">
+                                        <i class="feather-chevron-right"></i>
+                                    </a>
+                                </li>
+                                <li class="page-item active">
+                                    <span class="page-link">@(page)</span>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="@Url.Action("ScheduledReports", new { page = page + 1 })">
+                                        <i class="feather-chevron-left"></i>
+                                    </a>
+                                </li>
+                            </ul>
+                        </nav>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <div class="avatar-text bg-soft-primary text-primary avatar-xl mx-auto mb-3">
+                        <i class="feather-clock" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2">@Html.T("لا توجد تقارير مجدولة", "No scheduled reports")</h5>
+                    <p class="text-muted mb-4">@Html.T("ابدأ بجدولة تقرير جديد ليتم إنشاؤه تلقائياً بشكل دوري", "Start by scheduling a new report to be generated automatically on a recurring basis")</p>
+                    <a asp-action="CreateScheduledReport" class="btn btn-primary">
+                        <i class="feather-plus me-2"></i>
+                        @Html.T("جدولة تقرير جديد", "Schedule new report")
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Delete Form -->
+<form id="deleteForm" method="post" style="display: none;">
+    @Html.AntiForgeryToken()
+</form>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/datatables.min.js"></script>
+    <script>
+        function deleteSchedule(id) {
+            if (confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا التقرير المجدول؟ سيتم إيقاف التنفيذ التلقائي.", "Are you sure you want to delete this scheduled report? Automatic execution will be stopped.").ToString().Replace("'", "\\'").Replace("\r", "").Replace("\n", "\\n"))')) {
+                const form = document.getElementById('deleteForm');
+                form.action = '@Url.Action("DeleteScheduledReport")?id=' + id;
+                form.submit();
+            }
+        }
+
+        // Auto refresh every 5 minutes (300000ms) - only if page is visible
+        var autoRefreshTimer;
+        function startAutoRefresh() {
+            autoRefreshTimer = setTimeout(function() {
+                if (!document.hidden) {
+                    location.reload();
+                } else {
+                    startAutoRefresh(); // Reset timer if page was hidden
+                }
+            }, 300000);
+        }
+        
+        // Start auto-refresh
+        startAutoRefresh();
+        
+        // Pause when page becomes hidden
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                clearTimeout(autoRefreshTimer);
+            } else {
+                startAutoRefresh();
+            }
+        });
+    </script>
+}
+

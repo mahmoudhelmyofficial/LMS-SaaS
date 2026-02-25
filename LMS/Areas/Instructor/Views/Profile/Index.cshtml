@@ -1,0 +1,394 @@
+@using LMS.Services.Interfaces
+@model InstructorProfileDto
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("الملف الشخصي", "Profile");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة ملفك الشخصي", "View and manage your profile");
+    var qualifications = ViewBag.Qualifications as List<QualificationDto> ?? new List<QualificationDto>();
+    var completeness = ViewBag.ProfileCompleteness as ProfileCompletenessDto;
+    
+    // Load platform settings
+    var thresholdComplete = await PlatformSettings.GetIntSettingAsync("Threshold.Profile.Complete", 80);
+    var thresholdProgress = await PlatformSettings.GetIntSettingAsync("Threshold.Profile.Progress", 50);
+}
+
+@{
+    var editUrl = Url.Action("Edit");
+    var actionButtonsHtml = "<a href='" + editUrl + "' class='btn btn-primary'>" +
+        "<i class='feather-edit me-2'></i>" +
+        "تعديل الملف الشخصي" +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @if (Model == null)
+    {
+        <div class="alert alert-warning text-center py-5">
+            <i class="feather-alert-circle" style="font-size: 64px;"></i>
+            <h4 class="mt-4">@Html.T("لم يتم العثور على ملفك الشخصي", "Your profile was not found")</h4>
+            <p>يرجى المحاولة مرة أخرى لاحقاً</p>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <!-- Profile Overview -->
+            <div class="col-lg-4">
+                <!-- Profile Card -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-body text-center">
+                        <!-- Profile Picture -->
+                        <div class="position-relative d-inline-block mb-4">
+                            @if (!string.IsNullOrEmpty(Model.ProfilePictureUrl))
+                            {
+                                <img src="@Model.ProfilePictureUrl" alt="@Model.FullName" 
+                                     class="rounded-circle" style="width: 120px; height: 120px; object-fit: cover;">
+                            }
+                            else
+                            {
+                                <div class="avatar-text avatar-xxl rounded-circle bg-soft-primary text-primary">
+                                    <span style="font-size: 48px;">@Model.FirstName?.Substring(0, 1)@Model.LastName?.Substring(0, 1)</span>
+                                </div>
+                            }
+                            @if (Model.IsApproved)
+                            {
+                                <span class="position-absolute bottom-0 end-0 bg-success text-white rounded-circle p-2">
+                                    <i class="feather-check"></i>
+                                </span>
+                            }
+                        </div>
+
+                        <!-- Name & Headline -->
+                        <h4 class="mb-1">@Model.FullName</h4>
+                        @if (!string.IsNullOrEmpty(Model.Headline))
+                        {
+                            <p class="text-muted mb-3">@Model.Headline</p>
+                        }
+
+                        <!-- Status Badges -->
+                        <div class="mb-4">
+                            @if (Model.IsApproved)
+                            {
+                                <span class="badge bg-success me-1">مدرس معتمد</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning me-1">قيد المراجعة</span>
+                            }
+                            @if (Model.IsEmailVerified)
+                            {
+                                <span class="badge bg-info">البريد مُحقق</span>
+                            }
+                        </div>
+
+                        <!-- Quick Stats -->
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <h5 class="mb-0 text-primary">@Model.TotalStudents</h5>
+                                <small class="text-muted">طالب</small>
+                            </div>
+                            <div class="col-4">
+                                <h5 class="mb-0 text-success">@Model.PublishedCourses</h5>
+                                <small class="text-muted">دورة</small>
+                            </div>
+                            <div class="col-4">
+                                <h5 class="mb-0 text-warning">
+                                    @Model.AverageRating.ToString("F1")
+                                    <i class="feather-star fs-12"></i>
+                                </h5>
+                                <small class="text-muted">تقييم</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile Completeness -->
+                @if (completeness != null)
+                {
+                    <div class="card stretch stretch-full mb-4 profile-completeness">
+                        <div class="card-header">
+                            <h5 class="card-title">@Html.T("اكتمال الملف الشخصي", "Profile completion")</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span>نسبة الاكتمال</span>
+                                    <span class="fw-bold">@completeness.Score%</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-@(completeness.Score >= thresholdComplete ? "success" : completeness.Score >= thresholdProgress ? "warning" : "danger")" 
+                                         style="width: @completeness.Score%"></div>
+                                </div>
+                            </div>
+                            @if (completeness.Recommendations?.Any() == true)
+                            {
+                                <div class="recommendations">
+                                    <h6 class="fs-13 text-muted mb-2">@Html.T("لإكمال ملفك:", "To complete your profile:")</h6>
+                                    <ul class="fs-13 mb-0 text-muted ps-3">
+                                        @foreach (var rec in completeness.Recommendations)
+                                        {
+                                            <li>@rec</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Quick Links -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إجراءات سريعة", "Quick actions")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="list-group list-group-flush">
+                            <a href="@Url.Action("Edit")" class="list-group-item list-group-item-action">
+                                <i class="feather-edit-2 me-3 text-primary"></i>
+                                تعديل الملف الشخصي
+                            </a>
+                            <a href="@Url.Action("Settings")" class="list-group-item list-group-item-action">
+                                <i class="feather-settings me-3 text-info"></i>
+                                الإعدادات العامة
+                            </a>
+                            <a href="@Url.Action("PaymentSettings")" class="list-group-item list-group-item-action">
+                                <i class="feather-credit-card me-3 text-success"></i>
+                                إعدادات الدفع
+                            </a>
+                            <a href="@Url.Action("SocialLinks")" class="list-group-item list-group-item-action">
+                                <i class="feather-share-2 me-3 text-secondary"></i>
+                                روابط التواصل
+                            </a>
+                            <a href="@Url.Action("Notifications")" class="list-group-item list-group-item-action">
+                                <i class="feather-bell me-3 text-warning"></i>
+                                تفضيلات الإشعارات
+                            </a>
+                            <a href="@Url.Action("Security")" class="list-group-item list-group-item-action">
+                                <i class="feather-shield me-3 text-danger"></i>
+                                إعدادات الأمان
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Profile Details -->
+            <div class="col-lg-8">
+                <!-- Basic Info -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-user me-2 text-primary"></i>
+                            المعلومات الأساسية
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="text-muted fs-12 mb-1">الاسم الكامل</label>
+                                <p class="mb-0">@Model.FullName</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted fs-12 mb-1">البريد الإلكتروني</label>
+                                <p class="mb-0">@Model.Email</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted fs-12 mb-1">رقم الهاتف</label>
+                                <p class="mb-0">@(Model.PhoneNumber ?? "غير محدد")</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted fs-12 mb-1">الموقع</label>
+                                <p class="mb-0">
+                                    @if (!string.IsNullOrEmpty(Model.City) && !string.IsNullOrEmpty(Model.Country))
+                                    {
+                                        @($"{Model.City}، {Model.Country}")
+                                    }
+                                    else
+                                    {
+                                        <span>غير محدد</span>
+                                    }
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted fs-12 mb-1">اللغة</label>
+                                <p class="mb-0">@(Model.Language == "ar" ? "العربية" : "English")</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted fs-12 mb-1">المنطقة الزمنية</label>
+                                <p class="mb-0">@(Model.TimeZone ?? "Africa/Cairo")</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bio -->
+                @if (!string.IsNullOrEmpty(Model.Bio) || !string.IsNullOrEmpty(Model.InstructorBio))
+                {
+                    <div class="card stretch stretch-full mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title">
+                                <i class="feather-file-text me-2 text-info"></i>
+                                نبذة عني
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            @if (!string.IsNullOrEmpty(Model.InstructorBio))
+                            {
+                                @Html.Raw(Model.InstructorBio)
+                            }
+                            else if (!string.IsNullOrEmpty(Model.Bio))
+                            {
+                                <p>@Model.Bio</p>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Specializations -->
+                @if (Model.Specializations?.Any() == true)
+                {
+                    <div class="card stretch stretch-full mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title">
+                                <i class="feather-award me-2 text-warning"></i>
+                                التخصصات
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var spec in Model.Specializations)
+                                {
+                                    <span class="badge bg-soft-primary text-primary fs-13 p-2">@spec</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Qualifications -->
+                @if (qualifications.Any())
+                {
+                    <div class="card stretch stretch-full mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">
+                                <i class="feather-briefcase me-2 text-success"></i>
+                                المؤهلات والشهادات
+                            </h5>
+                            <a href="@Url.Action("Qualifications")" class="btn btn-sm btn-light">
+                                إدارة المؤهلات
+                            </a>
+                        </div>
+                        <div class="card-body qualifications-list">
+                            @foreach (var qual in qualifications)
+                            {
+                                <div class="d-flex align-items-start mb-3 pb-3 border-bottom">
+                                    <div class="avatar-text rounded bg-soft-success text-success me-3">
+                                        <i class="feather-award"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">
+                                            @qual.Title
+                                            @if (qual.IsVerified)
+                                            {
+                                                <span class="badge bg-success ms-1">
+                                                    <i class="feather-check"></i> مُحقق
+                                                </span>
+                                            }
+                                        </h6>
+                                        <p class="text-muted mb-0 fs-13">
+                                            @(qual.Institution ?? "") 
+                                            @if (qual.Year.HasValue)
+                                            {
+                                                <span>• @qual.Year</span>
+                                            }
+                                        </p>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Financial Summary -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            @{ ViewBag.CurrencyIconClass = "me-2 text-success"; ViewBag.CurrencyIconStyle = "font-weight: bold; margin-left: 8px; color: #22c55e;"; }
+                            @await Html.PartialAsync("_CurrencyIcon")
+                            الملخص المالي
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-4">
+                                <div class="p-3 bg-soft-success rounded text-center">
+                                    <h4 class="mb-1 text-success">@Model.TotalEarnings.ToString("N2") ج.م</h4>
+                                    <small class="text-muted">إجمالي الأرباح</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 bg-soft-primary rounded text-center">
+                                    <h4 class="mb-1 text-primary">@Html.FormatCurrency(Model.AvailableBalance, 2)</h4>
+                                    <small class="text-muted">الرصيد المتاح</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 bg-soft-warning rounded text-center">
+                                    <h4 class="mb-1 text-warning">@Model.CommissionRate%</h4>
+                                    <small class="text-muted">نسبة العمولة</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Account Info -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-secondary"></i>
+                            معلومات الحساب
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="text-muted fs-12 mb-1">تاريخ الانضمام</label>
+                                <p class="mb-0">@Model.JoinedDate.ToString("dd MMMM yyyy")</p>
+                            </div>
+                            @if (Model.LastLoginDate.HasValue)
+                            {
+                                <div class="col-md-6">
+                                    <label class="text-muted fs-12 mb-1">آخر تسجيل دخول</label>
+                                    <p class="mb-0">@Model.LastLoginDate.Value.ToString("dd/MM/yyyy HH:mm")</p>
+                                </div>
+                            }
+                            @if (Model.ApprovedAt.HasValue)
+                            {
+                                <div class="col-md-6">
+                                    <label class="text-muted fs-12 mb-1">تاريخ الاعتماد</label>
+                                    <p class="mb-0">@Model.ApprovedAt.Value.ToString("dd MMMM yyyy")</p>
+                                </div>
+                            }
+                            <div class="col-md-6">
+                                <label class="text-muted fs-12 mb-1">سنوات الخبرة</label>
+                                <p class="mb-0">@Model.YearsOfExperience سنة</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script src="~/js/instructor/profile-settings.js" asp-append-version="true"></script>
+}

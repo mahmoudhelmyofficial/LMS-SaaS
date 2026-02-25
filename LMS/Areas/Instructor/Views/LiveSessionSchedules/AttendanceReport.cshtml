@@ -1,0 +1,176 @@
+@model LMS.Areas.Instructor.ViewModels.ScheduleAttendanceReportViewModel
+
+@{
+    ViewData["Title"] = Html.T("تقرير الحضور", "Attendance Report");
+    ViewData["Subtitle"] = Model.ScheduleTitle;
+    var detailsUrl = Url.Action("Details", new { id = Model.ScheduleId });
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + detailsUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة للتفاصيل", "Back to Details") + "</a>") }
+})
+
+<style>
+    .attendance-present { background-color: rgba(25, 135, 84, 0.15) !important; }
+    .attendance-late { background-color: rgba(255, 193, 7, 0.15) !important; }
+    .attendance-absent { background-color: rgba(220, 53, 69, 0.15) !important; }
+    .attendance-excused { background-color: rgba(13, 110, 253, 0.15) !important; }
+    .attendance-leftearly { background-color: rgba(255, 152, 0, 0.15) !important; }
+</style>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @if (Model.Students.Any())
+    {
+        <!-- Summary Stats -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+                {
+                    { "Label", Html.T("عدد الطلاب", "Students Count") },
+                    { "Value", Model.Students.Count },
+                    { "Icon", "users" },
+                    { "Color", "primary" }
+                })
+            </div>
+            <div class="col-md-3">
+                @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+                {
+                    { "Label", Html.T("عدد الجلسات", "Sessions Count") },
+                    { "Value", Model.Sessions.Count },
+                    { "Icon", "video" },
+                    { "Color", "info" }
+                })
+            </div>
+            <div class="col-md-3">
+                @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+                {
+                    { "Label", Html.T("متوسط الحضور", "Average Attendance") },
+                    { "Value", (Model.Students.Any() ? Model.Students.Average(s => s.TotalPresent).ToString("F1") : "0") },
+                    { "Icon", "check-circle" },
+                    { "Color", "success" }
+                })
+            </div>
+            <div class="col-md-3">
+                @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+                {
+                    { "Label", Html.T("متوسط الدرجة", "Average Score") },
+                    { "Value", (Model.Students.Any() ? Model.Students.Average(s => s.AverageScore).ToString("F1") + "%" : "0%") },
+                    { "Icon", "award" },
+                    { "Color", "warning" }
+                })
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-3">
+                    <span class="d-flex align-items-center gap-1"><span class="badge bg-success">&nbsp;&nbsp;</span> @Html.T("حاضر", "Present")</span>
+                    <span class="d-flex align-items-center gap-1"><span class="badge bg-warning">&nbsp;&nbsp;</span> @Html.T("متأخر", "Late")</span>
+                    <span class="d-flex align-items-center gap-1"><span class="badge bg-danger">&nbsp;&nbsp;</span> @Html.T("غائب", "Absent")</span>
+                    <span class="d-flex align-items-center gap-1"><span class="badge bg-primary">&nbsp;&nbsp;</span> @Html.T("معذور", "Excused")</span>
+                    <span class="d-flex align-items-center gap-1"><span class="badge bg-secondary">&nbsp;&nbsp;</span> @Html.T("غادر مبكراً", "Left Early")</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Matrix -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title">@Html.T("مصفوفة الحضور", "Attendance Matrix")</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th class="position-sticky start-0 bg-white" style="min-width: 200px; z-index: 2;">@Html.T("الطالب", "Student")</th>
+                                @foreach (var session in Model.Sessions)
+                                {
+                                    <th class="text-center" style="min-width: 100px;">
+                                        <div class="fs-12">@session.Title</div>
+                                        <div class="fs-11 text-muted">@session.ScheduledDate.ToString("dd/MM")</div>
+                                    </th>
+                                }
+                                <th class="text-center">@Html.T("حاضر", "Present")</th>
+                                <th class="text-center">@Html.T("غائب", "Absent")</th>
+                                <th class="text-center">@Html.T("متأخر", "Late")</th>
+                                <th class="text-center">@Html.T("المتوسط", "Average")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var student in Model.Students.OrderByDescending(s => s.AverageScore))
+                            {
+                                <tr>
+                                    <td class="position-sticky start-0 bg-white" style="z-index: 1;">
+                                        <div class="fw-medium">@student.StudentName</div>
+                                        <div class="fs-11 text-muted">@student.StudentEmail</div>
+                                    </td>
+                                    @foreach (var session in Model.Sessions)
+                                    {
+                                        var attendanceStatus = student.SessionAttendance.ContainsKey(session.SessionId) ? student.SessionAttendance[session.SessionId] : LMS.Domain.Enums.AttendanceStatus.Absent;
+                                        var cellClass = attendanceStatus switch
+                                        {
+                                            LMS.Domain.Enums.AttendanceStatus.Present => "attendance-present",
+                                            LMS.Domain.Enums.AttendanceStatus.Late => "attendance-late",
+                                            LMS.Domain.Enums.AttendanceStatus.Absent => "attendance-absent",
+                                            LMS.Domain.Enums.AttendanceStatus.Excused => "attendance-excused",
+                                            LMS.Domain.Enums.AttendanceStatus.LeftEarly => "attendance-leftearly",
+                                            _ => "attendance-absent"
+                                        };
+                                        var statusIcon = attendanceStatus switch
+                                        {
+                                            LMS.Domain.Enums.AttendanceStatus.Present => "✓",
+                                            LMS.Domain.Enums.AttendanceStatus.Late => "⏰",
+                                            LMS.Domain.Enums.AttendanceStatus.Absent => "✗",
+                                            LMS.Domain.Enums.AttendanceStatus.Excused => "⊘",
+                                            LMS.Domain.Enums.AttendanceStatus.LeftEarly => "→",
+                                            _ => "?"
+                                        };
+                                        <td class="text-center @cellClass">
+                                            <span data-bs-toggle="tooltip" title="@(student.SessionScores.ContainsKey(session.SessionId) ? student.SessionScores[session.SessionId].ToString("F0") + "%" : "0%")">
+                                                @statusIcon
+                                            </span>
+                                        </td>
+                                    }
+                                    <td class="text-center"><span class="badge bg-soft-success text-success">@student.TotalPresent</span></td>
+                                    <td class="text-center"><span class="badge bg-soft-danger text-danger">@student.TotalAbsent</span></td>
+                                    <td class="text-center"><span class="badge bg-soft-warning text-warning">@student.TotalLate</span></td>
+                                    <td class="text-center">
+                                        <span class="fw-bold @(student.AverageScore >= 70 ? "text-success" : student.AverageScore >= 50 ? "text-warning" : "text-danger")">
+                                            @student.AverageScore.ToString("F0")%
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body p-5 text-center">
+                <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                    <i class="feather-bar-chart-2"></i>
+                </div>
+                <h5 class="fw-bold mb-2">@Html.T("لا توجد بيانات حضور", "No Attendance Data")</h5>
+                <p class="text-muted">@Html.T("لم يتم تسجيل أي بيانات حضور لهذا الجدول بعد", "No attendance data has been recorded for this schedule yet")</p>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
+        });
+    </script>
+}

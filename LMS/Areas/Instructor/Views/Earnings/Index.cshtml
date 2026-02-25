@@ -1,0 +1,361 @@
+@model List<LMS.Areas.Instructor.ViewModels.EarningDisplayViewModel>
+@using LMS.Services.Interfaces
+@inject ISystemConfigurationService SystemConfigService
+
+@using LMS.Views.Shared
+@{
+    ViewData["Title"] = Html.T("الأرباح والإيرادات", "Earnings & Revenue");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة أرباحك", "View and manage your earnings");
+    var withdrawUrl = Url.Action("Create", "WithdrawalRequests");
+    var withdrawalsUrl = Url.Action("Index", "WithdrawalRequests");
+    
+    var availableBalance = ViewBag.AvailableBalance as decimal? ?? 0;
+    var pendingBalance = ViewBag.PendingBalance as decimal? ?? 0;
+    var totalEarnings = ViewBag.TotalEarnings as decimal? ?? 0;
+    var monthlyEarnings = ViewBag.MonthlyEarnings as decimal? ?? 0;
+    var monthlyGrowth = ViewBag.MonthlyGrowth as decimal? ?? 0;
+    // CommissionRate is the instructor's percentage (what they keep), so platform fee is 100 - CommissionRate
+    var instructorRate = ViewBag.CommissionRate as decimal? ?? Constants.Defaults.DefaultCommissionRate;
+    var platformCommissionRate = 100 - instructorRate;
+    var notSpecified = await SystemConfigService.GetLocalizationAsync("not_specified", "ar", "غير محدد");
+    var salesRevenue = ViewBag.SalesRevenue as decimal? ?? 0;
+    var platformFees = ViewBag.PlatformFees as decimal? ?? 0;
+    var referralEarnings = ViewBag.ReferralEarnings as decimal? ?? 0;
+    
+    var chartLabels = ViewBag.ChartLabels as List<string> ?? new List<string>();
+    var chartData = ViewBag.ChartData as List<decimal> ?? new List<decimal>();
+    var courseLabels = ViewBag.CourseLabels as List<string> ?? new List<string>();
+    var courseEarnings = ViewBag.CourseEarnings as List<decimal> ?? new List<decimal>();
+    var recentTransactions = ViewBag.RecentTransactions ?? new List<dynamic>();
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1">@ViewData["Title"]</h4>
+        <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="@withdrawUrl" class="btn btn-primary">
+            <i class="feather-credit-card me-2"></i>@Html.T("طلب سحب", "Request Withdrawal")
+        </a>
+        <a href="@withdrawalsUrl" class="btn btn-light">
+            <i class="feather-list me-2"></i>@Html.T("طلبات السحب", "Withdrawal Requests")
+        </a>
+        @await Html.PartialAsync("_ExportDropdown", new ExportDropdownModel 
+        { 
+            ExportUrl = "/api/export/earnings",
+            EntityType = "earnings"
+        })
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Earnings Overview -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("الرصيد المتاح", "Available Balance") },
+                { "Value", Html.FormatCurrency(availableBalance, 0).ToString() },
+                { "Icon", "dollar-sign" },
+                { "Color", "success" },
+                { "Link", Url.Action("Create", "WithdrawalRequests") }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("الرصيد المعلق", "Pending Balance") },
+                { "Value", Html.FormatCurrency(pendingBalance, 0).ToString() },
+                { "Icon", "clock" },
+                { "Color", "warning" },
+                { "ChangeText", Html.T("سيكون متاحاً قريباً", "Available soon") }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الأرباح", "Total Earnings") },
+                { "Value", Html.FormatCurrency(totalEarnings, 0).ToString() },
+                { "Icon", "trending-up" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("أرباح هذا الشهر", "This Month's Earnings") },
+                { "Value", Html.FormatCurrency(monthlyEarnings, 0).ToString() },
+                { "Icon", "calendar" },
+                { "Color", "info" },
+                { "Change", (monthlyGrowth >= 0 ? "+" : "") + monthlyGrowth.ToString("F1") + "%" },
+                { "ChangeText", Html.T("عن الشهر الماضي", "vs last month") }
+            })
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <!-- Earnings Chart -->
+        <div class="col-xxl-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تطور الأرباح", "Earnings Trend")</h5>
+                    <div class="card-header-action">
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-light active">@Html.T("6 أشهر", "6 Months")</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <canvas id="earningsChart" height="350"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Earnings by Course -->
+        <div class="col-xxl-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الأرباح حسب الدورة", "Earnings by Course")</h5>
+                </div>
+                <div class="card-body">
+                    @if (courseLabels.Any())
+                    {
+                        <canvas id="courseEarningsChart" height="350"></canvas>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <div class="avatar-text avatar-lg bg-soft-primary text-primary mb-3 mx-auto">
+                                <i class="feather-pie-chart"></i>
+                            </div>
+                            <p class="text-muted">@Html.T("لا توجد بيانات كافية", "Not enough data")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Earnings Breakdown -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تفصيل الأرباح", "Earnings Breakdown")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <div class="p-4 bg-soft-success rounded">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <h6 class="mb-0">@Html.T("إيرادات المبيعات", "Sales Revenue")</h6>
+                                    <i class="feather-shopping-cart fs-3 text-success"></i>
+                                </div>
+                                <h3 class="fw-bold text-success mb-2">@Html.FormatCurrency(salesRevenue, 0)</h3>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fs-12 text-muted">@Html.T("إجمالي المبيعات قبل العمولة", "Total sales before commission")</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-4 bg-soft-primary rounded">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <h6 class="mb-0">@Html.T("عمولات الإحالة", "Referral Earnings")</h6>
+                                    <i class="feather-users fs-3 text-primary"></i>
+                                </div>
+                                <h3 class="fw-bold text-primary mb-2">@Html.FormatCurrency(referralEarnings, 0)</h3>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fs-12 text-muted">@Html.T("من برنامج الإحالات", "From referral program")</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-4 bg-soft-warning rounded">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <h6 class="mb-0">@Html.T("خصومات المنصة", "Platform Fees")</h6>
+                                    <i class="feather-percent fs-3 text-warning"></i>
+                                </div>
+                                <h3 class="fw-bold text-warning mb-2">-@Html.FormatCurrency(platformFees, 0)</h3>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fs-12 text-muted">@platformCommissionRate% @Html.T("عمولة المنصة", "platform fee") (@Html.T("أنت تحصل على", "You get") @instructorRate%)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Transactions -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("آخر المعاملات", "Recent Transactions")</h5>
+                    <div class="card-header-action">
+                        <a href="@Url.Action("Transactions")" class="btn btn-sm btn-light">
+                            @Html.T("عرض الكل", "View All")
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var transaction in Model.Take(Constants.DisplayLimits.RecentTransactionsOnEarnings))
+                            {
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <span class="fw-medium">@Html.T("مبيعات دورة", "Course sale")</span>
+                                            <span class="fw-bold text-success">@Html.FormatCurrency(transaction.NetAmount, 2)</span>
+                                        </div>
+                                        <p class="mb-1 text-break">@transaction.CourseName</p>
+                                        <p class="fs-12 text-muted mb-2">@transaction.StudentName · @transaction.CreatedAt.ToString("dd/MM/yyyy")</p>
+                                        <span class="badge bg-soft-success text-success">@Html.T("مكتمل", "Completed")</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("التاريخ", "Date")</th>
+                                            <th>@Html.T("الوصف", "Description")</th>
+                                            <th>@Html.T("الدورة", "Course")</th>
+                                            <th>@Html.T("الطالب", "Student")</th>
+                                            <th>@Html.T("المبلغ", "Amount")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var transaction in Model.Take(Constants.DisplayLimits.RecentTransactionsOnEarnings))
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <span class="fs-13">@transaction.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                                    <p class="fs-11 text-muted mb-0">@transaction.CreatedAt.ToString("hh:mm tt")</p>
+                                                </td>
+                                                <td>
+                                                    <span class="fw-medium">@Html.T("مبيعات دورة", "Course sale")</span>
+                                                </td>
+                                                <td>
+                                                    <span class="text-dark">@transaction.CourseName</span>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                            @(transaction.StudentName.Length > 0 ? transaction.StudentName.Substring(0, 1) : "?")
+                                                        </div>
+                                                        <span>@transaction.StudentName</span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="fw-bold text-success">@Html.FormatCurrency(transaction.NetAmount, 2)</span>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-soft-success text-success">@Html.T("مكتمل", "Completed")</span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-3 mx-auto">
+                                <i class="feather-inbox"></i>
+                            </div>
+                            <h6 class="fw-bold mb-2">@Html.T("لا توجد معاملات", "No transactions")</h6>
+                            <p class="text-muted mb-0">@Html.T("ستظهر معاملاتك هنا عند حدوث مبيعات", "Your transactions will appear here when you make sales")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Earnings Chart
+        const earningsCtx = document.getElementById('earningsChart').getContext('2d');
+        new Chart(earningsCtx, {
+            type: 'line',
+            data: {
+                labels: @Html.Raw(Json.Serialize(chartLabels)),
+                datasets: [{
+                    label: '@Html.Raw(Html.T("الأرباح", "Earnings"))',
+                    data: @Html.Raw(Json.Serialize(chartData)),
+                    borderColor: '#22c55e',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                const currencyCode = '@(ViewBag.DefaultCurrencyCode ?? "EGP")';
+                                return value.toLocaleString('ar-SA', { style: 'currency', currency: currencyCode, minimumFractionDigits: 0 });
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        @if (courseLabels.Any())
+        {
+            <text>
+        // Course Earnings Pie Chart
+        const courseEarningsCtx = document.getElementById('courseEarningsChart').getContext('2d');
+        new Chart(courseEarningsCtx, {
+            type: 'doughnut',
+            data: {
+                labels: @Html.Raw(Json.Serialize(courseLabels)),
+                datasets: [{
+                    data: @Html.Raw(Json.Serialize(courseEarnings)),
+                    backgroundColor: @Html.Raw(Json.Serialize(Constants.ChartColors.Primary)),
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        rtl: true,
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15
+                        }
+                    }
+                }
+            }
+        });
+            </text>
+        }
+    </script>
+}

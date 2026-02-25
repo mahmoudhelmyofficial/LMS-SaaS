@@ -1,0 +1,286 @@
+@model ReminderViewModel
+@{
+    ViewData["Title"] = Html.T("إنشاء تذكير", "Create Reminder");
+    var courses = ViewBag.Courses as List<LMS.Domain.Entities.Courses.Course>;
+}
+
+@section Styles {
+<style>
+    .reminder-container {
+        max-width: 700px;
+        margin: 0 auto;
+    }
+    
+    .reminder-type-card {
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-align: center;
+    }
+    
+    .reminder-type-card:hover {
+        border-color: #667eea;
+        background-color: #f9fafb;
+    }
+    
+    .reminder-type-card.selected {
+        border-color: #667eea;
+        background-color: #eef2ff;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .reminder-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 10px;
+    }
+    
+    .datetime-picker {
+        position: relative;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<div class="reminder-container">
+    <!-- Back Button -->
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-sm btn-light">
+            <i class="feather-arrow-right me-2"></i>
+            @Html.T("العودة للتذكيرات", "Back to reminders")
+        </a>
+    </div>
+    
+    <!-- Header -->
+    <div class="card stretch stretch-full mb-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div class="card-body py-4 text-center text-white">
+            <div class="mb-3">
+                <i class="feather-bell" style="font-size: 3rem;"></i>
+            </div>
+            <h2 class="fw-bold mb-2">@Html.T("إنشاء تذكير جديد", "Create new reminder")</h2>
+            <p class="opacity-75 mb-0">@Html.T("لا تفوت أي موعد مهم، أنشئ تذكير الآن", "Don't miss any important deadline, create a reminder now")</p>
+        </div>
+    </div>
+    
+    <!-- Form -->
+    <div class="card stretch stretch-full">
+        <div class="card-body p-4">
+            <form asp-action="Create" method="post">
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                
+                <!-- Reminder Type -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold mb-3">@Html.T("نوع التذكير", "Reminder type")</label>
+                    <div class="row g-3">
+                        <div class="col-md-3 col-6">
+                            <div class="reminder-type-card" onclick="selectReminderType(this, 'Study')">
+                                <div class="reminder-icon bg-soft-primary text-primary">
+                                    <i class="feather-book-open"></i>
+                                </div>
+                                <div class="fw-semibold">@Html.T("دراسة", "Study")</div>
+                                <input type="radio" name="ReminderType" value="Study" hidden />
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3 col-6">
+                            <div class="reminder-type-card" onclick="selectReminderType(this, 'Assignment')">
+                                <div class="reminder-icon bg-soft-warning text-warning">
+                                    <i class="feather-file-text"></i>
+                                </div>
+                                <div class="fw-semibold">@Html.T("واجب", "Assignment")</div>
+                                <input type="radio" name="ReminderType" value="Assignment" hidden />
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3 col-6">
+                            <div class="reminder-type-card" onclick="selectReminderType(this, 'Quiz')">
+                                <div class="reminder-icon bg-soft-info text-info">
+                                    <i class="feather-help-circle"></i>
+                                </div>
+                                <div class="fw-semibold">@Html.T("اختبار", "Quiz")</div>
+                                <input type="radio" name="ReminderType" value="Quiz" hidden />
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3 col-6">
+                            <div class="reminder-type-card" onclick="selectReminderType(this, 'LiveClass')">
+                                <div class="reminder-icon bg-soft-danger text-danger">
+                                    <i class="feather-video"></i>
+                                </div>
+                                <div class="fw-semibold">@Html.T("جلسة مباشرة", "Live class")</div>
+                                <input type="radio" name="ReminderType" value="LiveClass" hidden />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Title -->
+                <div class="mb-4">
+                    <label asp-for="Title" class="form-label fw-bold">
+                        @Html.T("عنوان التذكير", "Reminder title")
+                        <span class="text-danger">*</span>
+                    </label>
+                    <input asp-for="Title" class="form-control form-control-lg" 
+                           placeholder="@Html.T("مثال: مراجعة الدرس الثالث", "e.g. Review lesson three")" />
+                    <span asp-validation-for="Title" class="text-danger"></span>
+                </div>
+                
+                <!-- Description -->
+                <div class="mb-4">
+                    <label asp-for="Description" class="form-label fw-bold">
+                        @Html.T("الوصف", "Description")
+                    </label>
+                    <textarea asp-for="Description" class="form-control" rows="3" 
+                              placeholder="@Html.T("أضف تفاصيل إضافية للتذكير (اختياري)", "Add additional details for the reminder (optional)")"></textarea>
+                    <span asp-validation-for="Description" class="text-danger"></span>
+                </div>
+                
+                <!-- Course -->
+                @if (courses != null && courses.Any())
+                {
+                    <div class="mb-4">
+                        <label asp-for="CourseId" class="form-label fw-bold">
+                            @Html.T("الدورة المرتبطة", "Related course")
+                        </label>
+                        <select asp-for="CourseId" class="form-select">
+                            <option value="">-- @Html.T("اختر دورة (اختياري)", "Select course (optional)") --</option>
+                            @foreach (var course in courses)
+                            {
+                                <option value="@course.Id">@course.Title</option>
+                            }
+                        </select>
+                        <span asp-validation-for="CourseId" class="text-danger"></span>
+                    </div>
+                }
+                
+                <!-- Date and Time -->
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <label asp-for="RemindAt" class="form-label fw-bold">
+                            @Html.T("التاريخ والوقت", "Date and time")
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="RemindAt" type="datetime-local" class="form-control form-control-lg" 
+                               min="@DateTime.Now.ToString("yyyy-MM-ddTHH:mm")" />
+                        <span asp-validation-for="RemindAt" class="text-danger"></span>
+                    </div>
+                    
+                    <!-- Quick Date Buttons -->
+                    <div class="col-md-6 mb-4">
+                        <label class="form-label fw-bold">@Html.T("اختيار سريع", "Quick select")</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="setReminder(1, 'hours')">
+                                @Html.T("بعد ساعة", "In 1 hour")
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="setReminder(3, 'hours')">
+                                @Html.T("بعد 3 ساعات", "In 3 hours")
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="setReminder(1, 'days')">
+                                @Html.T("غداً", "Tomorrow")
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="setReminder(7, 'days')">
+                                @Html.T("بعد أسبوع", "In 1 week")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Notification Methods -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold mb-3">@Html.T("طريقة التنبيه", "Notification method")</label>
+                    
+                    <div class="form-check mb-2">
+                        <input asp-for="SendEmail" class="form-check-input" type="checkbox" checked />
+                        <label asp-for="SendEmail" class="form-check-label">
+                            <i class="feather-mail text-primary me-2"></i>
+                            @Html.T("إرسال بريد إلكتروني", "Send email")
+                        </label>
+                    </div>
+                    
+                    <div class="form-check">
+                        <input asp-for="SendPush" class="form-check-input" type="checkbox" checked />
+                        <label asp-for="SendPush" class="form-check-label">
+                            <i class="feather-bell text-warning me-2"></i>
+                            @Html.T("إشعار داخل المنصة", "In-app notification")
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Info Alert -->
+                <div class="alert alert-info">
+                    <div class="d-flex gap-2">
+                        <i class="feather-info"></i>
+                        <div class="small">
+                            @Html.T("سيتم إرسال التذكير في الموعد المحدد. تأكد من تفعيل الإشعارات في إعدادات حسابك.", "The reminder will be sent at the scheduled time. Make sure notifications are enabled in your account settings.")
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Submit Buttons -->
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-grow-1">
+                        <i class="feather-check me-2"></i>
+                        @Html.T("إنشاء التذكير", "Create reminder")
+                    </button>
+                    <a asp-action="Index" class="btn btn-light">
+                        @Html.T("إلغاء", "Cancel")
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+@{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+<script>
+    function selectReminderType(card, type) {
+        // Remove selected class from all cards
+        document.querySelectorAll('.reminder-type-card').forEach(c => c.classList.remove('selected'));
+        
+        // Add selected class to clicked card
+        card.classList.add('selected');
+        
+        // Check the radio button
+        card.querySelector('input[type="radio"]').checked = true;
+    }
+    
+    function setReminder(value, unit) {
+        const now = new Date();
+        
+        if (unit === 'hours') {
+            now.setHours(now.getHours() + value);
+        } else if (unit === 'days') {
+            now.setDate(now.getDate() + value);
+        }
+        
+        // Format to datetime-local input format
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        
+        const dateTimeValue = `${year}-${month}-${day}T${hours}:${minutes}`;
+        document.querySelector('input[name="RemindAt"]').value = dateTimeValue;
+    }
+    
+    // Auto-select first reminder type on load
+    document.addEventListener('DOMContentLoaded', function() {
+        const firstCard = document.querySelector('.reminder-type-card');
+        if (firstCard && !document.querySelector('.reminder-type-card.selected')) {
+            selectReminderType(firstCard, 'Study');
+        }
+    });
+</script>
+}
+

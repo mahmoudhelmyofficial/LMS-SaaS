@@ -1,0 +1,240 @@
+@model LMS.Areas.Instructor.ViewModels.RecordingUploadViewModel
+
+@{
+    ViewData["Title"] = Html.T("رفع تسجيل جديد", "Upload New Recording");
+    ViewData["Subtitle"] = Html.T("رفع أو إضافة رابط تسجيل لجلسة مباشرة", "Upload or add a recording link for a live session");
+    var indexUrl = Url.Action("Index");
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة للقائمة", "Back to List") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger mb-4">
+            <h6 class="alert-heading mb-2">
+                <i class="feather-alert-circle me-2"></i>
+                @Html.T("يرجى تصحيح الأخطاء التالية:", "Please correct the following errors:")
+            </h6>
+            @Html.ValidationSummary(false, "", new { @class = "mb-0" })
+        </div>
+    }
+
+    <form asp-action="Upload" method="post" enctype="multipart/form-data" id="uploadForm">
+        @Html.AntiForgeryToken()
+
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Basic Info -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            @Html.T("معلومات التسجيل", "Recording Information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label class="form-label" asp-for="LiveClassId">@Html.T("الجلسة المباشرة", "Live Session") <span class="text-danger">*</span></label>
+                                <select asp-for="LiveClassId" class="form-select" required>
+                                    <option value="">-- @Html.T("اختر الجلسة", "Select Session") --</option>
+                                    @if (ViewBag.LiveClasses != null)
+                                    {
+                                        foreach (var lc in ViewBag.LiveClasses as Microsoft.AspNetCore.Mvc.Rendering.SelectList)
+                                        {
+                                            <option value="@lc.Value">@lc.Text</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="LiveClassId" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Title">@Html.T("عنوان التسجيل", "Recording Title") <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" asp-for="Title" placeholder="@Html.T("مثال: تسجيل الجلسة الأولى - مقدمة في البرمجة", "Example: Session 1 Recording - Introduction to Programming")" required />
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Description">@Html.T("الوصف", "Description")</label>
+                                <textarea class="form-control" asp-for="Description" rows="3" placeholder="@Html.T("وصف مختصر للتسجيل", "Brief description of the recording")"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Method -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-upload me-2 text-primary"></i>
+                            @Html.T("طريقة الرفع", "Upload Method")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Upload Method Tabs -->
+                        <ul class="nav nav-tabs mb-4" role="tablist">
+                            <li class="nav-item">
+                                <a class="nav-link active" data-bs-toggle="tab" href="#fileUpload" role="tab">
+                                    <i class="feather-upload-cloud me-2"></i>@Html.T("رفع ملف", "Upload File")
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#externalUrl" role="tab">
+                                    <i class="feather-link me-2"></i>@Html.T("رابط خارجي", "External Link")
+                                </a>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <!-- File Upload -->
+                            <div class="tab-pane fade show active" id="fileUpload" role="tabpanel">
+                                <div class="border-2 border-dashed rounded p-5 text-center" id="dropZone" style="border-color: #dee2e6; cursor: pointer;">
+                                    <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-3 mx-auto">
+                                        <i class="feather-upload-cloud"></i>
+                                    </div>
+                                    <h6 class="fw-bold mb-2">@Html.T("اسحب الملف هنا أو اضغط لاختيار ملف", "Drag the file here or click to choose a file")</h6>
+                                    <p class="text-muted fs-12 mb-3">@Html.T("يدعم الصيغ: MP4, AVI, MKV, MOV, WebM - حد أقصى 2 جيجابايت", "Supported formats: MP4, AVI, MKV, MOV, WebM - Max 2GB")</p>
+                                    <input type="file" name="RecordingFile" id="recordingFile" class="d-none" accept="video/*,.mp4,.avi,.mkv,.mov,.webm" />
+                                    <button type="button" class="btn btn-primary" onclick="document.getElementById('recordingFile').click()">
+                                        <i class="feather-folder me-2"></i>@Html.T("اختر ملف", "Choose File")
+                                    </button>
+                                    <div id="fileInfo" class="mt-3" style="display: none;">
+                                        <div class="alert alert-success">
+                                            <i class="feather-file me-2"></i>
+                                            <span id="fileName"></span> - <span id="fileSize"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- External URL -->
+                            <div class="tab-pane fade" id="externalUrl" role="tabpanel">
+                                <div class="mb-3">
+                                    <label class="form-label" asp-for="ExternalUrl">@Html.T("رابط التسجيل الخارجي", "External Recording URL")</label>
+                                    <input type="url" class="form-control" asp-for="ExternalUrl" placeholder="https://www.youtube.com/watch?v=..." />
+                                    <span asp-validation-for="ExternalUrl" class="text-danger"></span>
+                                    <div class="form-text">@Html.T("يمكنك استخدام روابط YouTube, Vimeo, أو أي منصة فيديو أخرى", "You can use YouTube, Vimeo, or any other video platform links")</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Settings -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إعدادات", "Settings")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" asp-for="AccessRequiresPurchase" id="accessRequiresPurchase" checked />
+                            <label class="form-check-label" for="accessRequiresPurchase">
+                                @Html.T("يتطلب شراء للمشاهدة", "Requires Purchase to Watch")
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            @Html.T("إذا كان مفعلاً، سيحتاج الطلاب لشراء الجلسة أو الاشتراك في الجدول للوصول للتسجيل", "If enabled, students will need to purchase the session or subscribe to the schedule to access the recording")
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help -->
+                <div class="card bg-soft-info border-0 mb-4">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3">
+                            <i class="feather-info me-2"></i>@Html.T("إرشادات", "Guidelines")
+                        </h6>
+                        <ul class="list-unstyled fs-13 mb-0">
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("اختر الجلسة المرتبطة بالتسجيل", "Select the session associated with the recording")
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("يمكنك رفع ملف أو إدخال رابط خارجي", "You can upload a file or enter an external link")
+                            </li>
+                            <li class="mb-0">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("التسجيل لن يُنشر تلقائياً - يمكنك نشره لاحقاً", "The recording won't be published automatically - you can publish it later")
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <div class="card">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2" id="submitBtn">
+                            <i class="feather-upload me-2"></i>@Html.T("رفع التسجيل", "Upload Recording")
+                        </button>
+                        <a href="@Url.Action("Index")" class="btn btn-light w-100">
+                            <i class="feather-x me-2"></i>@Html.T("إلغاء", "Cancel")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        $(document).ready(function () {
+            // File input change
+            $('#recordingFile').on('change', function () {
+                var file = this.files[0];
+                if (file) {
+                    var sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                    $('#fileName').text(file.name);
+                    $('#fileSize').text(sizeMB + ' MB');
+                    $('#fileInfo').show();
+                }
+            });
+
+            // Drag and drop
+            var dropZone = document.getElementById('dropZone');
+            if (dropZone) {
+                dropZone.addEventListener('click', function () {
+                    document.getElementById('recordingFile').click();
+                });
+
+                dropZone.addEventListener('dragover', function (e) {
+                    e.preventDefault();
+                    dropZone.style.borderColor = 'var(--bs-primary)';
+                    dropZone.style.backgroundColor = 'rgba(var(--bs-primary-rgb), 0.05)';
+                });
+
+                dropZone.addEventListener('dragleave', function () {
+                    dropZone.style.borderColor = '#dee2e6';
+                    dropZone.style.backgroundColor = '';
+                });
+
+                dropZone.addEventListener('drop', function (e) {
+                    e.preventDefault();
+                    dropZone.style.borderColor = '#dee2e6';
+                    dropZone.style.backgroundColor = '';
+                    if (e.dataTransfer.files.length) {
+                        document.getElementById('recordingFile').files = e.dataTransfer.files;
+                        $(document.getElementById('recordingFile')).trigger('change');
+                    }
+                });
+            }
+
+            // Submit button loading
+            $('#uploadForm').on('submit', function () {
+                $('#submitBtn').prop('disabled', true).html('<i class="feather-loader me-2 spin"></i>' + '@Html.T("جاري الرفع...", "Uploading...")');
+            });
+        });
+    </script>
+}

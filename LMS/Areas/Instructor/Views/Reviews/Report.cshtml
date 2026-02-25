@@ -1,0 +1,276 @@
+@model LMS.Areas.Instructor.ViewModels.ReviewReportViewModel
+
+@{
+    ViewData["Title"] = Html.T("الإبلاغ عن تقييم", "Report Review");
+    ViewData["Subtitle"] = Html.T("الإبلاغ عن محتوى غير لائق", "Report inappropriate content");
+    var review = ViewBag.Review as LMS.Domain.Entities.Social.Review;
+}
+
+@{
+    var indexUrl = Url.Action("Index");
+    var actionButtonsHtml = "<a href='" + indexUrl + "' class='btn btn-light'>" +
+        "<i class='feather-arrow-right me-2'></i>" +
+        "العودة للتقييمات" +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Review Display -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-message-square me-2 text-primary"></i>
+                        التقييم المبلغ عنه
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (review != null)
+                    {
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                                @review.Student?.FirstName?.Substring(0, 1)
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="fw-bold mb-1">@review.Student?.FullName</h6>
+                                <p class="text-muted fs-13 mb-1">@review.Course?.Title</p>
+                                
+                                <!-- Rating Stars -->
+                                <div class="d-flex align-items-center gap-1">
+                                    @for (int i = 1; i <= 5; i++)
+                                    {
+                                        <i class="feather-star @(i <= review.Rating ? "text-warning" : "text-muted")" style="font-size: 16px;"></i>
+                                    }
+                                    <span class="fw-bold text-dark ms-2">@review.Rating.ToString("F1") / 5.0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-soft-light p-3 rounded border-start border-3 border-danger">
+                            <p class="mb-0" style="white-space: pre-wrap; line-height: 1.8;">@review.Comment</p>
+                        </div>
+
+                        <div class="mt-3 text-muted fs-13">
+                            <i class="feather-calendar me-1"></i>
+                            تاريخ التقييم: @review.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Report Form -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-flag me-2 text-danger"></i>
+                        نموذج الإبلاغ
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Report" asp-route-id="@Model.ReviewId" method="post" id="reportForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="ReviewId" />
+
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("سبب الإبلاغ", "Report reason") <span class="text-danger">*</span></label>
+                            <select class="form-select mb-3" id="reasonSelect">
+                                <option value="">-- اختر سبب الإبلاغ --</option>
+                                <option value="محتوى مسيء أو غير لائق">محتوى مسيء أو غير لائق</option>
+                                <option value="لغة غير محترمة أو ألفاظ نابية">لغة غير محترمة أو ألفاظ نابية</option>
+                                <option value="معلومات خاطئة أو مضللة">معلومات خاطئة أو مضللة</option>
+                                <option value="تقييم مزيف من حساب وهمي">تقييم مزيف من حساب وهمي</option>
+                                <option value="إعلان أو ترويج غير مرغوب">إعلان أو ترويج غير مرغوب</option>
+                                <option value="تشهير أو إساءة شخصية">تشهير أو إساءة شخصية</option>
+                                <option value="other">سبب آخر</option>
+                            </select>
+                            <textarea asp-for="Reason" class="form-control" rows="4" placeholder="@Html.T("اشرح سبب الإبلاغ بالتفصيل...", "Explain the reason for reporting in detail...")"></textarea>
+                            <span asp-validation-for="Reason" class="text-danger"></span>
+                            <div class="form-text">
+                                <i class="feather-info me-1"></i>
+                                اشرح سبب الإبلاغ بوضوح (10-500 حرف)
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("ملاحظات إضافية (اختياري)", "Additional notes (optional)")</label>
+                            <textarea asp-for="AdditionalNotes" class="form-control" rows="3" placeholder="@Html.T("أي معلومات إضافية قد تفيد في المراجعة...", "Any additional information that may help the review...")"></textarea>
+                            <span asp-validation-for="AdditionalNotes" class="text-danger"></span>
+                        </div>
+
+                        <div class="alert alert-warning">
+                            <i class="feather-alert-triangle me-2"></i>
+                            <strong>تنبيه:</strong> سيتم مراجعة هذا الإبلاغ من قبل إدارة المنصة. استخدم هذه الميزة فقط للتقييمات التي تنتهك سياسات المنصة.
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="feather-flag me-2"></i>
+                                إرسال الإبلاغ
+                            </button>
+                            <a href="@Url.Action("Index")" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Guidelines Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">
+                        <i class="feather-book-open me-2"></i>
+                        إرشادات الإبلاغ
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted fs-13 mb-3">يمكنك الإبلاغ عن التقييمات التي:</p>
+                    <ul class="list-unstyled mb-0 fs-13">
+                        <li class="mb-2 d-flex align-items-start">
+                            <i class="feather-check text-danger me-2 mt-1"></i>
+                            <span>تحتوي على لغة مسيئة أو ألفاظ نابية</span>
+                        </li>
+                        <li class="mb-2 d-flex align-items-start">
+                            <i class="feather-check text-danger me-2 mt-1"></i>
+                            <span>تتضمن معلومات كاذبة أو مضللة</span>
+                        </li>
+                        <li class="mb-2 d-flex align-items-start">
+                            <i class="feather-check text-danger me-2 mt-1"></i>
+                            <span>تروج لمنتجات أو خدمات</span>
+                        </li>
+                        <li class="mb-2 d-flex align-items-start">
+                            <i class="feather-check text-danger me-2 mt-1"></i>
+                            <span>تحتوي على تهديدات أو تنمر</span>
+                        </li>
+                        <li class="mb-0 d-flex align-items-start">
+                            <i class="feather-check text-danger me-2 mt-1"></i>
+                            <span>تنتهك حقوق الملكية الفكرية</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Not Reportable Card -->
+            <div class="card stretch stretch-full mb-4 bg-soft-warning">
+                <div class="card-body">
+                    <h6 class="fw-bold text-warning mb-3">
+                        <i class="feather-x-circle me-2"></i>
+                        لا يُعد سبباً للإبلاغ
+                    </h6>
+                    <ul class="list-unstyled mb-0 fs-13">
+                        <li class="mb-2">
+                            <i class="feather-x me-2 text-muted"></i>
+                            التقييم السلبي بسبب اختلاف الرأي
+                        </li>
+                        <li class="mb-2">
+                            <i class="feather-x me-2 text-muted"></i>
+                            انتقاد محتوى الدورة بشكل بنّاء
+                        </li>
+                        <li class="mb-0">
+                            <i class="feather-x me-2 text-muted"></i>
+                            عدم الإعجاب بأسلوب التدريس
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Process Info -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h6 class="card-title">
+                        <i class="feather-clock me-2"></i>
+                        ماذا يحدث بعد الإبلاغ؟
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="timeline-area">
+                        <div class="d-flex gap-3 mb-3">
+                            <div class="avatar-text avatar-sm bg-soft-primary text-primary flex-shrink-0">1</div>
+                            <div>
+                                <h6 class="fs-13 fw-bold mb-1">@Html.T("استلام الإبلاغ", "Report received")</h6>
+                                <p class="fs-12 text-muted mb-0">سيتم استلام إبلاغك فوراً</p>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-3 mb-3">
+                            <div class="avatar-text avatar-sm bg-soft-warning text-warning flex-shrink-0">2</div>
+                            <div>
+                                <h6 class="fs-13 fw-bold mb-1">@Html.T("المراجعة", "Review")</h6>
+                                <p class="fs-12 text-muted mb-0">فريق الدعم سيراجع الإبلاغ</p>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-3">
+                            <div class="avatar-text avatar-sm bg-soft-success text-success flex-shrink-0">3</div>
+                            <div>
+                                <h6 class="fs-13 fw-bold mb-1">@Html.T("الإجراء", "Action")</h6>
+                                <p class="fs-12 text-muted mb-0">@Html.T("اتخاذ الإجراء المناسب", "Take appropriate action")</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        $(document).ready(function () {
+            const reasonSelect = $('#reasonSelect');
+            const reasonTextarea = $('#Reason');
+
+            // Pre-fill reason from select
+            reasonSelect.on('change', function() {
+                const selectedValue = $(this).val();
+                if (selectedValue && selectedValue !== 'other') {
+                    reasonTextarea.val(selectedValue);
+                } else if (selectedValue === 'other') {
+                    reasonTextarea.val('').focus();
+                }
+            });
+
+            // Form validation
+            $('#reportForm').on('submit', function(e) {
+                const reason = reasonTextarea.val().trim();
+
+                if (!reason) {
+                    e.preventDefault();
+                    alert('يرجى إدخال سبب الإبلاغ');
+                    reasonTextarea.focus();
+                    return false;
+                }
+
+                if (reason.length < 10) {
+                    e.preventDefault();
+                    alert('سبب الإبلاغ يجب أن يكون 10 أحرف على الأقل');
+                    reasonTextarea.focus();
+                    return false;
+                }
+
+                if (reason.length > 500) {
+                    e.preventDefault();
+                    alert('سبب الإبلاغ يجب ألا يتجاوز 500 حرف');
+                    reasonTextarea.focus();
+                    return false;
+                }
+
+                // Confirm submission
+                return confirm('هل أنت متأكد من إرسال هذا الإبلاغ؟');
+            });
+        });
+    </script>
+}
+

@@ -1,0 +1,252 @@
+@model IEnumerable<LMS.Domain.Entities.Assessments.AssignmentSubmission>
+
+@{
+    ViewData["Title"] = Html.T("التسليمات المعلقة", "Pending Submissions");
+    ViewData["Subtitle"] = Html.T("تسليمات تنتظر التقييم", "Submissions awaiting grading");
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="fs-12 fw-medium text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+        <ul class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Dashboard")">@Html.T("الرئيسية", "Home")</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index")">@Html.T("التسليمات", "Submissions")</a></li>
+            <li class="breadcrumb-item active">@Html.T("قيد الانتظار", "Pending")</li>
+        </ul>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex align-items-center gap-2">
+            <a href="@Url.Action("Index")" class="btn btn-light">
+                <i class="feather-list me-2"></i>
+                @Html.T("جميع التسليمات", "All submissions")
+            </a>
+            <a href="@Url.Action("Statistics")" class="btn btn-light">
+                <i class="feather-bar-chart-2 me-2"></i>
+                @Html.T("الإحصائيات", "Statistics")
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Filter by Course -->
+    <div class="card stretch stretch-full mb-4">
+        <div class="card-body">
+            <form method="get" asp-action="Pending" class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label">@Html.T("تصفية حسب الدورة", "Filter by course")</label>
+                    <select name="courseId" class="form-select">
+                        <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                        @if (ViewBag.Courses != null)
+                        {
+                            @foreach (var course in ViewBag.Courses)
+                            {
+                                <option value="@course.Id" selected="@(ViewBag.CourseId != null && ViewBag.CourseId == course.Id)">@course.Title</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="feather-filter me-2"></i>
+                        @Html.T("تصفية", "Filter")
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <a href="@Url.Action("Pending")" class="btn btn-light w-100">
+                        <i class="feather-x me-2"></i>
+                        @Html.T("إلغاء التصفية", "Clear filter")
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="alert alert-warning mb-4" style="border-radius: 12px; border: none;">
+        <div class="d-flex align-items-center">
+            <i class="feather-clock" style="font-size: 32px; margin-left: 16px;"></i>
+            <div>
+                <h5 class="mb-1">@Html.T("لديك", "You have") @ViewBag.TotalCount @Html.T("تسليم ينتظر التقييم", "submission(s) awaiting grading")</h5>
+                <p class="mb-0">@Html.T("يرجى مراجعة وتقييم هذه التسليمات في أقرب وقت لمساعدة الطلاب على التقدم", "Please review and grade these submissions as soon as possible to help students progress")</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Submissions List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-clock text-warning me-2"></i>
+                        @Html.T("التسليمات المعلقة", "Pending submissions")
+                    </h5>
+                    <div class="card-header-action">
+                        <span class="badge bg-warning">@ViewBag.TotalCount @Html.T("تسليم", "submission(s)")</span>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الطالب", "Student")</th>
+                                        <th>@Html.T("التكليف", "Assignment")</th>
+                                        <th>@Html.T("الدورة", "Course")</th>
+                                        <th>@Html.T("تاريخ التسليم", "Submitted")</th>
+                                        <th>@Html.T("الموعد النهائي", "Deadline")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                        <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var submission in Model)
+                                    {
+                                        var isLate = submission.Assignment?.DueDate.HasValue == true && 
+                                                    submission.SubmittedAt > submission.Assignment.DueDate.Value;
+                                        
+                                        <tr class="@(isLate ? "table-warning" : "")">
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                        <i class="feather-user"></i>
+                                                    </div>
+                                                    <div>
+                                                        <span class="fw-medium">@submission.Enrollment?.Student?.FullName</span>
+                                                        <br />
+                                                        <small class="text-muted">@submission.Enrollment?.Student?.Email</small>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Details", new { id = submission.Id })" class="fw-medium text-dark">
+                                                    @submission.Assignment?.Title
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="text-muted">@submission.Assignment?.Lesson?.Module?.Course?.Title</span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="feather-calendar text-muted"></i>
+                                                    <span>@submission.SubmittedAt.ToString("dd/MM/yyyy")</span>
+                                                </div>
+                                                <small class="text-muted">@submission.SubmittedAt.ToString("hh:mm tt")</small>
+                                            </td>
+                                            <td>
+                                                @if (submission.Assignment?.DueDate.HasValue == true)
+                                                {
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <i class="feather-clock @(isLate ? "text-danger" : "text-muted")"></i>
+                                                        <span class="@(isLate ? "text-danger" : "")">
+                                                            @submission.Assignment.DueDate.Value.ToString("dd/MM/yyyy")
+                                                        </span>
+                                                    </div>
+                                                    @if (isLate)
+                                                    {
+                                                        var lateDays = (submission.SubmittedAt - submission.Assignment.DueDate.Value).Days;
+                                                        <small class="text-danger">
+                                                            <i class="feather-alert-triangle"></i>
+                                                            @Html.T("متأخر", "Late") @lateDays @Html.T("يوم", "days")
+                                                        </small>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">@Html.T("غير محدد", "Not set")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-warning text-warning">
+                                                    <i class="feather-clock"></i> @Html.T("قيد الانتظار", "Pending")
+                                                </span>
+                                                @if (isLate)
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger">
+                                                        <i class="feather-alert-triangle"></i> @Html.T("متأخر", "Late")
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Grade", new { id = submission.Id })" class="btn btn-sm btn-primary" data-bs-toggle="tooltip" title="@Html.T("تقييم الآن", "Grade now")">
+                                                        <i class="feather-edit-3 me-1"></i>
+                                                        @Html.T("تقييم", "Grade")
+                                                    </a>
+                                                    <a href="@Url.Action("Details", new { id = submission.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض التفاصيل", "View details")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    @if (!string.IsNullOrEmpty(submission.AttachmentUrls))
+                                                    {
+                                                        <a href="@submission.AttachmentUrls" target="_blank" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تحميل المرفق", "Download attachment")">
+                                                            <i class="feather-download"></i>
+                                                        </a>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination -->
+                        @if (ViewBag.TotalPages > 1)
+                        {
+                            <div class="card-footer d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="text-muted">@Html.T("عرض", "Showing") @Model.Count() @Html.T("من", "of") @ViewBag.TotalCount</span>
+                                </div>
+                                <nav>
+                                    <ul class="pagination pagination-sm mb-0">
+                                        @for (int i = 1; i <= ViewBag.TotalPages; i++)
+                                        {
+                                            <li class="page-item @(ViewBag.Page == i ? "active" : "")">
+                                                <a class="page-link" href="@Url.Action("Pending", new { page = i, courseId = ViewBag.CourseId })">@i</a>
+                                            </li>
+                                        }
+                                    </ul>
+                                </nav>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-success text-success mb-4 mx-auto">
+                                <i class="feather-check-circle"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("ممتاز! لا توجد تسليمات معلقة 🎉", "Great! No pending submissions 🎉")</h5>
+                            <p class="text-muted mb-4">@Html.T("لقد قمت بتقييم جميع التسليمات المرسلة", "You have graded all submitted submissions")</p>
+                            <a href="@Url.Action("Index")" class="btn btn-primary">
+                                <i class="feather-list me-2"></i>
+                                @Html.T("عرض جميع التسليمات", "View all submissions")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

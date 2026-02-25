@@ -1,0 +1,594 @@
+@using LMS.Areas.Student.ViewModels
+@using LMS.Services.Interfaces
+@model LMS.Areas.Student.Controllers.TakeQuizViewModel
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("الاختبار", "Quiz");
+    Layout = "~/Areas/Student/Views/Shared/_Layout.cshtml";
+    var quizTitle = Model?.QuizTitle ?? "الاختبار";
+    var questions = Model?.Questions ?? new List<QuizQuestionViewModel>();
+    var timeRemaining = Model?.TimeLimit ?? 0;
+    var attemptId = Model?.AttemptId ?? 0;
+    
+    // Quiz settings
+    var autoSaveIntervalMs = await PlatformSettings.GetIntSettingAsync("Quiz.AutoSaveIntervalMs", 30000);
+}
+
+@section Styles {
+<style>
+    body { background: #f9fafb; }
+    .quiz-header {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        background: white;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .question-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .option-card {
+        padding: 15px 20px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-bottom: 12px;
+    }
+    .option-card:hover {
+        border-color: #667eea;
+        background: #f5f7ff;
+    }
+    .option-card.selected {
+        border-color: #667eea;
+        background: #eff6ff;
+    }
+    .timer {
+        font-size: 24px;
+        font-weight: bold;
+        padding: 10px 20px;
+        border-radius: 8px;
+    }
+    .timer.warning {
+        background: #fef3c7;
+        color: #f59e0b;
+    }
+    .timer.danger {
+        background: #fee2e2;
+        color: #ef4444;
+        animation: pulse 1s infinite;
+    }
+    @@keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+    .question-nav {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+        gap: 10px;
+    }
+    .question-nav-btn {
+        width: 50px;
+        height: 50px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .question-nav-btn:hover {
+        border-color: #667eea;
+    }
+    .question-nav-btn.answered {
+        background: #22c55e;
+        color: white;
+        border-color: #22c55e;
+    }
+    .question-nav-btn.current {
+        background: #667eea;
+        color: white;
+        border-color: #667eea;
+    }
+</style>
+}
+
+<!-- Quiz Header -->
+<div class="quiz-header py-3">
+    <div class="container-fluid">
+        <div class="row align-items-center">
+            <div class="col-md-4">
+                <h5 class="fw-bold mb-0">@quizTitle</h5>
+                <small class="text-muted">@Html.T("سؤال", "Question") <span id="currentQuestionNumber">1</span> @Html.T("من", "of") @questions.Count</small>
+            </div>
+            <div class="col-md-4 text-center">
+                @if (timeRemaining > 0)
+                {
+                    <div class="timer" id="timer">
+                        <i class="feather-clock me-2"></i>
+                        <span id="timeDisplay">@timeRemaining:00</span>
+                    </div>
+                }
+            </div>
+            <div class="col-md-4 text-end">
+                <span class="badge bg-soft-success text-success me-2">
+                    <span id="answeredCount">0</span> / @questions.Count @Html.T("مُجاب", "answered")
+                </span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="showQuestionNav()">
+                    <i class="feather-list me-2"></i>
+                    @Html.T("الأسئلة", "Questions")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quiz Content -->
+<div class="container-fluid py-4">
+    <div class="row g-4">
+        <!-- Questions -->
+        <div class="col-lg-9">
+            <form id="quizForm" asp-action="SubmitQuiz" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="attemptId" value="@attemptId" />
+
+                <!-- Proctoring settings from ViewModel -->
+                <input type="hidden" id="requiresProctoring" value="@(Model?.RequiresProctoring == true ? "true" : "false")" />
+                <input type="hidden" id="quizAttemptId" value="@attemptId" />
+                <input type="hidden" id="procPreventTabSwitch" value="@(Model?.ProcPreventTabSwitch == true ? "true" : "false")" />
+                <input type="hidden" id="procPreventCopyPaste" value="@(Model?.ProcPreventCopyPaste == true ? "true" : "false")" />
+                <input type="hidden" id="procDisableRightClick" value="@(Model?.ProcDisableRightClick == true ? "true" : "false")" />
+                <input type="hidden" id="procRequireFullscreen" value="@(Model?.ProcRequireFullscreen == true ? "true" : "false")" />
+                <input type="hidden" id="procRequireWebcam" value="@(Model?.ProcRequireWebcam == true ? "true" : "false")" />
+                <input type="hidden" id="procCaptureScreenshots" value="@(Model?.ProcCaptureScreenshots == true ? "true" : "false")" />
+                <input type="hidden" id="procScreenshotInterval" value="@(Model?.ProcScreenshotInterval ?? 60)" />
+                <input type="hidden" id="procMaxWarnings" value="@(Model?.ProcMaxWarnings ?? 3)" />
+                <input type="hidden" id="procAutoTerminate" value="@(Model?.ProcAutoTerminate == true ? "true" : "false")" />
+                
+                @for (int i = 0; i < questions.Count; i++)
+                {
+                    var question = questions[i];
+                    var questionNumber = i + 1;
+                    
+                    <div class="question-card" id="question-@questionNumber" style="@(i > 0 ? "display: none;" : "")">
+                        <div class="mb-4">
+                            <div class="d-flex align-items-start justify-content-between mb-3">
+                                <h4 class="fw-bold">@Html.T("سؤال", "Question") @questionNumber</h4>
+                                <span class="badge bg-soft-primary text-primary">@question.Points @Html.T("نقطة", "point(s)")</span>
+                            </div>
+                            <p class="fs-5 mb-0">@question.QuestionText</p>
+                        </div>
+
+                        @if ((question.QuestionType == "MultipleChoice" || question.QuestionType == "SingleChoice") && question.Options != null && question.Options.Any())
+                        {
+                            <div class="options-container">
+                                @foreach (var option in question.Options)
+                                {
+                                    <div class="option-card" onclick="selectOption(this, @question.Id, @option.Id)">
+                                        <input type="radio" 
+                                               name="answer_@question.Id" 
+                                               value="@option.Id" 
+                                               id="option_@option.Id" 
+                                               style="display: none;" />
+                                        <label for="option_@option.Id" class="mb-0 w-100 cursor-pointer">
+                                            <i class="feather-circle me-2"></i>
+                                            @option.Text
+                                        </label>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else if (question.QuestionType == "TrueFalse")
+                        {
+                            <div class="options-container">
+                                <div class="option-card" onclick="selectOption(this, @question.Id, 'true')">
+                                    <input type="radio" 
+                                           name="answer_@question.Id" 
+                                           value="true" 
+                                           id="true_@question.Id" 
+                                           style="display: none;" />
+                                    <label for="true_@question.Id" class="mb-0 w-100 cursor-pointer">
+                                        <i class="feather-check-circle me-2 text-success"></i>
+                                        @Html.T("صحيح", "True")
+                                    </label>
+                                </div>
+                                <div class="option-card" onclick="selectOption(this, @question.Id, 'false')">
+                                    <input type="radio" 
+                                           name="answer_@question.Id" 
+                                           value="false" 
+                                           id="false_@question.Id" 
+                                           style="display: none;" />
+                                    <label for="false_@question.Id" class="mb-0 w-100 cursor-pointer">
+                                        <i class="feather-x-circle me-2 text-danger"></i>
+                                        @Html.T("خطأ", "False")
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                        else if (question.QuestionType == "ShortAnswer")
+                        {
+                            <div class="mb-3">
+                                <textarea class="form-control" 
+                                          name="answer_@question.Id" 
+                                          rows="4" 
+                                          placeholder="@Html.T("اكتب إجابتك هنا...", "Type your answer here...")"
+                                          onchange="markAsAnswered(@questionNumber)"></textarea>
+                            </div>
+                        }
+                        else if (question.QuestionType == "Essay")
+                        {
+                            <div class="mb-3">
+                                <textarea class="form-control" 
+                                          name="answer_@question.Id" 
+                                          rows="8" 
+                                          placeholder="@Html.T("اكتب إجابتك هنا...", "Type your answer here...")"
+                                          onchange="markAsAnswered(@questionNumber)"></textarea>
+                            </div>
+                        }
+                        else if (question.QuestionType == "FillInTheBlanks" || question.QuestionType == "FillInBlank")
+                        {
+                            <div class="mb-3">
+                                <textarea class="form-control" 
+                                          name="answer_@question.Id" 
+                                          rows="4" 
+                                          placeholder="@Html.T("اكتب إجابتك هنا...", "Type your answer here...")"
+                                          onchange="markAsAnswered(@questionNumber)"></textarea>
+                            </div>
+                        }
+                        else if (question.QuestionType == "FileUpload")
+                        {
+                            <div class="mb-2">
+                                <label class="form-label">@Html.T("رفع ملف", "Upload file")</label>
+                                <input type="file" class="form-control" name="answerFile_@question.Id" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png" />
+                            </div>
+                            <label class="form-label">@Html.T("أو اكتب إجابتك هنا", "Or type your answer here")</label>
+                            <div class="mb-3">
+                                <textarea class="form-control" 
+                                          name="answer_@question.Id" 
+                                          rows="4" 
+                                          placeholder="@Html.T("اكتب إجابتك هنا...", "Type your answer here...")"
+                                          onchange="markAsAnswered(@questionNumber)"></textarea>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="mb-3">
+                                <textarea class="form-control" 
+                                          name="answer_@question.Id" 
+                                          rows="6" 
+                                          placeholder="@Html.T("اكتب إجابتك هنا...", "Type your answer here...")"
+                                          onchange="markAsAnswered(@questionNumber)"></textarea>
+                            </div>
+                        }
+
+                        <!-- Navigation Buttons -->
+                        <div class="d-flex justify-content-between mt-4 pt-3 border-top">
+                            @if (i > 0)
+                            {
+                                <button type="button" class="btn btn-outline-secondary" onclick="previousQuestion()">
+                                    <i class="feather-arrow-right me-2"></i>
+                                    @Html.T("السابق", "Previous")
+                                </button>
+                            }
+                            else
+                            {
+                                <div></div>
+                            }
+                            
+                            @if (i < questions.Count - 1)
+                            {
+                                <button type="button" class="btn btn-primary" onclick="nextQuestion()">
+                                    @Html.T("التالي", "Next")
+                                    <i class="feather-arrow-left ms-2"></i>
+                                </button>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-success" onclick="confirmSubmit()">
+                                    <i class="feather-check-circle me-2"></i>
+                                    @Html.T("إنهاء وتسليم", "Finish and submit")
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </form>
+        </div>
+
+        <!-- Sidebar - Question Navigation -->
+        <div class="col-lg-3">
+            <div class="card stretch stretch-full" style="position: sticky; top: 80px;">
+                <div class="card-header">
+                    <h6 class="fw-bold mb-0">@Html.T("التنقل بين الأسئلة", "Question navigation")</h6>
+                </div>
+                <div class="card-body">
+                    <div class="question-nav" id="questionNav">
+                        @for (int i = 1; i <= questions.Count; i++)
+                        {
+                            <div class="question-nav-btn @(i == 1 ? "current" : "")" 
+                                 id="nav-btn-@i" 
+                                 onclick="goToQuestion(@i)">
+                                @i
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="d-flex align-items-center gap-2 fs-12">
+                        <div class="d-flex align-items-center">
+                            <div style="width: 20px; height: 20px; background: #22c55e; border-radius: 4px;" class="me-1"></div>
+                            @Html.T("مُجاب", "Answered")
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <div style="width: 20px; height: 20px; background: #667eea; border-radius: 4px;" class="me-1"></div>
+                            @Html.T("حالي", "Current")
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    window.__T = window.__T || {};
+    window.__T.TimeUpSubmit = '@Html.Raw(Html.T("انتهى الوقت! سيتم تسليم الاختبار تلقائياً", "Time is up! The quiz will be submitted automatically.").ToString().Replace("'", "\\'"))';
+    window.__T.ConfirmSubmitQuiz = '@Html.Raw(Html.T("هل أنت متأكد من تسليم الاختبار؟", "Are you sure you want to submit the quiz?").ToString().Replace("'", "\\'"))';
+    window.__T.AnsweredQuestions = '@Html.Raw(Html.T("الأسئلة المُجابة:", "Answered questions:").ToString().Replace("'", "\\'"))';
+    window.__T.Of = '@Html.Raw(Html.T("من", "of").ToString().Replace("'", "\\'"))';
+    window.__T.WarningUnanswered = '@Html.Raw(Html.T("تحذير: لديك", "Warning: You have").ToString().Replace("'", "\\'"))';
+    window.__T.QuestionNotAnswered = '@Html.Raw(Html.T("سؤال لم تجب عليه!", "question(s) not answered!").ToString().Replace("'", "\\'"))';
+    let currentQuestion = 1;
+    const totalQuestions = @questions.Count;
+    let timeRemaining = @timeRemaining * 60; // Convert to seconds
+    let timerInterval;
+
+    // Timer
+    @if (timeRemaining > 0)
+    {
+        @:function startTimer() {
+        @:    timerInterval = setInterval(function() {
+        @:        timeRemaining--;
+        @:        updateTimerDisplay();
+        @:        
+        @:        if (timeRemaining @Html.Raw("<=") 0) {
+        @:            clearInterval(timerInterval);
+        @:            alert((window.__T && window.__T.TimeUpSubmit) || 'Time is up! The quiz will be submitted automatically.');
+        @:            document.getElementById('quizForm').submit();
+        @:        }
+        @:    }, 1000);
+        @:}
+
+        @:function updateTimerDisplay() {
+        @:    const minutes = Math.floor(timeRemaining / 60);
+        @:    const seconds = timeRemaining % 60;
+        @:    const display = minutes + ':' + (seconds @Html.Raw("<") 10 ? '0' : '') + seconds;
+        @:    document.getElementById('timeDisplay').textContent = display;
+        @:    
+        @:    const timer = document.getElementById('timer');
+        @:    if (timeRemaining @Html.Raw("<=") 60) {
+        @:        timer.classList.add('danger');
+        @:    } else if (timeRemaining @Html.Raw("<=") 300) {
+        @:        timer.classList.add('warning');
+        @:    }
+        @:}
+
+        @:startTimer();
+    }
+
+    // Question Navigation
+    function selectOption(element, questionId, optionId) {
+        // Remove selected class from siblings
+        const siblings = element.parentElement.querySelectorAll('.option-card');
+        siblings.forEach(sib => sib.classList.remove('selected'));
+        
+        // Add selected class to clicked option
+        element.classList.add('selected');
+        
+        // Mark question as answered
+        markAsAnswered(currentQuestion);
+    }
+
+    function markAsAnswered(questionNum) {
+        const navBtn = document.getElementById('nav-btn-' + questionNum);
+        if (!navBtn.classList.contains('current')) {
+            navBtn.classList.add('answered');
+        }
+        updateAnsweredCount();
+    }
+
+    function updateAnsweredCount() {
+        const answered = document.querySelectorAll('.question-nav-btn.answered').length;
+        document.getElementById('answeredCount').textContent = answered;
+    }
+
+    function goToQuestion(questionNum) {
+        // Hide current question
+        document.getElementById('question-' + currentQuestion).style.display = 'none';
+        
+        // Remove current class from current nav button
+        document.getElementById('nav-btn-' + currentQuestion).classList.remove('current');
+        
+        // Show target question
+        document.getElementById('question-' + questionNum).style.display = 'block';
+        
+        // Add current class to target nav button
+        const targetBtn = document.getElementById('nav-btn-' + questionNum);
+        targetBtn.classList.add('current');
+        targetBtn.classList.remove('answered');
+        
+        // Update current question
+        currentQuestion = questionNum;
+        document.getElementById('currentQuestionNumber').textContent = currentQuestion;
+        
+        // Scroll to top
+        window.scrollTo(0, 0);
+    }
+
+    function nextQuestion() {
+        if (currentQuestion < totalQuestions) {
+            goToQuestion(currentQuestion + 1);
+        }
+    }
+
+    function previousQuestion() {
+        if (currentQuestion > 1) {
+            goToQuestion(currentQuestion - 1);
+        }
+    }
+
+    function confirmSubmit() {
+        const answered = document.querySelectorAll('.question-nav-btn.answered').length + 1; // +1 for current
+        const unanswered = totalQuestions - answered;
+        
+        var T = window.__T || {};
+        let message = (T.ConfirmSubmitQuiz || 'Are you sure you want to submit the quiz?') + '\n\n';
+        message += (T.AnsweredQuestions || 'Answered questions:') + ' ' + answered + ' ' + (T.Of || 'of') + ' ' + totalQuestions;
+        
+        if (unanswered > 0) {
+            message += '\n\n' + (T.WarningUnanswered || 'Warning: You have') + ' ' + unanswered + ' ' + (T.QuestionNotAnswered || 'question(s) not answered!');
+        }
+        
+        if (confirm(message)) {
+            document.getElementById('quizForm').submit();
+        }
+    }
+
+    // Prevent accidental page leave
+    window.addEventListener('beforeunload', function (e) {
+        e.preventDefault();
+        e.returnValue = '';
+    });
+
+    // Auto-save at configured interval
+    setInterval(function() {
+        // Implementation for auto-save draft
+        console.log('Auto-saving...');
+    }, @autoSaveIntervalMs);
+</script>
+
+<script src="~/js/proctoring-engine.js"></script>
+<script>
+    // Proctoring Integration
+    (function() {
+        // Check if proctoring is required - look for data attribute or hidden field
+        const requiresProctoring = document.getElementById('requiresProctoring')?.value === 'true';
+
+        if (!requiresProctoring) return;
+
+        let proctoringEngine = null;
+        let proctoringSessionId = null;
+        const quizAttemptId = document.getElementById('quizAttemptId')?.value;
+        const antiForgeryToken = document.querySelector('[name="__RequestVerificationToken"]')?.value || '';
+
+        // Get proctoring settings from hidden fields or data attributes
+        const settings = {
+            preventTabSwitch: document.getElementById('procPreventTabSwitch')?.value === 'true',
+            preventCopyPaste: document.getElementById('procPreventCopyPaste')?.value === 'true',
+            disableRightClick: document.getElementById('procDisableRightClick')?.value === 'true',
+            requireFullscreen: document.getElementById('procRequireFullscreen')?.value === 'true',
+            requireWebcam: document.getElementById('procRequireWebcam')?.value === 'true',
+            captureScreenshots: document.getElementById('procCaptureScreenshots')?.value === 'true',
+            screenshotIntervalSeconds: parseInt(document.getElementById('procScreenshotInterval')?.value) || 60,
+            maxWarnings: parseInt(document.getElementById('procMaxWarnings')?.value) || 3,
+            autoTerminate: document.getElementById('procAutoTerminate')?.value === 'true'
+        };
+
+        async function startProctoring() {
+            try {
+                // Start proctoring session on server
+                const response = await fetch('/Student/Quizzes/StartProctoringSession', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': antiForgeryToken,
+                        'RequestVerificationToken': antiForgeryToken
+                    },
+                    body: JSON.stringify({
+                        quizAttemptId: parseInt(quizAttemptId),
+                        browserInfo: navigator.userAgent,
+                        ipAddress: '',
+                        screenResolution: `${screen.width}x${screen.height}`
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    proctoringSessionId = result.sessionId;
+
+                    // Initialize and start the engine
+                    proctoringEngine = new ProctoringEngine({
+                        ...settings,
+                        sessionId: proctoringSessionId,
+                        onMaxWarnings: function() {
+                            // Auto-submit the quiz
+                            autoSubmitQuiz();
+                        }
+                    });
+
+                    await proctoringEngine.initialize(proctoringSessionId);
+                    console.log('Proctoring started with session:', proctoringSessionId);
+                }
+            } catch (error) {
+                console.error('Failed to start proctoring:', error);
+            }
+        }
+
+        async function autoSubmitQuiz() {
+            try {
+                await fetch('/Student/Quizzes/AutoSubmit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': antiForgeryToken,
+                        'RequestVerificationToken': antiForgeryToken
+                    },
+                    body: JSON.stringify({
+                        quizAttemptId: parseInt(quizAttemptId),
+                        sessionId: proctoringSessionId,
+                        reason: 'Max warnings exceeded'
+                    })
+                });
+
+                // Redirect to results
+                window.location.href = `/Student/Quizzes/AttemptResults/${quizAttemptId}`;
+            } catch (error) {
+                console.error('Auto-submit failed:', error);
+            }
+        }
+
+        // Start proctoring when page loads
+        startProctoring();
+
+        // End proctoring on page unload
+        window.addEventListener('beforeunload', function() {
+            if (proctoringEngine) {
+                proctoringEngine.destroy();
+            }
+            if (proctoringSessionId) {
+                // Use sendBeacon for reliable delivery
+                const data = JSON.stringify({ sessionId: proctoringSessionId });
+                navigator.sendBeacon('/Student/Quizzes/EndProctoringSession',
+                    new Blob([data], { type: 'application/json' }));
+            }
+        });
+
+        // Also intercept quiz submit button to end proctoring
+        const submitBtn = document.querySelector('[data-submit-quiz], #submitQuizBtn, form[action*="Submit"] button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.addEventListener('click', function() {
+                if (proctoringEngine) {
+                    proctoringEngine.destroy();
+                }
+            });
+        }
+    })();
+</script>
+}
+

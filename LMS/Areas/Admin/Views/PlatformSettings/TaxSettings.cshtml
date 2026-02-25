@@ -1,0 +1,358 @@
+@model IEnumerable<LMS.Domain.Entities.Settings.TaxSetting>
+
+@{
+    ViewData["Title"] = Html.T("إعدادات الضرائب", "Tax Settings");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("إعدادات المنصة", "Platform Settings"), Url.Action("Index", "PlatformSettings")),
+        (Html.T("إعدادات الضرائب", "Tax Settings"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إضافة إعدادات ضريبة", "Add tax settings"), "feather-plus", Url.Action("Create", "TaxSettings"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .tax-rate-badge {
+            font-size: 1.1rem;
+            padding: 0.5rem 1rem;
+        }
+        .settings-card {
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        .settings-card:hover {
+            border-color: var(--bs-primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .country-flag {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Statistics Overview -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("إجمالي الإعدادات", "Total settings")</p>
+                            <h3 class="fw-bold mb-0">@Model.Count()</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                            <i class="feather-file-text"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("إعدادات نشطة", "Active settings")</p>
+                            <h3 class="fw-bold mb-0 text-success">@Model.Count(t => t.IsEnabled)</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("معطلة", "Disabled")</p>
+                            <h3 class="fw-bold mb-0 text-warning">@Model.Count(t => !t.IsEnabled)</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-warning text-warning">
+                            <i class="feather-x-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <p class="text-muted mb-2">@Html.T("متوسط النسبة", "Average rate")</p>
+                            <h3 class="fw-bold mb-0 text-info">@(Model.Any() ? Model.Average(t => t.TaxRate).ToString("F1") : "0.0")%</h3>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-info text-info">
+                            <i class="feather-percent"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!Model.Any())
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                    <i class="feather-inbox" style="font-size: 3rem;"></i>
+                </div>
+                <h4 class="fw-bold mb-2">@Html.T("لا توجد إعدادات ضريبية", "No tax settings")</h4>
+                <p class="text-muted mb-4">@Html.T("ابدأ بإضافة إعدادات الضرائب للدول المختلفة", "Start by adding tax settings for different countries")</p>
+                <a asp-area="Admin" asp-controller="TaxSettings" asp-action="Create" class="btn btn-primary">
+                    <i class="feather-plus me-2"></i>@Html.T("إضافة إعدادات ضريبة", "Add tax settings")
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- Tax Settings List -->
+        <div class="row">
+            @foreach (var tax in Model.OrderBy(t => t.Country).ThenBy(t => t.Name))
+            {
+                <div class="col-lg-6 col-md-12">
+                    <div class="card settings-card stretch stretch-full mb-4">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start justify-content-between mb-3">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-text avatar-lg @(tax.IsEnabled ? "bg-soft-success text-success" : "bg-soft-secondary text-secondary")">
+                                        <i class="feather-percent"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="fw-bold mb-1">@tax.Name</h5>
+                                        <div class="d-flex align-items-center gap-2">
+                                            @if (!string.IsNullOrEmpty(tax.Country))
+                                            {
+                                                <span class="badge bg-soft-primary text-primary">
+                                                    <i class="feather-map-pin me-1"></i>@tax.Country
+                                                </span>
+                                            }
+                                            @if (!string.IsNullOrEmpty(tax.Region))
+                                            {
+                                                <span class="badge bg-soft-info text-info">@tax.Region</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="dropdown">
+                                    <a href="javascript:void(0)" data-bs-toggle="dropdown" class="avatar-text avatar-sm" data-bs-offset="25,25">
+                                        <i class="feather-more-vertical"></i>
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Edit", "TaxSettings", new { area = "Admin", id = tax.Id })">
+                                                <i class="feather-edit me-3"></i>
+                                                <span>@Html.T("تعديل", "Edit")</span>
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form asp-area="Admin" asp-controller="TaxSettings" asp-action="Delete" asp-route-id="@tax.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذه الإعدادات؟", "Are you sure you want to delete this setting?").ToString().Replace("'", "\\'"))')">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="dropdown-item text-danger">
+                                                    <i class="feather-trash-2 me-3"></i>
+                                                    <span>@Html.T("حذف", "Delete")</span>
+                                                </button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <!-- Tax Rate Display -->
+                            <div class="text-center py-3 mb-3 bg-soft-primary rounded">
+                                <span class="tax-rate-badge badge bg-primary">
+                                    <i class="feather-percent me-1"></i>
+                                    @tax.TaxRate.ToString("F2")%
+                                </span>
+                                <p class="text-muted small mb-0 mt-2">@tax.TaxType</p>
+                            </div>
+
+                            <!-- Tax Details -->
+                            <div class="row g-3 mb-3">
+                                <div class="col-6">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="feather-hash text-muted"></i>
+                                        <div>
+                                            <p class="text-muted small mb-0">@Html.T("رمز الضريبة", "Tax code")</p>
+                                            <p class="fw-semibold mb-0">@(tax.TaxCode ?? "غير محدد")</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="feather-calendar text-muted"></i>
+                                        <div>
+                                            <p class="text-muted small mb-0">@Html.T("تاريخ السريان", "Effective date")</p>
+                                            <p class="fw-semibold mb-0">@(tax.EffectiveDate?.ToString("yyyy/MM/dd") ?? "فوري")</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(tax.Description))
+                            {
+                                <div class="alert alert-light border mb-3">
+                                    <small>@tax.Description</small>
+                                </div>
+                            }
+
+                            <!-- Status and Actions -->
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" @(tax.IsEnabled ? "checked" : "") disabled>
+                                        <label class="form-check-label small">
+                                            @(tax.IsEnabled ? "مفعلة" : "معطلة")
+                                        </label>
+                                    </div>
+                                    @if (tax.ApplyToPrice)
+                                    {
+                                        <span class="badge bg-soft-success text-success">
+                                            <i class="feather-check me-1"></i>تطبق على الأسعار
+                                        </span>
+                                    }
+                                </div>
+                                <small class="text-muted">
+                                    <i class="feather-clock me-1"></i>
+                                    @tax.CreatedAt.ToString("dd/MM/yyyy")
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Detailed Table View (Optional - Can be toggled) -->
+        <div class="card mt-4" id="tableView" style="display: none;">
+            <div class="card-header">
+                <h5 class="card-title mb-0">@Html.T("عرض تفصيلي - جدول", "Detailed view - Table")</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>@Html.T("الاسم", "Name")</th>
+                                <th>@Html.T("الدولة/المنطقة", "Country/Region")</th>
+                                <th>@Html.T("نوع الضريبة", "Tax type")</th>
+                                <th>@Html.T("رمز الضريبة", "Tax code")</th>
+                                <th>@Html.T("نسبة الضريبة", "Tax rate")</th>
+                                <th>@Html.T("تاريخ السريان", "Effective date")</th>
+                                <th>@Html.T("الحالة", "Status")</th>
+                                <th>@Html.T("الإجراءات", "Actions")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var tax in Model.OrderBy(t => t.Country).ThenBy(t => t.Name))
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">@tax.Name</div>
+                                        @if (!string.IsNullOrEmpty(tax.Description))
+                                        {
+                                            <small class="text-muted">@tax.Description</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(tax.Country))
+                                        {
+                                            <div>@tax.Country</div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(tax.Region))
+                                        {
+                                            <small class="text-muted">@tax.Region</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-soft-info text-info">@tax.TaxType</span>
+                                    </td>
+                                    <td>@(tax.TaxCode ?? "-")</td>
+                                    <td>
+                                        <span class="badge bg-primary">@tax.TaxRate.ToString("F2")%</span>
+                                    </td>
+                                    <td>@(tax.EffectiveDate?.ToString("yyyy/MM/dd") ?? "فوري")</td>
+                                    <td>
+                                        @if (tax.IsEnabled)
+                                        {
+                                            <span class="badge bg-soft-success text-success">
+                                                <i class="feather-check me-1"></i>مفعلة
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-soft-secondary text-secondary">
+                                                <i class="feather-x me-1"></i>معطلة
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="hstack gap-2">
+                                            <a href="@Url.Action("Edit", "TaxSettings", new { area = "Admin", id = tax.Id })" class="avatar-text avatar-sm" title="@Html.T("تعديل", "Edit")">
+                                                <i class="feather-edit"></i>
+                                            </a>
+                                            <form asp-area="Admin" asp-controller="TaxSettings" asp-action="Delete" asp-route-id="@tax.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذه الإعدادات؟", "Are you sure you want to delete this setting?").ToString().Replace("'", "\\'"))')">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="avatar-text avatar-sm text-danger" title="@Html.T("حذف", "Delete")">
+                                                    <i class="feather-trash-2"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- View Toggle Button -->
+    @if (Model.Any())
+    {
+        <div class="text-center mt-4">
+            <button class="btn btn-light" id="toggleViewBtn" onclick="toggleView()">
+                <i class="feather-list me-2"></i>
+                <span id="viewBtnText">@Html.T("عرض الجدول", "View table")</span>
+            </button>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        function toggleView() {
+            const tableView = document.getElementById('tableView');
+            const btnText = document.getElementById('viewBtnText');
+            
+            if (tableView.style.display === 'none') {
+                tableView.style.display = 'block';
+                btnText.textContent = 'عرض البطاقات';
+            } else {
+                tableView.style.display = 'none';
+                btnText.textContent = 'عرض الجدول';
+            }
+        }
+    </script>
+}
+

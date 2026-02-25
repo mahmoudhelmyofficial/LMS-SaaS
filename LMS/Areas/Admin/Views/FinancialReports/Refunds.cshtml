@@ -1,0 +1,321 @@
+@model LMS.Services.RefundReport
+@{
+    ViewData["Title"] = Html.T("تقرير المبالغ المستردة", "Refunds report");
+    ViewData["ActiveMenu"] = "FinancialReports";
+}
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <nav aria-label="@Html.T("مسار التنقل", "Breadcrumb")">
+                        <ol class="breadcrumb mb-2">
+                            <li class="breadcrumb-item"><a asp-action="Index">@Html.T("التقارير المالية", "Financial reports")</a></li>
+                            <li class="breadcrumb-item active">@Html.T("المبالغ المستردة", "Refunds")</li>
+                        </ol>
+                    </nav>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-undo text-primary me-2"></i>
+                        @Html.T("تقرير المبالغ المستردة", "Refunds report")
+                    </h1>
+                </div>
+                <a asp-controller="Refunds" asp-action="Index" class="btn btn-outline-primary">
+                    <i class="fas fa-list me-1"></i>
+                    @Html.T("طلبات الاسترداد", "Refund requests")
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm bg-danger text-white">
+                <div class="card-body">
+                    <h6 class="text-white-50 mb-2">@Html.T("إجمالي المبالغ المستردة", "Total refunds")</h6>
+                    <h3 class="mb-0">@Model.TotalRefundedAmount.ToString("N0") ج.م</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">@Html.T("عدد طلبات الاسترداد", "Number of refund requests")</h6>
+                    <h3 class="text-info mb-0">@Model.TotalRefundRequests</h3>
+                    <small class="text-muted">@Model.ApprovedRefunds موافق عليها</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">@Html.T("نسبة الاسترداد", "Refund rate")</h6>
+                    <h3 class="@(Model.RefundRate <= 5 ? "text-success" : Model.RefundRate <= 10 ? "text-warning" : "text-danger") mb-0">
+                        @Model.RefundRate.ToString("F2")%
+                    </h3>
+                    <small class="text-muted">@Html.T("من إجمالي المبيعات", "of total sales")</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <h6 class="text-muted mb-2">@Html.T("متوسط وقت المعالجة", "Average processing time")</h6>
+                    <h3 class="text-primary mb-0">@Model.AverageProcessingTime.ToString("F1")</h3>
+                    <small class="text-muted">@Html.T("يوم", "day(s)")</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Refunds Over Time -->
+        <div class="col-xl-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar text-primary me-2"></i>
+                        المبالغ المستردة عبر الوقت
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="refundsChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Refund Reasons -->
+        <div class="col-xl-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0">
+                        <i class="fas fa-question-circle text-primary me-2"></i>
+                        أسباب الاسترداد
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="reasonsChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <!-- Products with High Refund Rate -->
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                        منتجات ذات نسبة استرداد عالية
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>@Html.T("المنتج", "Product")</th>
+                                    <th class="text-center">@Html.T("المبيعات", "Sales")</th>
+                                    <th class="text-center">@Html.T("الاستردادات", "Refunds")</th>
+                                    <th class="text-end">@Html.T("المبلغ المسترد", "Refund amount")</th>
+                                    <th class="text-center">@Html.T("النسبة", "Rate")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var product in Model.HighRefundProducts.Take(5))
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="text-truncate" style="max-width: 200px;">
+                                                @product.ProductName
+                                            </div>
+                                            <small class="text-muted">@product.InstructorName</small>
+                                        </td>
+                                        <td class="text-center">@product.TotalSales</td>
+                                        <td class="text-center text-danger">@product.RefundCount</td>
+                                        <td class="text-end">@product.RefundedAmount.ToString("N0") ج.م</td>
+                                        <td class="text-center">
+                                            <span class="badge bg-danger">@product.RefundRate.ToString("F1")%</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Refunds -->
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clock text-primary me-2"></i>
+                        أحدث طلبات الاسترداد
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        @foreach (var refund in Model.RecentRefunds.Take(6))
+                        {
+                            var statusBadge = refund.Status switch
+                            {
+                                "Approved" => "bg-success",
+                                "Pending" => "bg-warning text-dark",
+                                "Rejected" => "bg-danger",
+                                "Processing" => "bg-info",
+                                _ => "bg-secondary"
+                            };
+                            var statusText = refund.Status switch
+                            {
+                                "Approved" => "موافق",
+                                "Pending" => "قيد الانتظار",
+                                "Rejected" => "مرفوض",
+                                "Processing" => "قيد المعالجة",
+                                _ => refund.Status
+                            };
+                            
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <div class="fw-bold">@refund.CustomerName</div>
+                                        <div class="text-truncate text-muted small" style="max-width: 250px;">
+                                            @refund.ProductName
+                                        </div>
+                                        <small class="text-muted">@refund.Reason</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge @statusBadge">@statusText</span>
+                                        <div class="fw-bold text-danger mt-1">@refund.Amount.ToString("N0") ج.م</div>
+                                        <small class="text-muted">@refund.Date.ToString("MM/dd")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Refunds Table -->
+    @if (Model.PendingRefunds.Any())
+    {
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i class="fas fa-hourglass-half me-2"></i>
+                    طلبات استرداد تحتاج إلى معالجة (@Model.PendingRefunds.Count)
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>@Html.T("العميل", "Customer")</th>
+                                <th>@Html.T("المنتج", "Product")</th>
+                                <th>@Html.T("السبب", "Reason")</th>
+                                <th class="text-end">@Html.T("المبلغ", "Amount")</th>
+                                <th class="text-end">@Html.T("تاريخ الطلب", "Request date")</th>
+                                <th class="text-center">@Html.T("الأيام المنتظرة", "Days pending")</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var refund in Model.PendingRefunds)
+                            {
+                                var waitingDays = (DateTime.UtcNow - refund.Date).Days;
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">@refund.CustomerName</div>
+                                        <small class="text-muted">@refund.CustomerEmail</small>
+                                    </td>
+                                    <td class="text-truncate" style="max-width: 200px;">@refund.ProductName</td>
+                                    <td class="text-truncate" style="max-width: 150px;">@refund.Reason</td>
+                                    <td class="text-end fw-bold text-danger">@refund.Amount.ToString("N0") ج.م</td>
+                                    <td class="text-end">@refund.Date.ToString("yyyy/MM/dd")</td>
+                                    <td class="text-center">
+                                        <span class="badge @(waitingDays >= 7 ? "bg-danger" : waitingDays >= 3 ? "bg-warning text-dark" : "bg-info")">
+                                            @waitingDays يوم
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <a asp-controller="Refunds" asp-action="Details" asp-route-id="@refund.Id" 
+                                           class="btn btn-sm btn-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Refunds Over Time Chart
+    new Chart(document.getElementById('refundsChart'), {
+        type: 'bar',
+        data: {
+            labels: [@Html.Raw(string.Join(",", Model.RefundsOverTime.Select(r => $"'{r.Period}'")))],
+            datasets: [
+                {
+                    label: 'عدد الاستردادات',
+                    data: [@string.Join(",", Model.RefundsOverTime.Select(r => r.Count))],
+                    backgroundColor: '#dc3545',
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'المبلغ المسترد',
+                    data: [@string.Join(",", Model.RefundsOverTime.Select(r => r.Amount))],
+                    type: 'line',
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'transparent',
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            scales: {
+                y: { position: 'left', title: { display: true, text: 'العدد' } },
+                y1: { 
+                    position: 'right', 
+                    title: { display: true, text: 'المبلغ (ج.م)' },
+                    grid: { drawOnChartArea: false }
+                }
+            }
+        }
+    });
+
+    // Reasons Chart
+    new Chart(document.getElementById('reasonsChart'), {
+        type: 'pie',
+        data: {
+            labels: [@Html.Raw(string.Join(",", Model.RefundReasons.Select(r => $"'{r.Reason}'")))],
+            datasets: [{
+                data: [@string.Join(",", Model.RefundReasons.Select(r => r.Count))],
+                backgroundColor: ['#dc3545', '#ffc107', '#0dcaf0', '#6f42c1', '#fd7e14', '#20c997']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } }
+        }
+    });
+</script>
+}
+

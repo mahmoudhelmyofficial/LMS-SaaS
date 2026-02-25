@@ -1,0 +1,470 @@
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("مراقبة النظام", "System monitoring");
+    Layout = "~/Areas/Admin/Views/Shared/_AdminLayout.cshtml";
+    
+    // Load UI settings
+    var monitoringRefreshInterval = await PlatformSettings.GetIntSettingAsync("UI.MonitoringRefreshIntervalMs", 30000);
+}
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-heartbeat text-danger me-2"></i>
+                @Html.T("مراقبة النظام", "System monitoring")
+            </h1>
+            <p class="text-muted mb-0">@Html.T("مراقبة شاملة لصحة النظام والأداء", "Comprehensive system health and performance monitoring")</p>
+        </div>
+        <button class="btn btn-primary" onclick="refreshAll()">
+            <i class="fas fa-sync-alt me-2"></i>
+            @Html.T("تحديث", "Refresh")
+        </button>
+    </div>
+
+    <!-- Status Cards -->
+    <div class="row mb-4" id="statusCards">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="rounded-circle bg-success bg-opacity-10 p-3">
+                                <i class="fas fa-server text-success fa-2x"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">@Html.T("حالة النظام", "System status")</h6>
+                            <h4 class="mb-0" id="systemStatus">
+                                <span class="spinner-border spinner-border-sm"></span>
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="rounded-circle bg-primary bg-opacity-10 p-3">
+                                <i class="fas fa-database text-primary fa-2x"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">@Html.T("قاعدة البيانات", "Database")</h6>
+                            <h4 class="mb-0" id="dbStatus">
+                                <span class="spinner-border spinner-border-sm"></span>
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="rounded-circle bg-warning bg-opacity-10 p-3">
+                                <i class="fas fa-tachometer-alt text-warning fa-2x"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">@Html.T("متوسط الاستجابة", "Avg. response")</h6>
+                            <h4 class="mb-0" id="avgResponse">
+                                <span class="spinner-border spinner-border-sm"></span>
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="rounded-circle bg-info bg-opacity-10 p-3">
+                                <i class="fas fa-check-circle text-info fa-2x"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h6 class="text-muted mb-1">@Html.T("نسبة النجاح", "Success rate")</h6>
+                            <h4 class="mb-0" id="successRate">
+                                <span class="spinner-border spinner-border-sm"></span>
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Data Integrity -->
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0">
+                    <h5 class="mb-0">
+                        <i class="fas fa-shield-alt text-primary me-2"></i>
+                        @Html.T("سلامة البيانات", "Data integrity")
+                    </h5>
+                </div>
+                <div class="card-body" id="dataIntegritySection">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">@Html.T("جاري التحميل...", "Loading...")</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-white border-0">
+                    <button class="btn btn-outline-primary btn-sm" onclick="fixDataIssues(true)">
+                        <i class="fas fa-wrench me-1"></i>
+                        @Html.T("فحص الإصلاحات (معاينة)", "Preview fixes")
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="fixDataIssues(false)">
+                        <i class="fas fa-tools me-1"></i>
+                        @Html.T("تطبيق الإصلاحات", "Apply fixes")
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line text-success me-2"></i>
+                        @Html.T("مقاييس الأداء", "Performance metrics")
+                    </h5>
+                </div>
+                <div class="card-body" id="performanceSection">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">@Html.T("جاري التحميل...", "Loading...")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slow Operations -->
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clock text-warning me-2"></i>
+                        @Html.T("العمليات البطيئة", "Slow operations")
+                    </h5>
+                </div>
+                <div class="card-body" id="slowOpsSection">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">@Html.T("جاري التحميل...", "Loading...")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Logs -->
+        <div class="col-lg-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-alt text-info me-2"></i>
+                        @Html.T("السجلات الأخيرة", "Recent logs")
+                    </h5>
+                </div>
+                <div class="card-body" id="logsSection" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">@Html.T("جاري التحميل...", "Loading...")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    var _monT = {
+        healthy: '@Html.Raw(Html.T("سليم", "Healthy").Replace("'", "\\'"))',
+        needsAttention: '@Html.Raw(Html.T("يتطلب انتباه", "Needs attention").Replace("'", "\\'"))',
+        connected: '@Html.Raw(Html.T("متصل", "Connected").Replace("'", "\\'"))',
+        issues: '@Html.Raw(Html.T("مشاكل", "Issues").Replace("'", "\\'"))',
+        ms: '@Html.Raw(Html.T("مللي ثانية", "ms").Replace("'", "\\'"))',
+        check: '@Html.Raw(Html.T("الفحص", "Check").Replace("'", "\\'"))',
+        count: '@Html.Raw(Html.T("العدد", "Count").Replace("'", "\\'"))',
+        status: '@Html.Raw(Html.T("الحالة", "Status").Replace("'", "\\'"))',
+        orphanedEnrollments: '@Html.Raw(Html.T("تسجيلات يتيمة", "Orphaned enrollments").Replace("'", "\\'"))',
+        orphanedLessons: '@Html.Raw(Html.T("دروس يتيمة", "Orphaned lessons").Replace("'", "\\'"))',
+        orphanedModules: '@Html.Raw(Html.T("وحدات يتيمة", "Orphaned modules").Replace("'", "\\'"))',
+        orphanedProgress: '@Html.Raw(Html.T("تقدم يتيم", "Orphaned progress").Replace("'", "\\'"))',
+        coursesWithoutContent: '@Html.Raw(Html.T("دورات بدون محتوى", "Courses without content").Replace("'", "\\'"))',
+        usersWithoutRoles: '@Html.Raw(Html.T("مستخدمين بدون أدوار", "Users without roles").Replace("'", "\\'"))',
+        requiresFix: '@Html.Raw(Html.T("يتطلب إصلاح", "Requires fix").Replace("'", "\\'"))',
+        allChecksHealthy: '@Html.Raw(Html.T("جميع الفحوصات سليمة", "All checks healthy").Replace("'", "\\'"))',
+        dataIntegrityLoadFailed: '@Html.Raw(Html.T("فشل تحميل بيانات سلامة البيانات", "Failed to load data integrity").Replace("'", "\\'"))',
+        totalOps: '@Html.Raw(Html.T("إجمالي العمليات", "Total operations").Replace("'", "\\'"))',
+        successful: '@Html.Raw(Html.T("ناجحة", "Successful").Replace("'", "\\'"))',
+        failed: '@Html.Raw(Html.T("فاشلة", "Failed").Replace("'", "\\'"))',
+        min: '@Html.Raw(Html.T("أدنى", "Min").Replace("'", "\\'"))',
+        avg: '@Html.Raw(Html.T("متوسط", "Avg").Replace("'", "\\'"))',
+        max: '@Html.Raw(Html.T("أقصى", "Max").Replace("'", "\\'"))',
+        perfLoadFailed: '@Html.Raw(Html.T("فشل تحميل مقاييس الأداء", "Failed to load performance metrics").Replace("'", "\\'"))',
+        noSlowOps: '@Html.Raw(Html.T("لا توجد عمليات بطيئة", "No slow operations").Replace("'", "\\'"))',
+        slowOpsLoadFailed: '@Html.Raw(Html.T("فشل تحميل العمليات البطيئة", "Failed to load slow operations").Replace("'", "\\'"))',
+        noRecentLogs: '@Html.Raw(Html.T("لا توجد سجلات حديثة", "No recent logs").Replace("'", "\\'"))',
+        logsLoadFailed: '@Html.Raw(Html.T("فشل تحميل السجلات", "Failed to load logs").Replace("'", "\\'"))',
+        confirmApplyFixes: '@Html.Raw(Html.T("هل أنت متأكد من تطبيق الإصلاحات؟", "Are you sure you want to apply fixes?").Replace("'", "\\'"))',
+        previewResults: '@Html.Raw(Html.T("نتائج المعاينة:", "Preview results:").Replace("'", "\\'"))',
+        fixesApplied: '@Html.Raw(Html.T("تم تطبيق الإصلاحات:", "Fixes applied:").Replace("'", "\\'"))',
+        progressRecords: '@Html.Raw(Html.T("سجلات التقدم", "Progress records").Replace("'", "\\'"))',
+        enrollmentRecords: '@Html.Raw(Html.T("سجلات التسجيل", "Enrollment records").Replace("'", "\\'"))',
+        courseRecords: '@Html.Raw(Html.T("سجلات الدورات", "Course records").Replace("'", "\\'"))',
+        fixExecutionFailed: '@Html.Raw(Html.T("فشل في تنفيذ الإصلاحات", "Failed to execute fixes").Replace("'", "\\'"))',
+        momentsAgo: '@Html.Raw(Html.T("منذ لحظات", "Moments ago").Replace("'", "\\'"))',
+        minAgoFmt: '@Html.Raw(Html.T("منذ {0} دقيقة", "{0} min ago").Replace("'", "\\'").Replace("{0}", "__0__"))',
+        hourAgoFmt: '@Html.Raw(Html.T("منذ {0} ساعة", "{0} hr ago").Replace("'", "\\'").Replace("{0}", "__0__"))',
+        dayAgoFmt: '@Html.Raw(Html.T("منذ {0} يوم", "{0} day(s) ago").Replace("'", "\\'").Replace("{0}", "__0__"))'
+    };
+    document.addEventListener('DOMContentLoaded', function() {
+        refreshAll();
+        // Auto-refresh based on settings
+        setInterval(refreshAll, @monitoringRefreshInterval);
+    });
+
+    async function refreshAll() {
+        await Promise.all([
+            loadOverview(),
+            loadDataIntegrity(),
+            loadPerformance(),
+            loadSlowOps(),
+            loadLogs()
+        ]);
+    }
+
+    async function loadOverview() {
+        try {
+            const response = await fetch('/api/admin/monitoring/overview');
+            const data = await response.json();
+            
+            document.getElementById('systemStatus').innerHTML = 
+                data.status === 'Healthy' 
+                    ? '<span class="badge bg-success">' + _monT.healthy + '</span>'
+                    : '<span class="badge bg-warning">' + _monT.needsAttention + '</span>';
+            
+            document.getElementById('dbStatus').innerHTML = 
+                data.dataIntegrity.isHealthy 
+                    ? '<span class="badge bg-success">' + _monT.connected + '</span>'
+                    : '<span class="badge bg-danger">' + _monT.issues + '</span>';
+            
+            document.getElementById('avgResponse').textContent = 
+                data.performance.averageResponseMs.toFixed(0) + ' ' + _monT.ms;
+            
+            document.getElementById('successRate').textContent = 
+                data.performance.successRate.toFixed(1) + '%';
+        } catch (error) {
+            console.error('Error loading overview:', error);
+        }
+    }
+
+    async function loadDataIntegrity() {
+        try {
+            const response = await fetch('/api/admin/monitoring/data-integrity');
+            const data = await response.json();
+            
+            let html = '<div class="table-responsive"><table class="table table-sm">';
+            html += '<thead><tr><th>' + _monT.check + '</th><th>' + _monT.count + '</th><th>' + _monT.status + '</th></tr></thead><tbody>';
+            
+            const checks = [
+                { name: _monT.orphanedEnrollments, value: data.orphanedEnrollments },
+                { name: _monT.orphanedLessons, value: data.orphanedLessons },
+                { name: _monT.orphanedModules, value: data.orphanedModules },
+                { name: _monT.orphanedProgress, value: data.orphanedProgress },
+                { name: _monT.coursesWithoutContent, value: data.coursesWithoutContent },
+                { name: _monT.usersWithoutRoles, value: data.usersWithoutRoles }
+            ];
+            
+            checks.forEach(check => {
+                const status = check.value === 0 
+                    ? '<span class="badge bg-success">' + _monT.healthy + '</span>'
+                    : '<span class="badge bg-danger">' + _monT.requiresFix + '</span>';
+                html += `<tr><td>${check.name}</td><td>${check.value}</td><td>${status}</td></tr>`;
+            });
+            
+            html += '</tbody></table></div>';
+            
+            if (data.isHealthy) {
+                html += '<div class="alert alert-success mb-0"><i class="fas fa-check-circle me-2"></i>' + _monT.allChecksHealthy + '</div>';
+            }
+            
+            document.getElementById('dataIntegritySection').innerHTML = html;
+        } catch (error) {
+            document.getElementById('dataIntegritySection').innerHTML = 
+                '<div class="alert alert-danger">' + _monT.dataIntegrityLoadFailed + '</div>';
+        }
+    }
+
+    async function loadPerformance() {
+        try {
+            const response = await fetch('/api/admin/monitoring/performance?hours=1');
+            const data = await response.json();
+            
+            let html = `
+                <div class="row text-center">
+                    <div class="col-4">
+                        <h4 class="mb-0">${data.totalOperations}</h4>
+                        <small class="text-muted">${_monT.totalOps}</small>
+                    </div>
+                    <div class="col-4">
+                        <h4 class="mb-0 text-success">${data.successfulOperations}</h4>
+                        <small class="text-muted">${_monT.successful}</small>
+                    </div>
+                    <div class="col-4">
+                        <h4 class="mb-0 text-danger">${data.failedOperations}</h4>
+                        <small class="text-muted">${_monT.failed}</small>
+                    </div>
+                </div>
+                <hr>
+                <div class="row text-center">
+                    <div class="col-3">
+                        <h5 class="mb-0">${data.minResponseTimeMs}ms</h5>
+                        <small class="text-muted">${_monT.min}</small>
+                    </div>
+                    <div class="col-3">
+                        <h5 class="mb-0">${data.averageResponseTimeMs.toFixed(0)}ms</h5>
+                        <small class="text-muted">${_monT.avg}</small>
+                    </div>
+                    <div class="col-3">
+                        <h5 class="mb-0">${data.p95ResponseTimeMs.toFixed(0)}ms</h5>
+                        <small class="text-muted">P95</small>
+                    </div>
+                    <div class="col-3">
+                        <h5 class="mb-0">${data.maxResponseTimeMs}ms</h5>
+                        <small class="text-muted">${_monT.max}</small>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('performanceSection').innerHTML = html;
+        } catch (error) {
+            document.getElementById('performanceSection').innerHTML = 
+                '<div class="alert alert-danger">' + _monT.perfLoadFailed + '</div>';
+        }
+    }
+
+    async function loadSlowOps() {
+        try {
+            const response = await fetch('/api/admin/monitoring/performance/slow?count=10');
+            const data = await response.json();
+            
+            if (data.length === 0) {
+                document.getElementById('slowOpsSection').innerHTML = 
+                    '<div class="alert alert-success mb-0"><i class="fas fa-check-circle me-2"></i>' + _monT.noSlowOps + '</div>';
+                return;
+            }
+            
+            let html = '<div class="list-group list-group-flush">';
+            data.forEach(op => {
+                const timeAgo = formatTimeAgo(new Date(op.timestamp));
+                html += `
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <div>
+                            <strong>${op.operationName}</strong>
+                            <br><small class="text-muted">${timeAgo}</small>
+                        </div>
+                        <span class="badge bg-warning">${op.elapsedMs}ms</span>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            document.getElementById('slowOpsSection').innerHTML = html;
+        } catch (error) {
+            document.getElementById('slowOpsSection').innerHTML = 
+                '<div class="alert alert-danger">' + _monT.slowOpsLoadFailed + '</div>';
+        }
+    }
+
+    async function loadLogs() {
+        try {
+            const response = await fetch('/api/admin/monitoring/logs?count=20');
+            const data = await response.json();
+            
+            if (data.logs.length === 0) {
+                document.getElementById('logsSection').innerHTML = 
+                    '<div class="alert alert-info mb-0">' + _monT.noRecentLogs + '</div>';
+                return;
+            }
+            
+            let html = '';
+            data.logs.forEach(log => {
+                const levelClass = log.level === 'Error' ? 'danger' : 
+                                  log.level === 'Warning' ? 'warning' : 
+                                  log.level === 'Info' ? 'info' : 'secondary';
+                const timeAgo = formatTimeAgo(new Date(log.timestamp));
+                
+                html += `
+                    <div class="border-bottom py-2">
+                        <div class="d-flex justify-content-between">
+                            <span class="badge bg-${levelClass}">${log.level}</span>
+                            <small class="text-muted">${timeAgo}</small>
+                        </div>
+                        <small>${log.message}</small>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('logsSection').innerHTML = html;
+        } catch (error) {
+            document.getElementById('logsSection').innerHTML = 
+                '<div class="alert alert-danger">' + _monT.logsLoadFailed + '</div>';
+        }
+    }
+
+    async function fixDataIssues(dryRun) {
+        if (!dryRun && !confirm(_monT.confirmApplyFixes)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/admin/monitoring/data-integrity/fix?dryRun=${dryRun}`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            
+            let message = dryRun ? _monT.previewResults + '\n' : _monT.fixesApplied + '\n';
+            message += '- ' + _monT.progressRecords + ': ' + data.fixedProgressRecords + '\n';
+            message += '- ' + _monT.enrollmentRecords + ': ' + data.fixedEnrollmentRecords + '\n';
+            message += '- ' + _monT.courseRecords + ': ' + data.fixedCourseRecords;
+            
+            alert(message);
+            
+            if (!dryRun) {
+                await loadDataIntegrity();
+            }
+        } catch (error) {
+            alert(_monT.fixExecutionFailed);
+        }
+    }
+
+    function formatTimeAgo(date) {
+        const seconds = Math.floor((new Date() - date) / 1000);
+        if (seconds < 60) return _monT.momentsAgo;
+        if (seconds < 3600) return _monT.minAgoFmt.replace('__0__', Math.floor(seconds / 60));
+        if (seconds < 86400) return _monT.hourAgoFmt.replace('__0__', Math.floor(seconds / 3600));
+        return _monT.dayAgoFmt.replace('__0__', Math.floor(seconds / 86400));
+    }
+</script>
+}
+

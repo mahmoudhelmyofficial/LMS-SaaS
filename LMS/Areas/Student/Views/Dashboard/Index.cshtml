@@ -1,0 +1,800 @@
+@model LMS.Areas.Student.Controllers.StudentDashboardViewModel
+@inject LMS.Services.Interfaces.ICurrentUserService CurrentUserService
+@inject LMS.Services.Interfaces.IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("لوحة التحكم", "Dashboard");
+    var stats = Model.Stats;
+    var userName = User.Identity?.Name?.Split('@')[0] ?? Html.T("الطالب", "Student");
+    
+    // Dashboard UI settings
+    var dashboardCoursesLimit = await PlatformSettings.GetIntSettingAsync("UI.DashboardItems.Courses", 3);
+    var dashboardDeadlinesLimit = await PlatformSettings.GetIntSettingAsync("UI.DashboardItems.Deadlines", 4);
+    var dashboardAchievementsLimit = await PlatformSettings.GetIntSettingAsync("UI.DashboardItems.Achievements", 3);
+    var dashboardRecommendationsLimit = await PlatformSettings.GetIntSettingAsync("UI.DashboardItems.Recommendations", 3);
+    
+    // Threshold settings
+    var urgentDeadlineDays = await PlatformSettings.GetIntSettingAsync("Threshold.Deadline.UrgentDays", 2);
+    var upcomingDeadlineDays = await PlatformSettings.GetIntSettingAsync("Threshold.Deadline.UpcomingDays", 7);
+    var excellentProgress = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Excellent", 80);
+}
+
+<style>
+    /* Glass Banner Styles - iOS Glassmorphism */
+    .glass-banner {
+        position: relative;
+        border-radius: 20px;
+        padding: 24px 28px;
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        z-index: 1; /* Keep glass banners in normal stacking context */
+    }
+    
+    .glass-banner::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    }
+    
+    .glass-banner:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 40px rgba(0, 74, 173, 0.2);
+    }
+    
+    /* Welcome Banner - Primary Blue Theme */
+    .glass-banner-welcome {
+        background: linear-gradient(135deg, 
+            rgba(0, 74, 173, 0.85) 0%, 
+            rgba(0, 102, 204, 0.75) 50%, 
+            rgba(26, 92, 185, 0.8) 100%);
+        box-shadow: 
+            0 8px 32px rgba(0, 74, 173, 0.25),
+            0 4px 16px rgba(0, 74, 173, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+    
+    .glass-banner-welcome::after {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -20%;
+        width: 60%;
+        height: 200%;
+        background: radial-gradient(ellipse, rgba(255, 255, 255, 0.15) 0%, transparent 60%);
+        pointer-events: none;
+    }
+    
+    /* Alert Banner - Amber/Warning Theme */
+    .glass-banner-alert {
+        background: linear-gradient(135deg, 
+            rgba(245, 158, 11, 0.9) 0%, 
+            rgba(217, 119, 6, 0.85) 50%, 
+            rgba(180, 83, 9, 0.88) 100%);
+        box-shadow: 
+            0 8px 32px rgba(217, 119, 6, 0.25),
+            0 4px 16px rgba(217, 119, 6, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+    
+    .glass-banner-alert::after {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -20%;
+        width: 60%;
+        height: 200%;
+        background: radial-gradient(ellipse, rgba(255, 255, 255, 0.12) 0%, transparent 60%);
+        pointer-events: none;
+    }
+    
+    .glass-banner .banner-icon {
+        width: 64px;
+        height: 64px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        color: white;
+        margin-left: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    }
+    
+    .glass-banner h4,
+    .glass-banner h5 {
+        color: white;
+        font-weight: 700;
+        margin-bottom: 6px;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    
+    .glass-banner p {
+        color: rgba(255, 255, 255, 0.9);
+        margin: 0;
+        font-size: 15px;
+    }
+    
+    .glass-banner .btn-glass {
+        background: rgba(255, 255, 255, 0.25);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        color: white;
+        font-weight: 600;
+        padding: 10px 20px;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .glass-banner .btn-glass:hover {
+        background: rgba(255, 255, 255, 0.35);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        color: white;
+    }
+
+    .stats-card {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        transition: transform 0.3s ease;
+        height: 100%;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+    }
+    
+    .stats-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+    }
+    
+    .stats-icon.primary { background: var(--gradient-primary, linear-gradient(135deg, #004aad 0%, #0066cc 50%, #3385d6 100%)); color: white; }
+    .stats-icon.success { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; }
+    .stats-icon.warning { background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%); color: white; }
+    .stats-icon.info { background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%); color: white; }
+    
+    .stats-number { font-size: 32px; font-weight: 700; margin: 12px 0 4px; color: #1f2937; }
+    .stats-label { color: #6b7280; font-size: 14px; margin-bottom: 8px; }
+    
+    .content-card {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        height: 100%;
+    }
+    
+    .course-card {
+        padding: 16px;
+        border-radius: 8px;
+        background: #f9fafb;
+        margin-bottom: 12px;
+        border-right: 4px solid;
+    }
+    
+    .course-card.active { border-color: var(--primary, #004aad); }
+    .course-card.completed { border-color: var(--success, #059669); }
+    
+    .progress-bar-custom {
+        height: 8px;
+        border-radius: 10px;
+        background: #e5e7eb;
+        overflow: hidden;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        background: var(--gradient-primary, linear-gradient(90deg, #004aad 0%, #336dc5 100%));
+        border-radius: 10px;
+        transition: width 0.3s;
+    }
+    
+    .recommendation-course-card {
+        color: #1e293b !important;
+    }
+    
+    .recommendation-course-card * {
+        color: inherit;
+    }
+    
+    .recommendation-course-card h6,
+    .recommendation-course-card .card-title {
+        color: #1e293b !important;
+    }
+    
+    .recommendation-course-card p,
+    .recommendation-course-card .text-muted {
+        color: #64748b !important;
+    }
+    
+    .recommendation-course-card .btn {
+        color: white !important;
+    }
+    
+    .recommendation-course-card .badge {
+        color: white !important;
+    }
+</style>
+
+<!-- Welcome Section - Glassy Banner -->
+<div class="glass-banner glass-banner-welcome">
+    <div class="d-flex align-items-center">
+        <div class="banner-icon">
+            <i class="feather-smile"></i>
+        </div>
+        <div>
+            <h4>@Html.T("مرحباً بك!", "Welcome!") 🎓</h4>
+            <p>@Html.T("أنت مسجل في", "You are enrolled in") @stats.TotalEnrolledCourses @Html.T("دورات، استمر في التعلم لتحقيق أهدافك!", "courses, keep learning to achieve your goals!")</p>
+        </div>
+    </div>
+</div>
+
+<!-- At-Risk Alerts - Glassy Banner -->
+@if (Model.AtRiskAlerts.Any())
+{
+    <div class="glass-banner glass-banner-alert">
+        <div class="d-flex align-items-center">
+            <div class="banner-icon">
+                <i class="feather-alert-triangle"></i>
+            </div>
+            <div class="flex-grow-1">
+                <h5>@Html.T("تنبيه: بعض الدورات تحتاج انتباهك!", "Alert: Some courses need your attention!")</h5>
+                <p>@Html.T("لديك", "You have") @Model.AtRiskAlerts.Count @Html.T("دورة لم يتم الوصول إليها مؤخراً", "course(s) not accessed recently")</p>
+            </div>
+            <button class="btn-glass" data-bs-toggle="modal" data-bs-target="#atRiskModal">
+                @Html.T("عرض التفاصيل", "View Details")
+            </button>
+        </div>
+    </div>
+}
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-start flex-wrap">
+                <div class="flex-grow-1">
+                    <p class="stats-label">@Html.T("الدورات المسجلة", "Enrolled Courses")</p>
+                    <h2 class="stats-number">@stats.TotalEnrolledCourses</h2>
+                    <small class="text-muted">@stats.ActiveCourses @Html.T("قيد الدراسة", "in progress")</small>
+                </div>
+                <div class="stats-icon primary">
+                    <i class="feather-book-open"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-start flex-wrap">
+                <div class="flex-grow-1">
+                    <p class="stats-label">@Html.T("الدورات المكتملة", "Completed Courses")</p>
+                    <h2 class="stats-number">@stats.CompletedCourses</h2>
+                    <small class="text-muted">@stats.CertificatesEarned @Html.T("شهادات محصلة", "certificates earned")</small>
+                </div>
+                <div class="stats-icon success">
+                    <i class="feather-check-circle"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-start flex-wrap">
+                <div class="flex-grow-1">
+                    <p class="stats-label">@Html.T("ساعات التعلم", "Learning Hours")</p>
+                    <h2 class="stats-number">@((stats.TotalStudyMinutes / 60))</h2>
+                    <small class="text-muted">+@((stats.WeeklyStudyMinutes / 60)) @Html.T("ساعة هذا الأسبوع", "hours this week")</small>
+                </div>
+                <div class="stats-icon warning">
+                    <i class="feather-clock"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-start flex-wrap">
+                <div class="flex-grow-1">
+                    <p class="stats-label">@Html.T("الشارات المحصلة", "Badges Earned")</p>
+                    <h2 class="stats-number">@stats.TotalBadges</h2>
+                    <small class="text-muted">@Html.T("المركز", "Rank") #@stats.GlobalRank @Html.T("عالمياً", "globally")</small>
+                </div>
+                <div class="stats-icon info">
+                    <i class="feather-award"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Continue Learning & Upcoming -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="content-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="mb-0">
+                    <i class="feather-play-circle text-primary me-2"></i>
+                    @Html.T("واصل التعلم", "Continue Learning")
+                </h5>
+            </div>
+            <div class="courses-list">
+                @if (Model.ActiveEnrollments.Any())
+                {
+                    foreach (var enrollment in Model.ActiveEnrollments.Take(dashboardCoursesLimit))
+                    {
+                        var progressColor = enrollment.ProgressPercentage >= excellentProgress ? "success" : "primary";
+                        <div class="course-card active">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <strong>@enrollment.Course.Title</strong>
+                                    <p class="mb-0 text-muted small">
+                                        @enrollment.LessonProgress.Count(lp => lp.IsCompleted) @Html.T("من", "of") @enrollment.Course.TotalLessons @Html.T("درس", "lesson(s)")
+                                    </p>
+                                </div>
+                                <span class="badge bg-@progressColor">@enrollment.ProgressPercentage.ToString("F0")%</span>
+                            </div>
+                            <div class="progress-bar-custom">
+                                <div class="progress-fill" style="width: @enrollment.ProgressPercentage%"></div>
+                            </div>
+                            <a asp-controller="Learning" asp-action="Continue" asp-route-enrollmentId="@enrollment.Id" 
+                               class="btn btn-sm btn-primary mt-2 w-100">@Html.T("متابعة الدرس", "Continue Lesson")</a>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center py-4">
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary mb-3 mx-auto">
+                            <i class="feather-book-open"></i>
+                        </div>
+                        <p class="text-muted mb-3">@Html.T("لم تقم بالتسجيل في أي دورة بعد", "You haven't enrolled in any course yet")</p>
+                        <a asp-controller="Courses" asp-action="Browse" class="btn btn-primary btn-sm">
+                            <i class="feather-search me-2"></i>@Html.T("تصفح الدورات", "Browse Courses")
+                        </a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="content-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="mb-0">
+                    <i class="feather-calendar text-warning me-2"></i>
+                    @Html.T("المهام القادمة", "Upcoming Tasks")
+                </h5>
+                <span class="badge bg-warning">@Model.UpcomingDeadlines.Count @Html.T("مهام", "task(s)")</span>
+            </div>
+            <div class="tasks-list">
+                @if (Model.UpcomingDeadlines.Any())
+                {
+                    foreach (var deadline in Model.UpcomingDeadlines.Take(dashboardDeadlinesLimit))
+                    {
+                        var daysLeft = (deadline.DueDate - DateTime.UtcNow).Days;
+                        var urgencyColor = deadline.IsOverdue ? "danger" : (daysLeft <= urgentDeadlineDays ? "warning" : "info");
+                        var urgencyText = deadline.IsOverdue ? Html.T("متأخر", "Overdue") : (daysLeft <= urgentDeadlineDays ? Html.T("عاجل", "Urgent") : (daysLeft <= upcomingDeadlineDays ? Html.T("قريباً", "Soon") : Html.T("مجدول", "Scheduled")));
+                        var icon = deadline.Type == "Assignment" ? "file-text" : (deadline.Type == "Quiz" ? "edit" : "video");
+                        
+                        <div class="course-card" style="border-color: var(--bs-@urgencyColor);">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="feather-@icon text-@urgencyColor me-2"></i>
+                                    <strong>@deadline.Title</strong>
+                                    <p class="mb-0 text-muted small">
+                                        @if (deadline.IsOverdue)
+                                        {
+                                            <text>@Html.T("كان يستحق", "Was due") @deadline.DueDate.ToString("dd/MM")</text>
+                                        }
+                                        else
+                                        {
+                                            <text>@Html.T("يستحق خلال", "Due in") @daysLeft @(daysLeft == 1 ? Html.T("يوم", "day") : Html.T("أيام", "days"))</text>
+                                        }
+                                    </p>
+                                </div>
+                                <span class="badge bg-@urgencyColor">@urgencyText</span>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center py-4">
+                        <div class="avatar-text avatar-lg bg-soft-success text-success mb-3 mx-auto">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <p class="text-muted">@Html.T("لا توجد مهام قادمة!", "No upcoming tasks!") 🎉</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts & Achievements -->
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="content-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h5 class="mb-0">@Html.T("نشاط التعلم", "Learning Activity")</h5>
+                <div class="btn-group btn-group-sm" id="chartPeriodButtons">
+                    <button class="btn btn-outline-secondary active" data-period="week" onclick="updateActivityChart('week', this)">@Html.T("أسبوع", "Week")</button>
+                    <button class="btn btn-outline-secondary" data-period="month" onclick="updateActivityChart('month', this)">@Html.T("شهر", "Month")</button>
+                    <button class="btn btn-outline-secondary" data-period="year" onclick="updateActivityChart('year', this)">@Html.T("سنة", "Year")</button>
+                </div>
+            </div>
+            @if (!Model.ActivityFeed.Any())
+            {
+                <div class="text-center py-5" id="noActivityState">
+                    <div class="avatar-text avatar-lg bg-soft-info text-info mb-3 mx-auto" style="width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <i class="feather-activity" style="font-size: 24px;"></i>
+                    </div>
+                    <h6 class="text-muted mb-2">@Html.T("لا يوجد نشاط بعد", "No activity yet")</h6>
+                    <p class="text-muted small mb-3">@Html.T("ابدأ التعلم لترى إحصائيات نشاطك هنا", "Start learning to see your activity stats here")</p>
+                    <a asp-controller="Courses" asp-action="Browse" class="btn btn-sm btn-primary">
+                        <i class="feather-search me-1"></i>
+                        @Html.T("تصفح الدورات", "Browse Courses")
+                    </a>
+                </div>
+                <canvas id="activityChart" height="80" style="display: none;"></canvas>
+            }
+            else
+            {
+                <canvas id="activityChart" height="80"></canvas>
+            }
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="content-card">
+            <h5 class="mb-4">
+                <i class="feather-award text-warning me-2"></i>
+                @Html.T("أحدث الإنجازات", "Latest Achievements")
+            </h5>
+            <div class="achievements-list">
+                @if (Model.RecentAchievements.Any())
+                {
+                    foreach (var achievement in Model.RecentAchievements.Take(dashboardAchievementsLimit))
+                    {
+                        var bgColor = achievement.Badge.Rarity switch {
+                            LMS.Domain.Enums.BadgeRarity.Common => "#f3f4f6",
+                            LMS.Domain.Enums.BadgeRarity.Rare => "#dbeafe",
+                            LMS.Domain.Enums.BadgeRarity.Epic => "#fef3c7",
+                            LMS.Domain.Enums.BadgeRarity.Legendary => "#dcfce7",
+                            _ => "#f3f4f6"
+                        };
+                        <div class="d-flex align-items-center mb-3 p-3" style="background: @bgColor; border-radius: 8px;">
+                            <div class="fs-1 me-3">
+                                @(string.IsNullOrEmpty(achievement.Badge.IconUrl) ? "🏆" : "")
+                                @if (!string.IsNullOrEmpty(achievement.Badge.IconUrl))
+                                {
+                                    <img src="@achievement.Badge.IconUrl" alt="@achievement.Badge.Name" style="width: 40px; height: 40px;" />
+                                }
+                            </div>
+                            <div>
+                                <strong>@achievement.Badge.Name</strong>
+                                <p class="mb-0 small text-muted">@achievement.Badge.Description</p>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center py-3">
+                        <p class="text-muted mb-3">@Html.T("ابدأ رحلتك للحصول على الشارات!", "Start your journey to earn badges!")</p>
+                    </div>
+                }
+                <a asp-controller="Gamification" asp-action="Dashboard" class="btn btn-outline-primary w-100">
+                    @Html.T("عرض جميع الإنجازات", "View All Achievements")
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Course Recommendations -->
+@if (Model.Recommendations.Any())
+{
+    <div class="row g-4 mt-4">
+        <div class="col-12">
+            <div class="content-card" style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 50%, #3d7ab5 100%); position: relative; overflow: hidden;">
+                <!-- Background decoration -->
+                <div style="position: absolute; top: -50%; right: -10%; width: 50%; height: 200%; background: radial-gradient(ellipse, rgba(255,255,255,0.08) 0%, transparent 70%); pointer-events: none;"></div>
+                
+                <div class="d-flex align-items-center justify-content-between mb-4 position-relative">
+                    <div>
+                        <h5 class="mb-1" style="color: #ffffff; font-weight: 700;">
+                            <i class="feather-star me-2" style="color: #fbbf24;"></i>
+                            @Html.T("دورات موصى بها لك", "Recommended Courses for You")
+                        </h5>
+                        <p class="mb-0" style="color: rgba(255,255,255,0.8); font-size: 14px;">@Html.T("بناءً على اهتماماتك ومهاراتك", "Based on your interests and skills")</p>
+                    </div>
+                    <a asp-controller="Courses" asp-action="Browse" class="btn btn-light btn-sm" style="font-weight: 600;">
+                        @Html.T("عرض المزيد", "View More")
+                        <i class="feather-arrow-left ms-1"></i>
+                    </a>
+                </div>
+                <div class="row g-3 position-relative">
+                    @foreach (var rec in Model.Recommendations.Take(dashboardRecommendationsLimit))
+                    {
+                        <div class="col-md-4">
+                            <div class="card border-0 recommendation-course-card" style="background: rgba(255,255,255,0.95); border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+                                <div class="card-body">
+                                    <h6 class="mb-2" style="color: #1e293b; font-weight: 600;">@rec.CourseTitle</h6>
+                                    <p class="fs-12 mb-3" style="color: #64748b;">@rec.Reason</p>
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <span class="badge" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white;">@(rec.MatchScore.ToString("F0"))% @Html.T("تطابق", "match")</span>
+                                        <a asp-controller="Courses" asp-action="Details" asp-route-id="@rec.CourseId" class="btn btn-sm" style="background: linear-gradient(135deg, #004aad 0%, #0066cc 100%); color: white; border: none;">
+                                            @Html.T("عرض", "View")
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- At-Risk Courses Modal -->
+<div class="modal fade" id="atRiskModal" tabindex="-1" data-bs-backdrop="false" aria-labelledby="atRiskModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-warning-subtle">
+                <h5 class="modal-title text-warning-emphasis fw-bold" id="atRiskModalLabel">
+                    <i class="feather-alert-triangle me-2 text-warning"></i>
+                    @Html.T("دورات تحتاج انتباهك", "Courses That Need Your Attention")
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@Html.T("إغلاق", "Close")"></button>
+            </div>
+            <div class="modal-body">
+                @if (Model.AtRiskAlerts.Any())
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var alert in Model.AtRiskAlerts)
+                        {
+                            <div class="list-group-item">
+                                <div class="d-flex align-items-start">
+                                    <div class="avatar-text avatar-md bg-soft-danger text-danger me-3">
+                                        <i class="feather-book-open"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">@alert.CourseTitle</h6>
+                                        <p class="text-muted mb-2 fs-12">@alert.Message</p>
+                                        <div class="d-flex gap-2">
+                                            @foreach (var recommendation in alert.Recommendations.Take(3))
+                                            {
+                                                <span class="badge bg-soft-info text-info">@recommendation</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    @if (alert.EnrollmentId > 0)
+                                    {
+                                        <a asp-controller="Courses" asp-action="ResumeLearning" asp-route-enrollmentId="@alert.EnrollmentId" class="btn btn-sm btn-primary">
+                                            @Html.T("متابعة", "Continue")
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <a asp-controller="Courses" asp-action="Index" class="btn btn-sm btn-secondary">
+                                            @Html.T("عرض الدورات", "View Courses")
+                                        </a>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@Html.T("إغلاق", "Close")</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Store all activity data for different periods
+        var allActivityData = {
+            week: @Html.Raw(Json.Serialize(Model.ActivityFeed
+                .Where(a => a.Timestamp >= DateTime.UtcNow.AddDays(-7))
+                .GroupBy(a => a.Timestamp.Date)
+                .Select(g => new { 
+                    date = g.Key.ToString("yyyy-MM-dd"),
+                    count = g.Count()
+                })
+                .OrderBy(x => x.date)
+                .ToList())),
+            month: @Html.Raw(Json.Serialize(Model.ActivityFeed
+                .Where(a => a.Timestamp >= DateTime.UtcNow.AddDays(-30))
+                .GroupBy(a => a.Timestamp.Date)
+                .Select(g => new { 
+                    date = g.Key.ToString("yyyy-MM-dd"),
+                    count = g.Count()
+                })
+                .OrderBy(x => x.date)
+                .ToList())),
+            year: @Html.Raw(Json.Serialize(Model.ActivityFeed
+                .Where(a => a.Timestamp >= DateTime.UtcNow.AddDays(-365))
+                .GroupBy(a => new { Month = a.Timestamp.Month, Year = a.Timestamp.Year })
+                .Select(g => new { 
+                    date = g.Key.Year + "-" + g.Key.Month.ToString("D2"),
+                    count = g.Count()
+                })
+                .OrderBy(x => x.date)
+                .ToList()))
+        };
+
+        var dayLabels = @Html.Raw(Json.Serialize(new[] {
+            Html.T("الأحد", "Sun"), Html.T("الإثنين", "Mon"), Html.T("الثلاثاء", "Tue"), Html.T("الأربعاء", "Wed"),
+            Html.T("الخميس", "Thu"), Html.T("الجمعة", "Fri"), Html.T("السبت", "Sat")
+        }));
+        var monthLabels = @Html.Raw(Json.Serialize(new[] {
+            Html.T("يناير", "Jan"), Html.T("فبراير", "Feb"), Html.T("مارس", "Mar"), Html.T("أبريل", "Apr"),
+            Html.T("مايو", "May"), Html.T("يونيو", "Jun"), Html.T("يوليو", "Jul"), Html.T("أغسطس", "Aug"),
+            Html.T("سبتمبر", "Sep"), Html.T("أكتوبر", "Oct"), Html.T("نوفمبر", "Nov"), Html.T("ديسمبر", "Dec")
+        }));
+        
+        // Activity Chart variable
+        var activityChart = null;
+        
+        // Function to generate chart data based on period
+        function generateChartData(period) {
+            var chartLabels = [];
+            var chartData = [];
+            var activityData = allActivityData[period] || [];
+            
+            if (period === 'week') {
+                // Generate last 7 days
+                for (var i = 6; i >= 0; i--) {
+                    var date = new Date();
+                    date.setDate(date.getDate() - i);
+                    chartLabels.push(dayLabels[date.getDay()]);
+                    
+                    var dateStr = date.toISOString().split('T')[0];
+                    var dataPoint = activityData.find(d => d.date === dateStr);
+                    chartData.push(dataPoint ? dataPoint.count : 0);
+                }
+            } else if (period === 'month') {
+                // Generate last 30 days (grouped by week)
+                for (var i = 4; i >= 0; i--) {
+                    var weekStart = new Date();
+                    weekStart.setDate(weekStart.getDate() - (i * 7));
+                    var weekEnd = new Date(weekStart);
+                    weekEnd.setDate(weekEnd.getDate() + 6);
+                    
+                    chartLabels.push('@Html.Raw(Html.T("أسبوع", "Week").Replace("'", "\\'"))' + ' ' + (5 - i));
+                    
+                    var weekCount = 0;
+                    activityData.forEach(function(d) {
+                        var dDate = new Date(d.date);
+                        if (dDate >= weekStart && dDate <= weekEnd) {
+                            weekCount += d.count;
+                        }
+                    });
+                    chartData.push(weekCount);
+                }
+            } else if (period === 'year') {
+                // Generate last 12 months
+                for (var i = 11; i >= 0; i--) {
+                    var date = new Date();
+                    date.setMonth(date.getMonth() - i);
+                    var monthIndex = date.getMonth();
+                    var year = date.getFullYear();
+                    
+                    chartLabels.push(monthLabels[monthIndex]);
+                    
+                    var monthStr = year + '-' + (monthIndex + 1).toString().padStart(2, '0');
+                    var dataPoint = activityData.find(d => d.date === monthStr);
+                    chartData.push(dataPoint ? dataPoint.count : 0);
+                }
+            }
+            
+            return { labels: chartLabels, data: chartData };
+        }
+        
+        // Function to update chart based on period
+        function updateActivityChart(period, btn) {
+            // Update button states
+            document.querySelectorAll('#chartPeriodButtons button').forEach(function(button) {
+                button.classList.remove('active');
+            });
+            if (btn) btn.classList.add('active');
+            
+            // Get chart data for the period
+            var result = generateChartData(period);
+            
+            // Update chart
+            if (activityChart) {
+                activityChart.data.labels = result.labels;
+                activityChart.data.datasets[0].data = result.data;
+                activityChart.update();
+            }
+        }
+        
+        // Initialize chart on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            var activityCtx = document.getElementById('activityChart');
+            if (!activityCtx) return;
+            
+            var initialData = generateChartData('week');
+            
+            activityChart = new Chart(activityCtx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: initialData.labels,
+                    datasets: [{
+                        label: '@Html.T("نشاطات", "Activities")',
+                        data: initialData.data,
+                        backgroundColor: [
+                            'rgba(0, 74, 173, 0.8)',
+                            'rgba(5, 150, 105, 0.8)',
+                            'rgba(217, 119, 6, 0.8)',
+                            'rgba(2, 132, 199, 0.8)',
+                            'rgba(220, 38, 38, 0.8)',
+                            'rgba(0, 74, 173, 0.6)',
+                            'rgba(51, 109, 197, 0.8)'
+                        ],
+                        borderRadius: 8,
+                        barThickness: 40
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            },
+                            grid: {
+                                borderDash: [5, 5]
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        });
+
+    </script>
+}

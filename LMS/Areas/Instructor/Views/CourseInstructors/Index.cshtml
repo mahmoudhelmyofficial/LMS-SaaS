@@ -1,0 +1,334 @@
+@model IEnumerable<LMS.Domain.Entities.Courses.CourseInstructor>
+
+@{
+    ViewData["Title"] = Html.T("إدارة المدرسين المساعدين", "Co-Instructors Management");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة المدرسين المساعدين للدورة", "View and manage course co-instructors");
+    var course = ViewBag.Course as LMS.Domain.Entities.Courses.Course;
+    var addUrl = Url.Action("Add", new { courseId = course.Id });
+    var courseDetailsUrl = Url.Action("Details", "Courses", new { id = course.Id });
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw($@"
+        <a href='{addUrl}' class='btn btn-primary'>
+            <i class='feather-plus me-2'></i>
+            إضافة مدرس مساعد
+        </a>
+        <a href='{courseDetailsUrl}' class='btn btn-light'>
+            <i class='feather-arrow-right me-2'></i>
+            العودة للدورة
+        </a>
+    ") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Course Info -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-image avatar-xl">
+                            <img src="@(course.ThumbnailUrl ?? "/assets/images/general/placeholder.png")" alt="@course.Title" class="img-fluid">
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-1">@course.Title</h5>
+                            <p class="text-muted mb-0">إدارة المدرسين المساعدين والصلاحيات</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Co-Instructors List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة المدرسين المساعدين", "Co-instructors list")</h5>
+                    <div class="card-header-action">
+                        <span class="badge bg-soft-primary text-primary">@Model.Count() مدرس</span>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var instructor in Model)
+                            {
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-start gap-2">
+                                            <div class="avatar-text avatar-md bg-info text-white flex-shrink-0">
+                                                @(instructor.Instructor?.FullName?.Substring(0, 1).ToUpper() ?? "M")
+                                            </div>
+                                            <div class="min-w-0 flex-grow-1">
+                                                <span class="fw-bold text-break d-block">@instructor.Instructor?.FullName</span>
+                                                <p class="fs-11 text-muted mb-1">@instructor.Instructor?.Email</p>
+                                                @if (instructor.IsPrimaryOwner) { <span class="badge bg-soft-primary text-primary fs-10">@Html.T("مالك رئيسي", "Primary owner")</span> }
+                                                <div class="d-flex flex-wrap gap-2 mt-1">
+                                                    <span class="badge bg-soft-success text-success">@instructor.RevenueSharePercentage%</span>
+                                                    @if (instructor.IsActive) { <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span> }
+                                                    else { <span class="badge bg-soft-secondary text-secondary">@Html.T("معطل", "Inactive")</span> }
+                                                </div>
+                                                @if (!instructor.IsPrimaryOwner)
+                                                {
+                                                    <div class="hstack gap-2 mt-2">
+                                                        <a href="@Url.Action("Edit", new { id = instructor.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-edit"></i></a>
+                                                        <form asp-action="ToggleActive" asp-route-id="@instructor.Id" method="post" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="feather-@(instructor.IsActive ? "eye-off" : "eye")"></i></button>
+                                                        </form>
+                                                        <form asp-action="Remove" asp-route-id="@instructor.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إزالة هذا المدرس المساعد؟", "Are you sure you want to remove this co-instructor?").Replace("'", "\\'"))')">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="feather-trash-2"></i></button>
+                                                        </form>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("المدرس", "Instructor")</th>
+                                            <th>@Html.T("الدور", "Role")</th>
+                                            <th>@Html.T("العنوان المخصص", "Custom title")</th>
+                                            <th>@Html.T("نسبة الأرباح", "Revenue share")</th>
+                                            <th>@Html.T("الصلاحيات", "Permissions")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                            <th>@Html.T("الترتيب", "Order")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var instructor in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-3">
+                                                    <div class="avatar-text avatar-md bg-info text-white">
+                                                        @(instructor.Instructor?.FullName?.Substring(0, 1).ToUpper() ?? "M")
+                                                    </div>
+                                                    <div>
+                                                        <a href="javascript:void(0)" class="fw-bold text-dark">@instructor.Instructor?.FullName</a>
+                                                        <p class="fs-11 text-muted mb-0">@instructor.Instructor?.Email</p>
+                                                        @if (instructor.IsPrimaryOwner)
+                                                        {
+                                                            <span class="badge bg-soft-primary text-primary fs-10">@Html.T("مالك رئيسي", "Primary owner")</span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="fs-13 fw-medium">@(instructor.Role ?? Html.T("مدرس مساعد", "Co-instructor").ToString())</span>
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(instructor.CustomTitle))
+                                                {
+                                                    <span class="fs-12">@instructor.CustomTitle</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted fs-11">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="feather-percent text-success"></i>
+                                                    <span class="fw-bold text-success">@instructor.RevenueSharePercentage%</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    @if (instructor.CanEditContent)
+                                                    {
+                                                        <span class="badge bg-soft-success text-success fs-10" title="@Html.T("تعديل المحتوى", "Edit content")">
+                                                            <i class="feather-edit"></i>
+                                                        </span>
+                                                    }
+                                                    @if (instructor.CanManageStudents)
+                                                    {
+                                                        <span class="badge bg-soft-info text-info fs-10" title="@Html.T("إدارة الطلاب", "Manage students")">
+                                                            <i class="feather-users"></i>
+                                                        </span>
+                                                    }
+                                                    @if (instructor.CanGradeAssignments)
+                                                    {
+                                                        <span class="badge bg-soft-warning text-warning fs-10" title="@Html.T("تقييم الواجبات", "Grade assignments")">
+                                                            <i class="feather-check-square"></i>
+                                                        </span>
+                                                    }
+                                                    @if (instructor.CanHostLiveClasses)
+                                                    {
+                                                        <span class="badge bg-soft-danger text-danger fs-10" title="@Html.T("استضافة البث المباشر", "Host live sessions")">
+                                                            <i class="feather-video"></i>
+                                                        </span>
+                                                    }
+                                                    @if (instructor.CanReplyDiscussions)
+                                                    {
+                                                        <span class="badge bg-soft-primary text-primary fs-10" title="@Html.T("الرد على المناقشات", "Reply to discussions")">
+                                                            <i class="feather-message-circle"></i>
+                                                        </span>
+                                                    }
+                                                    @if (instructor.CanViewAnalytics)
+                                                    {
+                                                        <span class="badge bg-soft-teal text-teal fs-10" title="@Html.T("عرض التحليلات", "View analytics")">
+                                                            <i class="feather-bar-chart-2"></i>
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (instructor.IsActive)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">@Html.T("معطل", "Inactive")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-dark text-dark">@instructor.DisplayOrder</span>
+                                            </td>
+                                            <td>
+                                                @if (!instructor.IsPrimaryOwner)
+                                                {
+                                                    <div class="hstack gap-2 justify-content-end">
+                                                        <a href="@Url.Action("Edit", new { id = instructor.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل الصلاحيات", "Edit permissions")">
+                                                            <i class="feather-edit"></i>
+                                                        </a>
+                                                        <form asp-action="ToggleActive" asp-route-id="@instructor.Id" method="post" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="avatar-text avatar-md border-0 bg-transparent" data-bs-toggle="tooltip" title="@(instructor.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))">
+                                                                <i class="feather-@(instructor.IsActive ? "eye-off" : "eye")"></i>
+                                                            </button>
+                                                        </form>
+                                                        <form asp-action="Remove" asp-route-id="@instructor.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إزالة هذا المدرس المساعد؟", "Are you sure you want to remove this co-instructor?").Replace("'", "\\'"))')">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="avatar-text avatar-md border-0 bg-transparent text-danger" data-bs-toggle="tooltip" title="@Html.T("إزالة", "Remove")">
+                                                                <i class="feather-trash-2"></i>
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted fs-11">-</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-users"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا يوجد مدرسين مساعدين", "No co-instructors yet")</h5>
+                            <p class="text-muted mb-4">@Html.T("يمكنك إضافة مدرسين مساعدين للمساعدة في إدارة الدورة", "You can add co-instructors to help manage the course")</p>
+                            <a href="@Url.Action("Add", new { courseId = course.Id })" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إضافة مدرس مساعد", "Add co-instructor")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Permissions Legend -->
+    @if (Model != null && Model.Any())
+    {
+        <div class="row mt-4">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="card-title">@Html.T("دليل الصلاحيات", "Permissions guide")</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-soft-success text-success">
+                                        <i class="feather-edit"></i>
+                                    </span>
+                                    <span class="fs-12">@Html.T("تعديل المحتوى", "Edit content")</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-soft-info text-info">
+                                        <i class="feather-users"></i>
+                                    </span>
+                                    <span class="fs-12">إدارة الطلاب</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-soft-warning text-warning">
+                                        <i class="feather-check-square"></i>
+                                    </span>
+                                    <span class="fs-12">تقييم الواجبات</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-soft-danger text-danger">
+                                        <i class="feather-video"></i>
+                                    </span>
+                                    <span class="fs-12">استضافة البث المباشر</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-soft-primary text-primary">
+                                        <i class="feather-message-circle"></i>
+                                    </span>
+                                    <span class="fs-12">الرد على المناقشات</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-soft-teal text-teal">
+                                        <i class="feather-bar-chart-2"></i>
+                                    </span>
+                                    <span class="fs-12">@Html.T("عرض التحليلات", "View analytics")</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

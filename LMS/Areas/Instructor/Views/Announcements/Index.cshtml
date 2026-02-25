@@ -1,0 +1,215 @@
+@model IEnumerable<CourseAnnouncement>
+@using LMS.Helpers
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("الإعلانات", "Announcements");
+    ViewData["Subtitle"] = Html.T("إدارة إعلانات دوراتك", "Manage your course announcements");
+    var createUrl = Url.Action("Create");
+    var actionButtonsHtml = "<a href='" + createUrl + "' class='btn btn-primary'><i class='feather-plus me-2'></i>" + Html.T("إعلان جديد", "New Announcement") + "</a>";
+    
+    // Load platform settings
+    var defaultPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Default", 10);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Filter -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <select class="form-select" name="courseId" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                @if (ViewBag.Courses != null)
+                                {
+                                    foreach (var course in ViewBag.Courses)
+                                    {
+                                        var isSelected = ViewBag.CourseId != null && (int)ViewBag.CourseId == (int)course.Id;
+                                        if (isSelected)
+                                        {
+                                            <option value="@course.Id" selected="selected">@course.Title</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@course.Id">@course.Title</option>
+                                        }
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <select class="form-select" name="status" onchange="this.form.submit()">
+                                @{
+                                    var currentStatus = ViewBag.Status as string;
+                                }
+                                <option value="">@Html.T("جميع الحالات", "All statuses")</option>
+                                <option value="Published" selected="@(currentStatus == "Published")">@Html.T("منشور", "Published")</option>
+                                <option value="Draft" selected="@(currentStatus == "Draft")">@Html.T("مسودة", "Draft")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" name="search" placeholder="@Html.T("بحث...", "Search...")" value="@(ViewBag.SearchTerm ?? "")">
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Announcements List -->
+    <div class="row">
+        @if (Model != null && Model.Any())
+        {
+            foreach (var announcement in Model)
+            {
+                <div class="col-lg-12 mb-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start justify-content-between mb-3">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <h5 class="mb-0">@announcement.Title</h5>
+                                        @if (announcement.IsPinned)
+                                        {
+                                            <span class="badge bg-warning">
+                                                <i class="feather-bookmark"></i>
+                                                @Html.T("مثبت", "Pinned")
+                                            </span>
+                                        }
+                                        @if (announcement.IsPublished)
+                                        {
+                                            <span class="badge bg-success">
+                                                <i class="feather-eye"></i>
+                                                @Html.T("منشور", "Published")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">
+                                                <i class="feather-eye-off"></i>
+                                                @Html.T("مسودة", "Draft")
+                                            </span>
+                                        }
+                                    </div>
+                                    <div class="d-flex align-items-center gap-3 text-muted fs-13 mb-3">
+                                        <span>
+                                            <i class="feather-book me-1"></i>
+                                            @announcement.Course?.Title
+                                        </span>
+                                        <span>
+                                            <i class="feather-calendar me-1"></i>
+                                            @announcement.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")
+                                        </span>
+                                        <span>
+                                            <i class="feather-users me-1"></i>
+                                            @announcement.ViewCount مشاهدة
+                                        </span>
+                                    </div>
+                                    <p class="text-muted mb-0">
+                                        @{
+                                            var plainContent = System.Text.RegularExpressions.Regex.Replace(announcement.Content ?? "", "<.*?>", "");
+                                            var truncated = plainContent.Length > 150 ? plainContent.Substring(0, 150) + "..." : plainContent;
+                                        }
+                                        @truncated
+                                    </p>
+                                </div>
+                                <div class="dropdown">
+                                    <button class="btn btn-light btn-sm" type="button" data-bs-toggle="dropdown">
+                                        <i class="feather-more-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Edit", new { id = announcement.Id })">
+                                                <i class="feather-edit me-2"></i>
+                                                تعديل
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <form asp-action="TogglePin" asp-route-id="@announcement.Id" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="dropdown-item border-0 bg-transparent w-100 text-start"
+                                                        onclick="event.stopPropagation(); this.closest('form').submit(); return false;">
+                                                    <i class="feather-bookmark me-2"></i>
+                                                    @(announcement.IsPinned ? "إلغاء التثبيت" : "تثبيت")
+                                                </button>
+                                            </form>
+                                        </li>
+                                        <li>
+                                            <form asp-action="TogglePublish" asp-route-id="@announcement.Id" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="dropdown-item border-0 bg-transparent w-100 text-start">
+                                                    <i class="feather-@(announcement.IsPublished ? "eye-off" : "eye") me-2"></i>
+                                                    @(announcement.IsPublished ? "إلغاء النشر" : "نشر")
+                                                </button>
+                                            </form>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item text-danger" href="javascript:void(0)" 
+                                               onclick="event.stopPropagation(); confirmDelete('@Url.Action("Delete", new { id = announcement.Id })', 'هل أنت متأكد من حذف هذا الإعلان؟')">
+                                                <i class="feather-trash-2 me-2"></i>
+                                                حذف
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <!-- Attachments -->
+                            @if (!string.IsNullOrEmpty(announcement.AttachmentUrl))
+                            {
+                                <div class="border-top pt-3">
+                                    <a href="@announcement.AttachmentUrl" class="d-inline-flex align-items-center gap-2 text-primary" target="_blank">
+                                        <i class="feather-paperclip"></i>
+                                        <span>ملف مرفق</span>
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Pagination -->
+            @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("CurrentPage", ViewBag.CurrentPage ?? 1),
+                ("TotalPages", ViewBag.TotalPages ?? 1),
+                ("TotalItems", ViewBag.TotalItems ?? 0),
+                ("PageSize", ViewBag.PageSize ?? defaultPageSize),
+                ("Action", "Index"),
+                ("Controller", "Announcements")
+            ))
+        }
+        else
+        {
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                            <i class="feather-megaphone"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">@Html.T("لا توجد إعلانات", "No announcements")</h5>
+                        <p class="text-muted mb-4">@Html.T("ابدأ بإنشاء أول إعلان لطلابك", "Start by creating your first announcement for your students")</p>
+                        <a href="@Url.Action("Create")" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إنشاء إعلان", "Create announcement")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@await Html.PartialAsync("_DeleteModal")
+

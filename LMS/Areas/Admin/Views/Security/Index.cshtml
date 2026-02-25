@@ -1,0 +1,185 @@
+@{
+    ViewData["Title"] = Html.T("لوحة الأمان", "Security dashboard");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الأمان", "Security"), null),
+        (Html.T("لوحة التحكم", "Dashboard"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    
+    var securityScore = ViewBag.SecurityScore as int? ?? 0;
+    var isDataEncrypted = ViewBag.IsDataEncrypted as bool? ?? true;
+    var isCsrfEnabled = ViewBag.IsCsrfEnabled as bool? ?? true;
+    var isAuditLogEnabled = ViewBag.IsAuditLogEnabled as bool? ?? true;
+    var isTwoFactorEnforced = ViewBag.IsTwoFactorEnforced as bool? ?? false;
+    var recentEvents = ViewBag.RecentEvents as List<LMS.Domain.Entities.Security.LoginLog>;
+    
+    var scoreLabel = securityScore >= 80 ? Html.T("ممتاز", "Excellent").ToString() : (securityScore >= 60 ? Html.T("جيد", "Good").ToString() : (securityScore >= 40 ? Html.T("متوسط", "Average").ToString() : Html.T("ضعيف", "Weak").ToString()));
+    var scoreColor = securityScore >= 80 ? "#10b981" : (securityScore >= 60 ? "#22c55e" : (securityScore >= 40 ? "#f59e0b" : "#ef4444"));
+}
+
+@section Styles {
+    <style>
+        .security-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .security-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-3px);
+        }
+        .circular-chart {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <!-- Security Score -->
+        <div class="col-lg-12 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-3 text-center">
+                            <div class="position-relative mx-auto" style="width: 150px; height: 150px;">
+                                <svg viewBox="0 0 36 36" class="circular-chart">
+                                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                        fill="none" stroke="#e5e7eb" stroke-width="3"/>
+                                    <path class="circle" stroke-dasharray="@securityScore, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                        fill="none" stroke="@scoreColor" stroke-width="3" stroke-linecap="round"/>
+                                </svg>
+                                <div class="position-absolute top-50 start-50 translate-middle">
+                                    <h2 class="mb-0">@securityScore%</h2>
+                                    <small class="text-muted">@scoreLabel</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-9">
+                            <h4 class="mb-3">@Html.T("درجة الأمان", "Security score")</h4>
+                            <div class="row">
+                                <div class="col-md-6 mb-2">
+                                    <i class="feather-@(isDataEncrypted ? "check-circle text-success" : "x-circle text-danger") me-2"></i>
+                                    <span>@(isDataEncrypted ? Html.T("تشفير البيانات مفعل", "Data encryption enabled") : Html.T("تشفير البيانات غير مفعل", "Data encryption disabled"))</span>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <i class="feather-@(isCsrfEnabled ? "check-circle text-success" : "x-circle text-danger") me-2"></i>
+                                    <span>@(isCsrfEnabled ? Html.T("حماية CSRF مفعلة", "CSRF protection enabled") : Html.T("حماية CSRF غير مفعلة", "CSRF protection disabled"))</span>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <i class="feather-@(isTwoFactorEnforced ? "check-circle text-success" : "x-circle text-danger") me-2"></i>
+                                    <span>@(isTwoFactorEnforced ? Html.T("المصادقة الثنائية مُفعّلة بشكل واسع", "Two-factor authentication enforced") : Html.T("المصادقة الثنائية تحتاج تحسين", "Two-factor authentication needs improvement"))</span>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <i class="feather-@(isAuditLogEnabled ? "check-circle text-success" : "x-circle text-danger") me-2"></i>
+                                    <span>@(isAuditLogEnabled ? Html.T("سجل التدقيق مفعل", "Audit log enabled") : Html.T("سجل التدقيق غير مفعل", "Audit log disabled"))</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Access -->
+        <div class="col-lg-12 mb-4">
+            <h5 class="mb-3">الأدوات الأمنية</h5>
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <div class="card security-card" onclick="window.location='@Url.Action("LoginLogs", "Security")'">
+                        <div class="card-body text-center">
+                            <i class="feather-log-in fs-1 text-primary mb-3"></i>
+                            <h6 class="mb-2">سجل تسجيلات الدخول</h6>
+                            <p class="text-muted small mb-0">عرض محاولات الدخول</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3 mb-3">
+                    <div class="card security-card" onclick="window.location='@Url.Action("ActiveSessions", "Security")'">
+                        <div class="card-body text-center">
+                            <i class="feather-activity fs-1 text-success mb-3"></i>
+                            <h6 class="mb-2">الجلسات النشطة</h6>
+                            <p class="text-muted small mb-0">إدارة جلسات المستخدمين</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3 mb-3">
+                    <div class="card security-card" onclick="window.location='@Url.Action("TwoFactorSettings", "Security")'">
+                        <div class="card-body text-center">
+                            <i class="feather-smartphone fs-1 text-warning mb-3"></i>
+                            <h6 class="mb-2">المصادقة الثنائية</h6>
+                            <p class="text-muted small mb-0">إعدادات 2FA</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-3 mb-3">
+                    <div class="card security-card" onclick="window.location='@Url.Action("Index", "SecuritySettings")'">
+                        <div class="card-body text-center">
+                            <i class="feather-settings fs-1 text-info mb-3"></i>
+                            <h6 class="mb-2">إعدادات الأمان</h6>
+                            <p class="text-muted small mb-0">كلمات المرور والحماية</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Security Events -->
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أحداث أمنية حديثة", "Recent security events")</h5>
+                </div>
+                <div class="card-body">
+                    @if (recentEvents != null && recentEvents.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var log in recentEvents.Take(10))
+                            {
+                                var eventIcon = log.IsSuccessful ? "check" : "x";
+                                var eventColor = log.IsSuccessful ? "success" : "danger";
+                                var eventText = log.IsSuccessful ? "تسجيل دخول ناجح" : "محاولة دخول فاشلة";
+                                
+                                <div class="list-group-item d-flex align-items-center gap-3">
+                                    <div class="avatar-text bg-soft-@eventColor text-@eventColor">
+                                        <i class="feather-@eventIcon"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <p class="mb-0">@eventText</p>
+                                        <small class="text-muted">
+                                            @(log.User?.Email ?? log.UserEmail ?? "غير معروف") - 
+                                            @log.LoginAt.ToRelativeTime()
+                                            @if (!string.IsNullOrEmpty(log.IpAddress))
+                                            {
+                                                <span class="ms-2">(@log.IpAddress)</span>
+                                            }
+                                        </small>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="text-center mt-3">
+                            <a asp-action="LoginLogs" class="btn btn-outline-primary">
+                                <i class="feather-list me-2"></i>
+                                عرض جميع السجلات
+                            </a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <i class="feather-shield fs-1 text-muted mb-2 d-block"></i>
+                            <p class="text-muted mb-0">لا توجد أحداث أمنية مسجلة</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

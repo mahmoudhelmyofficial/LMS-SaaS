@@ -1,0 +1,252 @@
+@model PracticeModeViewModel
+@{
+    ViewData["Title"] = Html.T("وضع التدريب", "Practice Mode");
+}
+
+@section Styles {
+<style>
+    .question-card {
+        background: white;
+        border-radius: 12px;
+        padding: 32px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        margin-bottom: 24px;
+    }
+    .answer-option {
+        background: #f9fafb;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .answer-option:hover {
+        background: #f3f4f6;
+        border-color: #6366f1;
+    }
+    .answer-option.selected {
+        background: #dbeafe;
+        border-color: #3b82f6;
+    }
+    .answer-option.correct {
+        background: #d1fae5;
+        border-color: #22c55e;
+    }
+    .answer-option.incorrect {
+        background: #fee2e2;
+        border-color: #ef4444;
+    }
+    .explanation-box {
+        background: #fffbeb;
+        border-right: 4px solid #f59e0b;
+        padding: 16px;
+        border-radius: 8px;
+        margin-top: 16px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-edit-3 text-primary me-2"></i>
+                    @Html.T("وضع التدريب", "Practice mode") - @Model.Quiz.Title
+                </h3>
+                <p class="text-muted mb-0">@Html.T("تدرب بدون ضغط الوقت واحصل على تفسيرات فورية", "Practice with no time pressure and get instant explanations")</p>
+            </div>
+            <div class="d-flex gap-2">
+                <span class="badge bg-soft-primary text-primary">
+                    @Html.T("سؤال", "Question") @Model.CurrentQuestionIndex @Html.T("من", "of") @Model.TotalQuestions
+                </span>
+                <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+                    <i class="feather-x"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Progress Bar -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between mb-2">
+            <span class="text-muted">@Html.T("التقدم", "Progress")</span>
+            <span class="fw-bold">@((Model.CurrentQuestionIndex * 100.0 / Model.TotalQuestions).ToString("F0"))%</span>
+        </div>
+        <div class="progress" style="height: 10px;">
+            <div class="progress-bar bg-primary" 
+                 style="width: @((Model.CurrentQuestionIndex * 100.0 / Model.TotalQuestions))%">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Question Card -->
+<div class="question-card" id="questionCard">
+    <h5 class="fw-bold mb-4">@Model.CurrentQuestion.QuestionText</h5>
+    
+    @if (!string.IsNullOrEmpty(Model.CurrentQuestion.ImageUrl))
+    {
+        <div class="mb-4">
+            <img src="@Model.CurrentQuestion.ImageUrl" alt="@Html.T("صورة السؤال", "Question image")" class="img-fluid rounded" style="max-height: 300px;" />
+        </div>
+    }
+
+    <form id="practiceForm">
+        <input type="hidden" name="questionId" value="@Model.CurrentQuestion.Id" />
+        <input type="hidden" name="quizId" value="@Model.Quiz.Id" />
+        
+        <div class="answers-container">
+            @foreach (var answer in Model.CurrentQuestion.Answers)
+            {
+                <div class="answer-option" data-answer-id="@answer.Id" onclick="selectAnswer(this)">
+                    <div class="d-flex align-items-center">
+                        <div class="form-check me-3">
+                            <input class="form-check-input" type="radio" name="selectedAnswerId" 
+                                   value="@answer.Id" id="answer_@answer.Id">
+                        </div>
+                        <label class="flex-grow-1 mb-0" for="answer_@answer.Id" style="cursor: pointer;">
+                            @answer.AnswerText
+                        </label>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="d-flex justify-content-between mt-4">
+            <button type="button" class="btn btn-primary" onclick="checkAnswer()" id="checkBtn">
+                <i class="feather-check me-2"></i>
+                @Html.T("تحقق من الإجابة", "Check answer")
+            </button>
+            
+            <button type="button" class="btn btn-success" onclick="nextQuestion()" id="nextBtn" style="display: none;">
+                @Html.T("السؤال التالي", "Next question")
+                <i class="feather-arrow-left ms-2"></i>
+            </button>
+        </div>
+    </form>
+
+    <!-- Explanation Box (Hidden initially) -->
+    <div class="explanation-box" id="explanationBox" style="display: none;">
+        <h6 class="fw-bold mb-2">
+            <i class="feather-info text-warning me-2"></i>
+            @Html.T("الشرح", "Explanation")
+        </h6>
+        <p class="mb-0" id="explanationText"></p>
+    </div>
+</div>
+
+<!-- Stats Card -->
+<div class="card stretch stretch-full">
+    <div class="card-body">
+        <h6 class="fw-bold mb-3">@Html.T("إحصائيات هذه الجلسة", "Session statistics")</h6>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="text-center p-3 rounded" style="background: #f0fdf4;">
+                    <h4 class="fw-bold text-success mb-1" id="correctCount">@Model.Stats.CorrectAnswers</h4>
+                    <small class="text-muted">@Html.T("إجابات صحيحة", "Correct answers")</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center p-3 rounded" style="background: #fef2f2;">
+                    <h4 class="fw-bold text-danger mb-1" id="incorrectCount">@Model.Stats.IncorrectAnswers</h4>
+                    <small class="text-muted">@Html.T("إجابات خاطئة", "Incorrect answers")</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center p-3 rounded" style="background: #dbeafe;">
+                    <h4 class="fw-bold text-primary mb-1" id="accuracyRate">@Model.Stats.AccuracyRate%</h4>
+                    <small class="text-muted">@Html.T("نسبة الدقة", "Accuracy rate")</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    window.__T = window.__T || {};
+    window.__T.PleaseSelectAnswer = '@Html.Raw(Html.T("الرجاء اختيار إجابة", "Please select an answer").ToString().Replace("'", "\\'"))';
+    let answerChecked = false;
+
+    function selectAnswer(element) {
+        if (answerChecked) return;
+        
+        // Remove previous selection
+        document.querySelectorAll('.answer-option').forEach(opt => {
+            opt.classList.remove('selected');
+        });
+        
+        // Add selected class
+        element.classList.add('selected');
+        
+        // Check the radio button
+        const radio = element.querySelector('input[type="radio"]');
+        radio.checked = true;
+    }
+
+    function checkAnswer() {
+        const selectedAnswer = document.querySelector('input[name="selectedAnswerId"]:checked');
+        
+        if (!selectedAnswer) {
+            alert((window.__T && window.__T.PleaseSelectAnswer) || 'Please select an answer');
+            return;
+        }
+
+        const formData = new FormData(document.getElementById('practiceForm'));
+        
+        fetch('@Url.Action("CheckPracticeAnswer")', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            answerChecked = true;
+            
+            // Show result
+            document.querySelectorAll('.answer-option').forEach(opt => {
+                const answerId = opt.dataset.answerId;
+                
+                if (answerId == data.correctAnswerId) {
+                    opt.classList.add('correct');
+                } else if (answerId == selectedAnswer.value && !data.isCorrect) {
+                    opt.classList.add('incorrect');
+                }
+                
+                // Disable clicking
+                opt.style.pointerEvents = 'none';
+            });
+
+            // Show explanation
+            document.getElementById('explanationText').textContent = data.explanation;
+            document.getElementById('explanationBox').style.display = 'block';
+
+            // Update stats
+            document.getElementById('correctCount').textContent = data.stats.correctAnswers;
+            document.getElementById('incorrectCount').textContent = data.stats.incorrectAnswers;
+            document.getElementById('accuracyRate').textContent = data.stats.accuracyRate + '%';
+
+            // Toggle buttons
+            document.getElementById('checkBtn').style.display = 'none';
+            document.getElementById('nextBtn').style.display = 'block';
+        });
+    }
+
+    function nextQuestion() {
+        const formData = new FormData(document.getElementById('practiceForm'));
+        const currentIndex = @Model.CurrentQuestionIndex;
+        
+        window.location.href = '@Url.Action("PracticeMode", new { quizId = Model.Quiz.Id })?questionIndex=' + (currentIndex + 1);
+    }
+</script>
+}

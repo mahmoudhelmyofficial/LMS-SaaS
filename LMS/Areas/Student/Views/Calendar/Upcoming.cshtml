@@ -1,0 +1,718 @@
+@model IEnumerable<LMS.Domain.Entities.Learning.CalendarEvent>
+@{
+    ViewData["Title"] = Html.T("الأحداث القادمة", "Upcoming Events");
+    var groupedEvents = Model.GroupBy(e => e.StartTime.Date).OrderBy(g => g.Key).ToList();
+    var totalEvents = Model.Count();
+    var todayEvents = Model.Count(e => e.StartTime.Date == DateTime.UtcNow.Date);
+    var thisWeekEvents = Model.Count(e => e.StartTime.Date <= DateTime.UtcNow.Date.AddDays(7));
+}
+
+@section Styles {
+<style>
+    .event-card {
+        transition: all 0.3s ease;
+        border-right: 4px solid #e5e7eb;
+    }
+    
+    .event-card:hover {
+        transform: translateX(-5px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    .event-card.event-today {
+        border-right-color: #3b82f6;
+        background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+    }
+    
+    .event-card.event-urgent {
+        border-right-color: #ef4444;
+        background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+    }
+    
+    .event-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+    
+    .countdown-badge {
+        font-size: 11px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+    
+    .date-header {
+        position: sticky;
+        top: 0;
+        background: #f8fafc;
+        z-index: 10;
+        padding: 12px 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    .filter-chip {
+        padding: 8px 16px;
+        border-radius: 20px;
+        border: 2px solid #e5e7eb;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: white;
+    }
+    
+    .filter-chip:hover {
+        border-color: #3b82f6;
+        background: #eff6ff;
+        color: #3b82f6;
+    }
+    
+    .filter-chip.active {
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: white;
+    }
+    
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 24px;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .stats-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        animation: pulse 3s ease-in-out infinite;
+    }
+    
+    @@keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 0.5; }
+        50% { transform: scale(1.1); opacity: 0.8; }
+    }
+    
+    .timeline-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 3px solid #fff;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        background: #3b82f6;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 80px 20px;
+    }
+    
+    .empty-state-icon {
+        font-size: 80px;
+        color: #cbd5e1;
+        margin-bottom: 20px;
+    }
+    
+    @@media (max-width: 768px) {
+        .event-card {
+            margin-bottom: 15px;
+        }
+        
+        .stats-card {
+            margin-bottom: 15px;
+        }
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Breadcrumb -->
+<nav aria-label="@Html.T("مسار التنقل", "Breadcrumb")" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index" asp-controller="Dashboard"><i class="feather-home me-2"></i>@Html.T("لوحة التحكم", "Dashboard")</a></li>
+        <li class="breadcrumb-item"><a asp-action="Index"><i class="feather-calendar me-2"></i>@Html.T("التقويم", "Calendar")</a></li>
+        <li class="breadcrumb-item active">@Html.T("الأحداث القادمة", "Upcoming events")</li>
+    </ol>
+</nav>
+
+<!-- Page Header with Stats -->
+<div class="row g-4 mb-4">
+    <!-- Header Title -->
+    <div class="col-12">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                    <div>
+                        <h3 class="fw-bold mb-2">
+                            <i class="feather-clock text-primary me-2"></i>
+                            @Html.T("الأحداث القادمة", "Upcoming events")
+                        </h3>
+                        <p class="text-muted mb-0">@Html.T("جميع مواعيدك وفعالياتك المجدولة في الفترة القادمة", "All your scheduled appointments and events")</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a asp-action="Index" class="btn btn-light">
+                            <i class="feather-calendar me-2"></i>
+                            @Html.T("عرض التقويم", "View calendar")
+                        </a>
+                        <a asp-action="Create" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إضافة حدث", "Add event")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="col-xl-3 col-md-6">
+        <div class="stats-card">
+            <div class="position-relative">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h2 class="fw-bold mb-2">@totalEvents</h2>
+                        <p class="mb-0 opacity-90">@Html.T("إجمالي الأحداث", "Total events")</p>
+                    </div>
+                    <div class="avatar-text avatar-lg bg-white bg-opacity-25 text-white">
+                        <i class="feather-calendar"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="card stretch stretch-full border-0 bg-gradient-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h2 class="fw-bold mb-2 text-white">@todayEvents</h2>
+                        <p class="mb-0 text-white opacity-90">@Html.T("أحداث اليوم", "Today's events")</p>
+                    </div>
+                    <div class="avatar-text avatar-lg bg-white bg-opacity-25 text-white">
+                        <i class="feather-sun"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="card stretch stretch-full border-0 bg-gradient-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h2 class="fw-bold mb-2 text-white">@thisWeekEvents</h2>
+                        <p class="mb-0 text-white opacity-90">@Html.T("هذا الأسبوع", "This week")</p>
+                    </div>
+                    <div class="avatar-text avatar-lg bg-white bg-opacity-25 text-white">
+                        <i class="feather-trending-up"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="card stretch stretch-full border-0 bg-gradient-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h2 class="fw-bold mb-2 text-white">@Model.Count(e => e.SendReminder)</h2>
+                        <p class="mb-0 text-white opacity-90">@Html.T("مع تذكير", "With reminder")</p>
+                    </div>
+                    <div class="avatar-text avatar-lg bg-white bg-opacity-25 text-white">
+                        <i class="feather-bell"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters & Search -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-center">
+            <div class="col-lg-6">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="feather-search"></i></span>
+                    <input type="text" class="form-control" id="searchEvents" placeholder="@Html.T("ابحث عن حدث...", "Search for an event...")" />
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="d-flex gap-2 flex-wrap justify-content-end">
+                    <button class="filter-chip active" data-filter="all">
+                        <i class="feather-list me-1"></i>
+                        @Html.T("الكل", "All") (@totalEvents)
+                    </button>
+                    <button class="filter-chip" data-filter="Study">
+                        <i class="feather-book me-1"></i>
+                        @Html.T("دراسة", "Study") (@Model.Count(e => e.EventType == "Study"))
+                    </button>
+                    <button class="filter-chip" data-filter="Assignment">
+                        <i class="feather-file-text me-1"></i>
+                        @Html.T("واجبات", "Assignments") (@Model.Count(e => e.EventType == "Assignment"))
+                    </button>
+                    <button class="filter-chip" data-filter="Quiz">
+                        <i class="feather-edit me-1"></i>
+                        @Html.T("اختبارات", "Quizzes") (@Model.Count(e => e.EventType == "Quiz"))
+                    </button>
+                    <button class="filter-chip" data-filter="LiveClass">
+                        <i class="feather-video me-1"></i>
+                        @Html.T("جلسات", "Sessions") (@Model.Count(e => e.EventType == "LiveClass"))
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (totalEvents == 0)
+{
+    <!-- Empty State -->
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            <div class="empty-state">
+                <div class="empty-state-icon">
+                    <i class="feather-calendar"></i>
+                </div>
+                <h4 class="fw-bold mb-3">@Html.T("لا توجد أحداث قادمة", "No upcoming events")</h4>
+                <p class="text-muted mb-4">@Html.T("ليس لديك أي أحداث مجدولة في الفترة القادمة", "You have no events scheduled")</p>
+                <a asp-action="Create" class="btn btn-primary">
+                    <i class="feather-plus me-2"></i>
+                    @Html.T("إضافة حدث جديد", "Add new event")
+                </a>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <!-- Events Timeline -->
+    <div class="row g-4">
+        <div class="col-12">
+            @foreach (var dateGroup in groupedEvents)
+            {
+                var isToday = dateGroup.Key == DateTime.UtcNow.Date;
+                var isTomorrow = dateGroup.Key == DateTime.UtcNow.Date.AddDays(1);
+                var daysUntil = (dateGroup.Key - DateTime.UtcNow.Date).Days;
+                
+                <!-- Date Header -->
+                <div class="date-header" data-date="@dateGroup.Key.ToString("yyyy-MM-dd")">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <div class="timeline-dot me-3"></div>
+                            <div>
+                                <h5 class="fw-bold mb-0">
+                                    @if (isToday)
+                                    {
+                                        <span class="text-primary">@Html.T("اليوم", "Today")</span>
+                                    }
+                                    else if (isTomorrow)
+                                    {
+                                        <span class="text-warning">@Html.T("غداً", "Tomorrow")</span>
+                                    }
+                                    else
+                                    {
+                                        @dateGroup.Key.ToString("dddd, d MMMM yyyy", new System.Globalization.CultureInfo(System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "ar-SA" : "en-US"))
+                                    }
+                                </h5>
+                                <p class="text-muted fs-12 mb-0">
+                                    @if (!isToday && !isTomorrow)
+                                    {
+                                        <span>@Html.T("بعد", "In") @daysUntil @Html.T("يوم", "days")</span>
+                                        <span class="mx-1">•</span>
+                                    }
+                                    <span>@dateGroup.Count() @Html.T("حدث", "event(s)")</span>
+                                </p>
+                            </div>
+                        </div>
+                        @if (isToday)
+                        {
+                            <span class="badge bg-primary">
+                                <i class="feather-zap me-1"></i>
+@Html.T("أولوية عالية", "High priority")
+                                            </span>
+                        }
+                    </div>
+                </div>
+
+                <!-- Events for this date -->
+                @foreach (var calendarEvent in dateGroup.OrderBy(e => e.StartTime))
+                {
+                    var timeUntil = calendarEvent.StartTime - DateTime.UtcNow;
+                    var hoursUntil = (int)timeUntil.TotalHours;
+                    var isUrgent = hoursUntil <= 2 && hoursUntil >= 0;
+                    var eventColor = GetEventColor(calendarEvent.EventType);
+                    var eventIcon = GetEventIcon(calendarEvent.EventType);
+                    var eventBgColor = GetEventBgColor(calendarEvent.EventType);
+                    
+                    <div class="event-card card stretch stretch-full mb-3 @(isToday ? "event-today" : "") @(isUrgent ? "event-urgent" : "")" 
+                         data-event-type="@calendarEvent.EventType"
+                         data-event-title="@calendarEvent.Title">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start gap-3">
+                                <!-- Event Icon -->
+                                <div class="event-icon" style="background-color: @eventBgColor; color: @eventColor;">
+                                    <i class="@eventIcon"></i>
+                                </div>
+
+                                <!-- Event Details -->
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-start justify-content-between mb-2">
+                                        <div class="flex-grow-1">
+                                            <h5 class="fw-bold mb-2">
+                                                <a asp-action="Details" asp-route-id="@calendarEvent.Id" class="text-dark text-decoration-none">
+                                                    @calendarEvent.Title
+                                                </a>
+                                            </h5>
+                                            
+                                            <!-- Event Meta -->
+                                            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                                                <!-- Event Type Badge -->
+                                                <span class="badge" style="background-color: @eventColor;">
+                                                    @GetEventTypeLabel(calendarEvent.EventType)
+                                                </span>
+
+                                                <!-- Time -->
+                                                <span class="text-muted fs-13">
+                                                    <i class="feather-clock me-1"></i>
+                                                    @if (calendarEvent.IsAllDay)
+                                                    {
+                                                        <span>@Html.T("طوال اليوم", "All day")</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>@calendarEvent.StartTime.ToString("hh:mm tt", new System.Globalization.CultureInfo(System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "ar-SA" : "en-US"))</span>
+                                                        @if (calendarEvent.EndTime.HasValue)
+                                                        {
+                                                            <span> - @calendarEvent.EndTime.Value.ToString("hh:mm tt", new System.Globalization.CultureInfo(System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "ar-SA" : "en-US"))</span>
+                                                        }
+                                                    }
+                                                </span>
+
+                                                <!-- Course -->
+                                                @if (calendarEvent.Course != null)
+                                                {
+                                                    <span class="text-muted fs-13">
+                                                        <i class="feather-book-open me-1"></i>
+                                                        @calendarEvent.Course.Title
+                                                    </span>
+                                                }
+
+                                                <!-- Reminder -->
+                                                @if (calendarEvent.SendReminder)
+                                                {
+                                                    <span class="text-muted fs-13">
+                                                        <i class="feather-bell me-1"></i>
+                                                        @Html.T("تذكير نشط", "Active reminder")
+                                                    </span>
+                                                }
+
+                                                <!-- Location -->
+                                                @if (!string.IsNullOrEmpty(calendarEvent.Location))
+                                                {
+                                                    <span class="text-muted fs-13">
+                                                        <i class="feather-map-pin me-1"></i>
+                                                        @calendarEvent.Location
+                                                    </span>
+                                                }
+                                            </div>
+
+                                            <!-- Description -->
+                                            @if (!string.IsNullOrEmpty(calendarEvent.Description))
+                                            {
+                                                <p class="text-muted fs-13 mb-0 text-truncate-2-line">
+                                                    @calendarEvent.Description
+                                                </p>
+                                            }
+                                        </div>
+
+                                        <!-- Countdown Badge -->
+                                        @if (timeUntil.TotalHours > 0)
+                                        {
+                                            <div class="text-start" style="min-width: 100px;">
+                                                @if (hoursUntil < 1)
+                                                {
+                                                    <span class="countdown-badge bg-danger text-white">
+                                                        <i class="feather-alert-triangle me-1"></i>
+                                                        @Html.T("خلال دقائق", "In minutes")
+                                                    </span>
+                                                }
+                                                else if (hoursUntil < 24)
+                                                {
+                                                    <span class="countdown-badge @(isUrgent ? "bg-danger" : "bg-warning") text-white">
+                                                        <i class="feather-clock me-1"></i>
+                                                        @Html.T("خلال", "In") @hoursUntil @Html.T("ساعة", "hour(s)")
+                                                    </span>
+                                                }
+                                                else if (daysUntil < 7)
+                                                {
+                                                    <span class="countdown-badge bg-info text-white">
+                                                        <i class="feather-calendar me-1"></i>
+                                                        @Html.T("خلال", "In") @daysUntil @Html.T("يوم", "day(s)")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="countdown-badge bg-secondary text-white">
+                                                        @daysUntil @Html.T("يوم", "days")
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <!-- Action Buttons -->
+                                    <div class="d-flex gap-2 mt-3">
+                                        <a asp-action="Details" asp-route-id="@calendarEvent.Id" 
+                                           class="btn btn-sm btn-light">
+                                            <i class="feather-eye me-1"></i>
+                                            @Html.T("التفاصيل", "Details")
+                                        </a>
+                                        <a asp-action="Edit" asp-route-id="@calendarEvent.Id" 
+                                           class="btn btn-sm btn-light">
+                                            <i class="feather-edit me-1"></i>
+                                            @Html.T("تعديل", "Edit")
+                                        </a>
+                                        @if (calendarEvent.CourseId.HasValue)
+                                        {
+                                            <a asp-controller="Courses" asp-action="Details" asp-route-id="@calendarEvent.CourseId" 
+                                               class="btn btn-sm btn-light">
+                                                <i class="feather-book-open me-1"></i>
+                                                @Html.T("الدورة", "Course")
+                                            </a>
+                                        }
+                                        @if (calendarEvent.LiveClassId.HasValue)
+                                        {
+                                            <a asp-area="Student" asp-controller="LiveClasses" asp-action="Join" asp-route-id="@calendarEvent.LiveClassId" 
+                                               class="btn btn-sm btn-primary">
+                                                <i class="feather-video me-1"></i>
+                                                @Html.T("انضم للجلسة", "Join session")
+                                            </a>
+                                        }
+                                        @if (calendarEvent.AssignmentId.HasValue)
+                                        {
+                                            <a asp-controller="Assignments" asp-action="Details" asp-route-id="@calendarEvent.AssignmentId" 
+                                               class="btn btn-sm btn-primary">
+                                                <i class="feather-file-text me-1"></i>
+                                                @Html.T("عرض الواجب", "View assignment")
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- Quick Actions Footer -->
+    <div class="card stretch stretch-full mt-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h6 class="fw-bold mb-1">@Html.T("جميع الأحداث محدثة", "All events up to date")</h6>
+                    <p class="text-muted fs-12 mb-0">@Html.T("آخر تحديث:", "Last updated:") @DateTime.Now.ToString("hh:mm tt")</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-light" onclick="window.print()">
+                        <i class="feather-printer me-2"></i>
+                        @Html.T("طباعة", "Print")
+                    </button>
+                    <button type="button" class="btn btn-light" onclick="exportToICS()">
+                        <i class="feather-download me-2"></i>
+                        @Html.T("تصدير ICS", "Export ICS")
+                    </button>
+                    <a asp-action="Index" class="btn btn-primary">
+                        <i class="feather-calendar me-2"></i>
+                        @Html.T("عرض في التقويم", "View in calendar")
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    (function(){ window.__T = window.__T || {}; window.__T.ExportError = '@Html.Raw(Html.T("حدث خطأ أثناء التصدير", "An error occurred while exporting").ToString().Replace("'", "\\'"))'; })();
+</script>
+<script>
+    // Search functionality
+    document.getElementById('searchEvents').addEventListener('input', function(e) {
+        const searchTerm = e.target.value.toLowerCase();
+        const eventCards = document.querySelectorAll('.event-card');
+        
+        eventCards.forEach(card => {
+            const title = card.getAttribute('data-event-title').toLowerCase();
+            const isVisible = title.includes(searchTerm);
+            card.style.display = isVisible ? 'block' : 'none';
+        });
+        
+        // Hide date headers with no visible events
+        document.querySelectorAll('.date-header').forEach(header => {
+            const nextElements = [];
+            let next = header.nextElementSibling;
+            while (next && !next.classList.contains('date-header')) {
+                if (next.classList.contains('event-card')) {
+                    nextElements.push(next);
+                }
+                next = next.nextElementSibling;
+            }
+            const hasVisibleEvents = nextElements.some(el => el.style.display !== 'none');
+            header.style.display = hasVisibleEvents ? 'block' : 'none';
+        });
+    });
+
+    // Filter functionality
+    document.querySelectorAll('.filter-chip').forEach(chip => {
+        chip.addEventListener('click', function() {
+            // Update active state
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            this.classList.add('active');
+            
+            const filterType = this.getAttribute('data-filter');
+            const eventCards = document.querySelectorAll('.event-card');
+            
+            eventCards.forEach(card => {
+                const eventType = card.getAttribute('data-event-type');
+                const isVisible = filterType === 'all' || eventType === filterType;
+                card.style.display = isVisible ? 'block' : 'none';
+            });
+            
+            // Hide date headers with no visible events
+            document.querySelectorAll('.date-header').forEach(header => {
+                const nextElements = [];
+                let next = header.nextElementSibling;
+                while (next && !next.classList.contains('date-header')) {
+                    if (next.classList.contains('event-card')) {
+                        nextElements.push(next);
+                    }
+                    next = next.nextElementSibling;
+                }
+                const hasVisibleEvents = nextElements.some(el => el.style.display !== 'none');
+                header.style.display = hasVisibleEvents ? 'block' : 'none';
+            });
+        });
+    });
+
+    // Export to ICS
+    function exportToICS() {
+        // This would need server-side implementation
+        fetch('@Url.Action("ExportToICS")', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.blob())
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'events.ics';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        })
+        .catch(error => {
+            alert((window.__T && window.__T.ExportError) || 'An error occurred while exporting');
+            console.error('Export error:', error);
+        });
+    }
+
+    // Auto-refresh countdown badges every minute
+    setInterval(function() {
+        location.reload();
+    }, 60000);
+
+    // Smooth scroll to today's events on load
+    window.addEventListener('load', function() {
+        const todayHeader = document.querySelector('.event-today');
+        if (todayHeader) {
+            todayHeader.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    });
+</script>
+}
+
+@functions {
+    string GetEventColor(string eventType)
+    {
+        return eventType switch
+        {
+            "Study" => "#3b82f6",
+            "Assignment" => "#ef4444",
+            "Quiz" => "#f59e0b",
+            "LiveClass" => "#8b5cf6",
+            "Deadline" => "#ef4444",
+            "Personal" => "#10b981",
+            _ => "#6b7280"
+        };
+    }
+
+    string GetEventBgColor(string eventType)
+    {
+        return eventType switch
+        {
+            "Study" => "#eff6ff",
+            "Assignment" => "#fef2f2",
+            "Quiz" => "#fffbeb",
+            "LiveClass" => "#f5f3ff",
+            "Deadline" => "#fef2f2",
+            "Personal" => "#f0fdf4",
+            _ => "#f3f4f6"
+        };
+    }
+
+    string GetEventIcon(string eventType)
+    {
+        return eventType switch
+        {
+            "Study" => "feather-book",
+            "Assignment" => "feather-file-text",
+            "Quiz" => "feather-edit",
+            "LiveClass" => "feather-video",
+            "Deadline" => "feather-alert-circle",
+            "Personal" => "feather-star",
+            _ => "feather-calendar"
+        };
+    }
+
+    bool IsAr() => System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ar";
+    string Tr(string ar, string en) => IsAr() ? ar : en;
+
+    string GetEventTypeLabel(string eventType)
+    {
+        return eventType switch
+        {
+            "Study" => Tr("جلسة دراسة", "Study session"),
+            "Assignment" => Tr("واجب", "Assignment"),
+            "Quiz" => Tr("اختبار", "Quiz"),
+            "LiveClass" => Tr("جلسة مباشرة", "Live session"),
+            "Deadline" => Tr("موعد نهائي", "Deadline"),
+            "Personal" => Tr("شخصي", "Personal"),
+            _ => Tr("أخرى", "Other")
+        };
+    }
+}
+

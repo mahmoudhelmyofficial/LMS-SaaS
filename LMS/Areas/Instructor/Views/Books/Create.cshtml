@@ -1,0 +1,756 @@
+@model LMS.Areas.Instructor.ViewModels.BookCreateViewModel
+@using LMS.Domain.Enums
+
+@{
+    var backUrl = Url.Action("Index");
+    ViewData["Title"] = Html.T("إضافة كتاب جديد", "Add New Book");
+    ViewData["Subtitle"] = Html.T("أضف كتاباً إلكترونياً جديداً للبيع", "Add new e-book for sale");
+    ViewData["ActionButtons"] = Html.Raw($"<a href=\"{backUrl}\" class=\"btn btn-sm btn-light\"><i class=\"feather-arrow-right me-1\"></i> {Html.T("العودة للقائمة", "Back to list")}</a>");
+}
+
+@await Html.PartialAsync("_PageHeader", null, new ViewDataDictionary(ViewData))
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Create" method="post" enctype="multipart/form-data" id="bookForm">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            @Html.T("المعلومات الأساسية", "Basic information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label asp-for="Title" class="form-label">@Html.T("عنوان الكتاب", "Book title") <span class="text-danger">*</span></label>
+                                <input asp-for="Title" class="form-control" placeholder="@Html.T("أدخل عنوان الكتاب", "Enter book title")">
+                                <span asp-validation-for="Title" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Author" class="form-label">@Html.T("اسم المؤلف", "Author name")</label>
+                                <input asp-for="Author" class="form-control" placeholder="@Html.T("اترك فارغاً لاستخدام اسمك", "Leave blank to use your name")">
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="ISBN" class="form-label">@Html.T("رقم ISBN", "ISBN")</label>
+                                <input asp-for="ISBN" class="form-control" placeholder="@Html.T("اختياري", "Optional")">
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="ShortDescription" class="form-label">@Html.T("وصف مختصر", "Short description")</label>
+                                <textarea asp-for="ShortDescription" class="form-control" rows="2"
+                                          placeholder="@Html.T("وصف مختصر للكتاب (يظهر في قوائم الكتب)", "Brief book description (shown in book lists)")"></textarea>
+                                <span asp-validation-for="ShortDescription" class="text-danger small"></span>
+                            </div>
+                            <div class="col-12">
+                                <label asp-for="Description" class="form-label">@Html.T("الوصف الكامل", "Full description")</label>
+                                <textarea asp-for="Description" class="form-control" rows="5" id="description"
+                                          placeholder="@Html.T("وصف تفصيلي للكتاب ومحتوياته", "Detailed description of the book and its contents")"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category & Classification -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-folder me-2 text-primary"></i>
+                            @Html.T("التصنيف", "Category")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label asp-for="CategoryId" class="form-label">@Html.T("التصنيف الرئيسي", "Main category") <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <select asp-for="CategoryId" class="form-select" asp-items="ViewBag.Categories" id="categorySelect">
+                                        <option value="">@Html.T("اختر التصنيف", "Select category")</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal" title="@Html.T("إضافة تصنيف جديد", "Add new category")">
+                                        <i class="feather-plus"></i>
+                                    </button>
+                                </div>
+                                <span asp-validation-for="CategoryId" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="SubCategoryId" class="form-label">@Html.T("التصنيف الفرعي", "Subcategory")</label>
+                                <div class="input-group">
+                                    <select asp-for="SubCategoryId" class="form-select" id="subcategorySelect">
+                                        <option value="">-- @Html.T("بدون تصنيف فرعي", "No subcategory") --</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" id="addSubcategoryBtn" data-bs-toggle="modal" data-bs-target="#addSubcategoryModal" title="@Html.T("إضافة تصنيف فرعي", "Add subcategory")" disabled>
+                                        <i class="feather-plus"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">@Html.T("اختر التصنيف الرئيسي أولاً", "Select main category first")</small>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="BookType" class="form-label">@Html.T("نوع الكتاب", "Book type")</label>
+                                <select asp-for="BookType" class="form-select">
+                                    <option value="@BookType.EBook">@Html.T("كتاب إلكتروني", "E-book")</option>
+                                    <option value="@BookType.AudioBook">@Html.T("كتاب صوتي", "Audiobook")</option>
+                                    <option value="@BookType.Interactive">@Html.T("كتاب تفاعلي", "Interactive")</option>
+                                    <option value="@BookType.Workbook">@Html.T("كتاب تمارين", "Workbook")</option>
+                                    <option value="@BookType.Guide">@Html.T("دليل", "Guide")</option>
+                                    <option value="@BookType.Reference">@Html.T("مرجع", "Reference")</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="Language" class="form-label">@Html.T("اللغة", "Language")</label>
+                                <select asp-for="Language" class="form-select">
+                                    <option value="ar">@Html.T("العربية", "Arabic")</option>
+                                    <option value="en">@Html.T("English", "English")</option>
+                                    <option value="fr">@Html.T("Français", "French")</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="PageCount" class="form-label">@Html.T("عدد الصفحات", "Page count")</label>
+                                <input asp-for="PageCount" class="form-control" type="number" min="1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Book Details -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-book-open me-2 text-primary"></i>
+                            @Html.T("تفاصيل النشر", "Publication details")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label asp-for="Publisher" class="form-label">@Html.T("الناشر", "Publisher")</label>
+                                <input asp-for="Publisher" class="form-control" placeholder="@Html.T("اسم دار النشر (اختياري)", "Publisher name (optional)")">
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="PublicationDate" class="form-label">@Html.T("تاريخ النشر", "Publication date")</label>
+                                <input asp-for="PublicationDate" class="form-control" type="date">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formats -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-file-text me-2 text-primary"></i>
+                            @Html.T("التنسيقات المتاحة", "Available formats")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">@Html.T("اختر التنسيقات التي ستوفرها", "Choose formats you will offer")</label>
+                                <div class="d-flex flex-wrap gap-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="formatPdf" id="formatPdf" checked>
+                                        <label class="form-check-label" for="formatPdf">
+                                            <i class="feather-file text-danger me-1"></i> PDF
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="formatEpub" id="formatEpub">
+                                        <label class="form-check-label" for="formatEpub">
+                                            <i class="feather-book text-success me-1"></i> EPUB
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="formatMobi" id="formatMobi">
+                                        <label class="form-check-label" for="formatMobi">
+                                            <i class="feather-book text-warning me-1"></i> MOBI
+                                        </label>
+                                    </div>
+                                </div>
+                                <input asp-for="AvailableFormats" type="hidden" id="availableFormats">
+                            </div>
+                            <div class="col-12 mt-3">
+                                <div class="form-check">
+                                    <input asp-for="HasPhysicalCopy" class="form-check-input" type="checkbox" id="hasPhysicalCheck">
+                                    <label class="form-check-label" for="hasPhysicalCheck">
+                                        @Html.T("متوفر بنسخة ورقية", "Available in print")
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6" id="physicalPriceGroup" style="display: none;">
+                                <label asp-for="PhysicalPrice" class="form-label">@Html.T("سعر النسخة الورقية", "Print price") (@(ViewBag.DefaultCurrencyCode ?? "EGP"))</label>
+                                <input asp-for="PhysicalPrice" class="form-control" type="number" step="0.01" min="0">
+                            </div>
+                            <div class="col-md-6" id="physicalStockGroup" style="display: none;">
+                                <label asp-for="PhysicalStock" class="form-label">@Html.T("المخزون", "Stock")</label>
+                                <input asp-for="PhysicalStock" class="form-control" type="number" min="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Related Course -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-award me-2 text-primary"></i>
+                            @Html.T("الدورة المرتبطة (اختياري)", "Related course (optional)")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label asp-for="RelatedCourseId" class="form-label">@Html.T("الدورة المرتبطة", "Related course")</label>
+                                <select asp-for="RelatedCourseId" class="form-select" asp-items="ViewBag.Courses">
+                                    <option value="">@Html.T("لا يوجد", "None")</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input asp-for="IncludedWithCourse" class="form-check-input" type="checkbox">
+                                    <label asp-for="IncludedWithCourse" class="form-check-label">
+                                        @Html.T("مضمن مجاناً مع الدورة", "Included free with course")
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Files -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-upload-cloud me-2 text-primary"></i>
+                            @Html.T("ملفات الكتاب", "Book files")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-soft-info mb-4">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("يمكنك رفع ملفات الكتاب مباشرة أو اختيارها من المكتبة. يمكنك أيضاً إضافتها لاحقاً بعد إنشاء الكتاب", "You can upload book files directly or choose from the library. You can also add them later after creating the book")
+                        </div>
+
+                        <!-- Direct File Upload Section -->
+                        <div class="mb-4">
+                            <h6 class="fw-bold mb-3">
+                                <i class="feather-upload-cloud me-2 text-primary"></i>
+                                @Html.T("رفع مباشر للملفات", "Direct file upload")
+                            </h6>
+                            <div class="row g-3">
+                                <!-- PDF Upload -->
+                                <div class="col-md-6" id="directPdfUploadGroup">
+                                    <label class="form-label fw-bold">@Html.T("ملف PDF الكامل", "Full PDF file")</label>
+                                    <div class="upload-area border-2 border-dashed rounded-3 p-4 text-center position-relative"
+                                         id="pdfUploadArea"
+                                         style="background: #f8f9fa; border-color: #dee2e6 !important; cursor: pointer; transition: all 0.3s ease; min-height: 120px;">
+                                        <input type="file"
+                                               name="DirectPdfUpload"
+                                               id="directPdfUpload"
+                                               accept=".pdf,application/pdf"
+                                               class="position-absolute w-100 h-100 opacity-0"
+                                               style="top: 0; left: 0; cursor: pointer;">
+                                        <div id="pdfUploadPlaceholder">
+                                            <i class="feather-upload fs-3 text-primary mb-2"></i>
+                                            <p class="mb-1 small fw-bold">@Html.T("انقر لرفع ملف PDF", "Click to upload PDF")</p>
+                                            <small class="text-muted">@Html.T("الحجم الأقصى: 100 MB", "Max size: 100 MB")</small>
+                                        </div>
+                                        <div id="pdfUploadProgress" class="d-none">
+                                            <div class="progress mb-2" style="height: 6px;">
+                                                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                                     id="pdfProgressBar"
+                                                     style="width: 0%"></div>
+                                            </div>
+                                            <small id="pdfUploadStatus" class="text-muted">@Html.T("جاري الرفع...", "Uploading...")</small>
+                                        </div>
+                                        <div id="pdfUploadSuccess" class="d-none">
+                                            <i class="feather-check-circle fs-3 text-success mb-2"></i>
+                                            <p class="mb-0 small fw-bold text-success" id="pdfFileName"></p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Preview PDF Upload -->
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">@Html.T("ملف المعاينة (PDF)", "Preview file (PDF)")</label>
+                                    <div class="upload-area border-2 border-dashed rounded-3 p-4 text-center position-relative"
+                                         id="previewPdfUploadArea"
+                                         style="background: #f8f9fa; border-color: #dee2e6 !important; cursor: pointer; transition: all 0.3s ease; min-height: 120px;">
+                                        <input type="file"
+                                               name="DirectPreviewPdfUpload"
+                                               id="directPreviewPdfUpload"
+                                               accept=".pdf,application/pdf"
+                                               class="position-absolute w-100 h-100 opacity-0"
+                                               style="top: 0; left: 0; cursor: pointer;">
+                                        <div id="previewPdfUploadPlaceholder">
+                                            <i class="feather-file-text fs-3 text-info mb-2"></i>
+                                            <p class="mb-1 small fw-bold">@Html.T("انقر لرفع ملف المعاينة", "Click to upload preview file")</p>
+                                            <small class="text-muted">@Html.T("اختياري - الحجم الأقصى: 100 MB", "Optional - Max size: 100 MB")</small>
+                                        </div>
+                                        <div id="previewPdfUploadProgress" class="d-none">
+                                            <div class="progress mb-2" style="height: 6px;">
+                                                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                                     id="previewPdfProgressBar"
+                                                     style="width: 0%"></div>
+                                            </div>
+                                            <small id="previewPdfUploadStatus" class="text-muted">@Html.T("جاري الرفع...", "Uploading...")</small>
+                                        </div>
+                                        <div id="previewPdfUploadSuccess" class="d-none">
+                                            <i class="feather-check-circle fs-3 text-success mb-2"></i>
+                                            <p class="mb-0 small fw-bold text-success" id="previewPdfFileName"></p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- EPUB Upload -->
+                                <div class="col-md-6" id="directEpubUploadGroup" style="display: none;">
+                                    <label class="form-label fw-bold">@Html.T("ملف EPUB", "EPUB file")</label>
+                                    <div class="upload-area border-2 border-dashed rounded-3 p-4 text-center position-relative"
+                                         id="epubUploadArea"
+                                         style="background: #f8f9fa; border-color: #dee2e6 !important; cursor: pointer; transition: all 0.3s ease; min-height: 120px;">
+                                        <input type="file"
+                                               name="DirectEpubUpload"
+                                               id="directEpubUpload"
+                                               accept=".epub,application/epub+zip"
+                                               class="position-absolute w-100 h-100 opacity-0"
+                                               style="top: 0; left: 0; cursor: pointer;">
+                                        <div id="epubUploadPlaceholder">
+                                            <i class="feather-book fs-3 text-success mb-2"></i>
+                                            <p class="mb-1 small fw-bold">@Html.T("انقر لرفع ملف EPUB", "Click to upload EPUB")</p>
+                                            <small class="text-muted">@Html.T("الحجم الأقصى: 50 MB", "Max size: 50 MB")</small>
+                                        </div>
+                                        <div id="epubUploadProgress" class="d-none">
+                                            <div class="progress mb-2" style="height: 6px;">
+                                                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                                     id="epubProgressBar"
+                                                     style="width: 0%"></div>
+                                            </div>
+                                            <small id="epubUploadStatus" class="text-muted">@Html.T("جاري الرفع...", "Uploading...")</small>
+                                        </div>
+                                        <div id="epubUploadSuccess" class="d-none">
+                                            <i class="feather-check-circle fs-3 text-success mb-2"></i>
+                                            <p class="mb-0 small fw-bold text-success" id="epubFileName"></p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- MOBI Upload -->
+                                <div class="col-md-6" id="directMobiUploadGroup" style="display: none;">
+                                    <label class="form-label fw-bold">@Html.T("ملف MOBI", "MOBI file")</label>
+                                    <div class="upload-area border-2 border-dashed rounded-3 p-4 text-center position-relative"
+                                         id="mobiUploadArea"
+                                         style="background: #f8f9fa; border-color: #dee2e6 !important; cursor: pointer; transition: all 0.3s ease; min-height: 120px;">
+                                        <input type="file"
+                                               name="DirectMobiUpload"
+                                               id="directMobiUpload"
+                                               accept=".mobi,application/x-mobipocket-ebook"
+                                               class="position-absolute w-100 h-100 opacity-0"
+                                               style="top: 0; left: 0; cursor: pointer;">
+                                        <div id="mobiUploadPlaceholder">
+                                            <i class="feather-book fs-3 text-warning mb-2"></i>
+                                            <p class="mb-1 small fw-bold">@Html.T("انقر لرفع ملف MOBI", "Click to upload MOBI")</p>
+                                            <small class="text-muted">@Html.T("الحجم الأقصى: 50 MB", "Max size: 50 MB")</small>
+                                        </div>
+                                        <div id="mobiUploadProgress" class="d-none">
+                                            <div class="progress mb-2" style="height: 6px;">
+                                                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                                     id="mobiProgressBar"
+                                                     style="width: 0%"></div>
+                                            </div>
+                                            <small id="mobiUploadStatus" class="text-muted">@Html.T("جاري الرفع...", "Uploading...")</small>
+                                        </div>
+                                        <div id="mobiUploadSuccess" class="d-none">
+                                            <i class="feather-check-circle fs-3 text-success mb-2"></i>
+                                            <p class="mb-0 small fw-bold text-success" id="mobiFileName"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <!-- Media Library Selection -->
+                        <div>
+                            <h6 class="fw-bold mb-3">
+                                <i class="feather-folder me-2 text-primary"></i>
+                                @Html.T("أو اختر من المكتبة", "Or choose from library")
+                            </h6>
+                            <div class="row g-4">
+                                <div class="col-12">
+                                    @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                        { "FieldName", "CoverImageUrl" },
+                                        { "FieldId", "coverImageUrl" },
+                                        { "Label", Html.T("صورة الغلاف", "Cover image") },
+                                        { "MediaType", "Image" },
+                                        { "CurrentValue", "" },
+                                        { "Required", false },
+                                        { "HelpText", Html.T("صورة غلاف الكتاب بأبعاد 2:3 (مثال: 600×900 بكسل)", "Book cover image 2:3 aspect ratio (e.g. 600×900 px)") },
+                                        { "AspectRatio", "2/3" }
+                                    })
+                                </div>
+                                <div class="col-md-6" id="pdfFieldGroup">
+                                    @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                        { "FieldName", "FullPdfUrl" },
+                                        { "FieldId", "fullPdfUrl" },
+                                        { "Label", Html.T("ملف PDF الكامل", "Full PDF file") },
+                                        { "MediaType", "Document" },
+                                        { "CurrentValue", "" },
+                                        { "Required", false },
+                                        { "HelpText", Html.T("ملف PDF الكامل للكتاب", "Full book PDF file") }
+                                    })
+                                </div>
+                                <div class="col-md-6">
+                                    @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                        { "FieldName", "PreviewPdfUrl" },
+                                        { "FieldId", "previewPdfUrl" },
+                                        { "Label", Html.T("ملف المعاينة (اختياري)", "Preview file (optional)") },
+                                        { "MediaType", "Document" },
+                                        { "CurrentValue", "" },
+                                        { "Required", false },
+                                        { "HelpText", Html.T("نسخة مجانية للمعاينة (أول فصول الكتاب)", "Free preview (first chapters)") }
+                                    })
+                                </div>
+                                <div class="col-md-6" id="epubFieldGroup" style="display: none;">
+                                    @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                        { "FieldName", "EpubUrl" },
+                                        { "FieldId", "epubUrl" },
+                                        { "Label", Html.T("ملف EPUB", "EPUB file") },
+                                        { "MediaType", "Document" },
+                                        { "CurrentValue", "" },
+                                        { "Required", false },
+                                        { "HelpText", Html.T("ملف EPUB للقراءة على أجهزة القراءة الإلكترونية", "EPUB file for e-readers") }
+                                    })
+                                </div>
+                                <div class="col-md-6" id="mobiFieldGroup" style="display: none;">
+                                    @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                        { "FieldName", "MobiUrl" },
+                                        { "FieldId", "mobiUrl" },
+                                        { "Label", Html.T("ملف MOBI", "MOBI file") },
+                                        { "MediaType", "Document" },
+                                        { "CurrentValue", "" },
+                                        { "Required", false },
+                                        { "HelpText", Html.T("ملف MOBI لأجهزة Kindle", "MOBI file for Kindle") }
+                                    })
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+
+                <!-- Pricing -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-dollar-sign me-2 text-primary"></i>
+                            التسعير
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input asp-for="IsFree" class="form-check-input" type="checkbox" id="isFreeCheck">
+                                <label class="form-check-label" for="isFreeCheck">
+                                    كتاب مجاني
+                                </label>
+                            </div>
+                        </div>
+                        <div id="priceGroup" class="mb-3">
+                            <label asp-for="Price" class="form-label">@Html.T("السعر", "Price") (@(ViewBag.DefaultCurrencyCode ?? "EGP")) <span class="text-danger">*</span></label>
+                            <input asp-for="Price" class="form-control" type="number" step="0.01" min="0">
+                            <span asp-validation-for="Price" class="text-danger small"></span>
+                        </div>
+                        <div id="discountGroup">
+                            <label asp-for="DiscountPrice" class="form-label">@Html.T("سعر الخصم", "Discount price") (@(ViewBag.DefaultCurrencyCode ?? "EGP"))</label>
+                            <input asp-for="DiscountPrice" class="form-control" type="number" step="0.01" min="0">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Guidelines -->
+                <div class="card stretch stretch-full mb-4 bg-soft-info border-0">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3">
+                            <i class="feather-info me-2"></i>
+                            نصائح لإضافة كتاب ناجح
+                        </h6>
+                        <ul class="list-unstyled mb-0">
+                            <li class="d-flex align-items-start mb-2">
+                                <i class="feather-check-circle text-success me-2 mt-1 flex-shrink-0"></i>
+                                <span class="fs-13">@Html.T("استخدم عنواناً جذاباً يعكس محتوى الكتاب", "Use an engaging title that reflects the book content")</span>
+                            </li>
+                            <li class="d-flex align-items-start mb-2">
+                                <i class="feather-check-circle text-success me-2 mt-1 flex-shrink-0"></i>
+                                <span class="fs-13">@Html.T("أضف وصفاً تفصيلياً يشمل أهم المواضيع", "Add a detailed description covering main topics")</span>
+                            </li>
+                            <li class="d-flex align-items-start mb-2">
+                                <i class="feather-check-circle text-success me-2 mt-1 flex-shrink-0"></i>
+                                <span class="fs-13">@Html.T("ارفع صورة غلاف بجودة عالية (600×900 بكسل)", "Upload a high-quality cover image (600×900 px)")</span>
+                            </li>
+                            <li class="d-flex align-items-start mb-2">
+                                <i class="feather-check-circle text-success me-2 mt-1 flex-shrink-0"></i>
+                                <span class="fs-13">@Html.T("وفر ملف معاينة مجاني لجذب القراء", "Provide a free preview file to attract readers")</span>
+                            </li>
+                            <li class="d-flex align-items-start">
+                                <i class="feather-check-circle text-success me-2 mt-1 flex-shrink-0"></i>
+                                <span class="fs-13">@Html.T("حدد السعر المناسب بناءً على حجم المحتوى", "Set an appropriate price based on content size")</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-save me-1"></i>
+                            حفظ ومتابعة
+                        </button>
+                        <a href="@Url.Action("Index")" class="btn btn-light w-100">
+                            إلغاء
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </form>
+</div>
+
+@* Category Modals for On-the-Fly Creation *@
+@await Html.PartialAsync("_CategoryModals")
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/instructor-category-manager.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Initialize Category Manager for on-the-fly category creation
+            InstructorCategoryManager.init({
+                categorySelectId: 'categorySelect',
+                subcategorySelectId: 'subcategorySelect',
+                addSubcategoryBtnId: 'addSubcategoryBtn',
+                apiBaseUrl: '/Instructor/Books'
+            });
+
+            // Toggle price fields based on free checkbox
+            const isFreeCheck = document.getElementById('isFreeCheck');
+            const priceGroup = document.getElementById('priceGroup');
+            const discountGroup = document.getElementById('discountGroup');
+
+            isFreeCheck.addEventListener('change', function () {
+                priceGroup.style.display = this.checked ? 'none' : 'block';
+                discountGroup.style.display = this.checked ? 'none' : 'block';
+            });
+
+            // Toggle physical copy fields
+            const hasPhysicalCheck = document.getElementById('hasPhysicalCheck');
+            const physicalPriceGroup = document.getElementById('physicalPriceGroup');
+            const physicalStockGroup = document.getElementById('physicalStockGroup');
+
+            hasPhysicalCheck.addEventListener('change', function () {
+                physicalPriceGroup.style.display = this.checked ? 'block' : 'none';
+                physicalStockGroup.style.display = this.checked ? 'block' : 'none';
+            });
+
+            // Calculate available formats
+            const formatPdf = document.getElementById('formatPdf');
+            const formatEpub = document.getElementById('formatEpub');
+            const formatMobi = document.getElementById('formatMobi');
+            const availableFormats = document.getElementById('availableFormats');
+
+            function updateFormats() {
+                let value = 0;
+                if (formatPdf.checked) value |= 1;   // PDF = 1
+                if (formatEpub.checked) value |= 2;  // EPUB = 2
+                if (formatMobi.checked) value |= 4;  // MOBI = 4
+                availableFormats.value = value;
+            }
+
+            formatPdf.addEventListener('change', updateFormats);
+            formatEpub.addEventListener('change', updateFormats);
+            formatMobi.addEventListener('change', updateFormats);
+            updateFormats();
+
+            // Toggle file fields based on format selection
+            const pdfFieldGroup = document.getElementById('pdfFieldGroup');
+            const epubFieldGroup = document.getElementById('epubFieldGroup');
+            const mobiFieldGroup = document.getElementById('mobiFieldGroup');
+
+            function updateFileFields() {
+                if (pdfFieldGroup) pdfFieldGroup.style.display = formatPdf.checked ? 'block' : 'none';
+                if (epubFieldGroup) epubFieldGroup.style.display = formatEpub.checked ? 'block' : 'none';
+                if (mobiFieldGroup) mobiFieldGroup.style.display = formatMobi.checked ? 'block' : 'none';
+            }
+
+            formatPdf.addEventListener('change', updateFileFields);
+            formatEpub.addEventListener('change', updateFileFields);
+            formatMobi.addEventListener('change', updateFileFields);
+            updateFileFields();
+
+            // Direct file upload handlers
+            setupDirectFileUpload('directPdfUpload', 'pdf', 100);
+            setupDirectFileUpload('directPreviewPdfUpload', 'previewPdf', 100);
+            setupDirectFileUpload('directEpubUpload', 'epub', 50);
+            setupDirectFileUpload('directMobiUpload', 'mobi', 50);
+
+            // Show/hide direct upload fields based on format selection
+            function updateDirectUploadFields() {
+                const directEpubGroup = document.getElementById('directEpubUploadGroup');
+                const directMobiGroup = document.getElementById('directMobiUploadGroup');
+
+                if (directEpubGroup) {
+                    directEpubGroup.style.display = formatEpub.checked ? 'block' : 'none';
+                }
+                if (directMobiGroup) {
+                    directMobiGroup.style.display = formatMobi.checked ? 'block' : 'none';
+                }
+            }
+
+            formatEpub.addEventListener('change', updateDirectUploadFields);
+            formatMobi.addEventListener('change', updateDirectUploadFields);
+            updateDirectUploadFields();
+        });
+
+        // Setup direct file upload with progress
+        function setupDirectFileUpload(inputId, type, maxSizeMB) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+
+            const area = document.getElementById(`${type}UploadArea`);
+            const placeholder = document.getElementById(`${type}UploadPlaceholder`);
+            const progress = document.getElementById(`${type}UploadProgress`);
+            const progressBar = document.getElementById(`${type}ProgressBar`);
+            const status = document.getElementById(`${type}UploadStatus`);
+            const success = document.getElementById(`${type}UploadSuccess`);
+            const fileName = document.getElementById(`${type}FileName`);
+
+            if (area) {
+                area.addEventListener('click', () => input.click());
+            }
+
+            input.addEventListener('change', async function (e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Validate file type
+                const allowedExtensions = {
+                    'pdf': ['.pdf'],
+                    'previewPdf': ['.pdf'],
+                    'epub': ['.epub'],
+                    'mobi': ['.mobi']
+                };
+
+                const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+                if (!allowedExtensions[type]?.includes(fileExt)) {
+                    alert(`يرجى اختيار ملف ${fileExt.toUpperCase()} فقط`);
+                    input.value = '';
+                    return;
+                }
+
+                // Validate file size
+                const maxSizeBytes = maxSizeMB * 1024 * 1024;
+                if (file.size > maxSizeBytes) {
+                    alert(`حجم الملف يتجاوز ${maxSizeMB} ميجابايت`);
+                    input.value = '';
+                    return;
+                }
+
+                // Show progress
+                if (placeholder) placeholder.classList.add('d-none');
+                if (progress) progress.classList.remove('d-none');
+                if (progressBar) progressBar.style.width = '0%';
+                if (status) status.textContent = 'جاري الرفع...';
+
+                try {
+                    // Upload file
+                    const formData = new FormData();
+                    formData.append('File', file);
+                    formData.append('Title', file.name.replace(/\.[^/.]+$/, ""));
+                    formData.append('Description', `ملف ${type.toUpperCase()} للكتاب`);
+
+                    const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+
+                    const xhr = new XMLHttpRequest();
+
+                    // Track upload progress
+                    xhr.upload.addEventListener('progress', function (e) {
+                        if (e.lengthComputable && progressBar) {
+                            const percentComplete = (e.loaded / e.total) * 100;
+                            progressBar.style.width = percentComplete + '%';
+                            if (status) {
+                                status.textContent = `جاري الرفع... ${Math.round(percentComplete)}%`;
+                            }
+                        }
+                    });
+
+                    xhr.addEventListener('load', function () {
+                        if (xhr.status === 200) {
+                            try {
+                                const result = JSON.parse(xhr.responseText);
+                                if (result.success && result.media) {
+                                    // Show success
+                                    if (progress) progress.classList.add('d-none');
+                                    if (success) success.classList.remove('d-none');
+                                    if (fileName) fileName.textContent = file.name;
+
+                                    // Store file URL for form submission
+                                    const hiddenFieldName = type === 'pdf' ? 'FullPdfUrl' :
+                                                           type === 'previewPdf' ? 'PreviewPdfUrl' :
+                                                           type === 'epub' ? 'EpubUrl' : 'MobiUrl';
+                                    let hiddenField = document.querySelector(`input[name="${hiddenFieldName}"]`);
+                                    if (!hiddenField) {
+                                        hiddenField = document.createElement('input');
+                                        hiddenField.type = 'hidden';
+                                        hiddenField.name = hiddenFieldName;
+                                        document.querySelector('form').appendChild(hiddenField);
+                                    }
+                                    hiddenField.value = result.media.fileUrl;
+                                } else {
+                                    throw new Error(result.message || 'فشل رفع الملف');
+                                }
+                            } catch (error) {
+                                showUploadError(type, error.message);
+                            }
+                        } else {
+                            showUploadError(type, 'حدث خطأ أثناء رفع الملف');
+                        }
+                    });
+
+                    xhr.addEventListener('error', function () {
+                        showUploadError(type, 'حدث خطأ أثناء رفع الملف');
+                    });
+
+                    xhr.open('POST', '/Instructor/MediaLibrary/UploadApi');
+                    xhr.setRequestHeader('X-CSRF-TOKEN', token || '');
+                    xhr.send(formData);
+
+                } catch (error) {
+                    showUploadError(type, error.message);
+                }
+            });
+        }
+
+        function showUploadError(type, message) {
+            const placeholder = document.getElementById(`${type}UploadPlaceholder`);
+            const progress = document.getElementById(`${type}UploadProgress`);
+
+            if (progress) progress.classList.add('d-none');
+            if (placeholder) placeholder.classList.remove('d-none');
+
+            alert(message);
+        }
+    </script>
+}

@@ -1,0 +1,423 @@
+@model LMS.Areas.Student.ViewModels.BrowseBooksViewModel
+@using LMS.Domain.Enums
+@{
+    ViewData["Title"] = Html.T("تصفح الكتب", "Browse Books");
+}
+
+@section Styles {
+<style>
+    .discover-hero {
+        background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 50%, #3d7ab5 100%);
+        border-radius: 20px;
+        position: relative;
+        overflow: hidden;
+    }
+    .discover-hero::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -20%;
+        width: 60%;
+        height: 200%;
+        background: radial-gradient(ellipse, rgba(255,255,255,0.08) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .filter-sidebar { position: sticky; top: 20px; }
+    .filter-card {
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+    .filter-card .card-header {
+        background: transparent;
+        border-bottom: 1px solid #f1f5f9;
+        padding: 20px;
+    }
+    .browse-book-card {
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        height: 100%;
+        border: none;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+    }
+    .browse-book-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+    }
+    .book-thumbnail {
+        height: 180px;
+        object-fit: cover;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .price-badge {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 10;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 12px;
+    }
+    .course-price { font-size: 22px; font-weight: 700; color: #1e40af; }
+    .course-price-original { text-decoration: line-through; color: #94a3b8; font-size: 14px; }
+    .rating-stars { color: #fbbf24; font-size: 14px; }
+    .btn-add-cart {
+        background: linear-gradient(135deg, #004aad 0%, #0066cc 100%);
+        border: none;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .btn-add-cart:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,74,173,0.3);
+    }
+    .text-truncate-2-line {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<div class="container-fluid py-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="@Html.T("مسار التنقل", "Breadcrumb")" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a asp-area="Student" asp-controller="Dashboard" asp-action="Index">@Html.T("الرئيسية", "Home")</a></li>
+            <li class="breadcrumb-item"><a asp-area="Student" asp-controller="Books" asp-action="Index">@Html.T("الكتب", "Books")</a></li>
+            <li class="breadcrumb-item active">@Html.T("تصفح الكتب", "Browse Books")</li>
+        </ol>
+    </nav>
+
+    <!-- Hero Section (aligned with Browse Courses) -->
+    <div class="discover-hero mb-4 py-4 px-4">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <h2 class="text-white fw-bold mb-2">
+                    <i class="feather-book-open me-2"></i>
+                    @Html.T("تصفح الكتب", "Browse Books")
+                </h2>
+                <p class="text-white opacity-75 mb-0">@Html.T("اكتشف مكتبة الكتب الإلكترونية والمجانية", "Discover our e-books and free library")</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Sidebar Filters -->
+        <div class="col-lg-3 mb-4">
+            <div class="filter-sidebar">
+                <div class="card filter-card">
+                    <div class="card-header">
+                        <h6 class="fw-bold mb-0 d-flex align-items-center">
+                            <div class="bg-primary bg-opacity-10 rounded-circle p-2 me-2">
+                                <i class="feather-sliders text-primary"></i>
+                            </div>
+                            @Html.T("تصفية النتائج", "Filter Results")
+                        </h6>
+                    </div>
+                <div class="card-body">
+                    <form asp-action="Index" method="get">
+                        @if (!string.IsNullOrEmpty(Model.InstructorId))
+                        {
+                            <input type="hidden" name="instructorId" value="@Model.InstructorId" />
+                        }
+                        <!-- Search -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">@Html.T("البحث", "Search")</label>
+                            <input type="text" name="search" value="@Model.Search" 
+                                   class="form-control" placeholder="@Html.T("ابحث عن كتاب...", "Search for a book...")">
+                        </div>
+
+                        <!-- Categories -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">@Html.T("التصنيف", "Category")</label>
+                            <select name="category" class="form-select">
+                                <option value="">@Html.T("جميع التصنيفات", "All Categories")</option>
+                                @foreach (var cat in Model.Categories)
+                                {
+                                    if (Model.CategoryId == cat.Id)
+                                    {
+                                        <option value="@cat.Id" selected>@cat.Name (@cat.BookCount)</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@cat.Id">@cat.Name (@cat.BookCount)</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <!-- Price Range -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">@Html.T("السعر", "Price")</label>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <input type="number" name="minPrice" value="@Model.MinPrice" 
+                                           class="form-control" placeholder="@Html.T("من", "From")">
+                                </div>
+                                <div class="col-6">
+                                    <input type="number" name="maxPrice" value="@Model.MaxPrice" 
+                                           class="form-control" placeholder="@Html.T("إلى", "To")">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Free Only -->
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="free" value="true" 
+                                       class="form-check-input" id="freeOnly"
+                                       @(Model.IsFree == true ? "checked" : null)>
+                                <label class="form-check-label" for="freeOnly">
+                                    @Html.T("الكتب المجانية فقط", "Free Books Only")
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Book Type -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">@Html.T("نوع الكتاب", "Book Type")</label>
+                            <select name="type" class="form-select">
+                                <option value="">@Html.T("الكل", "All")</option>
+                                @if (Model.BookType == BookType.EBook) { <option value="@BookType.EBook" selected>@Html.T("كتاب إلكتروني", "E-Book")</option> } else { <option value="@BookType.EBook">@Html.T("كتاب إلكتروني", "E-Book")</option> }
+                                @if (Model.BookType == BookType.AudioBook) { <option value="@BookType.AudioBook" selected>@Html.T("كتاب صوتي", "Audio Book")</option> } else { <option value="@BookType.AudioBook">@Html.T("كتاب صوتي", "Audio Book")</option> }
+                                @if (Model.BookType == BookType.Workbook) { <option value="@BookType.Workbook" selected>@Html.T("كتاب تمارين", "Workbook")</option> } else { <option value="@BookType.Workbook">@Html.T("كتاب تمارين", "Workbook")</option> }
+                            </select>
+                        </div>
+
+                        <!-- Format -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">@Html.T("التنسيق", "Format")</label>
+                            <select name="format" class="form-select">
+                                <option value="">@Html.T("الكل", "All")</option>
+                                @if (Model.Format == BookFormat.PDF) { <option value="@BookFormat.PDF" selected>@Html.T("PDF", "PDF")</option> } else { <option value="@BookFormat.PDF">@Html.T("PDF", "PDF")</option> }
+                                @if (Model.Format == BookFormat.EPUB) { <option value="@BookFormat.EPUB" selected>@Html.T("EPUB", "EPUB")</option> } else { <option value="@BookFormat.EPUB">@Html.T("EPUB", "EPUB")</option> }
+                                @if (Model.Format == BookFormat.MOBI) { <option value="@BookFormat.MOBI" selected>@Html.T("MOBI", "MOBI")</option> } else { <option value="@BookFormat.MOBI">@Html.T("MOBI", "MOBI")</option> }
+                            </select>
+                        </div>
+
+                        <!-- Language -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">@Html.T("اللغة", "Language")</label>
+                            <select name="language" class="form-select">
+                                <option value="">@Html.T("الكل", "All")</option>
+                                @foreach (var lang in Model.Languages)
+                                {
+                                    if (Model.Language == lang.Code)
+                                    {
+                                        <option value="@lang.Code" selected>@lang.Name (@lang.BookCount)</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@lang.Code">@lang.Name (@lang.BookCount)</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <!-- Rating -->
+                        <div class="mb-4">
+                            <label class="form-label small fw-bold">@Html.T("التقييم", "Rating")</label>
+                            <select name="rating" class="form-select">
+                                <option value="">@Html.T("الكل", "All")</option>
+                                @if (Model.MinRating == 4) { <option value="4" selected>@Html.T("4 نجوم وأكثر", "4 Stars & Above")</option> } else { <option value="4">@Html.T("4 نجوم وأكثر", "4 Stars & Above")</option> }
+                                @if (Model.MinRating == 3) { <option value="3" selected>@Html.T("3 نجوم وأكثر", "3 Stars & Above")</option> } else { <option value="3">@Html.T("3 نجوم وأكثر", "3 Stars & Above")</option> }
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-filter me-2"></i>
+                            @Html.T("تطبيق التصفية", "Apply Filter")
+                        </button>
+                        <a href="@Url.Action("Index", new { instructorId = Model.InstructorId })" class="btn btn-outline-secondary w-100">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("إعادة تعيين", "Reset")
+                        </a>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Books Grid -->
+        <div class="col-lg-9">
+            <!-- Results Header (aligned with Browse Courses) -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                        <div>
+                            <h5 class="fw-bold mb-1">@Html.T("نتائج البحث", "Search Results")</h5>
+                            <p class="text-muted mb-0">@Html.T("تم العثور على", "Found") @Model.TotalCount @Html.T("كتاب", "book(s)")</p>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="mb-0 me-2 text-muted">@Html.T("ترتيب حسب:", "Sort by:")</label>
+                            <select name="sort" class="form-select form-select-sm" style="width: auto;"
+                                    onchange="var u = new URL(window.location.href); u.searchParams.set('sort', this.value); window.location.href = u.toString();">
+                                @if (Model.SortBy == "PublishedAt") { <option value="PublishedAt" selected>@Html.T("الأحدث", "Newest")</option> } else { <option value="PublishedAt">@Html.T("الأحدث", "Newest")</option> }
+                                @if (Model.SortBy == "Sales") { <option value="Sales" selected>@Html.T("الأكثر مبيعاً", "Best Selling")</option> } else { <option value="Sales">@Html.T("الأكثر مبيعاً", "Best Selling")</option> }
+                                @if (Model.SortBy == "Rating") { <option value="Rating" selected>@Html.T("الأعلى تقييماً", "Highest Rated")</option> } else { <option value="Rating">@Html.T("الأعلى تقييماً", "Highest Rated")</option> }
+                                @if (Model.SortBy == "Price") { <option value="Price" selected>@Html.T("السعر", "Price")</option> } else { <option value="Price">@Html.T("السعر", "Price")</option> }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @if (Model.Books.Any())
+            {
+                <div class="row g-4">
+                    @foreach (var book in Model.Books)
+                    {
+                        var bookDetailUrl = string.IsNullOrEmpty(book.Slug) ? Url.Action("DetailsById", "Books", new { area = "Student", id = book.Id }) : Url.Action("Details", "Books", new { area = "Student", slug = book.Slug });
+                        <div class="col-xl-4 col-lg-6 col-md-6">
+                            <div class="card browse-book-card">
+                                <div class="position-relative">
+                                    <a href="@bookDetailUrl" class="text-decoration-none">
+                                        @if (!string.IsNullOrEmpty(book.CoverImageUrl))
+                                        {
+                                            <img src="@book.CoverImageUrl" alt="@book.Title" class="card-img-top book-thumbnail" />
+                                        }
+                                        else
+                                        {
+                                            <div class="book-thumbnail d-flex align-items-center justify-content-center">
+                                                <i class="feather-book text-white" style="font-size: 64px;"></i>
+                                            </div>
+                                        }
+                                    </a>
+                                    @if (book.IsFree || book.FinalPrice == 0)
+                                    {
+                                        <span class="price-badge badge bg-success">@Html.T("مجاني", "Free")</span>
+                                    }
+                                    else if (book.DiscountPercentage.HasValue)
+                                    {
+                                        <span class="price-badge badge bg-danger">@Html.T("خصم", "Discount") @book.DiscountPercentage%</span>
+                                    }
+                                    @if (book.IsNew)
+                                    {
+                                        <span class="price-badge badge bg-info" style="top: 12px; left: auto; right: 12px;">@Html.T("جديد", "New")</span>
+                                    }
+                                    @if (book.IsPurchased)
+                                    {
+                                        <span class="badge bg-success position-absolute bottom-0 end-0 m-2">
+                                            <i class="feather-check me-1"></i>@Html.T("مشترى", "Purchased")
+                                        </span>
+                                    }
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-2">
+                                        @if (!string.IsNullOrEmpty(book.CategoryName))
+                                        {
+                                            <span class="badge bg-soft-primary text-primary">@book.CategoryName</span>
+                                        }
+                                    </div>
+                                    <a href="@bookDetailUrl" class="text-dark text-decoration-none">
+                                        <h5 class="fw-bold mb-2 text-truncate-2-line">@book.Title</h5>
+                                    </a>
+                                    @if (!string.IsNullOrEmpty(book.Author))
+                                    {
+                                        <p class="text-muted fs-12 mb-2">@book.Author</p>
+                                    }
+                                    <p class="text-muted fs-12 mb-3 text-truncate-2-line">@book.ShortDescription</p>
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="rating-stars">★</span>
+                                        <span class="fs-12 ms-1">@book.AverageRating.ToString("N1")</span>
+                                        <span class="text-muted fs-12 ms-1">(@book.TotalReviews)</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top border-light">
+                                        <div>
+                                            @if (book.IsFree || book.FinalPrice == 0)
+                                            {
+                                                <span class="course-price text-success">@Html.T("مجاني", "Free")</span>
+                                            }
+                                            else if (book.DiscountPrice.HasValue)
+                                            {
+                                                <span class="course-price-original">@book.Price.ToEGP(0)</span>
+                                                <span class="course-price ms-1">@book.DiscountPrice.Value.ToEGP(0)</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="course-price">@book.Price.ToEGP(0)</span>
+                                            }
+                                        </div>
+                                        @if (book.IsPurchased)
+                                        {
+                                            <a href="@Url.Action("Download", "Books", new { area = "Student", id = book.Id })" class="btn btn-sm btn-add-cart text-white">
+                                                <i class="feather-download me-1"></i>@Html.T("تحميل", "Download")
+                                            </a>
+                                        }
+                                        else if (book.IsInCart && !(book.IsFree || book.FinalPrice == 0))
+                                        {
+                                            <a href="@Url.Action("Cart", "Checkout", new { area = "Student" })" class="btn btn-sm btn-outline-primary">
+                                                <i class="feather-shopping-cart me-1"></i>@Html.T("في السلة", "In Cart")
+                                            </a>
+                                        }
+                                        else if (book.IsFree || book.FinalPrice == 0)
+                                        {
+                                            <a href="@Url.Action("FreeDownload", "Books", new { area = "Student", id = book.Id })" class="btn btn-sm btn-success">
+                                                <i class="feather-download me-1"></i>@Html.T("تحميل مجاني", "Download free")
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <a href="@bookDetailUrl" class="btn btn-sm btn-add-cart text-white">
+                                                <i class="feather-shopping-cart me-1"></i>@Html.T("أضف للسلة", "Add to cart")
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <!-- Pagination -->
+                @if (Model.TotalPages > 1)
+                {
+                    <nav class="mt-4">
+                        <ul class="pagination justify-content-center">
+                            @for (int i = 1; i <= Model.TotalPages; i++)
+                            {
+                                <li class="page-item @(i == Model.Page ? "active" : "")">
+                                    <a class="page-link" href="@Url.Action("Index", new { 
+                                        page = i, 
+                                        category = Model.CategoryId, 
+                                        search = Model.Search,
+                                        minPrice = Model.MinPrice,
+                                        maxPrice = Model.MaxPrice,
+                                        free = Model.IsFree,
+                                        type = Model.BookType,
+                                        format = Model.Format,
+                                        language = Model.Language,
+                                        rating = Model.MinRating,
+                                        instructorId = Model.InstructorId,
+                                        sort = Model.SortBy,
+                                        desc = Model.SortDescending
+                                    })">@i</a>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                }
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="fas fa-book-open fa-4x text-muted mb-3"></i>
+                    <h5>@Html.T("لا توجد كتب", "No books found")</h5>
+                    <p class="text-muted">@Html.T("جرب تغيير معايير البحث", "Try changing your search criteria")</p>
+                    <a href="@Url.Action("Index", new { instructorId = Model.InstructorId })" class="btn btn-primary">
+                        @Html.T("عرض جميع الكتب", "View All Books")
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+

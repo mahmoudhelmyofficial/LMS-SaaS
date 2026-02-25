@@ -1,0 +1,244 @@
+@model IEnumerable<LMS.Domain.Entities.Social.Review>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("التقييمات والمراجعات", "Reviews & Ratings");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة تقييمات طلابك", "View and manage your student reviews");
+    var indexUrl = Url.Action("Index");
+    var rating5Url = Url.Action("Index", new { rating = 5 });
+    var rating4Url = Url.Action("Index", new { rating = 4 });
+    var rating3Url = Url.Action("Index", new { rating = 3 });
+    var rating2Url = Url.Action("Index", new { rating = 2 });
+    var rating1Url = Url.Action("Index", new { rating = 1 });
+    
+    // Load platform settings
+    var defaultPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Default", 10);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<div class='btn-group'><button type='button' class='btn btn-light dropdown-toggle' data-bs-toggle='dropdown'><i class='feather-filter me-2'></i>" + Html.T("تصفية", "Filter") + "</button><ul class='dropdown-menu dropdown-menu-end'><li><a class='dropdown-item' href='" + indexUrl + "'>" + Html.T("جميع التقييمات", "All ratings") + "</a></li><li><a class='dropdown-item' href='" + rating5Url + "'>5 " + Html.T("نجوم", "stars") + "</a></li><li><a class='dropdown-item' href='" + rating4Url + "'>4 " + Html.T("نجوم", "stars") + "</a></li><li><a class='dropdown-item' href='" + rating3Url + "'>3 " + Html.T("نجوم", "stars") + "</a></li><li><a class='dropdown-item' href='" + rating2Url + "'>2 " + Html.T("نجمة", "stars") + "</a></li><li><a class='dropdown-item' href='" + rating1Url + "'>1 " + Html.T("نجمة", "star") + "</a></li></ul></div>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Rating Summary -->
+    <div class="row mb-4">
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-body text-center py-5">
+                    <h1 class="display-1 fw-bold text-warning mb-2">@(ViewBag.AverageRating?.ToString("F1") ?? "0.0")</h1>
+                    <div class="mb-3">
+                        @for (int i = 1; i <= 5; i++)
+                        {
+                            <i class="feather-star @(i <= (ViewBag.AverageRating ?? 0) ? "text-warning fill-warning" : "text-muted")" style="font-size: 24px;"></i>
+                        }
+                    </div>
+                    <p class="text-muted mb-0">@Html.T("من أصل", "Out of") @(ViewBag.TotalReviews ?? 0) @Html.T("تقييم", "reviews")</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع التقييمات", "Rating distribution")</h5>
+                </div>
+                <div class="card-body">
+                    @for (int i = 5; i >= 1; i--)
+                    {
+                        var percentage = ViewBag.RatingDistribution != null && ViewBag.RatingDistribution.ContainsKey(i) 
+                            ? ViewBag.RatingDistribution[i] 
+                            : 0;
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <span class="fs-13 fw-medium" style="min-width: 60px;">@i @Html.T("نجوم", "stars")</span>
+                            <div class="progress flex-grow-1" style="height: 8px;">
+                                <div class="progress-bar bg-warning" style="width: @percentage%"></div>
+                            </div>
+                            <span class="fs-12 text-muted" style="min-width: 50px;">@percentage%</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <select class="form-select" name="courseId" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                @if (ViewBag.Courses != null)
+                                {
+                                    foreach (var course in ViewBag.Courses)
+                                    {
+                                        <option value="@course.Id">@course.Title</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" name="hasResponse" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع المراجعات", "All reviews")</option>
+                                <option value="true" selected="@(ViewBag.HasResponse == true)">@Html.T("تم الرد عليها", "Replied")</option>
+                                <option value="false" selected="@(ViewBag.HasResponse == false)">@Html.T("لم يتم الرد", "No reply")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" name="sortBy" onchange="this.form.submit()">
+                                <option value="newest" selected="@(ViewBag.SortBy == "newest" || ViewBag.SortBy == null)">@Html.T("الأحدث", "Newest")</option>
+                                <option value="oldest" selected="@(ViewBag.SortBy == "oldest")">@Html.T("الأقدم", "Oldest")</option>
+                                <option value="rating" selected="@(ViewBag.SortBy == "rating")">@Html.T("الأعلى تقييماً", "Highest rated")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <input type="text" class="form-control" name="search" placeholder="@Html.T("بحث...", "Search...")" value="@ViewBag.SearchTerm">
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reviews List -->
+    <div class="row">
+        @if (Model != null && Model.Any())
+        {
+            foreach (var review in Model)
+            {
+                <div class="col-lg-12 mb-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex align-items-start justify-content-between mb-3">
+                                <div class="d-flex align-items-start gap-3 flex-grow-1">
+                                    <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                        @(review.Student?.FullName?.Substring(0, 1) ?? "?")
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">@(review.Student?.FullName ?? Html.T("طالب غير معروف", "Unknown student"))</h6>
+                                        <div class="d-flex align-items-center gap-3 mb-2">
+                                            <div class="d-flex align-items-center gap-1">
+                                                @for (int i = 1; i <= 5; i++)
+                                                {
+                                                    <i class="feather-star @(i <= review.Rating ? "text-warning fill-warning" : "text-muted")"></i>
+                                                }
+                                            </div>
+                                            <span class="text-muted fs-12">@review.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                            <a href="@Url.Action("Details", "Courses", new { id = review.CourseId })" class="text-muted fs-12">
+                                                <i class="feather-book me-1"></i>
+                                                @(review.Course?.Title ?? Html.T("دورة غير معروفة", "Unknown course"))
+                                            </a>
+                                        </div>
+                                        <p class="mb-0">@review.Comment</p>
+
+                                        <!-- Instructor Response -->
+                                        @if (!string.IsNullOrEmpty(review.InstructorResponse))
+                                        {
+                                            <div class="mt-3 p-3 bg-soft-primary rounded">
+                                                <div class="d-flex align-items-center gap-2 mb-2">
+                                                    <i class="feather-corner-down-left text-primary"></i>
+                                                    <span class="fw-medium">@Html.T("ردك:", "Your reply:")</span>
+                                                </div>
+                                                <p class="mb-0">@review.InstructorResponse</p>
+                                                <span class="text-muted fs-11">@review.ResponseAt?.ToString("dd/MM/yyyy")</span>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="mt-3">
+                                                <button class="btn btn-sm btn-light" onclick="showResponseForm(@review.Id)">
+                                                    <i class="feather-corner-down-left me-2"></i>
+                                                    @Html.T("الرد على التقييم", "Reply to review")
+                                                </button>
+                                            </div>
+                                            <div id="responseForm-@review.Id" style="display: none;" class="mt-3">
+                                                <form asp-action="Respond" asp-route-id="@review.Id" method="post">
+                                                    @Html.AntiForgeryToken()
+                                                    <input type="hidden" name="ReviewId" value="@review.Id" />
+                                                    <textarea name="Response" class="form-control mb-2" rows="3" placeholder="@Html.T("اكتب ردك هنا...", "Write your reply here...")" required></textarea>
+                                                    <div class="d-flex gap-2">
+                                                        <button type="submit" class="btn btn-sm btn-primary">
+                                                            <i class="feather-send me-2"></i>
+                                                            @Html.T("إرسال الرد", "Send reply")
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-light" onclick="hideResponseForm(@review.Id)">
+                                                            @Html.T("إلغاء", "Cancel")
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="dropdown">
+                                    <button class="btn btn-light btn-sm" type="button" data-bs-toggle="dropdown">
+                                        <i class="feather-more-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Report", new { id = review.Id })">
+                                                <i class="feather-flag me-2"></i>
+                                                @Html.T("الإبلاغ عن التقييم", "Report review")
+                                            </a>
+                                        </li>
+                                        @if (!string.IsNullOrEmpty(review.InstructorResponse))
+                                        {
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0)" onclick="showResponseForm(@review.Id)">
+                                                    <i class="feather-edit me-2"></i>
+                                                    @Html.T("تعديل الرد", "Edit reply")
+                                                </a>
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* Pagination *@
+            var paginationData = new ViewDataDictionary(new Microsoft.AspNetCore.Mvc.ModelBinding.EmptyModelMetadataProvider(), new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary());
+            paginationData["CurrentPage"] = ViewBag.CurrentPage ?? 1;
+            paginationData["TotalPages"] = ViewBag.TotalPages ?? 1;
+            paginationData["TotalItems"] = ViewBag.TotalItems ?? 0;
+            paginationData["PageSize"] = ViewBag.PageSize ?? defaultPageSize;
+            paginationData["Action"] = "Index";
+            paginationData["Controller"] = "Reviews";
+            @await Html.PartialAsync("_Pagination", paginationData)
+        }
+        else
+        {
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-warning text-warning mb-4 mx-auto">
+                            <i class="feather-star"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">@Html.T("لا توجد تقييمات بعد", "No reviews yet")</h5>
+                        <p class="text-muted mb-0">@Html.T("ستظهر تقييمات طلابك هنا", "Your student reviews will appear here")</p>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function showResponseForm(reviewId) {
+            document.getElementById('responseForm-' + reviewId).style.display = 'block';
+        }
+
+        function hideResponseForm(reviewId) {
+            document.getElementById('responseForm-' + reviewId).style.display = 'none';
+        }
+    </script>
+}
+

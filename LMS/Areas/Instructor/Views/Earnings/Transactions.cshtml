@@ -1,0 +1,280 @@
+@model IEnumerable<LMS.Areas.Instructor.ViewModels.TransactionViewModel>
+
+@{
+    ViewData["Title"] = Html.T("سجل المعاملات", "Transactions History");
+    ViewData["Subtitle"] = Html.T("عرض جميع معاملات الأرباح والسحب", "View all earnings and withdrawal transactions");
+    var transRouteValues = new RouteValueDictionary();
+    if (ViewBag.Type != null) { transRouteValues["type"] = ViewBag.Type; }
+    if (ViewBag.FromDate != null) { transRouteValues["fromDate"] = ViewBag.FromDate; }
+    if (ViewBag.ToDate != null) { transRouteValues["toDate"] = ViewBag.ToDate; }
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Filter Section -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("نوع المعاملة", "Transaction type")</label>
+                            <select class="form-select" name="type" onchange="this.form.submit()">
+                                <option value="">@Html.T("الكل", "All")</option>
+                                <option value="earning" selected="@(ViewBag.Type == "earning")">@Html.T("أرباح", "Earnings")</option>
+                                <option value="withdrawal" selected="@(ViewBag.Type == "withdrawal")">@Html.T("سحب", "Withdrawal")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                            <input type="date" class="form-control" name="fromDate" value="@(ViewBag.FromDate?.ToString("yyyy-MM-dd"))">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                            <input type="date" class="form-control" name="toDate" value="@(ViewBag.ToDate?.ToString("yyyy-MM-dd"))">
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="feather-filter me-2"></i>@Html.T("تصفية", "Filter")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الأرباح", "Total earnings") },
+                { "Value", ((decimal)(ViewBag.TotalEarnings ?? 0)).ToEGP() },
+                { "Icon", "trending-up" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي السحب", "Total withdrawals") },
+                { "Value", ((decimal)(ViewBag.TotalWithdrawals ?? 0)).ToEGP() },
+                { "Icon", "arrow-down-circle" },
+                { "Color", "danger" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("العمولات", "Commissions") },
+                { "Value", ((decimal)(ViewBag.TotalCommission ?? 0)).ToEGP() },
+                { "Icon", "percent" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("صافي الدخل", "Net income") },
+                { "Value", ((decimal)(ViewBag.NetIncome ?? 0)).ToEGP() },
+                { "Icon", "dollar-sign" },
+                { "Color", "primary" }
+            })
+        </div>
+    </div>
+
+    <!-- Transactions List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("سجل المعاملات", "Transactions log")</h5>
+                    <div class="card-header-action">
+                        <a href="@Url.Action("Index", "Earnings")" class="btn btn-sm btn-light">
+                            <i class="feather-arrow-left me-2"></i>
+                            @Html.T("العودة للأرباح", "Back to earnings")
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("التاريخ", "Date")</th>
+                                        <th>@Html.T("النوع", "Type")</th>
+                                        <th>@Html.T("الوصف", "Description")</th>
+                                        <th>@Html.T("المرجع", "Reference")</th>
+                                        <th>@Html.T("المبلغ", "Amount")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                        <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var transaction in Model)
+                                    {
+                                        var isEarning = transaction.Type == "earning";
+                                        <tr>
+                                            <td>
+                                                <span class="text-muted">@transaction.Date.ToString("dd/MM/yyyy HH:mm")</span>
+                                            </td>
+                                            <td>
+                                                @if (isEarning)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-arrow-up me-1"></i>
+                                                        أرباح
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger">
+                                                        <i class="feather-arrow-down me-1"></i>
+                                                        سحب
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <div class="fw-medium">@transaction.Description</div>
+                                                    @if (!string.IsNullOrEmpty(transaction.CourseName))
+                                                    {
+                                                        <p class="fs-11 text-muted mb-0">الدورة: @transaction.CourseName</p>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(transaction.StudentName))
+                                                    {
+                                                        <p class="fs-11 text-muted mb-0">الطالب: @transaction.StudentName</p>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <code class="fs-11">@transaction.Reference</code>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <span class="fw-bold @(transaction.Amount >= 0 ? "text-success" : "text-danger")">
+                                                        @transaction.Amount.ToEGP()
+                                                    </span>
+                                                    @if (transaction.Commission.HasValue && transaction.Commission.Value > 0)
+                                                    {
+                                                        <p class="fs-11 text-muted mb-0">
+                                                            إجمالي: @transaction.GrossAmount?.ToEGP()
+                                                            <br />
+                                                            عمولة: @transaction.Commission.Value.ToEGP()
+                                                        </p>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @switch (transaction.Status.ToLower())
+                                                {
+                                                    case "completed":
+                                                        <span class="badge bg-soft-success text-success">مكتملة</span>
+                                                        break;
+                                                    case "pending":
+                                                        <span class="badge bg-soft-warning text-warning">قيد المعالجة</span>
+                                                        break;
+                                                    case "approved":
+                                                        <span class="badge bg-soft-info text-info">موافق عليها</span>
+                                                        break;
+                                                    case "rejected":
+                                                        <span class="badge bg-soft-danger text-danger">مرفوضة</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge bg-soft-secondary text-secondary">@transaction.Status</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    @if (!isEarning)
+                                                    {
+                                                        <a href="@Url.Action("Details", "WithdrawalRequests", new { id = transaction.Id })" 
+                                                           class="avatar-text avatar-md" 
+                                                           data-bs-toggle="tooltip" 
+                                                           title="@Html.T("تفاصيل", "Details")">
+                                                            <i class="feather-eye"></i>
+                                                        </a>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination -->
+                        @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                            ViewData,
+                            ("Action", "Transactions"),
+                            ("Controller", "Earnings"),
+                            ("RouteValues", transRouteValues)
+                        ))
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-list"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد معاملات", "No transactions")</h5>
+                            <p class="text-muted mb-4">لم تقم بأي معاملات خلال الفترة المحددة</p>
+                            <a href="@Url.Action("Index", "Earnings")" class="btn btn-primary">
+                                <i class="feather-arrow-left me-2"></i>
+                                العودة للأرباح
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Options -->
+    <div class="row mt-3">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="mb-3">@Html.T("تصدير البيانات", "Export data")</h6>
+                    <div class="btn-group">
+                        <a href="@Url.Action("ExportTransactionsPdf", new { type = ViewBag.Type, fromDate = ViewBag.FromDate, toDate = ViewBag.ToDate })" 
+                           class="btn btn-outline-danger">
+                            <i class="feather-file me-2"></i>
+                            @Html.T("تصدير PDF", "Export PDF")
+                        </a>
+                        <a href="@Url.Action("ExportTransactionsExcel", new { type = ViewBag.Type, fromDate = ViewBag.FromDate, toDate = ViewBag.ToDate })" 
+                           class="btn btn-outline-success">
+                            <i class="feather-file-text me-2"></i>
+                            @Html.T("تصدير Excel", "Export Excel")
+                        </a>
+                        <a href="@Url.Action("ExportTransactionsCsv", new { type = ViewBag.Type, fromDate = ViewBag.FromDate, toDate = ViewBag.ToDate })" 
+                           class="btn btn-outline-primary">
+                            <i class="feather-download me-2"></i>
+                            @Html.T("تصدير CSV", "Export CSV")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

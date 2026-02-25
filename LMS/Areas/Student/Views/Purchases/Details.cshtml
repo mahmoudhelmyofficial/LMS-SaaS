@@ -1,0 +1,645 @@
+@model LMS.Domain.Entities.Payments.Payment
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("تفاصيل الشراء", "Purchase Details");
+    var course = Model.Course;
+    var book = Model.Book;
+    var bookBundle = Model.BookBundle;
+    var invoice = Model.Invoice;
+    var enrollment = Model.Enrollment;
+    
+    // Refund settings
+    var refundWindowDays = await PlatformSettings.GetIntSettingAsync("Refund.WindowDays", 30);
+    var refundMaxProgress = await PlatformSettings.GetIntSettingAsync("Refund.MaxProgressPercent", 30);
+}
+
+@section Styles {
+<style>
+    .purchase-details-header {
+        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 50%, #6d28d9 100%);
+        border-radius: 20px;
+        padding: 2.5rem;
+        color: white;
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .purchase-details-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -20%;
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        border-radius: 50%;
+    }
+    
+    .purchase-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+    
+    .purchase-badge.success {
+        background: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+    }
+    
+    .purchase-badge.pending {
+        background: rgba(251, 191, 36, 0.2);
+        color: #fbbf24;
+    }
+    
+    .detail-card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        border: 1px solid #e2e8f0;
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+    
+    .detail-card-header {
+        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #e2e8f0;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .detail-card-header h5 {
+        margin: 0;
+        font-weight: 700;
+        color: #1e293b;
+    }
+    
+    .detail-card-header .icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        color: white;
+    }
+    
+    .detail-card-body {
+        padding: 1.5rem;
+    }
+    
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+    
+    .detail-row .label {
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .detail-row .value {
+        font-weight: 600;
+        color: #1e293b;
+    }
+    
+    .course-preview {
+        display: flex;
+        gap: 1.25rem;
+        padding: 1.25rem;
+        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+        border-radius: 12px;
+    }
+    
+    .course-preview-image {
+        width: 140px;
+        height: 100px;
+        border-radius: 10px;
+        object-fit: cover;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .course-preview-placeholder {
+        width: 140px;
+        height: 100px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+    }
+    
+    .price-breakdown {
+        background: linear-gradient(135deg, #f5f3ff, #ede9fe);
+        border-radius: 12px;
+        padding: 1.5rem;
+    }
+    
+    .price-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.75rem 0;
+        border-bottom: 1px dashed #c4b5fd;
+    }
+    
+    .price-row:last-child {
+        border-bottom: none;
+    }
+    
+    .price-row.total {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #7c3aed;
+        padding-top: 1rem;
+        margin-top: 0.5rem;
+        border-top: 2px solid #8b5cf6;
+        border-bottom: none;
+    }
+    
+    .action-card {
+        background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+        border: 2px solid #86efac;
+        border-radius: 16px;
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .action-card .icon {
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, #22c55e, #16a34a);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        color: white;
+    }
+    
+    .timeline {
+        position: relative;
+        padding-right: 2rem;
+    }
+    
+    .timeline::before {
+        content: '';
+        position: absolute;
+        right: 0.5rem;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e2e8f0;
+    }
+    
+    .timeline-item {
+        position: relative;
+        padding-bottom: 1.5rem;
+    }
+    
+    .timeline-item:last-child {
+        padding-bottom: 0;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        right: -1.75rem;
+        top: 0.25rem;
+        width: 12px;
+        height: 12px;
+        background: #8b5cf6;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 0 0 2px #8b5cf6;
+    }
+    
+    .timeline-item.completed::before {
+        background: #22c55e;
+        box-shadow: 0 0 0 2px #22c55e;
+    }
+    
+    .refund-info {
+        background: linear-gradient(135deg, #fef3c7, #fde68a);
+        border: 2px solid #fbbf24;
+        border-radius: 12px;
+        padding: 1.25rem;
+        display: flex;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+    
+    .refund-info .icon {
+        width: 40px;
+        height: 40px;
+        background: #f59e0b;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        flex-shrink: 0;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="purchase-details-header">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <div class="d-flex align-items-center gap-3 mb-3">
+                <div style="width: 56px; height: 56px; background: rgba(255,255,255,0.2); border-radius: 14px; display: flex; align-items: center; justify-content: center;">
+                    <i class="feather-shopping-bag fs-3"></i>
+                </div>
+                <div>
+                    <h2 class="fw-bold mb-1">@Html.T("تفاصيل الشراء", "Purchase details")</h2>
+                    <p class="mb-0 opacity-75">@Html.T("رقم المعاملة:", "Transaction ID:") @Model.TransactionId</p>
+                </div>
+            </div>
+            <div class="d-flex gap-3 flex-wrap">
+                <span class="purchase-badge @(Model.Status == LMS.Domain.Enums.PaymentStatus.Completed ? "success" : "pending")">
+                    <i class="feather-@(Model.Status == LMS.Domain.Enums.PaymentStatus.Completed ? "check-circle" : "clock")"></i>
+                    @(Model.Status == LMS.Domain.Enums.PaymentStatus.Completed ? "مكتمل" : Model.Status.ToString())
+                </span>
+                <span class="purchase-badge" style="background: rgba(255,255,255,0.2); color: white;">
+                    <i class="feather-calendar"></i>
+                    @(Model.CompletedAt?.ToString("dd/MM/yyyy HH:mm") ?? Model.CreatedAt.ToString("dd/MM/yyyy HH:mm"))
+                </span>
+            </div>
+        </div>
+        <div class="col-lg-4 text-lg-end mt-4 mt-lg-0">
+            <div class="fs-3 fw-bold mb-1">@Model.TotalAmount.ToEGP(2)</div>
+            <small class="opacity-75">@Html.T("المبلغ الإجمالي", "Total amount")</small>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column -->
+    <div class="col-lg-8">
+        <!-- Product Details -->
+        <div class="detail-card">
+            <div class="detail-card-header">
+                <div class="icon">
+                    <i class="feather-package"></i>
+                </div>
+                <h5>@Html.T("المنتج المشترى", "Purchased product")</h5>
+            </div>
+            <div class="detail-card-body">
+                @if (course != null)
+                {
+                    <div class="course-preview mb-4">
+                        @if (!string.IsNullOrEmpty(course.ThumbnailUrl))
+                        {
+                            <img src="@course.ThumbnailUrl" alt="@course.Title" class="course-preview-image" />
+                        }
+                        else
+                        {
+                            <div class="course-preview-placeholder">
+                                <i class="feather-book fs-1"></i>
+                            </div>
+                        }
+                        <div class="flex-grow-1">
+                            <span class="badge bg-primary mb-2">@Html.T("دورة تعليمية", "Course")</span>
+                            <h5 class="fw-bold mb-2">@course.Title</h5>
+                            @if (course.Instructor != null)
+                            {
+                                <p class="text-muted mb-2">
+                                    <i class="feather-user me-1"></i>
+                                    @course.Instructor.FullName
+                                </p>
+                            }
+                            <div class="d-flex gap-3 text-muted small">
+                                @if (course.TotalLessons > 0)
+                                {
+                                    <span><i class="feather-play-circle me-1"></i> @course.TotalLessons درس</span>
+                                }
+                                @if (course.TotalDurationMinutes > 0)
+                                {
+                                    <span><i class="feather-clock me-1"></i> @(course.TotalDurationMinutes / 60) ساعة</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    
+                    @if (enrollment != null)
+                    {
+                        <a asp-area="Student" asp-controller="Courses" asp-action="Details" asp-route-id="@enrollment.Id" class="btn btn-primary btn-lg w-100">
+                            <i class="feather-play me-2"></i>
+                            @Html.T("الذهاب للدورة", "Go to course")
+                        </a>
+                    }
+                }
+                else if (book != null)
+                {
+                    <div class="course-preview mb-4">
+                        @if (!string.IsNullOrEmpty(book.CoverImageUrl))
+                        {
+                            <img src="@book.CoverImageUrl" alt="@book.Title" class="course-preview-image" />
+                        }
+                        else
+                        {
+                            <div class="course-preview-placeholder">
+                                <i class="feather-book-open fs-1"></i>
+                            </div>
+                        }
+                        <div class="flex-grow-1">
+                            <span class="badge bg-secondary mb-2">@Html.T("كتاب", "Book")</span>
+                            <h5 class="fw-bold mb-2">@book.Title</h5>
+                            @if (!string.IsNullOrEmpty(book.Author))
+                            {
+                                <p class="text-muted mb-2">@book.Author</p>
+                            }
+                        </div>
+                    </div>
+                    <a asp-area="Student" asp-controller="Books" asp-action="MyLibrary" class="btn btn-primary btn-lg w-100">
+                        <i class="feather-book me-2"></i>
+                        @Html.T("الذهاب لمكتبتي", "Go to my library")
+                    </a>
+                }
+                else if (bookBundle != null)
+                {
+                    <div class="course-preview mb-4">
+                        @if (!string.IsNullOrEmpty(bookBundle.ThumbnailUrl))
+                        {
+                            <img src="@bookBundle.ThumbnailUrl" alt="@bookBundle.Name" class="course-preview-image" />
+                        }
+                        else
+                        {
+                            <div class="course-preview-placeholder">
+                                <i class="feather-package fs-1"></i>
+                            </div>
+                        }
+                        <div class="flex-grow-1">
+                            <span class="badge bg-info mb-2">@Html.T("باقة كتب", "Book bundle")</span>
+                            <h5 class="fw-bold mb-2">@bookBundle.Name</h5>
+                            @if (bookBundle.BooksCount > 0)
+                            {
+                                <p class="text-muted mb-2">@bookBundle.BooksCount @Html.T("كتاب", "books")</p>
+                            }
+                        </div>
+                    </div>
+                    <a asp-area="Student" asp-controller="Books" asp-action="MyLibrary" class="btn btn-primary btn-lg w-100">
+                        <i class="feather-book me-2"></i>
+                        @Html.T("الذهاب لمكتبتي", "Go to my library")
+                    </a>
+                }
+                else
+                {
+                    <div class="text-center py-4">
+                        <i class="feather-package fs-1 text-muted mb-3 d-block"></i>
+                        <p class="text-muted">@Html.T("تفاصيل المنتج غير متاحة", "Product details not available")</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Payment Details -->
+        <div class="detail-card">
+            <div class="detail-card-header">
+                <div class="icon">
+                    <i class="feather-credit-card"></i>
+                </div>
+                <h5>@Html.T("تفاصيل الدفع", "Payment details")</h5>
+            </div>
+            <div class="detail-card-body">
+                <div class="detail-row">
+                    <span class="label">
+                        <i class="feather-hash"></i>
+                        رقم المعاملة
+                    </span>
+                    <span class="value font-monospace">@Model.TransactionId</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">
+                        <i class="feather-credit-card"></i>
+                        طريقة الدفع
+                    </span>
+                    <span class="value">
+                        @(Model.PaymentMethod ?? Model.Provider.ToString())
+                    </span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">
+                        <i class="feather-globe"></i>
+                        مزود الخدمة
+                    </span>
+                    <span class="value">@Model.Provider</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">
+                        <i class="feather-calendar"></i>
+                        تاريخ الشراء
+                    </span>
+                    <span class="value">@Model.CreatedAt.ToString("dd MMMM yyyy - HH:mm")</span>
+                </div>
+                @if (Model.CompletedAt.HasValue)
+                {
+                    <div class="detail-row">
+                        <span class="label">
+                            <i class="feather-check-circle"></i>
+                            تاريخ الإتمام
+                        </span>
+                        <span class="value text-success">@Model.CompletedAt.Value.ToString("dd MMMM yyyy - HH:mm")</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Price Breakdown -->
+        <div class="detail-card">
+            <div class="detail-card-header">
+                <div class="icon">
+                    <i class="feather-dollar-sign"></i>
+                </div>
+                <h5>@Html.T("تفصيل المبلغ", "Amount breakdown")</h5>
+            </div>
+            <div class="detail-card-body">
+                <div class="price-breakdown">
+                    <div class="price-row">
+                        <span>@Html.T("السعر الأصلي", "Original price")</span>
+                        <span class="fw-semibold">@Model.OriginalAmount.ToEGP(2)</span>
+                    </div>
+                    @if (Model.DiscountAmount > 0)
+                    {
+                        <div class="price-row">
+                            <span class="text-success">
+                                <i class="feather-tag me-1"></i>
+                                @Html.T("الخصم", "Discount")
+                                @if (!string.IsNullOrEmpty(Model.CouponCode))
+                                {
+                                    <span class="badge bg-success ms-1">@Model.CouponCode</span>
+                                }
+                            </span>
+                            <span class="fw-semibold text-success">-@Model.DiscountAmount.ToEGP(2)</span>
+                        </div>
+                    }
+                    @if (Model.TaxAmount > 0)
+                    {
+                        <div class="price-row">
+                            <span>@Html.T("الضريبة", "Tax")</span>
+                            <span class="fw-semibold">@Model.TaxAmount.ToEGP(2)</span>
+                        </div>
+                    }
+                    <div class="price-row total">
+                        <span>@Html.T("الإجمالي المدفوع", "Total paid")</span>
+                        <span>@Model.TotalAmount.ToEGP(2)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column -->
+    <div class="col-lg-4">
+        <!-- Quick Actions -->
+        <div class="action-card mb-4">
+            <div class="icon">
+                <i class="feather-check fs-3"></i>
+            </div>
+            <h5 class="fw-bold mb-2">@Html.T("تمت عملية الشراء بنجاح", "Purchase completed successfully")</h5>
+            <p class="text-muted small mb-3">@Html.T("يمكنك الآن الوصول للمحتوى التعليمي", "You can now access the learning content")</p>
+            @if (enrollment != null)
+            {
+                <a asp-area="Student" asp-controller="Learning" asp-action="Continue" asp-route-enrollmentId="@enrollment.Id" class="btn btn-success w-100">
+                    <i class="feather-play me-2"></i>
+                    @Html.T("ابدأ التعلم الآن", "Start learning now")
+                </a>
+            }
+            else if (book != null)
+            {
+                <a asp-area="Student" asp-controller="Books" asp-action="MyLibrary" class="btn btn-success w-100">
+                    <i class="feather-book me-2"></i>
+                    @Html.T("الذهاب لمكتبتي", "Go to my library")
+                </a>
+            }
+            else if (bookBundle != null)
+            {
+                <a asp-area="Student" asp-controller="Books" asp-action="MyLibrary" class="btn btn-success w-100">
+                    <i class="feather-book me-2"></i>
+                    @Html.T("الذهاب لمكتبتي", "Go to my library")
+                </a>
+            }
+        </div>
+
+        <!-- Invoice Card -->
+        @if (invoice != null)
+        {
+            <div class="detail-card">
+                <div class="detail-card-header">
+                    <div class="icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                        <i class="feather-file-text"></i>
+                    </div>
+                    <h5>@Html.T("الفاتورة", "Invoice")</h5>
+                </div>
+                <div class="detail-card-body">
+                    <div class="detail-row">
+                        <span class="label">@Html.T("رقم الفاتورة", "Invoice number")</span>
+                        <span class="value">@invoice.InvoiceNumber</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">@Html.T("تاريخ الإصدار", "Issue date")</span>
+                        <span class="value">@invoice.IssuedDate.ToString("dd/MM/yyyy")</span>
+                    </div>
+                    <div class="d-grid gap-2 mt-3">
+                        <a asp-controller="Invoices" asp-action="View" asp-route-id="@invoice.Id" 
+                           class="btn btn-outline-primary">
+                            <i class="feather-eye me-1"></i>
+                            @Html.T("عرض الفاتورة", "View invoice")
+                        </a>
+                        <a asp-controller="Invoices" asp-action="Download" asp-route-id="@invoice.Id" 
+                           class="btn btn-primary">
+                            <i class="feather-download me-1"></i>
+                            @Html.T("تحميل PDF", "Download PDF")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Timeline -->
+        <div class="detail-card">
+            <div class="detail-card-header">
+                <div class="icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                    <i class="feather-activity"></i>
+                </div>
+                <h5>@Html.T("سجل المعاملة", "Transaction log")</h5>
+            </div>
+            <div class="detail-card-body">
+                <div class="timeline">
+                    <div class="timeline-item completed">
+                        <div class="fw-semibold">@Html.T("تم إنشاء الطلب", "Order created")</div>
+                        <small class="text-muted">@Model.CreatedAt.ToString("dd/MM/yyyy HH:mm")</small>
+                    </div>
+                    @if (Model.Status == LMS.Domain.Enums.PaymentStatus.Completed && Model.CompletedAt.HasValue)
+                    {
+                        <div class="timeline-item completed">
+                            <div class="fw-semibold">@Html.T("تم إتمام الدفع", "Payment completed")</div>
+                            <small class="text-muted">@Model.CompletedAt.Value.ToString("dd/MM/yyyy HH:mm")</small>
+                        </div>
+                        <div class="timeline-item completed">
+                            <div class="fw-semibold">@Html.T("تم تفعيل الوصول", "Access activated")</div>
+                            <small class="text-muted">@Html.T("فوري", "Instant")</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Refund Info -->
+        @{
+            var daysSincePurchase = (DateTime.UtcNow - Model.CreatedAt).TotalDays;
+            var canRequestRefund = daysSincePurchase <= refundWindowDays && 
+                                   Model.Status == LMS.Domain.Enums.PaymentStatus.Completed &&
+                                   (enrollment == null || enrollment.ProgressPercentage <= refundMaxProgress);
+        }
+        
+        @if (canRequestRefund)
+        {
+            <div class="refund-info">
+                <div class="icon">
+                    <i class="feather-info"></i>
+                </div>
+                <div>
+                    <h6 class="fw-bold mb-1">@Html.T("ضمان استرداد المال", "Money-back guarantee")</h6>
+                    <p class="small text-muted mb-2">
+                        @Html.T("يمكنك طلب استرداد المبلغ خلال", "You can request a refund within") @refundWindowDays @Html.T("يوماً من الشراء", "days of purchase") (@Html.T("متبقي", "remaining") @((refundWindowDays - daysSincePurchase).ToString("F0")) @Html.T("يوم", "days"))
+                    </p>
+                    <a asp-area="Student" asp-controller="Refunds" asp-action="Request" asp-route-paymentId="@Model.Id" 
+                       class="btn btn-outline-warning btn-sm">
+                        @Html.T("طلب استرداد", "Request refund")
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Back Button -->
+<div class="text-center mt-4">
+    <a asp-action="History" class="btn btn-outline-secondary">
+        <i class="feather-arrow-right me-1"></i>
+        @Html.T("العودة لسجل المشتريات", "Back to purchase history")
+    </a>
+</div>
+

@@ -1,0 +1,292 @@
+@model LMS.Services.Interfaces.TwoFactorSetupDto
+
+@{
+    ViewData["Title"] = Html.T("إعداد المصادقة الثنائية", "Two-Factor Authentication Setup");
+    ViewData["Subtitle"] = Html.T("اتبع الخطوات لإكمال إعداد المصادقة الثنائية", "Follow the steps to complete two-factor setup");
+}
+
+@{
+    var securityUrl = Url.Action("Security");
+    var actionButtonsHtml = "<a href='" + securityUrl + "' class='btn btn-light'>" +
+        "<i class='feather-arrow-right me-2'></i>" +
+        "العودة لإعدادات الأمان" +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-shield me-2 text-primary"></i>
+                        خطوات الإعداد
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-4">
+                        <div class="d-flex align-items-start">
+                            <i class="feather-info fs-18 me-3"></i>
+                            <div>
+                                <strong>مهم:</strong> اتبع هذه الخطوات لإكمال إعداد المصادقة الثنائية. ستحتاج إلى تطبيق مصادقة مثل Google Authenticator أو Microsoft Authenticator.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: Install App -->
+                    <div class="mb-4 pb-4 border-bottom">
+                        <div class="d-flex align-items-start mb-3">
+                            <div class="avatar-text avatar-md bg-soft-primary text-primary me-3">
+                                <span class="fw-bold">1</span>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-2">@Html.T("قم بتثبيت تطبيق المصادقة", "Install an authenticator app")</h6>
+                                <p class="fs-13 text-muted mb-3">
+                                    قم بتحميل وتثبيت أحد تطبيقات المصادقة على هاتفك:
+                                </p>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2" 
+                                       target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="feather-smartphone me-1"></i>
+                                        Google Authenticator
+                                    </a>
+                                    <a href="https://play.google.com/store/apps/details?id=com.azure.authenticator" 
+                                       target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="feather-smartphone me-1"></i>
+                                        Microsoft Authenticator
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Scan QR Code -->
+                    <div class="mb-4 pb-4 border-bottom">
+                        <div class="d-flex align-items-start mb-3">
+                            <div class="avatar-text avatar-md bg-soft-primary text-primary me-3">
+                                <span class="fw-bold">2</span>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-2">@Html.T("امسح رمز QR", "Scan the QR code")</h6>
+                                <p class="fs-13 text-muted mb-3">
+                                    افتح تطبيق المصادقة وامسح رمز QR التالي:
+                                </p>
+                                <div class="text-center mb-3">
+                                    @if (!string.IsNullOrEmpty(Model.QrCodeUrl))
+                                    {
+                                        <img src="@Model.QrCodeUrl" alt="QR Code" class="img-fluid" style="max-width: 250px;" />
+                                    }
+                                    else
+                                    {
+                                        <div class="alert alert-warning">
+                                            <i class="feather-alert-circle me-2"></i>
+                                            تعذر تحميل رمز QR
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Manual Entry -->
+                    <div class="mb-4 pb-4 border-bottom">
+                        <div class="d-flex align-items-start mb-3">
+                            <div class="avatar-text avatar-md bg-soft-primary text-primary me-3">
+                                <span class="fw-bold">3</span>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-2">@Html.T("أو أدخل المفتاح يدوياً", "Or enter the key manually")</h6>
+                                <p class="fs-13 text-muted mb-3">
+                                    إذا لم تتمكن من مسح رمز QR، يمكنك إدخال المفتاح يدوياً:
+                                </p>
+                                <div class="input-group mb-2">
+                                    <input type="text" class="form-control" id="manualKey" value="@Model.ManualEntryKey" readonly />
+                                    <button class="btn btn-outline-secondary" type="button" onclick="copyManualKey()">
+                                        <i class="feather-copy"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">
+                                    <i class="feather-info me-1"></i>
+                                    انقر على زر النسخ لنسخ المفتاح
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Verify -->
+                    <div class="mb-4">
+                        <div class="d-flex align-items-start mb-3">
+                            <div class="avatar-text avatar-md bg-soft-primary text-primary me-3">
+                                <span class="fw-bold">4</span>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-2">@Html.T("أدخل رمز التحقق", "Enter verification code")</h6>
+                                <p class="fs-13 text-muted mb-3">
+                                    أدخل رمز التحقق المكون من 6 أرقام من تطبيق المصادقة:
+                                </p>
+                                <form asp-action="VerifyTwoFactor" method="post" id="verifyTwoFactorForm">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="SecretKey" value="@Model.SecretKey" />
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <input type="text" name="VerificationCode" 
+                                                   class="form-control form-control-lg text-center" 
+                                                   placeholder="000000" 
+                                                   maxlength="6" 
+                                                   pattern="[0-9]{6}"
+                                                   required />
+                                        </div>
+                                        <div class="col-md-6">
+                                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                                                <i class="feather-check-circle me-2"></i>
+                                                التحقق والتفعيل
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recovery Codes -->
+            @if (Model.RecoveryCodes != null && Model.RecoveryCodes.Any())
+            {
+                <div class="card stretch stretch-full mb-4 bg-soft-warning border-0">
+                    <div class="card-header bg-warning text-white">
+                        <h5 class="card-title text-white mb-0">
+                            <i class="feather-key me-2"></i>
+                            رموز الاسترداد
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-warning mb-3">
+                            <i class="feather-alert-triangle me-2"></i>
+                            <strong>مهم جداً:</strong> احفظ هذه الرموز في مكان آمن. يمكنك استخدامها للوصول إلى حسابك إذا فقدت جهازك.
+                        </div>
+                        <div class="row g-2">
+                            @foreach (var code in Model.RecoveryCodes)
+                            {
+                                <div class="col-md-6">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" value="@code" readonly />
+                                        <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('@code')">
+                                            <i class="feather-copy"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="mt-3">
+                            <button class="btn btn-warning" onclick="downloadRecoveryCodes()">
+                                <i class="feather-download me-2"></i>
+                                تحميل رموز الاسترداد
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full mb-4 bg-soft-success border-0">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <i class="feather-shield text-success" style="font-size: 48px;"></i>
+                    </div>
+                    <h6 class="text-center mb-3">@Html.T("المصادقة الثنائية", "Two-factor authentication")</h6>
+                    <p class="fs-13 text-center mb-0">
+                        تضيف المصادقة الثنائية طبقة إضافية من الأمان لحسابك. حتى لو عرف شخص ما كلمة مرورك، لن يتمكن من الوصول إلى حسابك بدون رمز التحقق.
+                    </p>
+                </div>
+            </div>
+
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("نصائح الأمان", "Security tips")</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="fs-13 mb-0">
+                        <li class="mb-2">احفظ رموز الاسترداد في مكان آمن</li>
+                        <li class="mb-2">لا تشارك رمز التحقق مع أحد</li>
+                        <li class="mb-2">استخدم تطبيق مصادقة موثوق</li>
+                        <li class="mb-0">تأكد من عمل النسخ الاحتياطي</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Copy manual key
+        function copyManualKey() {
+            const keyInput = document.getElementById('manualKey');
+            keyInput.select();
+            document.execCommand('copy');
+            
+            // Show feedback
+            const btn = event.target.closest('button');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="feather-check"></i>';
+            btn.classList.add('btn-success');
+            btn.classList.remove('btn-outline-secondary');
+            
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-outline-secondary');
+            }, 2000);
+        }
+
+        // Copy recovery code
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Show feedback
+                const btn = event.target.closest('button');
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="feather-check"></i>';
+                btn.classList.add('btn-success');
+                btn.classList.remove('btn-outline-secondary');
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-outline-secondary');
+                }, 2000);
+            });
+        }
+
+        // Download recovery codes
+        function downloadRecoveryCodes() {
+            const codes = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.RecoveryCodes));
+            const content = 'رموز الاسترداد للمصادقة الثنائية\n\n' + 
+                          'احفظ هذه الرموز في مكان آمن:\n\n' + 
+                          codes.join('\n') + 
+                          '\n\nتاريخ الإنشاء: ' + new Date().toLocaleString('ar-EG');
+            
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'recovery-codes.txt';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        // Verify code input formatting
+        document.querySelector('input[name="VerificationCode"]').addEventListener('input', function(e) {
+            this.value = this.value.replace(/\D/g, '').substring(0, 6);
+        });
+    </script>
+}
+
+

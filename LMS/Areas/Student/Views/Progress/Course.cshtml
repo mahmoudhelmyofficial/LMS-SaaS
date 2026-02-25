@@ -1,0 +1,589 @@
+@model LMS.Domain.Entities.Learning.Enrollment
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("تقدم", "Progress") + ": " + Model.Course.Title;
+    var moduleProgress = ViewBag.ModuleProgress as List<LMS.Areas.Student.Controllers.ModuleProgressItem>;
+    var performance = ViewBag.Performance as LMS.Services.Interfaces.PerformanceAnalytics;
+    
+    // UI settings
+    var strengthsWeaknessesLimit = await PlatformSettings.GetIntSettingAsync("UI.StrengthsWeaknesses.Limit", 3);
+}
+
+@section Styles {
+<style>
+    .course-progress-header {
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #7c3aed 100%);
+        border-radius: 20px;
+        padding: 2.5rem;
+        color: white;
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .course-progress-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -20%;
+        width: 400px;
+        height: 400px;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        border-radius: 50%;
+    }
+    
+    .course-thumbnail {
+        width: 120px;
+        height: 90px;
+        border-radius: 12px;
+        object-fit: cover;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    
+    .course-thumbnail-placeholder {
+        width: 120px;
+        height: 90px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .progress-circle {
+        position: relative;
+        width: 140px;
+        height: 140px;
+    }
+    
+    .progress-circle svg {
+        transform: rotate(-90deg);
+    }
+    
+    .progress-circle-bg {
+        fill: none;
+        stroke: rgba(255,255,255,0.2);
+        stroke-width: 10;
+    }
+    
+    .progress-circle-fill {
+        fill: none;
+        stroke: #10b981;
+        stroke-width: 10;
+        stroke-linecap: round;
+        transition: stroke-dashoffset 1s ease-in-out;
+    }
+    
+    .progress-circle-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+    }
+    
+    .progress-circle-text .percentage {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+    
+    .progress-circle-text .label {
+        font-size: 0.75rem;
+        opacity: 0.8;
+    }
+    
+    .stat-badge {
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 0.75rem 1.25rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .module-card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        border: 1px solid #e2e8f0;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .module-card:hover {
+        box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    
+    .module-header {
+        padding: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        cursor: pointer;
+    }
+    
+    .module-index {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+    
+    .module-index.completed {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+    }
+    
+    .module-index.in-progress {
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        color: white;
+    }
+    
+    .module-index.pending {
+        background: #f1f5f9;
+        color: #64748b;
+    }
+    
+    .module-progress-bar {
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 0.5rem;
+    }
+    
+    .module-progress-bar .fill {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.5s ease;
+    }
+    
+    .module-progress-bar .fill.completed {
+        background: linear-gradient(90deg, #10b981, #34d399);
+    }
+    
+    .module-progress-bar .fill.in-progress {
+        background: linear-gradient(90deg, #6366f1, #818cf8);
+    }
+    
+    .analytics-card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        border: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        height: 100%;
+    }
+    
+    .analytics-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1rem;
+    }
+    
+    .analytics-icon.primary {
+        background: linear-gradient(135deg, #eff6ff, #dbeafe);
+        color: #3b82f6;
+    }
+    
+    .analytics-icon.success {
+        background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+        color: #22c55e;
+    }
+    
+    .analytics-icon.warning {
+        background: linear-gradient(135deg, #fffbeb, #fef3c7);
+        color: #f59e0b;
+    }
+    
+    .analytics-icon.danger {
+        background: linear-gradient(135deg, #fef2f2, #fee2e2);
+        color: #ef4444;
+    }
+    
+    .strength-weakness-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 10px;
+        margin-bottom: 0.5rem;
+    }
+    
+    .strength-weakness-item.strength {
+        background: #f0fdf4;
+    }
+    
+    .strength-weakness-item.weakness {
+        background: #fef2f2;
+    }
+    
+    .strength-weakness-item .icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .strength-weakness-item.strength .icon {
+        background: #22c55e;
+        color: white;
+    }
+    
+    .strength-weakness-item.weakness .icon {
+        background: #ef4444;
+        color: white;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .action-btn {
+        flex: 1;
+        min-width: 200px;
+        padding: 1rem;
+        border-radius: 12px;
+        border: 2px solid #e2e8f0;
+        background: white;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        color: inherit;
+    }
+    
+    .action-btn:hover {
+        border-color: #6366f1;
+        background: #f5f3ff;
+        transform: translateY(-2px);
+    }
+    
+    .action-btn .icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        color: white;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Course Progress Header -->
+<div class="course-progress-header">
+    <div class="row align-items-center">
+        <div class="col-lg-7">
+            <div class="d-flex align-items-center gap-4 mb-3">
+                @if (!string.IsNullOrEmpty(Model.Course.ThumbnailUrl))
+                {
+                    <img src="@Model.Course.ThumbnailUrl" alt="@Model.Course.Title" class="course-thumbnail" />
+                }
+                else
+                {
+                    <div class="course-thumbnail-placeholder">
+                        <i class="feather-book fs-1"></i>
+                    </div>
+                }
+                <div>
+                    <h2 class="fw-bold mb-2">@Model.Course.Title</h2>
+                    <p class="mb-0 opacity-75">
+                        <i class="feather-user me-2"></i>
+                        @Model.Course.Instructor?.FullName
+                    </p>
+                </div>
+            </div>
+            <div class="d-flex gap-3 flex-wrap">
+                <span class="stat-badge">
+                    <i class="feather-check-circle"></i>
+                    @Model.CompletedLessons @Html.T("من", "of") @Model.TotalLessons @Html.T("درس", "lessons")
+                </span>
+                <span class="stat-badge">
+                    <i class="feather-clock"></i>
+                    @Model.TotalWatchTimeMinutes @Html.T("دقيقة دراسة", "min study")
+                </span>
+                @if (Model.LastAccessedAt.HasValue)
+                {
+                    <span class="stat-badge">
+                        <i class="feather-calendar"></i>
+                        @Html.T("آخر وصول:", "Last access:") @Model.LastAccessedAt.Value.ToString("dd/MM/yyyy")
+                    </span>
+                }
+            </div>
+        </div>
+        <div class="col-lg-5 text-lg-end mt-4 mt-lg-0">
+            <div class="progress-circle d-inline-block">
+                @{
+                    var progressPercent = Model.ProgressPercentage;
+                    var circumference = 2 * Math.PI * 55;
+                    var dashOffset = circumference - (circumference * (double)progressPercent / 100);
+                }
+                <svg width="140" height="140" viewBox="0 0 140 140">
+                    <circle class="progress-circle-bg" cx="70" cy="70" r="55" />
+                    <circle class="progress-circle-fill" cx="70" cy="70" r="55"
+                            stroke-dasharray="@circumference"
+                            stroke-dashoffset="@dashOffset" />
+                </svg>
+                <div class="progress-circle-text">
+                    <div class="percentage">@progressPercent.ToString("F0")%</div>
+                    <div class="label">@Html.T("مكتمل", "Complete")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Left Column: Modules Progress -->
+    <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="fw-bold mb-0">
+                <i class="feather-layers text-primary me-2"></i>
+                @Html.T("تقدم الوحدات", "Module progress")
+            </h4>
+            <a asp-controller="Learning" asp-action="Continue" asp-route-enrollmentId="@Model.Id" 
+               class="btn btn-primary">
+                <i class="feather-play me-1"></i>
+                @Html.T("متابعة التعلم", "Continue learning")
+            </a>
+        </div>
+        
+        @if (moduleProgress != null && moduleProgress.Any())
+        {
+            <div class="row g-3">
+                @foreach (var module in moduleProgress)
+                {
+                    var statusClass = module.ProgressPercentage == 100 ? "completed" : 
+                                      module.ProgressPercentage > 0 ? "in-progress" : "pending";
+                    var statusIcon = module.ProgressPercentage == 100 ? "check" : 
+                                     module.ProgressPercentage > 0 ? "play" : module.OrderIndex.ToString();
+                    
+                    <div class="col-12">
+                        <div class="module-card">
+                            <div class="module-header">
+                                <div class="module-index @statusClass">
+                                    @if (module.ProgressPercentage == 100)
+                                    {
+                                        <i class="feather-check"></i>
+                                    }
+                                    else if (module.ProgressPercentage > 0)
+                                    {
+                                        <i class="feather-play"></i>
+                                    }
+                                    else
+                                    {
+                                        @(module.OrderIndex + 1)
+                                    }
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6 class="fw-bold mb-1">@module.ModuleName</h6>
+                                            <small class="text-muted">
+                                                @module.CompletedLessons @Html.T("من", "of") @module.TotalLessons @Html.T("درس", "lessons")
+                                            </small>
+                                        </div>
+                                        <span class="badge @(module.ProgressPercentage == 100 ? "bg-success" : module.ProgressPercentage > 0 ? "bg-primary" : "bg-secondary")">
+                                            @module.ProgressPercentage.ToString("F0")%
+                                        </span>
+                                    </div>
+                                    <div class="module-progress-bar">
+                                        <div class="fill @statusClass" style="width: @module.ProgressPercentage%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <i class="feather-layers fs-1 text-muted mb-3 d-block"></i>
+                <p class="text-muted">@Html.T("لا توجد وحدات في هذه الدورة", "No modules in this course")</p>
+            </div>
+        }
+
+        <!-- Action Buttons -->
+        <div class="action-buttons mt-4">
+            <a asp-controller="Notes" asp-action="Course" asp-route-enrollmentId="@Model.Id" class="action-btn">
+                <div class="icon">
+                    <i class="feather-file-text"></i>
+                </div>
+                <div>
+                    <strong>@Html.T("ملاحظاتي", "My notes")</strong>
+                    <small class="text-muted d-block">@Html.T("عرض جميع ملاحظات الدورة", "View all course notes")</small>
+                </div>
+            </a>
+            <a asp-controller="Bookmarks" asp-action="Index" asp-route-courseId="@Model.CourseId" class="action-btn">
+                <div class="icon">
+                    <i class="feather-bookmark"></i>
+                </div>
+                <div>
+                    <strong>@Html.T("الإشارات المرجعية", "Bookmarks")</strong>
+                    <small class="text-muted d-block">@Html.T("الدروس المحفوظة", "Saved lessons")</small>
+                </div>
+            </a>
+            <a asp-controller="Discussions" asp-action="Index" asp-route-courseId="@Model.CourseId" class="action-btn">
+                <div class="icon">
+                    <i class="feather-message-circle"></i>
+                </div>
+                <div>
+                    <strong>@Html.T("النقاشات", "Discussions")</strong>
+                    <small class="text-muted d-block">@Html.T("تفاعل مع الزملاء", "Engage with peers")</small>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Right Column: Analytics -->
+    <div class="col-lg-4">
+        @if (performance != null)
+        {
+            <!-- Performance Score -->
+            <div class="analytics-card mb-4">
+                <div class="analytics-icon primary">
+                    <i class="feather-trending-up fs-4"></i>
+                </div>
+                <h6 class="fw-bold mb-2">@Html.T("مستوى الأداء", "Performance level")</h6>
+                <div class="d-flex align-items-end gap-2 mb-3">
+                    <h2 class="fw-bold mb-0 text-primary">@performance.PerformanceScore.ToString("F0")</h2>
+                    <span class="text-muted">/100</span>
+                </div>
+                <div class="progress" style="height: 8px;">
+                    <div class="progress-bar bg-primary" style="width: @performance.PerformanceScore%"></div>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="row g-3 mb-4">
+                <div class="col-6">
+                    <div class="analytics-card text-center">
+                        <div class="analytics-icon success mx-auto">
+                            <i class="feather-check-circle fs-4"></i>
+                        </div>
+                        <h4 class="fw-bold mb-1">@performance.QuizzesPassed</h4>
+                        <small class="text-muted">@Html.T("اختبارات ناجحة", "Quizzes passed")</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="analytics-card text-center">
+                        <div class="analytics-icon warning mx-auto">
+                            <i class="feather-percent fs-4"></i>
+                        </div>
+                        <h4 class="fw-bold mb-1">@performance.AverageQuizScore.ToString("F0")%</h4>
+                        <small class="text-muted">@Html.T("متوسط الاختبارات", "Quiz average")</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Strengths & Weaknesses -->
+            @if ((performance.Strengths != null && performance.Strengths.Any()) || 
+                 (performance.Weaknesses != null && performance.Weaknesses.Any()))
+            {
+                <div class="analytics-card">
+                    <h6 class="fw-bold mb-3">
+                        <i class="feather-target text-primary me-2"></i>
+                        @Html.T("نقاط القوة والضعف", "Strengths & weaknesses")
+                    </h6>
+                    
+                    @if (performance.Strengths != null)
+                    {
+                        @foreach (var strength in performance.Strengths.Take(strengthsWeaknessesLimit))
+                        {
+                            <div class="strength-weakness-item strength">
+                                <div class="icon">
+                                    <i class="feather-trending-up"></i>
+                                </div>
+                                <span class="small">@strength</span>
+                            </div>
+                        }
+                    }
+                    
+                    @if (performance.Weaknesses != null)
+                    {
+                        @foreach (var weakness in performance.Weaknesses.Take(strengthsWeaknessesLimit))
+                        {
+                            <div class="strength-weakness-item weakness">
+                                <div class="icon">
+                                    <i class="feather-alert-circle"></i>
+                                </div>
+                                <span class="small">@weakness</span>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            <!-- Default Stats Card -->
+            <div class="analytics-card">
+                <div class="analytics-icon primary">
+                    <i class="feather-bar-chart-2 fs-4"></i>
+                </div>
+                <h6 class="fw-bold mb-2">@Html.T("إحصائيات الدورة", "Course stats")</h6>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">@Html.T("الدروس المكتملة", "Completed lessons")</span>
+                        <span class="fw-bold">@Model.CompletedLessons / @Model.TotalLessons</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span class="text-muted">@Html.T("وقت الدراسة", "Study time")</span>
+                        <span class="fw-bold">@Model.TotalWatchTimeMinutes @Html.T("دقيقة", "min")</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">@Html.T("الحالة", "Status")</span>
+                        <span class="badge @(Model.Status == LMS.Domain.Enums.EnrollmentStatus.Completed ? "bg-success" : "bg-primary")">
+                            @(Model.Status == LMS.Domain.Enums.EnrollmentStatus.Completed ? Html.T("مكتملة", "Completed") : Html.T("قيد التقدم", "In progress"))
+                        </span>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Certificate Card (if completed) -->
+        @if (Model.Status == LMS.Domain.Enums.EnrollmentStatus.Completed && Model.CertificateId.HasValue)
+        {
+            <div class="analytics-card mt-4" style="background: linear-gradient(135deg, #fef3c7, #fde68a); border-color: #fbbf24;">
+                <div class="text-center">
+                    <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <i class="feather-award text-white fs-3"></i>
+                    </div>
+                    <h6 class="fw-bold mb-2">🎉 @Html.T("تهانينا!", "Congratulations!")</h6>
+                    <p class="small text-muted mb-3">@Html.T("لقد أتممت الدورة بنجاح", "You have completed the course successfully")</p>
+                    <a asp-controller="Certificates" asp-action="Details" asp-route-id="@Model.CertificateId" 
+                       class="btn btn-warning btn-sm">
+                        <i class="feather-download me-1"></i>
+                        @Html.T("تحميل الشهادة", "Download certificate")
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+

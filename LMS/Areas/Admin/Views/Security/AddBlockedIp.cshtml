@@ -1,0 +1,336 @@
+@model LMS.Areas.Admin.ViewModels.BlockedIpViewModel
+
+@{
+    ViewData["Title"] = Html.T("حظر عنوان IP", "Block IP address");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("الأمان", "Security"), Url.Action("Dashboard", "Security")),
+        (Html.T("عناوين IP المحظورة", "Blocked IPs"), Url.Action("BlockedIps", "Security")),
+        (Html.T("حظر عنوان IP", "Block IP address"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .form-card {
+            border-right: 4px solid #f06548;
+        }
+        .info-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Info Box -->
+            <div class="card mb-4">
+                <div class="card-body info-box">
+                    <div class="row align-items-center">
+                        <div class="col-md-2 text-center">
+                            <div class="avatar-text avatar-xl bg-white text-danger">
+                                <i class="feather-shield-off"></i>
+                            </div>
+                        </div>
+                        <div class="col-md-10">
+                            <h5 class="text-white mb-2">@Html.T("حظر عنوان IP", "Block IP address")</h5>
+                            <p class="mb-0 opacity-75">
+                                قم بحظر عنوان IP لمنعه من الوصول إلى المنصة. يمكنك تحديد مدة الحظر أو جعله دائماً.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form -->
+            <div class="card form-card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-shield-off me-2"></i>
+                        معلومات الحظر
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="AddBlockedIp" method="post">
+                        @Html.AntiForgeryToken()
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <!-- IP Address -->
+                        <div class="mb-4">
+                            <label asp-for="IpAddress" class="form-label required">
+                                <i class="feather-globe me-2"></i>
+                                عنوان IP
+                            </label>
+                            <input asp-for="IpAddress" class="form-control form-control-lg" placeholder="@Html.T("مثال: 192.168.1.1", "e.g. 192.168.1.1")" />
+                            <span asp-validation-for="IpAddress" class="text-danger small"></span>
+                            <small class="form-text text-muted">
+                                <i class="feather-info me-1"></i>
+                                يمكنك استخدام * للتعبير عن نطاق (مثل: 192.168.1.*)
+                            </small>
+                        </div>
+
+                        <!-- Reason -->
+                        <div class="mb-4">
+                            <label asp-for="Reason" class="form-label required">
+                                <i class="feather-alert-triangle me-2"></i>
+                                سبب الحظر
+                            </label>
+                            <textarea asp-for="Reason" class="form-control" rows="4" placeholder="@Html.T("اذكر سبب الحظر...", "State the reason for blocking...")"></textarea>
+                            <span asp-validation-for="Reason" class="text-danger small"></span>
+                        </div>
+
+                        <!-- Block Type -->
+                        <div class="mb-4">
+                            <label class="form-label">
+                                <i class="feather-clock me-2"></i>
+                                نوع الحظر
+                            </label>
+                            <input type="hidden" asp-for="IsPermanent" id="isPermanentField" value="true" />
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="form-check form-check-lg">
+                                        <input class="form-check-input" type="radio" name="blockType" id="permanent" value="permanent" checked onchange="toggleExpiry()">
+                                        <label class="form-check-label" for="permanent">
+                                            <strong>@Html.T("حظر دائم", "Permanent block")</strong>
+                                            <small class="d-block text-muted">لن ينتهي الحظر تلقائياً</small>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check form-check-lg">
+                                        <input class="form-check-input" type="radio" name="blockType" id="temporary" value="temporary" onchange="toggleExpiry()">
+                                        <label class="form-check-label" for="temporary">
+                                            <strong>@Html.T("حظر مؤقت", "Temporary block")</strong>
+                                            <small class="d-block text-muted">@Html.T("حدد تاريخ انتهاء الحظر", "Set block expiry date")</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Expiry Date -->
+                        <div class="mb-4 d-none" id="expirySection">
+                            <label asp-for="BlockedUntil" class="form-label">
+                                <i class="feather-calendar me-2"></i>
+                                تاريخ انتهاء الحظر
+                            </label>
+                            <input asp-for="BlockedUntil" type="datetime-local" class="form-control" />
+                            <span asp-validation-for="BlockedUntil" class="text-danger small"></span>
+                        </div>
+
+                        <!-- Country (Optional) -->
+                        <div class="mb-4">
+                            <label asp-for="Country" class="form-label">
+                                <i class="feather-map-pin me-2"></i>
+                                الدولة (اختياري)
+                            </label>
+                            <input asp-for="Country" class="form-control" placeholder="@Html.T("مثال: السعودية", "e.g. Saudi Arabia")" />
+                            <span asp-validation-for="Country" class="text-danger small"></span>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="mb-4">
+                            <label asp-for="Notes" class="form-label">
+                                <i class="feather-file-text me-2"></i>
+                                ملاحظات إضافية
+                            </label>
+                            <textarea asp-for="Notes" class="form-control" rows="3" placeholder="@Html.T("ملاحظات إضافية (اختياري)", "Additional notes (optional)")"></textarea>
+                        </div>
+
+                        <!-- Alert Box -->
+                        <div class="alert alert-warning">
+                            <h6 class="alert-heading">
+                                <i class="feather-alert-circle me-2"></i>
+                                تنبيه مهم
+                            </h6>
+                            <ul class="mb-0 ps-3">
+                                <li>تأكد من صحة عنوان IP قبل الحظر</li>
+                                <li>حظر عنوان IP خاطئ قد يمنع مستخدمين شرعيين من الوصول</li>
+                                <li>@Html.T("يمكنك إلغاء الحظر في أي وقت من قائمة العناوين المحظورة", "You can unblock at any time from the blocked addresses list")</li>
+                            </ul>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="BlockedIps" class="btn btn-light-brand">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="feather-shield-off me-2"></i>
+                                حظر العنوان
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Recent Blocked IPs -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-list me-2"></i>
+                        آخر العناوين المحظورة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        @{
+                            var recentBlockedIps = ViewBag.RecentBlockedIps as IEnumerable<LMS.Domain.Entities.Security.BlockedIp>;
+                        }
+                        @if (recentBlockedIps != null && recentBlockedIps.Any())
+                        {
+                            foreach (var ip in recentBlockedIps)
+                            {
+                                var hoursAgo = (DateTime.UtcNow - ip.CreatedAt).TotalHours;
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <code class="text-danger fw-bold">@ip.IpAddress</code>
+                                            <small class="d-block text-muted">@(ip.Reason ?? "غير محدد")</small>
+                                        </div>
+                                        <span class="badge bg-soft-danger text-danger">
+                                            @if (hoursAgo < 1)
+                                            {
+                                                @:منذ @((int)(hoursAgo * 60)) دقيقة
+                                            }
+                                            else
+                                            {
+                                                @:منذ @((int)hoursAgo) ساعة
+                                            }
+                                        </span>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-3">
+                                <i class="feather-shield fs-3 d-block mb-2"></i>
+                                <small>لا توجد عناوين محظورة حالياً</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Quick Tips -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-help-circle me-2"></i>
+                        نصائح سريعة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex gap-3 mb-3">
+                        <div class="avatar-text bg-soft-primary text-primary">
+                            <i class="feather-shield"></i>
+                        </div>
+                        <div>
+                            <h6>@Html.T("الحماية التلقائية", "Automatic protection")</h6>
+                            <p class="text-muted small mb-0">يقوم النظام بحظر العناوين المشبوهة تلقائياً بعد عدد معين من المحاولات الفاشلة</p>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-3 mb-3">
+                        <div class="avatar-text bg-soft-warning text-warning">
+                            <i class="feather-clock"></i>
+                        </div>
+                        <div>
+                            <h6>@Html.T("الحظر المؤقت", "Temporary block")</h6>
+                            <p class="text-muted small mb-0">@Html.T("استخدم الحظر المؤقت للحالات البسيطة التي لا تتطلب حظر دائم", "Use temporary block for simple cases that do not require permanent block")</p>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-3">
+                        <div class="avatar-text bg-soft-success text-success">
+                            <i class="feather-list"></i>
+                        </div>
+                        <div>
+                            <h6>@Html.T("مراجعة دورية", "Periodic review")</h6>
+                            <p class="text-muted small mb-0">@Html.T("راجع قائمة العناوين المحظورة بشكل دوري لإزالة الحظر غير الضروري", "Review the blocked list periodically to remove unnecessary blocks")</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-bar-chart-2 me-2"></i>
+                        إحصائيات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3 pb-3 border-bottom">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">@Html.T("عناوين محظورة", "Blocked addresses")</span>
+                            <span class="fw-bold">@(ViewBag.TotalBlockedIps ?? 0)</span>
+                        </div>
+                    </div>
+                    <div class="mb-3 pb-3 border-bottom">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">@Html.T("محاولات محظورة اليوم", "Blocked attempts today")</span>
+                            <span class="fw-bold text-danger">@(ViewBag.BlockedAttemptsToday ?? 0)</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted">@Html.T("عناوين ستنتهي قريباً", "Addresses expiring soon")</span>
+                            <span class="fw-bold text-warning">@(ViewBag.ExpiringSoon ?? 0)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    <script>
+        function toggleExpiry() {
+            const isPermanent = document.getElementById('permanent').checked;
+            const expirySection = document.getElementById('expirySection');
+            const isPermanentField = document.getElementById('isPermanentField');
+            
+            // Update hidden field value
+            isPermanentField.value = isPermanent ? 'true' : 'false';
+            
+            if (isPermanent) {
+                expirySection.classList.add('d-none');
+                // Clear expiry date when switching to permanent
+                document.querySelector('input[name="BlockedUntil"]').value = '';
+            } else {
+                expirySection.classList.remove('d-none');
+            }
+        }
+
+        $(document).ready(function() {
+            // Initialize based on current model state
+            @if (!Model.IsPermanent)
+            {
+                <text>
+                document.getElementById('temporary').checked = true;
+                document.getElementById('isPermanentField').value = 'false';
+                document.getElementById('expirySection').classList.remove('d-none');
+                </text>
+            }
+        });
+    </script>
+}
+

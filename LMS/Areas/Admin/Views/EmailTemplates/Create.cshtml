@@ -1,0 +1,497 @@
+@model LMS.Areas.Admin.ViewModels.EmailTemplateCreateViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء قالب بريد إلكتروني", "Create Email Template");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("قوالب البريد الإلكتروني", "Email Templates"), Url.Action("Index", "EmailTemplates")),
+        (Html.T("إنشاء قالب", "Create Template"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        .note-editor.note-frame {
+            direction: rtl;
+            text-align: right;
+        }
+        .code-editor {
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            min-height: 300px;
+            direction: ltr;
+            text-align: left;
+        }
+        .variable-tag {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .variable-tag:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .preview-panel {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background: #f8f9fa;
+            min-height: 400px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-mail me-2"></i>
+                        معلومات القالب
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Create" method="post" id="emailTemplateForm">
+                        @Html.AntiForgeryToken()
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <!-- Template Name -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Name" class="form-label">
+                                @Html.T("اسم القالب", "Template name") <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Name" class="form-control" placeholder="@Html.T("مثال: قالب الترحيب بالمستخدمين الجدد", "e.g. Welcome new users template")" />
+                            <span asp-validation-for="Name" class="text-danger"></span>
+                        </div>
+
+                        <!-- Subject -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Subject" class="form-label">
+                                @Html.T("موضوع البريد", "Email subject") <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Subject" class="form-control" placeholder="@Html.T("مثال: مرحباً بك في منصتنا التعليمية", "e.g. Welcome to our learning platform")" />
+                            <span asp-validation-for="Subject" class="text-danger"></span>
+                            <small class="form-text text-muted">
+                                <i class="feather-info"></i>
+                                @Html.T("يمكنك استخدام المتغيرات مثل {{UserName}} في الموضوع", "You can use variables like {{UserName}} in the subject")
+                            </small>
+                        </div>
+
+                        <!-- Category -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="Category" class="form-label">
+                                        @Html.T("التصنيف", "Category") <span class="text-danger">*</span>
+                                    </label>
+                                    <select asp-for="Category" class="form-select" id="categorySelect">
+                                        <option value="">@Html.T("اختر التصنيف", "Select category")</option>
+                                        <option value="Welcome">@Html.T("ترحيب", "Welcome")</option>
+                                        <option value="Notification">@Html.T("إشعار", "Notification")</option>
+                                        <option value="Marketing">@Html.T("تسويق", "Marketing")</option>
+                                        <option value="Transactional">@Html.T("معاملات", "Transactional")</option>
+                                        <option value="Educational">@Html.T("تعليمي", "Educational")</option>
+                                        <option value="Support">@Html.T("دعم", "Support")</option>
+                                        <option value="System">@Html.T("نظام", "System")</option>
+                                    </select>
+                                    <span asp-validation-for="Category" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="Language" class="form-label">
+                                        @Html.T("اللغة", "Language") <span class="text-danger">*</span>
+                                    </label>
+                                    <select asp-for="Language" class="form-select">
+                                        <option value="ar">@Html.T("العربية", "Arabic")</option>
+                                        <option value="en">@Html.T("الإنجليزية", "English")</option>
+                                    </select>
+                                    <span asp-validation-for="Language" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Description" class="form-label">
+                                @Html.T("الوصف", "Description")
+                            </label>
+                            <textarea asp-for="Description" class="form-control" rows="2" placeholder="@Html.T("وصف مختصر لاستخدام القالب...", "Brief description of template usage...")"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <!-- Editor Type -->
+                        <div class="form-group mb-4">
+                            <label class="form-label">@Html.T("نوع المحرر", "Editor type")</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="editorType" id="visualEditor" value="visual" checked>
+                                <label class="btn btn-outline-primary" for="visualEditor">
+                                    <i class="feather-layout me-2"></i>
+                                    @Html.T("محرر مرئي", "Visual editor")
+                                </label>
+                                <input type="radio" class="btn-check" name="editorType" id="htmlEditor" value="html">
+                                <label class="btn btn-outline-primary" for="htmlEditor">
+                                    <i class="feather-code me-2"></i>
+                                    محرر HTML
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Visual Editor -->
+                        <div class="form-group mb-4" id="visualEditorContent">
+                            <label asp-for="Body" class="form-label">
+                                محتوى البريد <span class="text-danger">*</span>
+                            </label>
+                            <textarea asp-for="Body" id="bodyEditor" class="form-control" rows="15"></textarea>
+                            <span asp-validation-for="Body" class="text-danger"></span>
+                        </div>
+
+                        <!-- HTML Editor -->
+                        <div class="form-group mb-4 d-none" id="htmlEditorContent">
+                            <label class="form-label">
+                                محتوى HTML <span class="text-danger">*</span>
+                            </label>
+                            <textarea id="htmlBodyEditor" class="form-control code-editor" rows="15"></textarea>
+                        </div>
+
+                        <!-- Layout Template -->
+                        <div class="form-group mb-4">
+                            <label asp-for="LayoutTemplate" class="form-label">
+                                قالب التخطيط
+                            </label>
+                            <select asp-for="LayoutTemplate" class="form-select">
+                                <option value="">@Html.T("بدون قالب (محتوى فقط)", "No template (content only)")</option>
+                                <option value="Default">@Html.T("القالب الافتراضي", "Default template")</option>
+                                <option value="Modern">@Html.T("عصري", "Modern")</option>
+                                <option value="Minimal">@Html.T("بسيط", "Minimal")</option>
+                                <option value="Professional">@Html.T("احترافي", "Professional")</option>
+                            </select>
+                            <span asp-validation-for="LayoutTemplate" class="text-danger"></span>
+                        </div>
+
+                        <!-- Options -->
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title mb-3">
+                                    <i class="feather-settings me-2"></i>
+                                    خيارات إضافية
+                                </h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActiveSwitch" checked />
+                                            <label class="form-check-label" for="isActiveSwitch">
+                                                <i class="feather-check-circle me-2"></i>
+                                                قالب نشط
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsDefault" class="form-check-input" type="checkbox" id="isDefaultSwitch" />
+                                            <label class="form-check-label" for="isDefaultSwitch">
+                                                <i class="feather-star me-2"></i>
+                                                قالب افتراضي للتصنيف
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="TrackOpens" class="form-check-input" type="checkbox" id="trackOpensSwitch" checked />
+                                            <label class="form-check-label" for="trackOpensSwitch">
+                                                <i class="feather-eye me-2"></i>
+                                                تتبع فتح البريد
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="TrackClicks" class="form-check-input" type="checkbox" id="trackClicksSwitch" checked />
+                                            <label class="form-check-label" for="trackClicksSwitch">
+                                                <i class="feather-mouse-pointer me-2"></i>
+                                                تتبع النقرات
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="Index" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <button type="button" class="btn btn-secondary" id="previewBtn">
+                                <i class="feather-eye me-2"></i>
+                                معاينة
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-2"></i>
+                                حفظ القالب
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Variables Guide -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-code me-2"></i>
+                        المتغيرات المتاحة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        انقر على أي متغير لنسخه
+                    </p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{UserName}}">
+                            {{UserName}}
+                        </span>
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{Email}}">
+                            {{Email}}
+                        </span>
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{CourseName}}">
+                            {{CourseName}}
+                        </span>
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{InstructorName}}">
+                            {{InstructorName}}
+                        </span>
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{CompanyName}}">
+                            {{CompanyName}}
+                        </span>
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{SiteUrl}}">
+                            {{SiteUrl}}
+                        </span>
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{CurrentYear}}">
+                            {{CurrentYear}}
+                        </span>
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{VerificationLink}}">
+                            {{VerificationLink}}
+                        </span>
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{ResetLink}}">
+                            {{ResetLink}}
+                        </span>
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{OrderNumber}}">
+                            {{OrderNumber}}
+                        </span>
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{Amount}}">
+                            {{Amount}}
+                        </span>
+                        <span class="badge bg-soft-primary text-primary variable-tag" data-var="{{Date}}">
+                            {{Date}}
+                        </span>
+                    </div>
+                    <hr class="my-3">
+                    <div class="alert alert-info mb-0">
+                        <small>
+                            <i class="feather-info me-2"></i>
+                            استخدم هذه المتغيرات في الموضوع أو المحتوى وسيتم استبدالها تلقائياً بالقيم الفعلية
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Templates -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-zap me-2"></i>
+                        قوالب سريعة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-light-brand text-start quick-template" data-template="welcome">
+                            <i class="feather-users me-2"></i>
+                            رسالة ترحيب
+                        </button>
+                        <button type="button" class="btn btn-light-brand text-start quick-template" data-template="verification">
+                            <i class="feather-check-circle me-2"></i>
+                            تأكيد البريد الإلكتروني
+                        </button>
+                        <button type="button" class="btn btn-light-brand text-start quick-template" data-template="reset">
+                            <i class="feather-lock me-2"></i>
+                            إعادة تعيين كلمة المرور
+                        </button>
+                        <button type="button" class="btn btn-light-brand text-start quick-template" data-template="notification">
+                            <i class="feather-bell me-2"></i>
+                            إشعار عام
+                        </button>
+                        <button type="button" class="btn btn-light-brand text-start quick-template" data-template="invoice">
+                            <i class="feather-file-text me-2"></i>
+                            فاتورة
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Initialize Summernote
+            $('#bodyEditor').summernote({
+                height: 350,
+                direction: 'rtl',
+                placeholder: 'اكتب محتوى البريد الإلكتروني هنا...',
+                toolbar: [
+                    ['style', ['style', 'bold', 'italic', 'underline', 'clear']],
+                    ['font', ['strikethrough', 'superscript', 'subscript']],
+                    ['fontsize', ['fontsize']],
+                    ['color', ['color']],
+                    ['para', ['ul', 'ol', 'paragraph']],
+                    ['table', ['table']],
+                    ['insert', ['link', 'picture', 'video']],
+                    ['view', ['fullscreen', 'codeview', 'help']]
+                ]
+            });
+
+            // Initialize Select2
+            $('#categorySelect').select2({ dir: 'rtl' });
+
+            // Editor Type Toggle
+            $('input[name="editorType"]').change(function() {
+                if ($(this).val() === 'visual') {
+                    $('#visualEditorContent').removeClass('d-none');
+                    $('#htmlEditorContent').addClass('d-none');
+                    $('#bodyEditor').summernote('code', $('#htmlBodyEditor').val());
+                } else {
+                    $('#visualEditorContent').addClass('d-none');
+                    $('#htmlEditorContent').removeClass('d-none');
+                    $('#htmlBodyEditor').val($('#bodyEditor').summernote('code'));
+                }
+            });
+
+            // Sync editors before submit
+            $('#emailTemplateForm').on('submit', function() {
+                if ($('input[name="editorType"]:checked').val() === 'html') {
+                    $('#bodyEditor').summernote('code', $('#htmlBodyEditor').val());
+                }
+            });
+
+            // Copy variable to clipboard
+            $('.variable-tag').click(function() {
+                const variable = $(this).data('var');
+                navigator.clipboard.writeText(variable).then(function() {
+                    // Show success message
+                    const toast = $('<div class="alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3" style="z-index: 9999;">تم نسخ المتغير: ' + variable + '</div>');
+                    $('body').append(toast);
+                    setTimeout(function() {
+                        toast.fadeOut(function() { $(this).remove(); });
+                    }, 2000);
+                });
+            });
+
+            // Quick Templates
+            const templates = {
+                welcome: {
+                    subject: 'مرحباً بك في {{CompanyName}}',
+                    body: '<h2>مرحباً {{UserName}}!</h2><p>نحن سعداء بانضمامك إلى منصتنا التعليمية.</p><p>ابدأ رحلتك التعليمية الآن واستكشف آلاف الدورات المتاحة.</p><p><a href="{{SiteUrl}}">زيارة المنصة</a></p>'
+                },
+                verification: {
+                    subject: 'تأكيد بريدك الإلكتروني',
+                    body: '<h2>مرحباً {{UserName}}</h2><p>الرجاء تأكيد بريدك الإلكتروني بالنقر على الرابط أدناه:</p><p><a href="{{VerificationLink}}">تأكيد البريد الإلكتروني</a></p>'
+                },
+                reset: {
+                    subject: 'إعادة تعيين كلمة المرور',
+                    body: '<h2>مرحباً {{UserName}}</h2><p>لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بك.</p><p><a href="{{ResetLink}}">إعادة تعيين كلمة المرور</a></p><p>إذا لم تطلب ذلك، يرجى تجاهل هذه الرسالة.</p>'
+                },
+                notification: {
+                    subject: 'إشعار جديد من {{CompanyName}}',
+                    body: '<h2>مرحباً {{UserName}}</h2><p>لديك إشعار جديد:</p><p>[محتوى الإشعار هنا]</p>'
+                },
+                invoice: {
+                    subject: 'فاتورة الطلب #{{OrderNumber}}',
+                    body: '<h2>فاتورة الطلب</h2><p>عزيزي {{UserName}},</p><p>شكراً لك على طلبك. رقم الطلب: {{OrderNumber}}</p><p>المبلغ الإجمالي: {{Amount}}</p><p>التاريخ: {{Date}}</p>'
+                }
+            };
+
+            $('.quick-template').click(function() {
+                const templateType = $(this).data('template');
+                const template = templates[templateType];
+                
+                $('#Subject').val(template.subject);
+                $('#bodyEditor').summernote('code', template.body);
+                
+                // Show success message
+                const toast = $('<div class="alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3" style="z-index: 9999;">تم تطبيق القالب</div>');
+                $('body').append(toast);
+                setTimeout(function() {
+                    toast.fadeOut(function() { $(this).remove(); });
+                }, 2000);
+            });
+
+            // Preview functionality
+            $('#previewBtn').click(function() {
+                const subject = $('#Subject').val() || 'موضوع البريد';
+                const body = $('#bodyEditor').summernote('code') || 'محتوى البريد';
+                
+                // Replace variables with sample data
+                let previewBody = body
+                    .replace(/{{UserName}}/g, 'أحمد محمد')
+                    .replace(/{{Email}}/g, 'user@example.com')
+                    .replace(/{{CourseName}}/g, 'تطوير تطبيقات الويب')
+                    .replace(/{{InstructorName}}/g, 'د. محمد علي')
+                    .replace(/{{CompanyName}}/g, 'منصة التعليم')
+                    .replace(/{{SiteUrl}}/g, 'https://example.com')
+                    .replace(/{{CurrentYear}}/g, new Date().getFullYear())
+                    .replace(/{{VerificationLink}}/g, '#')
+                    .replace(/{{ResetLink}}/g, '#')
+                    .replace(/{{OrderNumber}}/g, '12345')
+                    .replace(/{{Amount}}/g, '500 ريال')
+                    .replace(/{{Date}}/g, new Date().toLocaleDateString('ar-SA'));
+
+                // Open preview in new window
+                const previewWindow = window.open('', '_blank', 'width=800,height=600');
+                previewWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html dir="rtl">
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>${subject}</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
+                            .email-container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                            .email-header { border-bottom: 2px solid #007bff; padding-bottom: 15px; margin-bottom: 20px; }
+                            .email-subject { font-size: 24px; color: #333; margin: 0; }
+                            .email-body { line-height: 1.6; color: #666; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="email-container">
+                            <div class="email-header">
+                                <h1 class="email-subject">${subject}</h1>
+                            </div>
+                            <div class="email-body">
+                                ${previewBody}
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                `);
+                previewWindow.document.close();
+            });
+        });
+    </script>
+}
+

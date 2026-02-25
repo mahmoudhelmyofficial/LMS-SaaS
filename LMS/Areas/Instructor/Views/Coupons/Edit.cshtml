@@ -1,0 +1,438 @@
+@model LMS.Areas.Instructor.ViewModels.CouponEditViewModel
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("تعديل الكوبون", "Edit Coupon");
+    ViewData["Subtitle"] = Html.T("تحديث معلومات الكوبون", "Update coupon info") + ": " + Model.Code;
+    
+    // Load platform settings
+    var usageCritical = await PlatformSettings.GetIntSettingAsync("Threshold.Usage.Critical", 90);
+    var usageWarning = await PlatformSettings.GetIntSettingAsync("Threshold.Usage.Warning", 70);
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex gap-2">
+            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-light">
+                <i class="feather-eye me-2"></i>
+                @Html.T("عرض التفاصيل", "View details")
+            </a>
+            <a asp-action="Index" class="btn btn-light">
+                <i class="feather-arrow-right me-2"></i>
+                @Html.T("العودة للقائمة", "Back to list")
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Usage Warning -->
+    @if (Model.UsedCount > 0)
+    {
+        <div class="alert alert-warning mb-4">
+            <div class="d-flex align-items-center">
+                <i class="feather-alert-triangle fs-4 me-3"></i>
+                <div>
+                    <h6 class="mb-1">@Html.T("تنبيه: الكوبون مستخدم", "Warning: Coupon in use")</h6>
+                    <p class="mb-0">@Html.T("تم استخدام هذا الكوبون", "This coupon has been used") @Model.UsedCount @Html.T("مرة. بعض التعديلات قد تؤثر على الاستخدامات السابقة.", "time(s). Some changes may affect past usages.")</p>
+                </div>
+            </div>
+        </div>
+    }
+
+    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="couponForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="UsedCount" />
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            @Html.T("المعلومات الأساسية", "Basic information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("كود الكوبون", "Coupon code") <span class="text-danger">*</span></label>
+                                @if (Model.UsedCount > 0)
+                                {
+                                    <input asp-for="Code" class="form-control text-uppercase" maxlength="20" readonly>
+                                }
+                                else
+                                {
+                                    <input asp-for="Code" class="form-control text-uppercase" maxlength="20">
+                                }
+                                <span asp-validation-for="Code" class="text-danger"></span>
+                                @if (Model.UsedCount > 0)
+                                {
+                                    <div class="form-text text-warning">
+                                        <i class="feather-lock me-1"></i>
+                                        @Html.T("لا يمكن تعديل الكود بعد الاستخدام", "Code cannot be changed after use")
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="form-text">
+                                        <i class="feather-info me-1"></i>
+                                        @Html.T("4-20 حرف، أحرف إنجليزية كبيرة وأرقام فقط", "4-20 chars, uppercase letters and numbers only")
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("الوصف", "Description") <span class="text-danger">*</span></label>
+                                <textarea asp-for="Description" class="form-control" rows="3"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Discount Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-percent me-2 text-primary"></i>
+                            @Html.T("إعدادات الخصم", "Discount settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (Model.UsedCount > 0)
+                        {
+                            <div class="alert alert-info mb-4">
+                                <i class="feather-info me-2"></i>
+                                @Html.T("بعض إعدادات الخصم لا يمكن تعديلها بعد الاستخدام", "Some discount settings cannot be changed after use")
+                            </div>
+                        }
+
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("نوع الخصم", "Discount type") <span class="text-danger">*</span></label>
+                                @if (Model.UsedCount > 0)
+                                {
+                                    <select asp-for="DiscountType" class="form-select" id="discountTypeSelect" disabled>
+                                        <option value="@LMS.Domain.Enums.DiscountType.Percentage">@Html.T("نسبة مئوية (%)", "Percentage (%)")</option>
+                                        <option value="@LMS.Domain.Enums.DiscountType.FixedAmount">@Html.T("مبلغ ثابت (ر.س)", "Fixed amount")</option>
+                                    </select>
+                                }
+                                else
+                                {
+                                    <select asp-for="DiscountType" class="form-select" id="discountTypeSelect">
+                                        <option value="@LMS.Domain.Enums.DiscountType.Percentage">@Html.T("نسبة مئوية (%)", "Percentage (%)")</option>
+                                        <option value="@LMS.Domain.Enums.DiscountType.FixedAmount">@Html.T("مبلغ ثابت (ر.س)", "Fixed amount")</option>
+                                    </select>
+                                }
+                                <span asp-validation-for="DiscountType" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("قيمة الخصم", "Discount value") <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    @if (Model.UsedCount > 0)
+                                    {
+                                        <input asp-for="DiscountValue" type="number" class="form-control" min="0" step="0.01" readonly>
+                                    }
+                                    else
+                                    {
+                                        <input asp-for="DiscountValue" type="number" class="form-control" min="0" step="0.01">
+                                    }
+                                    <span class="input-group-text" id="discountUnit">
+                                        @(Model.DiscountType == LMS.Domain.Enums.DiscountType.Percentage ? "%" : "ر.س")
+                                    </span>
+                                </div>
+                                <span asp-validation-for="DiscountValue" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6" id="maxDiscountDiv" style="display: @(Model.DiscountType == LMS.Domain.Enums.DiscountType.Percentage ? "block" : "none")">
+                                <label class="form-label">@Html.T("الحد الأقصى للخصم", "Max discount")</label>
+                                <div class="input-group">
+                                    <input asp-for="MaxDiscountAmount" type="number" class="form-control" min="0" step="0.01">
+                                    <span class="input-group-text">ر.س</span>
+                                </div>
+                                <span asp-validation-for="MaxDiscountAmount" class="text-danger"></span>
+                                <div class="form-text">@Html.T("للنسبة المئوية فقط - اختياري", "For percentage only - optional")</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("الحد الأدنى للشراء", "Minimum purchase")</label>
+                                <div class="input-group">
+                                    <input asp-for="MinimumPurchaseAmount" type="number" class="form-control" min="0" step="0.01">
+                                    <span class="input-group-text">ر.س</span>
+                                </div>
+                                <span asp-validation-for="MinimumPurchaseAmount" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Applicable Courses -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-book me-2 text-primary"></i>
+                            @Html.T("الدورات المطبقة", "Applicable courses")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="allCoursesCheck" @(Model.SelectedCourseIds == null || !Model.SelectedCourseIds.Any() ? "checked" : "")>
+                                <label class="form-check-label" for="allCoursesCheck">
+                                    @Html.T("صالح لجميع الدورات", "Valid for all courses")
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="courseSelectionDiv" style="display: @(Model.SelectedCourseIds != null && Model.SelectedCourseIds.Any() ? "block" : "none")">
+                            <label class="form-label">@Html.T("اختر الدورات", "Select courses")</label>
+                            <select asp-for="SelectedCourseIds" class="form-select" asp-items="ViewBag.Courses" multiple size="8">
+                            </select>
+                            <span asp-validation-for="SelectedCourseIds" class="text-danger"></span>
+                            <div class="form-text">
+                                <i class="feather-info me-1"></i>
+                                @Html.T("استخدم Ctrl/Cmd للاختيار المتعدد", "Use Ctrl/Cmd for multiple selection")
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Validity Period -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-calendar me-2 text-primary"></i>
+                            @Html.T("فترة الصلاحية", "Validity period")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("تاريخ البدء", "Start date") <span class="text-danger">*</span></label>
+                                <input asp-for="ValidFrom" type="datetime-local" class="form-control">
+                                <span asp-validation-for="ValidFrom" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("تاريخ الانتهاء", "End date") <span class="text-danger">*</span></label>
+                                <input asp-for="ValidTo" type="datetime-local" class="form-control">
+                                <span asp-validation-for="ValidTo" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-12">
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-light btn-sm" onclick="extendDuration(7)">+ @Html.T("أسبوع", "Week")</button>
+                                    <button type="button" class="btn btn-light btn-sm" onclick="extendDuration(30)">+ @Html.T("شهر", "Month")</button>
+                                    <button type="button" class="btn btn-light btn-sm" onclick="extendDuration(90)">+ @Html.T("3 أشهر", "3 months")</button>
+                                </div>
+                                <small class="text-muted d-block mt-2">@Html.T("تمديد سريع لتاريخ الانتهاء", "Quick extend end date")</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Current Usage -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الاستخدام الحالي", "Current usage")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-3 mx-auto">
+                                <h3 class="mb-0">@Model.UsedCount</h3>
+                            </div>
+                            <p class="text-muted mb-0">@Html.T("مرة استخدام", "times used")</p>
+                        </div>
+
+                        @if (Model.MaxUses.HasValue)
+                        {
+                            var usagePercent = Model.MaxUses > 0 ? (double)Model.UsedCount / Model.MaxUses.Value * 100 : 0;
+                            <div class="progress mb-2" style="height: 8px;">
+                                <div class="progress-bar @(usagePercent >= usageCritical ? "bg-danger" : usagePercent >= usageWarning ? "bg-warning" : "bg-success")" 
+                                     role="progressbar" style="width: @usagePercent.ToString("F0")%"></div>
+                            </div>
+                            <small class="text-muted">@Model.UsedCount من @Model.MaxUses (@usagePercent.ToString("F1")%)</small>
+                        }
+                    </div>
+                </div>
+
+                <!-- Usage Limits -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("حدود الاستخدام", "Usage limits")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("الحد الأقصى لعدد الاستخدامات", "Max uses")</label>
+                            <input asp-for="MaxUses" type="number" class="form-control" min="@Model.UsedCount" placeholder="@Html.T("غير محدود", "Unlimited")">
+                            <span asp-validation-for="MaxUses" class="text-danger"></span>
+                            @if (Model.UsedCount > 0)
+                            {
+                                <div class="form-text text-warning">
+                                    <i class="feather-alert-triangle me-1"></i>
+                                    @Html.T("لا يمكن أن يكون أقل من", "Cannot be less than") @Model.UsedCount (@Html.T("الاستخدامات الحالية", "Current usages"))
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="form-text">@Html.T("اتركه فارغاً للاستخدام غير المحدود", "Leave empty for unlimited")</div>
+                            }
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("الحد الأقصى لكل طالب", "Max per student")</label>
+                            <input asp-for="MaxUsesPerUser" type="number" class="form-control" min="1">
+                            <span asp-validation-for="MaxUsesPerUser" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-check form-switch">
+                            <input asp-for="FirstPurchaseOnly" class="form-check-input" type="checkbox" id="firstPurchaseOnly">
+                            <label class="form-check-label" for="firstPurchaseOnly">
+                                @Html.T("للمشتريات الأولى فقط", "First purchase only")
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activation -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("حالة التفعيل", "Activation status")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActive">
+                            <label class="form-check-label" for="isActive">
+                                الكوبون نشط
+                            </label>
+                        </div>
+
+                        @if (Model.IsActive)
+                        {
+                            <div class="alert alert-success mb-0">
+                                <i class="feather-check-circle me-2"></i>
+                                الكوبون متاح للاستخدام
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-secondary mb-0">
+                                <i class="feather-pause-circle me-2"></i>
+                                الكوبون معطل مؤقتاً
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="card stretch stretch-full mb-4 bg-soft-info">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3">@Html.T("معلومات سريعة", "Quick info")</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small">تاريخ الإنشاء:</span>
+                            <span class="small">@DateTime.UtcNow.ToString("dd/MM/yyyy")</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted small">مرات الاستخدام:</span>
+                            <span class="fw-bold">@Model.UsedCount</span>
+                        </div>
+                        @if (Model.MaxUses.HasValue)
+                        {
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="text-muted small">المتبقي:</span>
+                                <span class="fw-bold text-success">@(Model.MaxUses.Value - Model.UsedCount)</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between gap-3">
+                            <a href="@Url.Action("Details", new { id = Model.Id })" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-check me-2"></i>
+                                حفظ التعديلات
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Discount type change handler
+            $('#discountTypeSelect').on('change', function() {
+                const isPercentage = $(this).val() == '@((int)LMS.Domain.Enums.DiscountType.Percentage)';
+                $('#maxDiscountDiv').toggle(isPercentage);
+                $('#discountUnit').text(isPercentage ? '%' : 'ر.س');
+            });
+
+            // All courses check handler
+            $('#allCoursesCheck').on('change', function() {
+                $('#courseSelectionDiv').toggle(!this.checked);
+                if (this.checked) {
+                    $('#SelectedCourseIds').val([]);
+                }
+            });
+
+            // Form validation
+            $('#couponForm').on('submit', function(e) {
+                const validFrom = new Date($('#ValidFrom').val());
+                const validTo = new Date($('#ValidTo').val());
+                
+                if (validTo <= validFrom) {
+                    e.preventDefault();
+                    alert('تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء');
+                    return false;
+                }
+
+                const maxUses = parseInt($('#MaxUses').val());
+                const usedCount = @Model.UsedCount;
+                
+                if (maxUses && maxUses < usedCount) {
+                    e.preventDefault();
+                    alert('الحد الأقصى للاستخدامات لا يمكن أن يكون أقل من الاستخدامات الحالية (' + usedCount + ')');
+                    return false;
+                }
+            });
+        });
+
+        function extendDuration(days) {
+            const to = new Date($('#ValidTo').val());
+            to.setDate(to.getDate() + days);
+            $('#ValidTo').val(to.toISOString().slice(0, 16));
+        }
+    </script>
+
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

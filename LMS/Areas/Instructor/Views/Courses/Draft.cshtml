@@ -1,0 +1,414 @@
+@model IEnumerable<LMS.Domain.Entities.Courses.Course>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("الدورات المسودة", "Draft Courses");
+    ViewData["Subtitle"] = Html.T("الدورات قيد الإعداد", "Courses in progress");
+    
+    // Load platform settings
+    var thresholdComplete = await PlatformSettings.GetIntSettingAsync("Threshold.Completion.Ready", 80);
+    var thresholdProgress = await PlatformSettings.GetIntSettingAsync("Threshold.Completion.Progress", 50);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + Url.Action("CreateWizard") + "' class='btn btn-primary'><i class='feather-plus me-2'></i>" + Html.T("إنشاء دورة جديدة", "Create New Course") + "</a><a href='" + Url.Action("Index") + "' class='btn btn-light'><i class='feather-list me-2'></i>" + Html.T("جميع الدورات", "All Courses") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Card -->
+    <div class="row mb-4 g-3">
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("دورات مسودة", "Draft Courses") },
+                { "Value", ViewBag.TotalCount ?? 0 },
+                { "Icon", "edit" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("جاهز للنشر", "Ready to Publish") },
+                { "Value", ViewBag.ReadyToPublish ?? 0 },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("يحتاج تحديث", "Needs Update") },
+                { "Value", ViewBag.NeedsWork ?? 0 },
+                { "Icon", "alert-circle" },
+                { "Color", "danger" }
+            })
+        </div>
+    </div>
+
+    <!-- Courses List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full border-0" style="border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);">
+                <div class="card-header d-flex align-items-center justify-content-between" style="border-bottom: 1px solid var(--border-color-light, #f1f5f9); padding: 1rem 1.5rem;">
+                    <h5 class="card-title mb-0 fw-bold">@Html.T("الدورات المسودة", "Draft Courses")</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <!-- View Toggle -->
+                        <div class="view-toggle btn-group" role="group" style="border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                            <button type="button" class="btn btn-sm" id="draftTableViewBtn" onclick="switchDraftView('table')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); transition: all 0.25s ease;">
+                                <i class="feather-list" style="font-size: 15px;"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm active" id="draftCardViewBtn" onclick="switchDraftView('card')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); border-right: none; transition: all 0.25s ease;">
+                                <i class="feather-grid" style="font-size: 15px;"></i>
+                            </button>
+                        </div>
+                        <div data-bs-toggle="tooltip" title="@Html.T("تحديث", "Refresh")">
+                            <a href="@Url.Action("Draft")" class="avatar-text avatar-xs bg-warning" style="border-radius: 10px;">
+                                <i class="feather-refresh-cw"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <!-- TABLE VIEW -->
+                        <div id="draftTableView" class="courses-view-panel d-none">
+                            <div class="table-responsive" style="overflow: visible;">
+                                <table class="table table-hover mb-0 courses-table-modern">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("الدورة", "Course")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                            <th>@Html.T("التقدم", "Progress")</th>
+                                            <th>@Html.T("آخر تحديث", "Last Updated")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var course in Model)
+                                        {
+                                            var completionPercentage = CalculateCourseCompletion(course);
+                                            <tr>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-3">
+                                                        <div class="avatar-image avatar-lg" style="border-radius: 10px; overflow: hidden; flex-shrink: 0;">
+                                                            <img src="@(course.ThumbnailUrl ?? "/assets/images/general/placeholder.png")" alt="@course.Title" class="img-fluid" style="object-fit: cover; width: 100%; height: 100%;">
+                                                        </div>
+                                                        <div>
+                                                            <a href="@Url.Action("CreateWizard", new { id = course.Id, step = 1 })" class="fw-bold text-dark">@course.Title</a>
+                                                            <p class="fs-12 text-muted mb-0">@course.Category?.Name</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-soft-warning text-warning" style="border-radius: 8px; padding: 5px 12px; font-weight: 600;">@Html.T("مسودة", "Draft")</span>
+                                                </td>
+                                                <td>
+                                                    <div style="min-width: 120px;">
+                                                        <div class="d-flex align-items-center justify-content-between mb-1">
+                                                            <span class="fs-12 fw-semibold" style="color: @(completionPercentage >= thresholdComplete ? "#059669" : completionPercentage >= thresholdProgress ? "#d97706" : "#dc2626");">@completionPercentage%</span>
+                                                        </div>
+                                                        <div class="progress" style="height: 6px; border-radius: 4px; background: var(--border-color-light, #f1f5f9);">
+                                                            <div class="progress-bar @(completionPercentage >= thresholdComplete ? "bg-success" : completionPercentage >= thresholdProgress ? "bg-warning" : "bg-danger")" 
+                                                                 role="progressbar" 
+                                                                 style="width: @(completionPercentage)%; border-radius: 4px;" 
+                                                                 aria-valuenow="@completionPercentage" 
+                                                                 aria-valuemin="0" 
+                                                                 aria-valuemax="100">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="fs-12 text-muted">@(course.UpdatedAt?.ToString("dd/MM/yyyy HH:mm") ?? course.CreatedAt.ToString("dd/MM/yyyy HH:mm"))</span>
+                                                </td>
+                                                <td>
+                                                    <div class="hstack gap-2 justify-content-end">
+                                                        <a href="@Url.Action("CreateWizard", new { id = course.Id, step = 1 })" class="btn btn-sm btn-primary" data-bs-toggle="tooltip" title="@Html.T("متابعة التعديل", "Continue editing")" style="border-radius: 8px;">
+                                                            <i class="feather-edit me-1"></i>
+                                                            @Html.T("متابعة", "Continue")
+                                                        </a>
+                                                        <div class="dropdown">
+                                                            <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown" data-bs-boundary="viewport" style="border-radius: 10px;">
+                                                                <i class="feather-more-horizontal"></i>
+                                                            </a>
+                                                            <ul class="dropdown-menu dropdown-menu-end course-actions-dropdown" style="border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.12); border: 1px solid var(--border-color-light, #f1f5f9); padding: 8px; min-width: 200px; z-index: 1080;">
+                                                                @if (completionPercentage >= thresholdComplete)
+                                                                {
+                                                                    <li>
+                                                                        <form asp-action="Publish" asp-route-id="@course.Id" method="post" style="display:inline;">
+                                                                            @Html.AntiForgeryToken()
+                                                                            <button type="submit" class="dropdown-item text-success" style="border-radius: 8px; padding: 10px 14px;">
+                                                                                <i class="feather-check-circle me-3"></i>
+                                                                                <span>@Html.T("نشر الدورة", "Publish course")</span>
+                                                                            </button>
+                                                                        </form>
+                                                                    </li>
+                                                                    <li><hr class="dropdown-divider" style="margin: 4px 0;"></li>
+                                                                }
+                                                                <li>
+                                                                    <a class="dropdown-item" href="@Url.Action("Details", new { id = course.Id })" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-eye me-3"></i>
+                                                                        <span>@Html.T("معاينة", "Preview")</span>
+                                                                    </a>
+                                                                </li>
+                                                                <li>
+                                                                    <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@Url.Action("Delete", new { id = course.Id })', '@Html.Raw((Html.T("هل أنت متأكد من حذف الدورة: ", "Are you sure you want to delete the course: ") + (course.Title ?? "").Replace("'", "\\'") + "؟").Replace("'", "\\'"))')" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-trash-2 me-3"></i>
+                                                                        <span>@Html.T("حذف", "Delete")</span>
+                                                                    </a>
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- CARD VIEW -->
+                        <div id="draftCardView" class="courses-view-panel courses-view-active">
+                            <div class="p-4">
+                                <div class="row g-4">
+                                    @foreach (var course in Model)
+                                    {
+                                        var completionPercentage = CalculateCourseCompletion(course);
+                                        <div class="col-12 col-sm-6 col-xl-4 col-xxl-3">
+                                            <div class="instructor-course-card" style="border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border: 1px solid var(--border-color-light, #f1f5f9); height: 100%; display: flex; flex-direction: column;">
+                                                <!-- Thumbnail -->
+                                                <div class="position-relative" style="aspect-ratio: 16/9; overflow: hidden;">
+                                                    <img src="@(course.ThumbnailUrl ?? "/assets/images/general/placeholder.png")"
+                                                         alt="@course.Title"
+                                                         style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease;">
+                                                    <!-- Status Badge -->
+                                                    <div class="position-absolute top-0 start-0 p-3">
+                                                        <span class="badge" style="background: rgba(217, 119, 6, 0.9); color: #fff; padding: 6px 12px; border-radius: 8px; font-weight: 600; backdrop-filter: blur(4px); font-size: 11px;">
+                                                            <i class="feather-edit me-1" style="font-size: 11px; color: #fff !important;"></i> @Html.T("مسودة", "Draft")
+                                                        </span>
+                                                    </div>
+                                                    <!-- Completion Badge -->
+                                                    <div class="position-absolute bottom-0 end-0 p-3">
+                                                        <span class="badge" style="background: @(completionPercentage >= thresholdComplete ? "rgba(5, 150, 105, 0.9)" : completionPercentage >= thresholdProgress ? "rgba(217, 119, 6, 0.9)" : "rgba(220, 38, 38, 0.9)"); color: #fff; padding: 6px 12px; border-radius: 8px; font-weight: 700; backdrop-filter: blur(4px); font-size: 12px;">
+                                                            @completionPercentage% @Html.T("مكتمل", "complete")
+                                                        </span>
+                                                    </div>
+                                                    <!-- Quick Actions Overlay -->
+                                                    <div class="course-card-overlay" style="position: absolute; inset: 0; background: rgba(0,0,0,0.4); opacity: 0; transition: opacity 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                                        <a href="@Url.Action("CreateWizard", new { id = course.Id, step = 1 })" class="btn btn-sm btn-primary" style="border-radius: 10px; padding: 8px 16px;">
+                                                            <i class="feather-edit me-1"></i> @Html.T("متابعة التعديل", "Continue editing")
+                                                        </a>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Card Body -->
+                                                <div class="p-3 d-flex flex-column flex-grow-1">
+                                                    <div class="d-flex align-items-start justify-content-between mb-2">
+                                                        <div class="flex-grow-1 pe-2">
+                                                            <a href="@Url.Action("CreateWizard", new { id = course.Id, step = 1 })" class="fw-bold text-dark d-block mb-1" style="font-size: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; text-decoration: none;">
+                                                                @course.Title
+                                                            </a>
+                                                            @if (course.Category != null)
+                                                            {
+                                                                <span class="fs-12 text-muted">@course.Category.Name</span>
+                                                            }
+                                                        </div>
+                                                        <!-- Dropdown Menu -->
+                                                        <div class="dropdown flex-shrink-0">
+                                                            <button class="btn btn-sm btn-light" data-bs-toggle="dropdown" data-bs-boundary="viewport" style="border-radius: 8px; padding: 4px 8px; border: 1px solid var(--border-color-light, #f1f5f9);">
+                                                                <i class="feather-more-vertical" style="font-size: 14px;"></i>
+                                                            </button>
+                                                            <ul class="dropdown-menu dropdown-menu-end course-actions-dropdown" style="border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.12); border: 1px solid var(--border-color-light, #f1f5f9); padding: 8px; min-width: 200px; z-index: 1080;">
+                                                                @if (completionPercentage >= thresholdComplete)
+                                                                {
+                                                                    <li>
+                                                                        <form asp-action="Publish" asp-route-id="@course.Id" method="post" style="display:inline;">
+                                                                            @Html.AntiForgeryToken()
+                                                                            <button type="submit" class="dropdown-item text-success" style="border-radius: 8px; padding: 10px 14px;">
+                                                                                <i class="feather-check-circle me-3"></i><span>@Html.T("نشر الدورة", "Publish course")</span>
+                                                                            </button>
+                                                                        </form>
+                                                                    </li>
+                                                                    <li><hr class="dropdown-divider" style="margin: 4px 0;"></li>
+                                                                }
+                                                                <li>
+                                                                    <a class="dropdown-item" href="@Url.Action("Details", new { id = course.Id })" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-eye me-3"></i><span>@Html.T("معاينة", "Preview")</span>
+                                                                    </a>
+                                                                </li>
+                                                                <li>
+                                                                    <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@Url.Action("Delete", new { id = course.Id })', '@Html.Raw((Html.T("هل أنت متأكد من حذف الدورة: ", "Are you sure you want to delete the course: ") + (course.Title ?? "").Replace("'", "\\'") + "؟").Replace("'", "\\'"))')" style="border-radius: 8px; padding: 10px 14px;">
+                                                                        <i class="feather-trash-2 me-3"></i><span>@Html.T("حذف", "Delete")</span>
+                                                                    </a>
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Progress Bar -->
+                                                    <div class="mt-auto pt-3" style="border-top: 1px solid var(--border-color-light, #f1f5f9);">
+                                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                                            <span class="fs-12 text-muted">@Html.T("نسبة الاكتمال", "Completion rate")</span>
+                                                            <span class="fs-12 fw-bold" style="color: @(completionPercentage >= thresholdComplete ? "#059669" : completionPercentage >= thresholdProgress ? "#d97706" : "#dc2626");">@completionPercentage%</span>
+                                                        </div>
+                                                        <div class="progress" style="height: 6px; border-radius: 4px; background: var(--border-color-light, #f1f5f9);">
+                                                            <div class="progress-bar @(completionPercentage >= thresholdComplete ? "bg-success" : completionPercentage >= thresholdProgress ? "bg-warning" : "bg-danger")"
+                                                                 role="progressbar"
+                                                                 style="width: @(completionPercentage)%; border-radius: 4px;"
+                                                                 aria-valuenow="@completionPercentage"
+                                                                 aria-valuemin="0"
+                                                                 aria-valuemax="100">
+                                                            </div>
+                                                        </div>
+                                                        <div class="d-flex align-items-center justify-content-between mt-2">
+                                                            <span class="fs-12 text-muted">
+                                                                @(course.UpdatedAt?.ToString("dd/MM/yyyy") ?? course.CreatedAt.ToString("dd/MM/yyyy"))
+                                                            </span>
+                                                            @if (completionPercentage >= thresholdComplete)
+                                                            {
+                                                                <span class="d-inline-flex align-items-center gap-1" style="font-size: 11px; color: #059669; font-weight: 600;">
+                                                                    <i class="feather-check-circle" style="font-size: 12px; color: #059669 !important;"></i> @Html.T("جاهز للنشر", "Ready to publish")
+                                                                </span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pagination -->
+                        @await Html.PartialAsync("_Pagination")
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-warning text-warning mb-4 mx-auto" style="border-radius: 20px;">
+                                <i class="feather-edit"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد دورات مسودة", "No draft courses")</h5>
+                            <p class="text-muted mb-4">@Html.T("جميع دوراتك منشورة أو قم بإنشاء دورة جديدة", "All your courses are published or create a new course")</p>
+                            <a href="@Url.Action("CreateWizard")" class="btn btn-primary" style="border-radius: 10px; padding: 10px 24px;">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إنشاء دورة جديدة", "Create new course")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DeleteModal")
+
+@functions {
+    private int CalculateCourseCompletion(LMS.Domain.Entities.Courses.Course course)
+    {
+        int completionScore = 0;
+        
+        // Basic info (30%)
+        if (!string.IsNullOrEmpty(course.Title)) completionScore += 5;
+        if (!string.IsNullOrEmpty(course.Description)) completionScore += 10;
+        if (!string.IsNullOrEmpty(course.ThumbnailUrl)) completionScore += 5;
+        if (course.CategoryId > 0) completionScore += 5;
+        if (course.Price > 0) completionScore += 5;
+        
+        // Content (50%)
+        var moduleCount = course.Modules?.Count ?? 0;
+        var lessonCount = course.Modules?.Sum(m => m.Lessons?.Count ?? 0) ?? 0;
+        
+        if (moduleCount > 0) completionScore += 15;
+        if (lessonCount >= 3) completionScore += 20;
+        else if (lessonCount > 0) completionScore += 10;
+        if (lessonCount >= 10) completionScore += 15;
+        
+        // Additional details (20%)
+        if (course.WhatYouWillLearn != null && course.WhatYouWillLearn.Any()) completionScore += 10;
+        if (course.Requirements != null && course.Requirements.Any()) completionScore += 5;
+        if (!string.IsNullOrEmpty(course.TargetAudience)) completionScore += 5;
+        
+        return Math.Min(completionScore, 100);
+    }
+}
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            // Restore view preference (default is grid/card)
+            var savedView = localStorage.getItem('instructor_drafts_view');
+            if (savedView === 'table') {
+                switchDraftView('table');
+            } else {
+                switchDraftView('card');
+            }
+
+            // Fix dropdown positioning for table dropdowns
+            document.querySelectorAll('.courses-table-modern .dropdown').forEach(function (dropdown) {
+                dropdown.addEventListener('show.bs.dropdown', function () {
+                    var tableResponsive = this.closest('.table-responsive');
+                    if (tableResponsive) {
+                        tableResponsive.style.overflow = 'visible';
+                    }
+                });
+                dropdown.addEventListener('hidden.bs.dropdown', function () {
+                    var tableResponsive = this.closest('.table-responsive');
+                    if (tableResponsive) {
+                        tableResponsive.style.overflow = 'visible';
+                    }
+                });
+            });
+        });
+
+        function switchDraftView(mode) {
+            var tableView = document.getElementById('draftTableView');
+            var cardView = document.getElementById('draftCardView');
+            var tableBtn = document.getElementById('draftTableViewBtn');
+            var cardBtn = document.getElementById('draftCardViewBtn');
+
+            if (mode === 'card') {
+                tableView.classList.add('d-none');
+                tableView.classList.remove('courses-view-active');
+                cardView.classList.remove('d-none');
+                cardView.classList.add('courses-view-active');
+                cardBtn.classList.add('active');
+                tableBtn.classList.remove('active');
+            } else {
+                cardView.classList.add('d-none');
+                cardView.classList.remove('courses-view-active');
+                tableView.classList.remove('d-none');
+                tableView.classList.add('courses-view-active');
+                tableBtn.classList.add('active');
+                cardBtn.classList.remove('active');
+            }
+
+            // Save preference
+            localStorage.setItem('instructor_drafts_view', mode);
+
+            // Reinitialize tooltips for new view
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                var existingTooltip = bootstrap.Tooltip.getInstance(tooltipTriggerEl);
+                if (!existingTooltip) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                }
+                return existingTooltip;
+            });
+        }
+    </script>
+}

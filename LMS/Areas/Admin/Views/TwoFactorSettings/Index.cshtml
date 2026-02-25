@@ -1,0 +1,262 @@
+@model IEnumerable<LMS.Domain.Entities.Security.TwoFactorSetting>
+
+@{
+    ViewData["Title"] = Html.T("إدارة المصادقة الثنائية", "Two-factor authentication management");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإعدادات", "Settings"), Url.Action("Index", "Settings")),
+        (Html.T("المصادقة الثنائية", "Two-factor authentication"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    
+    var totalUsers = Model.Count();
+    var enabledUsers = Model.Count(s => s.IsEnabled);
+    var smsUsers = Model.Count(s => s.IsEnabled && s.Method == "SMS");
+    var appUsers = Model.Count(s => s.IsEnabled && s.Method == "App");
+    var emailUsers = Model.Count(s => s.IsEnabled && s.Method == "Email");
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                        <i class="feather-users"></i>
+                    </div>
+                    <div>
+                        <span class="text-truncate-1-line">@Html.T("إجمالي المستخدمين", "Total users")</span>
+                        <h3 class="fw-bolder d-block">@totalUsers.ToString("N0")</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                        <i class="feather-check-circle"></i>
+                    </div>
+                    <div>
+                        <span class="text-truncate-1-line">@Html.T("2FA مفعّل", "2FA enabled")</span>
+                        <h3 class="fw-bolder d-block">@enabledUsers.ToString("N0")</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                        <i class="feather-smartphone"></i>
+                    </div>
+                    <div>
+                        <span class="text-truncate-1-line">@Html.T("تطبيق المصادقة", "Auth app")</span>
+                        <h3 class="fw-bolder d-block">@appUsers.ToString("N0")</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                        <i class="feather-message-square"></i>
+                    </div>
+                    <div>
+                        <span class="text-truncate-1-line">@Html.T("SMS + البريد", "SMS + Email")</span>
+                        <h3 class="fw-bolder d-block">@((smsUsers + emailUsers).ToString("N0"))</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <!-- Filter -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form method="get" class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("حالة التفعيل", "Activation status")</label>
+                            <select name="isEnabled" class="form-select">
+                                <option value="">@Html.T("الكل", "All")</option>
+                                <option value="true" selected="@(ViewBag.IsEnabled == true)">@Html.T("مفعّل", "Enabled")</option>
+                                <option value="false" selected="@(ViewBag.IsEnabled == false)">@Html.T("غير مفعّل", "Disabled")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-filter me-2"></i>@Html.T("تصفية", "Filter")
+                            </button>
+                            <a asp-action="Index" class="btn btn-light">
+                                <i class="feather-x me-2"></i>@Html.T("إعادة تعيين", "Reset")
+                            </a>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <a asp-controller="SecuritySettings" asp-action="Index" class="btn btn-outline-primary">
+                                <i class="feather-settings me-2"></i>@Html.T("إعدادات 2FA العامة", "General 2FA settings")
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Users List -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("مستخدمو المصادقة الثنائية", "Two-factor authentication users")</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("المستخدم", "User")</th>
+                                        <th>@Html.T("طريقة المصادقة", "Auth method")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                        <th>@Html.T("تاريخ التفعيل", "Activation date")</th>
+                                        <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var setting in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-3">
+                                                    <div class="avatar-text avatar-md bg-soft-primary text-primary rounded-circle">
+                                                        @(setting.User?.FirstName?.FirstOrDefault().ToString().ToUpper() ?? "U")
+                                                    </div>
+                                                    <div>
+                                                        <div class="fw-bold">@(setting.User?.FullName ?? Html.T("مستخدم", "User"))</div>
+                                                        <small class="text-muted">@(setting.User?.Email ?? "")</small>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @switch (setting.Method)
+                                                {
+                                                    case "App":
+                                                        <span class="badge bg-soft-primary text-primary">
+                                                            <i class="feather-smartphone fs-12 me-1"></i>
+                                                            @Html.T("تطبيق المصادقة", "Auth app")
+                                                        </span>
+                                                        break;
+                                                    case "SMS":
+                                                        <span class="badge bg-soft-info text-info">
+                                                            <i class="feather-message-square fs-12 me-1"></i>
+                                                            @Html.T("رسالة نصية", "SMS")
+                                                        </span>
+                                                        break;
+                                                    case "Email":
+                                                        <span class="badge bg-soft-warning text-warning">
+                                                            <i class="feather-mail fs-12 me-1"></i>
+                                                            @Html.T("بريد إلكتروني", "Email")
+                                                        </span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge bg-soft-secondary text-secondary">@setting.Method</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (setting.IsEnabled)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-check-circle fs-12 me-1"></i>
+                                                        @Html.T("مفعّل", "Enabled")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger">
+                                                        <i class="feather-x-circle fs-12 me-1"></i>
+                                                        @Html.T("غير مفعّل", "Disabled")
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="text-muted">
+                                                    @(setting.EnabledAt?.ToString("dd/MM/yyyy") ?? "-")
+                                                </span>
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a asp-action="Details" asp-route-id="@setting.Id" 
+                                                       class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    @if (setting.IsEnabled)
+                                                    {
+                                                        <form asp-action="Disable" asp-route-id="@setting.Id" method="post" class="d-inline"
+                                                              onsubmit="return confirm('@(Html.Raw(Html.T("هل أنت متأكد من تعطيل المصادقة الثنائية لهذا المستخدم؟", "Are you sure you want to disable two-factor authentication for this user?").ToString().Replace("'", "\\'")))')">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="avatar-text avatar-md border-0 bg-transparent" 
+                                                                    data-bs-toggle="tooltip" title="@Html.T("تعطيل", "Disable")">
+                                                                <i class="feather-toggle-right text-success"></i>
+                                                            </button>
+                                                        </form>
+                                                    }
+                                                    <form asp-action="Reset" asp-route-id="@setting.Id" method="post" class="d-inline"
+                                                          onsubmit="return confirm('@(Html.Raw(Html.T("هل أنت متأكد من إعادة تعيين المصادقة الثنائية لهذا المستخدم؟ سيحتاج لإعدادها من جديد.", "Are you sure you want to reset two-factor authentication for this user? They will need to set it up again.").ToString().Replace("'", "\\'")))')">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="avatar-text avatar-md border-0 bg-transparent" 
+                                                                data-bs-toggle="tooltip" title="@Html.T("إعادة تعيين", "Reset")">
+                                                            <i class="feather-refresh-cw text-warning"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                                <i class="feather-lock"></i>
+                            </div>
+                            <h5>@Html.T("لا توجد بيانات", "No data")</h5>
+                            <p class="text-muted mb-0">
+                                @if (ViewBag.IsEnabled != null)
+                                {
+                                    <span>@Html.T("لا يوجد مستخدمون بهذا الفلتر", "No users match this filter")</span>
+                                }
+                                else
+                                {
+                                    <span>@Html.T("لم يقم أي مستخدم بإعداد المصادقة الثنائية بعد", "No user has set up two-factor authentication yet")</span>
+                                }
+                            </p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}

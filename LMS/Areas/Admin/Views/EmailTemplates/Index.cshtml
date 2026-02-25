@@ -1,0 +1,273 @@
+@model IEnumerable<LMS.Domain.Entities.Notifications.EmailTemplate>
+
+@{
+    ViewData["Title"] = Html.T("قوالب البريد الإلكتروني", "Email templates");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التسويق", "Marketing"), null),
+        (Html.T("قوالب البريد", "Email templates"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string? Url, string? CssClass)>
+    {
+        (Html.T("إضافة قالب", "Add template"), "feather-plus", Url.Action("Create", "EmailTemplates"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .email-template-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .email-template-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-3px);
+        }
+        .template-preview {
+            height: 120px;
+            overflow: hidden;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            position: relative;
+        }
+        .template-icon {
+            font-size: 3rem;
+            color: #cbd5e0;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        @if (Model != null && Model.Any())
+        {
+            @foreach (var template in Model)
+            {
+                <div class="col-lg-4 col-md-6 mb-4">
+                    <div class="card email-template-card" onclick="window.location='@Url.Action("Edit", "EmailTemplates", new { id = template.Id })'">
+                        <div class="card-body">
+                            <div class="template-preview mb-3 d-flex align-items-center justify-content-center">
+                                <i class="feather-mail template-icon"></i>
+                            </div>
+                            
+                            <div class="d-flex align-items-start justify-content-between mb-2">
+                                <div>
+                                    <h5 class="mb-1">@template.Name</h5>
+                                    <p class="text-muted small mb-0">@template.Subject</p>
+                                </div>
+                                <div class="dropdown" onclick="event.stopPropagation()">
+                                    <a href="javascript:void(0)" data-bs-toggle="dropdown">
+                                        <i class="feather-more-vertical"></i>
+                                    </a>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Edit", "EmailTemplates", new { id = template.Id })">
+                                                <i class="feather-edit me-3"></i>
+                                                @Html.T("تعديل", "Edit")
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Preview", "EmailTemplates", new { id = template.Id })" target="_blank">
+                                                <i class="feather-eye me-3"></i>
+                                                @Html.T("معاينة", "Preview")
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("SendTest", "EmailTemplates", new { id = template.Id })">
+                                                <i class="feather-send me-3"></i>
+                                                @Html.T("إرسال تجريبي", "Send test")
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <form asp-action="DuplicateConfirm" asp-route-id="@template.Id" method="post" class="d-inline" onclick="event.stopPropagation()">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="dropdown-item">
+                                                    <i class="feather-copy me-3"></i>
+                                                    @Html.T("نسخ", "Copy")
+                                                </button>
+                                            </form>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@template.Id'); event.stopPropagation()">
+                                                <i class="feather-trash-2 me-3"></i>
+                                                @Html.T("حذف", "Delete")
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex gap-2">
+                                    @if (template.IsActive)
+                                    {
+                                        <span class="badge bg-soft-success text-success">نشط</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-soft-secondary text-secondary">معطل</span>
+                                    }
+                                    
+                                    @switch (template.Type)
+                                    {
+                                        case "Welcome":
+                                            <span class="badge bg-soft-primary text-primary">ترحيبي</span>
+                                            break;
+                                        case "OrderConfirmation":
+                                            <span class="badge bg-soft-success text-success">تأكيد طلب</span>
+                                            break;
+                                        case "PasswordReset":
+                                            <span class="badge bg-soft-warning text-warning">إعادة كلمة مرور</span>
+                                            break;
+                                        case "CourseCompletion":
+                                            <span class="badge bg-soft-info text-info">إتمام دورة</span>
+                                            break;
+                                        default:
+                                            <span class="badge bg-soft-secondary text-secondary">عام</span>
+                                            break;
+                                    }
+                                </div>
+                                <small class="text-muted">
+                                    <i class="feather-send me-1"></i>
+                                    @template.SentCount رسالة
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="feather-mail fs-1 text-muted mb-3"></i>
+                        <h5>لا توجد قوالب بريد إلكتروني بعد</h5>
+                        <p class="text-muted mb-4">ابدأ بإنشاء قوالب لرسائل البريد الإلكتروني</p>
+                        <a href="@Url.Action("Create", "EmailTemplates")" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            إضافة قالب جديد
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Quick Templates -->
+    <div class="row mt-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قوالب جاهزة", "Ready-made templates")</h5>
+                    <p class="text-muted small mb-0">اختر قالباً جاهزاً لإنشاء بريد إلكتروني احترافي بسرعة</p>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center p-4 border rounded preset-card" style="transition: all 0.3s; cursor: pointer;" 
+                                 onclick="window.location.href='@Url.Action("CreateFromPreset", "EmailTemplates", new { templateType = "welcome" })'">
+                                <i class="feather-user-plus fs-1 text-primary mb-3 d-block"></i>
+                                <h6 class="mb-2">رسالة ترحيبية</h6>
+                                <p class="small text-muted mb-3">ترحيب بالمستخدمين الجدد</p>
+                                <a href="@Url.Action("CreateFromPreset", "EmailTemplates", new { templateType = "welcome" })" 
+                                   class="btn btn-sm btn-primary">
+                                    <i class="feather-plus me-1"></i>
+                                    استخدام القالب
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center p-4 border rounded preset-card" style="transition: all 0.3s; cursor: pointer;" 
+                                 onclick="window.location.href='@Url.Action("CreateFromPreset", "EmailTemplates", new { templateType = "purchase" })'">
+                                <i class="feather-shopping-cart fs-1 text-success mb-3 d-block"></i>
+                                <h6 class="mb-2">تأكيد شراء</h6>
+                                <p class="small text-muted mb-3">تأكيد الطلبات والمشتريات</p>
+                                <a href="@Url.Action("CreateFromPreset", "EmailTemplates", new { templateType = "purchase" })" 
+                                   class="btn btn-sm btn-success">
+                                    <i class="feather-plus me-1"></i>
+                                    استخدام القالب
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center p-4 border rounded preset-card" style="transition: all 0.3s; cursor: pointer;" 
+                                 onclick="window.location.href='@Url.Action("CreateFromPreset", "EmailTemplates", new { templateType = "completion" })'">
+                                <i class="feather-award fs-1 text-warning mb-3 d-block"></i>
+                                <h6 class="mb-2">إتمام دورة</h6>
+                                <p class="small text-muted mb-3">إشعار إكمال الدورة</p>
+                                <a href="@Url.Action("CreateFromPreset", "EmailTemplates", new { templateType = "completion" })" 
+                                   class="btn btn-sm btn-warning">
+                                    <i class="feather-plus me-1"></i>
+                                    استخدام القالب
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center p-4 border rounded preset-card" style="transition: all 0.3s; cursor: pointer;" 
+                                 onclick="window.location.href='@Url.Action("CreateFromPreset", "EmailTemplates", new { templateType = "reminder" })'">
+                                <i class="feather-bell fs-1 text-info mb-3 d-block"></i>
+                                <h6 class="mb-2">إشعار تذكير</h6>
+                                <p class="small text-muted mb-3">تذكير المستخدمين</p>
+                                <a href="@Url.Action("CreateFromPreset", "EmailTemplates", new { templateType = "reminder" })" 
+                                   class="btn btn-sm btn-info">
+                                    <i class="feather-plus me-1"></i>
+                                    استخدام القالب
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        window.__EmailTemplatesIndexT = { deleteConfirm: '@Html.Raw(Html.T("هل أنت متأكد من حذف هذا القالب؟ هذا الإجراء لا يمكن التراجع عنه.", "Are you sure you want to delete this template? This action cannot be undone.").Replace("'", "\\'"))' };
+        function confirmDelete(templateId) {
+            if (confirm(window.__EmailTemplatesIndexT.deleteConfirm)) {
+                // Create a form to submit POST request for delete
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '@Url.Action("Delete", "EmailTemplates")' + '?id=' + templateId;
+                
+                // Add id input
+                var idInput = document.createElement('input');
+                idInput.type = 'hidden';
+                idInput.name = 'id';
+                idInput.value = templateId;
+                form.appendChild(idInput);
+                
+                // Add anti-forgery token
+                var tokenInput = document.createElement('input');
+                tokenInput.type = 'hidden';
+                tokenInput.name = '__RequestVerificationToken';
+                tokenInput.value = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+                form.appendChild(tokenInput);
+                
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+        
+        $(document).ready(function() {
+            // Add hover effect to preset cards
+            $('.preset-card').hover(
+                function() { $(this).css({'transform': 'translateY(-5px)', 'box-shadow': '0 5px 15px rgba(0,0,0,0.1)'}); },
+                function() { $(this).css({'transform': 'translateY(0)', 'box-shadow': 'none'}); }
+            );
+        });
+    </script>
+    
+    @Html.AntiForgeryToken()
+}
+

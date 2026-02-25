@@ -1,0 +1,571 @@
+@model dynamic
+
+@{
+    ViewData["Title"] = Html.T("كشف الاحتيال", "Fraud detection");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("المدفوعات", "Payments"), Url.Action("Index", "Payments")),
+        (Html.T("كشف الاحتيال", "Fraud detection"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+    <style>
+        .fraud-alert {
+            animation: pulse 2s infinite;
+        }
+        @@keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(240, 101, 72, 0.7); }
+            50% { box-shadow: 0 0 0 10px rgba(240, 101, 72, 0); }
+        }
+        .risk-badge {
+            font-size: 0.75rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+        }
+        .risk-high {
+            background: #ffe5e0;
+            color: #dc3545;
+            font-weight: 600;
+        }
+        .risk-medium {
+            background: #fff3cd;
+            color: #ffc107;
+            font-weight: 600;
+        }
+        .risk-low {
+            background: #d1ecf1;
+            color: #17a2b8;
+            font-weight: 600;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                            <i class="feather-alert-triangle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("عمليات مشبوهة", "Suspicious transactions")</span>
+                            <h3 class="fw-bolder d-block text-danger">@Model.SuspiciousCount.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-shield-off"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("محاولات فاشلة", "Failed attempts")</span>
+                            <h3 class="fw-bolder d-block text-warning">@Model.FailedAttempts.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-credit-card"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("عمليات عالية القيمة", "High-value transactions")</span>
+                            <h3 class="fw-bolder d-block text-info">@Model.HighValueTransactions.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("تم المراجعة", "Reviewed")</span>
+                            <h3 class="fw-bolder d-block text-success">@Model.ReviewedCount.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Fraud Alerts -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="alert alert-danger fraud-alert d-flex align-items-center" role="alert">
+                <i class="feather-alert-triangle fs-3 me-3"></i>
+                <div>
+                    <h5 class="alert-heading mb-1">@Html.T("تنبيه أمني", "Security alert")</h5>
+                    <p class="mb-0">@Html.T("تم رصد", "Detected") <strong>@Model.SuspiciousCount</strong> @Html.T("عملية مشبوهة تحتاج إلى مراجعة فورية!", "suspicious transaction(s) requiring immediate review!")</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fraud Detection Rules -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معايير كشف الاحتيال", "Fraud detection criteria")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i class="feather-refresh-cw text-danger"></i>
+                                    <span class="fw-bold">@Html.T("محاولات متعددة فاشلة", "Multiple failed attempts")</span>
+                                </div>
+                                <small class="text-muted">@Html.T("أكثر من 3 محاولات فاشلة في 24 ساعة", "More than 3 failed attempts in 24 hours")</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i class="feather-dollar-sign text-danger"></i>
+                                    <span class="fw-bold">@Html.T("مبالغ عالية", "High amounts")</span>
+                                </div>
+                                <small class="text-muted">@Html.T("عمليات تتجاوز 10,000 جنيه", "Transactions exceeding 10,000")</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i class="feather-zap text-danger"></i>
+                                    <span class="fw-bold">@Html.T("عمليات متتالية سريعة", "Rapid consecutive transactions")</span>
+                                </div>
+                                <small class="text-muted">@Html.T("أكثر من عمليتين في 10 دقائق", "More than 2 transactions in 10 minutes")</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Suspicious Transactions -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("العمليات المشبوهة", "Suspicious transactions")</h5>
+                    <div class="card-header-action">
+                        <div class="dropdown">
+                            <a href="javascript:void(0);" class="btn btn-sm btn-light-brand" data-bs-toggle="dropdown">
+                                <i class="feather-filter me-2"></i>
+                                تصفية
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-end">
+                                <a href="javascript:void(0);" class="dropdown-item filter-all">
+                                    <i class="feather-eye me-3"></i>
+                                    عرض الكل
+                                </a>
+                                <div class="dropdown-divider"></div>
+                                <a href="javascript:void(0);" class="dropdown-item filter-high">
+                                    <i class="feather-alert-circle me-3 text-danger"></i>
+                                    خطر عالي
+                                </a>
+                                <a href="javascript:void(0);" class="dropdown-item filter-medium">
+                                    <i class="feather-alert-triangle me-3 text-warning"></i>
+                                    خطر متوسط
+                                </a>
+                                <a href="javascript:void(0);" class="dropdown-item filter-low">
+                                    <i class="feather-info me-3 text-info"></i>
+                                    خطر منخفض
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="fraudTable">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("الطلب", "Order")</th>
+                                    <th>@Html.T("المستخدم", "User")</th>
+                                    <th>@Html.T("المبلغ", "Amount")</th>
+                                    <th>@Html.T("مستوى الخطر", "Risk level")</th>
+                                    <th>@Html.T("الأسباب", "Reasons")</th>
+                                    <th>@Html.T("محاولات فاشلة", "Failed attempts")</th>
+                                    <th>@Html.T("عمليات حديثة", "Recent activity")</th>
+                                    <th>@Html.T("التاريخ", "Date")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model.SuspiciousTransactions)
+                                {
+                                    var riskLevel = item.IsHighValue ? "high" : (item.FailedAttempts > 3 ? "high" : (item.RecentTransactions > 2 ? "medium" : "low"));
+                                    var riskText = riskLevel == "high" ? "عالي" : (riskLevel == "medium" ? "متوسط" : "منخفض");
+                                    var riskClass = riskLevel == "high" ? "risk-high" : (riskLevel == "medium" ? "risk-medium" : "risk-low");
+                                    
+                                    <tr>
+                                        <td>
+                                            <span class="fw-bold text-primary">#@item.Payment.Id</span>
+                                            <br>
+                                            <small class="text-muted">@item.Payment.TransactionId</small>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-3">
+                                                <div class="avatar-text avatar-md bg-soft-danger text-danger">
+                                                    <i class="feather-user"></i>
+                                                </div>
+                                                <div>
+                                                    <span class="d-block fw-semibold">
+                                                        @item.Payment.Student.FirstName @item.Payment.Student.LastName
+                                                    </span>
+                                                    <small class="text-muted">@item.Payment.Student.Email</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold text-danger fs-5">
+                                                @item.Payment.TotalAmount.ToEGP()
+                                            </span>
+                                            <br>
+                                            <small class="text-muted">@item.Payment.Currency</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge @riskClass risk-badge">
+                                                <i class="feather-alert-circle me-1"></i>
+                                                @riskText
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex flex-column gap-1">
+                                                @if (item.IsHighValue)
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger badge-sm">
+                                                        <i class="feather-dollar-sign me-1"></i>
+                                                        مبلغ عالي
+                                                    </span>
+                                                }
+                                                @if (item.FailedAttempts > 3)
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning badge-sm">
+                                                        <i class="feather-x-circle me-1"></i>
+                                                        محاولات فاشلة
+                                                    </span>
+                                                }
+                                                @if (item.RecentTransactions > 2)
+                                                {
+                                                    <span class="badge bg-soft-info text-info badge-sm">
+                                                        <i class="feather-zap me-1"></i>
+                                                        عمليات متتالية
+                                                    </span>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-danger text-danger">
+                                                @item.FailedAttempts
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-warning text-warning">
+                                                @item.RecentTransactions
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span>@item.Payment.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                            <br>
+                                            <small class="text-muted">@item.Payment.CreatedAt.ToString("hh:mm tt")</small>
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <button type="button" 
+                                                        class="avatar-text avatar-md" 
+                                                        onclick="investigatePayment(@item.Payment.Id)"
+                                                        data-bs-toggle="tooltip" 
+                                                        title="@Html.T("التحقيق", "Investigate")">
+                                                    <i class="feather-search"></i>
+                                                </button>
+                                                <div class="dropdown">
+                                                    <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown" data-bs-offset="0,21">
+                                                        <i class="feather-more-horizontal"></i>
+                                                    </a>
+                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        <li>
+                                                            <a class="dropdown-item" href="@Url.Action("Details", "Payments", new { id = item.Payment.Id })">
+                                                                <i class="feather-eye me-3"></i>
+                                                                <span>@Html.T("عرض التفاصيل", "View details")</span>
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item text-success" href="javascript:void(0)" onclick="markAsSafe(@item.Payment.Id)">
+                                                                <i class="feather-check me-3"></i>
+                                                                <span>@Html.T("علامة آمن", "Mark safe")</span>
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item text-warning" href="javascript:void(0)" onclick="suspendUser('@item.Payment.StudentId')">
+                                                                <i class="feather-pause-circle me-3"></i>
+                                                                <span>@Html.T("تعليق المستخدم", "Suspend user")</span>
+                                                            </a>
+                                                        </li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="blockPayment(@item.Payment.Id)">
+                                                                <i class="feather-x-circle me-3"></i>
+                                                                <span>@Html.T("حظر العملية", "Block transaction")</span>
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fraud Statistics -->
+    <div class="row mt-4">
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إحصائيات الاحتيال", "Fraud statistics")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="fraudStatsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع مستويات الخطر", "Risk level distribution")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="riskDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Investigation Modal -->
+<div class="modal fade" id="investigationModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Html.T("التحقيق في العملية", "Investigate transaction")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="investigationContent">
+                <!-- Content will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إغلاق", "Close")</button>
+                <button type="button" class="btn btn-success" onclick="markCurrentAsSafe()">
+                    <i class="feather-check me-2"></i>
+                    @Html.T("علامة آمن", "Mark safe")
+                </button>
+                <button type="button" class="btn btn-danger" onclick="blockCurrentPayment()">
+                    <i class="feather-x me-2"></i>
+                    @Html.T("حظر", "Block")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        window.__FraudT = {
+            promptSuspendReason: '@Html.Raw(Html.T("أدخل سبب التعليق:", "Enter the reason for suspension:").Replace("'", "\\'"))',
+            alertUserSuspended: '@Html.Raw(Html.T("تم تعليق المستخدم", "User has been suspended").Replace("'", "\\'"))',
+            alertPaymentBlocked: '@Html.Raw(Html.T("تم حظر العملية", "Transaction has been blocked").Replace("'", "\\'"))',
+            chartFailed: '@Html.Raw(Html.T("محاولات فاشلة", "Failed attempts").Replace("'", "\\'"))',
+            chartHighValue: '@Html.Raw(Html.T("عمليات عالية", "High value").Replace("'", "\\'"))',
+            chartRapid: '@Html.Raw(Html.T("عمليات سريعة", "Rapid transactions").Replace("'", "\\'"))',
+            chartReviewed: '@Html.Raw(Html.T("مراجعة", "Reviewed").Replace("'", "\\'"))',
+            chartCount: '@Html.Raw(Html.T("العدد", "Count").Replace("'", "\\'"))',
+            riskHigh: '@Html.Raw(Html.T("خطر عالي", "High risk").Replace("'", "\\'"))',
+            riskMedium: '@Html.Raw(Html.T("خطر متوسط", "Medium risk").Replace("'", "\\'"))',
+            riskLow: '@Html.Raw(Html.T("خطر منخفض", "Low risk").Replace("'", "\\'"))'
+        };
+        $(document).ready(function() {
+            // Initialize DataTable
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            var table = $('#fraudTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[3, "desc"]],
+                "pageLength": 25
+            });
+
+            // Filter functions
+            $('.filter-all').on('click', function() {
+                table.column(3).search('').draw();
+            });
+
+            $('.filter-high').on('click', function() {
+                table.column(3).search('عالي').draw();
+            });
+
+            $('.filter-medium').on('click', function() {
+                table.column(3).search('متوسط').draw();
+            });
+
+            $('.filter-low').on('click', function() {
+                table.column(3).search('منخفض').draw();
+            });
+
+            // Tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+
+        // Fraud Statistics Chart
+        const fraudStatsCtx = document.getElementById('fraudStatsChart').getContext('2d');
+        new Chart(fraudStatsCtx, {
+            type: 'bar',
+            data: {
+                labels: [window.__FraudT.chartFailed, window.__FraudT.chartHighValue, window.__FraudT.chartRapid, window.__FraudT.chartReviewed],
+                datasets: [{
+                    label: window.__FraudT.chartCount,
+                    data: [@Model.FailedAttempts, @Model.HighValueTransactions, @Model.RapidTransactions, @Model.ReviewedCount],
+                    backgroundColor: ['#f06548', '#ffc107', '#17a2b8', '#0ab39c']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+
+        // Risk Distribution Chart
+        const riskCtx = document.getElementById('riskDistributionChart').getContext('2d');
+        new Chart(riskCtx, {
+            type: 'doughnut',
+            data: {
+                labels: [window.__FraudT.riskHigh, window.__FraudT.riskMedium, window.__FraudT.riskLow],
+                datasets: [{
+                    data: [@Model.HighRiskCount, @Model.MediumRiskCount, @Model.LowRiskCount],
+                    backgroundColor: ['#f06548', '#ffc107', '#17a2b8'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+
+        let currentPaymentId = null;
+
+        function investigatePayment(paymentId) {
+            currentPaymentId = paymentId;
+            $('#investigationContent').html('<div class="text-center py-4"><div class="spinner-border"></div></div>');
+            $('#investigationModal').modal('show');
+
+            // Load investigation details
+            fetch(`/Admin/Payments/InvestigatePayment?id=${paymentId}`)
+                .then(response => response.json())
+                .then(data => {
+                    $('#investigationContent').html(data.html);
+                });
+        }
+
+        function markAsSafe(paymentId) {
+            if (confirm('@Html.Raw(Html.T("هل أنت متأكد أن هذه العملية آمنة؟", "Are you sure this transaction is safe?").ToString().Replace("'", "\\'"))')) {
+                fetch(`/Admin/Payments/MarkAsSafe?id=${paymentId}`, {
+                    method: 'POST'
+                })
+                .then(() => location.reload());
+            }
+        }
+
+        function suspendUser(userId) {
+            const reason = prompt(window.__FraudT.promptSuspendReason);
+            if (reason) {
+                fetch(`/Admin/Users/Suspend?id=${userId}&reason=${encodeURIComponent(reason)}`, {
+                    method: 'POST'
+                })
+                .then(() => {
+                    alert(window.__FraudT.alertUserSuspended);
+                    location.reload();
+                });
+            }
+        }
+
+        function blockPayment(paymentId) {
+            if (confirm('@Html.Raw(Html.T("هل أنت متأكد من حظر هذه العملية؟", "Are you sure you want to block this transaction?").ToString().Replace("'", "\\'"))')) {
+                fetch(`/Admin/Payments/BlockPayment?id=${paymentId}`, {
+                    method: 'POST'
+                })
+                .then(() => {
+                    alert(window.__FraudT.alertPaymentBlocked);
+                    location.reload();
+                });
+            }
+        }
+
+        function markCurrentAsSafe() {
+            if (currentPaymentId) {
+                markAsSafe(currentPaymentId);
+            }
+        }
+
+        function blockCurrentPayment() {
+            if (currentPaymentId) {
+                blockPayment(currentPaymentId);
+            }
+        }
+    </script>
+}
+

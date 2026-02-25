@@ -1,0 +1,701 @@
+@using LMS.Services.Interfaces
+@inject ISystemConfigurationService SystemConfigService
+@model LMS.Areas.Admin.Controllers.AdminDashboardViewModel
+
+@{
+    ViewData["Title"] = Html.T("لوحة التحكم", "Dashboard");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    
+    // Add refresh button to header actions
+    ViewData["HeaderActions"] = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("تحديث البيانات", "Refresh Data"), "feather-refresh-cw", Url.Action("RefreshStats", "Dashboard", new { area = "Admin" }) ?? "#", "btn-light-brand dashboard-refresh-btn")
+    };
+    
+    // Get time period options from database with fallback
+    var timePeriods = new List<LMS.Domain.Entities.Settings.SystemConfiguration>();
+    try
+    {
+        timePeriods = await SystemConfigService.GetConfigurationsByCategoryAsync("TimePeriods", "ar");
+    }
+    catch { }
+    
+    // Default time periods if none in database
+    var defaultTimePeriods = new Dictionary<string, string>
+    {
+        { "today", Html.T("اليوم", "Today") },
+        { "this_week", Html.T("هذا الأسبوع", "This Week") },
+        { "this_month", Html.T("هذا الشهر", "This Month") },
+        { "last_month", Html.T("الشهر الماضي", "Last Month") },
+        { "this_year", Html.T("هذا العام", "This Year") }
+    };
+    var selectedPeriod = ViewBag.SelectedPeriod as string ?? "this_month";
+    var selectedPeriodLabel = defaultTimePeriods.TryGetValue(selectedPeriod, out var label) ? label : Html.T("هذا الشهر", "This Month");
+    if (timePeriods.Any())
+    {
+        var fromConfig = timePeriods.FirstOrDefault(p => p.Key == selectedPeriod);
+        if (fromConfig != null) { selectedPeriodLabel = fromConfig.DisplayText ?? selectedPeriodLabel; }
+    }
+}
+
+@section Styles {
+    <style>
+        .dashboard-stat-icon {
+            font-size: 2.5rem;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        .recent-activity-item {
+            transition: all 0.3s ease;
+        }
+        .recent-activity-item:hover {
+            background-color: #f8f9fa;
+            transform: translateX(-5px);
+        }
+    </style>
+}
+
+<!-- Page Header is rendered by layout -->
+
+<!-- Hidden form for refresh action -->
+<form id="refreshStatsForm" method="post" asp-action="RefreshStats" asp-controller="Dashboard" asp-area="Admin" style="display: none;">
+    @Html.AntiForgeryToken()
+</form>
+
+@section StatsCards {
+    <!-- Total Users -->
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between flex-wrap">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-users dashboard-stat-icon"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("إجمالي المستخدمين", "Total Users")</span>
+                            <h3 class="fw-bold mb-0">@Model.TotalUsers.ToString("N0")</h3>
+                            <small class="text-muted">@Model.NewUsersToday @Html.T("جديد اليوم", "new today")</small>
+                        </div>
+                    </div>
+                    <div class="badge bg-soft-success text-success fs-12">
+                        <i class="feather-arrow-up fs-10 me-1"></i>
+                        <span>+@Model.NewUsersThisMonth</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Courses -->
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between flex-wrap">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-book dashboard-stat-icon"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("إجمالي الدورات", "Total Courses")</span>
+                            <h3 class="fw-bold mb-0">@Model.TotalCourses.ToString("N0")</h3>
+                            <small class="text-muted">@Model.PublishedCourses @Html.T("منشور", "published")</small>
+                        </div>
+                    </div>
+                    @if (Model.PendingCourses > 0)
+                    {
+                        <div class="badge bg-soft-warning text-warning fs-12">
+                            <span>@Model.PendingCourses @Html.T("قيد المراجعة", "pending review")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Revenue -->
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between flex-wrap">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                            <i class="feather-dollar-sign dashboard-stat-icon"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("إجمالي الإيرادات", "Total Revenue")</span>
+                            <h3 class="fw-bold mb-0">@Model.TotalRevenue.ToEGP()</h3>
+                            <small class="text-muted">@Model.RevenueToday.ToEGP() @Html.T("اليوم", "today")</small>
+                        </div>
+                    </div>
+                    <div class="badge @(Model.RevenueGrowth >= 0 ? "bg-soft-success text-success" : "bg-soft-danger text-danger") fs-12">
+                        <i class="feather-arrow-@(Model.RevenueGrowth >= 0 ? "up" : "down") fs-10 me-1"></i>
+                        <span>@Model.RevenueGrowth.ToString("F1")%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Enrollments -->
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between flex-wrap">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-user-check dashboard-stat-icon"></i>
+                        </div>
+                        <div>
+                            <span class="text-muted d-block mb-1">@Html.T("إجمالي التسجيلات", "Total Enrollments")</span>
+                            <h3 class="fw-bold mb-0">@Model.TotalEnrollments.ToString("N0")</h3>
+                            <small class="text-muted">@Model.EnrollmentsToday @Html.T("اليوم", "today")</small>
+                        </div>
+                    </div>
+                    <div class="badge bg-soft-info text-info fs-12">
+                        <span>@Model.CompletionRate.ToString("F1")% @Html.T("مكتمل", "completed")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <!-- Revenue Chart -->
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تحليل الإيرادات", "Revenue Analysis")</h5>
+                    <div class="card-header-action">
+                        <div class="dropdown">
+                            <a href="javascript:void(0);" class="btn btn-sm btn-light-brand dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="feather-calendar me-2"></i>
+                                <span id="revenuePeriodLabel">@selectedPeriodLabel</span>
+                            </a>
+                            <div class="dropdown-menu dropdown-menu-end">
+                                @if (timePeriods.Any())
+                                {
+                                    @foreach (var period in timePeriods)
+                                    {
+                                        <a href="@Url.Action("Index", "Dashboard", new { area = "Admin", period = period.Key })" class="dropdown-item @(period.Key == selectedPeriod ? "active" : "")">
+                                            @period.DisplayText
+                                        </a>
+                                    }
+                                }
+                                else
+                                {
+                                    @foreach (var period in defaultTimePeriods)
+                                    {
+                                        <a href="@Url.Action("Index", "Dashboard", new { area = "Admin", period = period.Key })" class="dropdown-item @(period.Key == selectedPeriod ? "active" : "")">
+                                            @period.Value
+                                        </a>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("العناصر المعلقة", "Pending Items")</h5>
+                </div>
+                <div class="card-body">
+                    @{
+                        var hasPendingItems = Model.PendingInstructorApplications > 0 ||
+                                             Model.PendingSupportTickets > 0 ||
+                                             Model.PendingRefunds > 0 ||
+                                             Model.PendingWithdrawals > 0 ||
+                                             Model.PendingReviews > 0 ||
+                                             Model.PendingCourses > 0;
+                    }
+                    @if (hasPendingItems)
+                    {
+                        <div class="list-group list-group-flush">
+                            @if (Model.PendingInstructorApplications > 0)
+                            {
+                                <a asp-controller="Instructors" asp-action="Applications" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                            <i class="feather-user-plus"></i>
+                                        </div>
+                                        <span>@Html.T("طلبات المدرسين", "Instructor Applications")</span>
+                                    </div>
+                                    <span class="badge bg-primary">@Model.PendingInstructorApplications</span>
+                                </a>
+                            }
+                            @if (Model.PendingSupportTickets > 0)
+                            {
+                                <a asp-controller="Support" asp-action="Index" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-text avatar-sm bg-soft-warning text-warning">
+                                            <i class="feather-headphones"></i>
+                                        </div>
+                                        <span>@Html.T("تذاكر الدعم", "Support Tickets")</span>
+                                    </div>
+                                    <span class="badge bg-warning">@Model.PendingSupportTickets</span>
+                                </a>
+                            }
+                            @if (Model.PendingRefunds > 0)
+                            {
+                                <a asp-controller="Refunds" asp-action="Index" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-text avatar-sm bg-soft-danger text-danger">
+                                            <i class="feather-credit-card"></i>
+                                        </div>
+                                        <span>@Html.T("استرداد المبالغ", "Refunds")</span>
+                                    </div>
+                                    <span class="badge bg-danger">@Model.PendingRefunds</span>
+                                </a>
+                            }
+                            @if (Model.PendingWithdrawals > 0)
+                            {
+                                <a asp-controller="WithdrawalMethods" asp-action="Requests" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-text avatar-sm bg-soft-info text-info">
+                                            <i class="feather-arrow-down-circle"></i>
+                                        </div>
+                                        <span>@Html.T("طلبات السحب", "Withdrawal Requests")</span>
+                                    </div>
+                                    <span class="badge bg-info">@Model.PendingWithdrawals</span>
+                                </a>
+                            }
+                            @if (Model.PendingReviews > 0)
+                            {
+                                <a asp-controller="Reviews" asp-action="Pending" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-text avatar-sm bg-soft-success text-success">
+                                            <i class="feather-star"></i>
+                                        </div>
+                                        <span>@Html.T("التقييمات المعلقة", "Pending Reviews")</span>
+                                    </div>
+                                    <span class="badge bg-success">@Model.PendingReviews</span>
+                                </a>
+                            }
+                            @if (Model.PendingCourses > 0)
+                            {
+                                <a asp-controller="Courses" asp-action="Pending" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-text avatar-sm bg-soft-secondary text-secondary">
+                                            <i class="feather-book-open"></i>
+                                        </div>
+                                        <span>@Html.T("دورات قيد المراجعة", "Courses Under Review")</span>
+                                    </div>
+                                    <span class="badge bg-secondary">@Model.PendingCourses</span>
+                                </a>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <i class="feather-check-circle fs-1 mb-3 d-block text-success"></i>
+                            <p class="mb-0">@Html.T("لا توجد عناصر معلقة", "No pending items")</p>
+                            <small>@Html.T("كل شيء على ما يرام!", "Everything is in order!")</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Enrollment Chart -->
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("التسجيلات الشهرية", "Monthly Enrollments")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="enrollmentChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Activity -->
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إحصائيات المستخدمين", "User Statistics")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-6">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-text bg-soft-primary text-primary">
+                                        <i class="feather-users"></i>
+                                    </div>
+                                    <div>
+                                        <span class="d-block text-muted fs-12">@Html.T("الطلاب", "Students")</span>
+                                        <h4 class="fw-bold mb-0">@Model.TotalStudents.ToString("N0")</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-text bg-soft-success text-success">
+                                        <i class="feather-user-check"></i>
+                                    </div>
+                                    <div>
+                                        <span class="d-block text-muted fs-12">@Html.T("طلاب نشطون", "Active Students")</span>
+                                        <h4 class="fw-bold mb-0">@Model.ActiveStudents.ToString("N0")</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-text bg-soft-warning text-warning">
+                                        <i class="feather-award"></i>
+                                    </div>
+                                    <div>
+                                        <span class="d-block text-muted fs-12">@Html.T("المدرسين", "Instructors")</span>
+                                        <h4 class="fw-bold mb-0">@Model.TotalInstructors.ToString("N0")</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-3 border rounded">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar-text bg-soft-danger text-danger">
+                                        <i class="feather-user-plus"></i>
+                                    </div>
+                                    <div>
+                                        <span class="d-block text-muted fs-12">@Html.T("مستخدمين جدد", "New Users")</span>
+                                        <h4 class="fw-bold mb-0">@Model.NewUsersThisMonth.ToString("N0")</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Top Courses -->
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أفضل الدورات", "Top Courses")</h5>
+                    <div class="card-header-action">
+                        <a asp-controller="Courses" asp-action="Index" class="btn btn-sm btn-light-brand">
+                            @Html.T("عرض الكل", "View All")
+                            <i class="feather-arrow-left ms-2"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        @if (Model.TopCourses.Any())
+                        {
+                            @foreach (var course in Model.TopCourses)
+                            {
+                                <div class="list-group-item d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-3 flex-grow-1">
+                                        <div class="avatar-text bg-soft-primary text-primary">
+                                            <i class="feather-book"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-0">@course.Name</h6>
+                                            <small class="text-muted">@course.Value @Html.T("طالب", "students")</small>
+                                        </div>
+                                    </div>
+                                    <div class="text-warning">
+                                        <i class="feather-star"></i>
+                                        <span>@course.SecondaryValue.ToString("F1")</span>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="feather-book fs-1 mb-3 d-block"></i>
+                                <p class="mb-0">@Html.T("لا توجد دورات بعد", "No courses yet")</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Instructors -->
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أفضل المدرسين", "Top Instructors")</h5>
+                    <div class="card-header-action">
+                        <a asp-controller="Instructors" asp-action="Index" class="btn btn-sm btn-light-brand">
+                            @Html.T("عرض الكل", "View All")
+                            <i class="feather-arrow-left ms-2"></i>
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        @if (Model.TopInstructors.Any())
+                        {
+                            @foreach (var instructor in Model.TopInstructors)
+                            {
+                                <div class="list-group-item d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-3 flex-grow-1">
+                                        <div class="avatar-text bg-soft-success text-success">
+                                            @(!string.IsNullOrEmpty(instructor.Name) ? instructor.Name.Substring(0, 1) : "I")
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-0">@instructor.Name</h6>
+                                            <small class="text-muted">@instructor.Value.ToEGP() @Html.T("إيرادات", "revenue")</small>
+                                        </div>
+                                    </div>
+                                    <div class="text-warning">
+                                        <i class="feather-star"></i>
+                                        <span>@instructor.SecondaryValue.ToString("F1")</span>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="feather-users fs-1 mb-3 d-block"></i>
+                                <p class="mb-0">@Html.T("لا يوجد مدرسون بعد", "No instructors yet")</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recent Enrollments -->
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("آخر التسجيلات", "Recent Enrollments")</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.RecentEnrollments.Any())
+                    {
+                        @foreach (var activity in Model.RecentEnrollments)
+                        {
+                            <div class="d-flex align-items-start gap-3 mb-3 recent-activity-item p-2 rounded">
+                                <div class="avatar-text bg-soft-primary text-primary">
+                                    <i class="feather-user-check"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <p class="mb-1">@activity.Description</p>
+                                    <small class="text-muted">
+                                        <i class="feather-clock me-1"></i>
+                                        @activity.Timestamp.ToString("dd/MM/yyyy hh:mm tt")
+                                    </small>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <i class="feather-user-check fs-1 mb-3 d-block"></i>
+                            <p class="mb-0">@Html.T("لا توجد تسجيلات حديثة", "No recent enrollments")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Payments -->
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("آخر المدفوعات", "Recent Payments")</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.RecentPayments.Any())
+                    {
+                        @foreach (var activity in Model.RecentPayments)
+                        {
+                            <div class="d-flex align-items-start gap-3 mb-3 recent-activity-item p-2 rounded">
+                                <div class="avatar-text bg-soft-success text-success">
+                                    <i class="feather-dollar-sign"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <p class="mb-1">@activity.Description</p>
+                                    <small class="text-muted">
+                                        <i class="feather-clock me-1"></i>
+                                        @activity.Timestamp.ToString("dd/MM/yyyy hh:mm tt")
+                                    </small>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <i class="feather-dollar-sign fs-1 mb-3 d-block"></i>
+                            <p class="mb-0">@Html.T("لا توجد مدفوعات حديثة", "No recent payments")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Revenue Chart Data
+        const revenueLabels = @Html.Raw(Json.Serialize(Model.RevenueChartData.Select(x => x.Label)));
+        const revenueData = @Html.Raw(Json.Serialize(Model.RevenueChartData.Select(x => x.Value)));
+        
+        // Enrollment Chart Data
+        const enrollmentLabels = @Html.Raw(Json.Serialize(Model.EnrollmentsChartData.Select(x => x.Label)));
+        const enrollmentData = @Html.Raw(Json.Serialize(Model.EnrollmentsChartData.Select(x => x.Value)));
+        
+        // Revenue Chart
+        const revenueCtx = document.getElementById('revenueChart');
+        if (revenueCtx) {
+            if (revenueLabels.length > 0) {
+                new Chart(revenueCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: revenueLabels,
+                        datasets: [{
+                            label: '@Html.T("الإيرادات", "Revenue")',
+                            data: revenueData,
+                            borderColor: '#3454d1',
+                            backgroundColor: 'rgba(52, 84, 209, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            } else {
+                revenueCtx.parentElement.innerHTML = `
+                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                        <i class="feather-bar-chart-2 fs-1 mb-3"></i>
+                        <p class="mb-0">@Html.T("لا توجد بيانات إيرادات لهذا الشهر", "No revenue data for this month")</p>
+                        <small>@Html.T("ستظهر البيانات هنا عند تسجيل مدفوعات جديدة", "Data will appear here when new payments are recorded")</small>
+                    </div>
+                `;
+            }
+        }
+
+        // Enrollment Chart
+        const enrollmentCtx = document.getElementById('enrollmentChart');
+        if (enrollmentCtx) {
+            if (enrollmentLabels.length > 0) {
+                new Chart(enrollmentCtx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: enrollmentLabels,
+                        datasets: [{
+                            label: '@Html.T("التسجيلات", "Enrollments")',
+                            data: enrollmentData,
+                            backgroundColor: '#0ab39c',
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                enrollmentCtx.parentElement.innerHTML = `
+                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                        <i class="feather-user-plus fs-1 mb-3"></i>
+                        <p class="mb-0">@Html.T("لا توجد تسجيلات لهذا الشهر", "No enrollments for this month")</p>
+                        <small>@Html.T("ستظهر البيانات هنا عند تسجيل طلاب جدد", "Data will appear here when new students enroll")</small>
+                    </div>
+                `;
+            }
+        }
+        
+        // Dashboard Refresh Button Handler
+        document.addEventListener('DOMContentLoaded', function() {
+            var refreshBtn = document.querySelector('.dashboard-refresh-btn');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Show loading state
+                    this.innerHTML = '<i class="feather-loader spin me-2"></i><span>@Html.T("جاري التحديث...", "Refreshing...")</span>';
+                    this.classList.add('disabled');
+                    this.style.pointerEvents = 'none';
+                    
+                    // Submit the hidden form
+                    var form = document.getElementById('refreshStatsForm');
+                    if (form) {
+                        form.submit();
+                    }
+                });
+            }
+        });
+    </script>
+    
+    <style>
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+        @@keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+}

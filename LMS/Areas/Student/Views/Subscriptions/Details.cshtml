@@ -1,0 +1,416 @@
+@model dynamic
+@{
+    ViewData["Title"] = Html.T("تفاصيل الاشتراك", "Subscription Details");
+}
+
+@section Styles {
+<style>
+    .subscription-details-card {
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    
+    .subscription-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+    }
+    
+    .info-row {
+        padding: 1rem 0;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .info-row:last-child {
+        border-bottom: none;
+    }
+    
+    .info-label {
+        color: #6b7280;
+        font-weight: 500;
+    }
+    
+    .info-value {
+        font-weight: 600;
+        color: #1f2937;
+    }
+    
+    .status-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+    
+    .billing-history-item {
+        padding: 1rem;
+        border-radius: 8px;
+        background: #f9fafb;
+        margin-bottom: 0.75rem;
+        transition: all 0.3s ease;
+    }
+    
+    .billing-history-item:hover {
+        background: #f3f4f6;
+        transform: translateX(-5px);
+    }
+    
+    .feature-item {
+        padding: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .feature-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-size: 1.25rem;
+    }
+    
+    .alert-warning-custom {
+        background: #fef3c7;
+        border: 1px solid #fcd34d;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Breadcrumb -->
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a asp-action="Index" class="text-muted">
+        <i class="feather-arrow-right me-2"></i>
+        @Html.T("العودة للاشتراكات", "Back to subscriptions")
+    </a>
+</div>
+
+<!-- Subscription Header -->
+<div class="card subscription-details-card stretch stretch-full mb-4">
+    <div class="subscription-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2 class="text-white fw-bold mb-2">@Model.Plan.Name</h2>
+                <p class="text-white opacity-75 mb-0">@Model.Plan.Description</p>
+            </div>
+            <div class="col-md-4 text-md-start text-center mt-3 mt-md-0">
+                <div class="mb-2">
+                    <span class="status-badge @(Model.Status == "Active" ? "bg-success" : Model.Status == "Canceled" ? "bg-danger" : "bg-warning")">
+                        @(Model.Status == "Active" ? Html.T("نشط", "Active") : Model.Status == "Canceled" ? Html.T("ملغى", "Canceled") : Model.Status == "Trialing" ? Html.T("تجريبي", "Trialing") : Html.T("معلق", "Pending"))
+                    </span>
+                </div>
+                <h1 class="text-white fw-bold mb-0">
+                    @Model.Plan.Price.ToEGP(0)
+                    <small class="fs-6 opacity-75">/@(Model.BillingCycle == "Monthly" ? Html.T("شهر", "month") : Html.T("سنة", "year"))</small>
+                </h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Subscription Information -->
+    <div class="col-xl-8">
+        <!-- Cancellation Warning -->
+        @if (Model.CancelAtPeriodEnd)
+        {
+            <div class="alert alert-warning-custom mb-4 d-flex align-items-center">
+                <i class="feather-alert-circle fs-4 me-3"></i>
+                <div class="flex-grow-1">
+                    <strong>@Html.T("تنبيه:", "Notice:")</strong> @Html.T("تم جدولة إلغاء هذا الاشتراك في", "This subscription is scheduled to cancel on") <strong>@Model.CurrentPeriodEnd.ToString("dd/MM/yyyy")</strong>
+                </div>
+                <form asp-action="Resume" method="post" class="d-inline">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-sm btn-success">
+                        <i class="feather-refresh-cw me-2"></i>
+                        استئناف الاشتراك
+                    </button>
+                </form>
+            </div>
+        }
+
+        <!-- Basic Information -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-info text-primary me-2"></i>
+                    @Html.T("معلومات الاشتراك", "Subscription Info")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="info-row">
+                    <span class="info-label">
+                        <i class="feather-calendar me-2"></i>
+                        @Html.T("تاريخ البدء", "Start date")
+                    </span>
+                    <span class="info-value">@Model.StartDate.ToString("dd MMMM yyyy")</span>
+                </div>
+                
+                <div class="info-row">
+                    <span class="info-label">
+                        <i class="feather-calendar me-2"></i>
+                        @Html.T("تاريخ انتهاء الفترة الحالية", "Current period ends")
+                    </span>
+                    <span class="info-value">@Model.CurrentPeriodEnd.ToString("dd MMMM yyyy")</span>
+                </div>
+
+                @if (Model.Status == "Active" && !Model.CancelAtPeriodEnd)
+                {
+                    <div class="info-row">
+                        <span class="info-label">
+                            <i class="feather-repeat me-2"></i>
+                            @Html.T("التجديد التلقائي", "Auto-renewal")
+                        </span>
+                        <span class="info-value text-success">
+                            <i class="feather-check-circle me-1"></i>
+                            @Html.T("مفعّل", "Enabled")
+                        </span>
+                    </div>
+
+                    <div class="info-row">
+                        <span class="info-label">
+                            <i class="feather-credit-card me-2"></i>
+                            @Html.T("طريقة الدفع", "Payment method")
+                        </span>
+                        <span class="info-value">
+                            •••• •••• •••• @(Model.PaymentMethod?.Last4 ?? "----")
+                        </span>
+                    </div>
+                }
+
+                @if (Model.TrialEnd.HasValue && Model.TrialEnd > DateTime.UtcNow)
+                {
+                    <div class="info-row">
+                        <span class="info-label">
+                            <i class="feather-gift me-2"></i>
+                            @Html.T("الفترة التجريبية تنتهي في", "Trial ends on")
+                        </span>
+                        <span class="info-value text-warning">
+                            @Model.TrialEnd.Value.ToString("dd MMMM yyyy")
+                        </span>
+                    </div>
+                }
+
+                @if (!string.IsNullOrEmpty(Model.CancellationReason) && Model.Status == "Canceled")
+                {
+                    <div class="info-row">
+                        <span class="info-label">
+                            <i class="feather-message-circle me-2"></i>
+                            @Html.T("سبب الإلغاء", "Cancellation reason")
+                        </span>
+                        <span class="info-value">@Model.CancellationReason</span>
+                    </div>
+                }
+
+                @if (Model.CancelledAt.HasValue)
+                {
+                    <div class="info-row">
+                        <span class="info-label">
+                            <i class="feather-x-circle me-2"></i>
+                            @Html.T("تاريخ الإلغاء", "Cancellation date")
+                        </span>
+                        <span class="info-value text-danger">
+                            @Model.CancelledAt.Value.ToString("dd MMMM yyyy")
+                        </span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Billing History -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-file-text text-primary me-2"></i>
+                    @Html.T("سجل الفواتير", "Billing history")
+                </h5>
+            </div>
+            <div class="card-body">
+                @if (Model.BillingHistory?.Count > 0)
+                {
+                    @foreach (var invoice in Model.BillingHistory)
+                    {
+                        <div class="billing-history-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="fw-bold mb-1">@invoice.Description</h6>
+                                    <small class="text-muted">
+                                        <i class="feather-calendar me-1"></i>
+                                        @invoice.Date.ToString("dd MMMM yyyy")
+                                    </small>
+                                </div>
+                                <div class="text-start">
+                                    <div class="fw-bold text-primary mb-1">
+                                        @invoice.Amount.ToEGP(0)
+                                    </div>
+                                    <span class="badge bg-@(invoice.Status == "Paid" ? "success" : invoice.Status == "Failed" ? "danger" : "warning") badge-sm">
+                                        @(invoice.Status == "Paid" ? Html.T("مدفوع", "Paid") : invoice.Status == "Failed" ? Html.T("فشل", "Failed") : Html.T("معلق", "Pending"))
+                                    </span>
+                                </div>
+                            </div>
+                            @if (invoice.Status == "Paid" && !string.IsNullOrEmpty(invoice.InvoiceUrl))
+                            {
+                                <div class="mt-2">
+                                    <a href="@invoice.InvoiceUrl" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="feather-download me-1"></i>
+                                        @Html.T("تحميل الفاتورة", "Download invoice")
+                                    </a>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center py-4 text-muted">
+                        <i class="feather-file-text fs-1 mb-3 d-block opacity-50"></i>
+                        <p class="mb-0">@Html.T("لا توجد فواتير حتى الآن", "No invoices yet")</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-xl-4">
+        <!-- Plan Features -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-star text-warning me-2"></i>
+                    @Html.T("مزايا الخطة", "Plan features")
+                </h5>
+            </div>
+            <div class="card-body">
+                @if (Model.Plan.Features?.Count > 0)
+                {
+                    @foreach (var feature in Model.Plan.Features)
+                    {
+                        <div class="feature-item">
+                            <div class="feature-icon">
+                                <i class="feather-check"></i>
+                            </div>
+                            <span>@feature</span>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="feather-check"></i></div>
+                        <span>@Html.T("وصول كامل للمحتوى", "Full content access")</span>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="feather-check"></i></div>
+                        <span>@Html.T("شهادات إتمام معتمدة", "Verified completion certificates")</span>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="feather-check"></i></div>
+                        <span>@Html.T("دعم فني متميز", "Premium support")</span>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="feather-check"></i></div>
+                        <span>@Html.T("تحديثات مستمرة", "Ongoing updates")</span>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-settings text-primary me-2"></i>
+                    @Html.T("إدارة الاشتراك", "Subscription management")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    @if (Model.Status == "Active" && !Model.CancelAtPeriodEnd)
+                    {
+                        <a asp-action="UpdatePaymentMethod" asp-route-id="@Model.Id" class="btn btn-outline-primary">
+                            <i class="feather-credit-card me-2"></i>
+                            @Html.T("تحديث طريقة الدفع", "Update payment method")
+                        </a>
+
+                        <a asp-action="Plans" class="btn btn-outline-info">
+                            <i class="feather-trending-up me-2"></i>
+                            @Html.T("ترقية الخطة", "Upgrade plan")
+                        </a>
+
+                        <hr />
+
+                        <a asp-action="Cancel" asp-route-id="@Model.Id" class="btn btn-outline-danger">
+                            <i class="feather-x-circle me-2"></i>
+                            @Html.T("إلغاء الاشتراك", "Cancel subscription")
+                        </a>
+                    }
+                    else if (Model.CancelAtPeriodEnd)
+                    {
+                        <form asp-action="Resume" method="post" class="w-100">
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="feather-refresh-cw me-2"></i>
+                                @Html.T("استئناف الاشتراك", "Resume subscription")
+                            </button>
+                        </form>
+                    }
+                    else if (Model.Status == "Canceled")
+                    {
+                        <a asp-action="Plans" class="btn btn-primary w-100">
+                            <i class="feather-plus-circle me-2"></i>
+                            @Html.T("اشترك في خطة جديدة", "Subscribe to a new plan")
+                        </a>
+                    }
+
+                    <a asp-action="Index" asp-controller="Support" class="btn btn-outline-secondary">
+                        <i class="feather-help-circle me-2"></i>
+                        @Html.T("الدعم الفني", "Support")
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Usage Stats (if available) -->
+        @if (Model.UsageStats != null)
+        {
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">
+                        <i class="feather-bar-chart-2 text-success me-2"></i>
+                        @Html.T("إحصائيات الاستخدام", "Usage Statistics")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="info-row">
+                        <span class="info-label">@Html.T("الدورات المسجلة", "Enrolled Courses")</span>
+                        <span class="info-value">@Model.UsageStats.CoursesEnrolled</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">@Html.T("ساعات التعلم", "Learning Hours")</span>
+                        <span class="info-value">@Model.UsageStats.TotalLearningHours.ToString("N0")</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">@Html.T("الشهادات الحاصل عليها", "Certificates Earned")</span>
+                        <span class="info-value">@Model.UsageStats.CertificatesEarned</span>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+

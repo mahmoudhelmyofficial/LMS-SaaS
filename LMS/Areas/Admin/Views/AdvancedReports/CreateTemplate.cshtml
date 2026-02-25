@@ -1,0 +1,404 @@
+@model LMS.Areas.Admin.ViewModels.ReportTemplateViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء قالب تقرير جديد", "Create new report template");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التقارير المتقدمة", "Advanced reports"), null),
+        (Html.T("قوالب التقارير", "Report templates"), Url.Action("Templates")),
+        (Html.T("إنشاء قالب جديد", "Create new template"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .report-type-card {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .report-type-card:hover {
+            border-color: #3b82f6;
+            background: #f0f9ff;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.15);
+        }
+        .report-type-card.selected {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+        .report-type-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 2rem;
+        }
+        .config-section {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        .config-section.active {
+            display: block;
+        }
+        @@keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .json-editor {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <form asp-action="CreateTemplate" method="post" id="templateForm">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <div class="row">
+            <!-- Main Form -->
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2"></i>
+                            المعلومات الأساسية
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Template Name -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Name" class="form-label">
+                                @Html.T("اسم القالب", "Template Name") <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Name" class="form-control form-control-lg" placeholder="@Html.T("مثال: تقرير المبيعات الشهري", "e.g. Monthly Sales Report")" />
+                            <span asp-validation-for="Name" class="text-danger"></span>
+                            <small class="form-text text-muted">
+                                <i class="feather-info"></i>
+                                @Html.T("اختر اسماً واضحاً يصف نوع التقرير", "Choose a clear name that describes the report type")
+                            </small>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Description" class="form-label">
+                                @Html.T("الوصف", "Description") <span class="text-danger">*</span>
+                            </label>
+                            <textarea asp-for="Description" class="form-control" rows="4" placeholder="@Html.T("وصف مفصل للتقرير والبيانات التي يحتويها...", "Detailed description of the report and the data it contains...")"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Report Type Selection -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-bar-chart-2 me-2"></i>
+                            @Html.T("نوع التقرير", "Report Type")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <input asp-for="ReportType" type="hidden" id="reportTypeInput" />
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="report-type-card" data-type="@((int)ReportType.Sales)">
+                                    <div class="report-type-icon bg-soft-success text-success">
+                                        <i class="feather-dollar-sign"></i>
+                                    </div>
+                                    <h6 class="fw-bold mb-1">@Html.T("تقرير المبيعات", "Sales Report")</h6>
+                                    <small class="text-muted">@Html.T("الإيرادات والمدفوعات", "Revenue and payments")</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="report-type-card" data-type="@((int)ReportType.Users)">
+                                    <div class="report-type-icon bg-soft-primary text-primary">
+                                        <i class="feather-users"></i>
+                                    </div>
+                                    <h6 class="fw-bold mb-1">@Html.T("تقرير المستخدمين", "Users Report")</h6>
+                                    <small class="text-muted">@Html.T("الطلاب والمدربين", "Students and instructors")</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="report-type-card" data-type="@((int)ReportType.Courses)">
+                                    <div class="report-type-icon bg-soft-info text-info">
+                                        <i class="feather-book"></i>
+                                    </div>
+                                    <h6 class="fw-bold mb-1">@Html.T("تقرير الدورات", "Courses Report")</h6>
+                                    <small class="text-muted">@Html.T("الدورات والمحتوى", "Courses and content")</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="report-type-card" data-type="@((int)ReportType.Enrollments)">
+                                    <div class="report-type-icon bg-soft-warning text-warning">
+                                        <i class="feather-user-check"></i>
+                                    </div>
+                                    <h6 class="fw-bold mb-1">@Html.T("تقرير التسجيلات", "Enrollments Report")</h6>
+                                    <small class="text-muted">@Html.T("التسجيلات والإكمال", "Enrollments and completion")</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="report-type-card" data-type="@((int)ReportType.Financial)">
+                                    <div class="report-type-icon bg-soft-danger text-danger">
+                                        <i class="feather-credit-card"></i>
+                                    </div>
+                                    <h6 class="fw-bold mb-1">@Html.T("التقرير المالي", "Financial Report")</h6>
+                                    <small class="text-muted">@Html.T("المعاملات المالية", "Financial transactions")</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="report-type-card" data-type="@((int)ReportType.Analytics)">
+                                    <div class="report-type-icon bg-soft-secondary text-secondary">
+                                        <i class="feather-trending-up"></i>
+                                    </div>
+                                    <h6 class="fw-bold mb-1">@Html.T("تقرير التحليلات", "Analytics Report")</h6>
+                                    <small class="text-muted">@Html.T("الإحصائيات المتقدمة", "Advanced statistics")</small>
+                                </div>
+                            </div>
+                        </div>
+                        <span asp-validation-for="ReportType" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- Configuration -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-settings me-2"></i>
+                            @Html.T("إعدادات التقرير", "Report Settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info mb-4">
+                            <i class="feather-info me-2"></i>
+                            <strong>ملاحظة:</strong> استخدم JSON لتكوين معايير التقرير والحقول المطلوبة
+                        </div>
+
+                        <div class="form-group">
+                            <label asp-for="Configuration" class="form-label">
+                                تكوين التقرير (JSON) <span class="text-danger">*</span>
+                            </label>
+                            <textarea asp-for="Configuration" class="form-control json-editor" rows="12" placeholder='{
+  "dateRange": "monthly",
+  "groupBy": "category",
+  "metrics": ["revenue", "enrollments", "completion_rate"],
+  "filters": {
+    "status": "active",
+    "minAmount": 0
+  },
+  "charts": ["line", "pie"],
+  "exportFormats": ["pdf", "excel", "csv"]
+}'></textarea>
+                            <span asp-validation-for="Configuration" class="text-danger"></span>
+                            <small class="form-text text-muted">
+                                <i class="feather-code"></i>
+                                أدخل إعدادات JSON المخصصة للتقرير
+                            </small>
+                        </div>
+
+                        <!-- Configuration Templates -->
+                        <div class="mt-3">
+                            <label class="form-label">قوالب جاهزة:</label>
+                            <div class="btn-group d-block" role="group">
+                                <button type="button" class="btn btn-light btn-sm" onclick="loadTemplate('sales')">
+                                    <i class="feather-dollar-sign me-1"></i>
+                                    قالب المبيعات
+                                </button>
+                                <button type="button" class="btn btn-light btn-sm" onclick="loadTemplate('users')">
+                                    <i class="feather-users me-1"></i>
+                                    قالب المستخدمين
+                                </button>
+                                <button type="button" class="btn btn-light btn-sm" onclick="loadTemplate('courses')">
+                                    <i class="feather-book me-1"></i>
+                                    قالب الدورات
+                                </button>
+                                <button type="button" class="btn btn-light btn-sm" onclick="loadTemplate('analytics')">
+                                    <i class="feather-bar-chart me-1"></i>
+                                    قالب التحليلات
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons -->
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="Templates" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <button type="button" class="btn btn-secondary" onclick="validateJSON()">
+                                <i class="feather-check me-2"></i>
+                                التحقق من JSON
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-2"></i>
+                                حفظ القالب
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Tips Card -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-help-circle me-2"></i>
+                            نصائح وإرشادات
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="vstack gap-3">
+                            <div class="alert alert-light mb-0">
+                                <i class="feather-lightbulb me-2 text-warning"></i>
+                                <small><strong>نصيحة:</strong> استخدم قالب JSON جاهز كنقطة بداية</small>
+                            </div>
+                            <div class="alert alert-light mb-0">
+                                <i class="feather-info me-2 text-info"></i>
+                                <small><strong>معلومة:</strong> يمكنك تعديل الإعدادات لاحقاً</small>
+                            </div>
+                            <div class="alert alert-light mb-0">
+                                <i class="feather-zap me-2 text-primary"></i>
+                                <small><strong>مهم:</strong> تأكد من صحة تنسيق JSON قبل الحفظ</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- JSON Reference -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-code me-2"></i>
+                            مرجع JSON
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-2">الحقول المتاحة:</h6>
+                        <ul class="list-unstyled small">
+                            <li class="mb-2">
+                                <code>dateRange</code>
+                                <small class="d-block text-muted">نطاق التاريخ (daily, weekly, monthly, yearly)</small>
+                            </li>
+                            <li class="mb-2">
+                                <code>groupBy</code>
+                                <small class="d-block text-muted">التجميع حسب (category, instructor, status)</small>
+                            </li>
+                            <li class="mb-2">
+                                <code>metrics</code>
+                                <small class="d-block text-muted">المقاييس المطلوبة (مصفوفة)</small>
+                            </li>
+                            <li class="mb-2">
+                                <code>filters</code>
+                                <small class="d-block text-muted">فلاتر البيانات (كائن)</small>
+                            </li>
+                            <li class="mb-2">
+                                <code>charts</code>
+                                <small class="d-block text-muted">أنواع الرسوم البيانية (مصفوفة)</small>
+                            </li>
+                            <li class="mb-2">
+                                <code>exportFormats</code>
+                                <small class="d-block text-muted">صيغ التصدير (pdf, excel, csv)</small>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Report type selection
+            $('.report-type-card').click(function() {
+                $('.report-type-card').removeClass('selected');
+                $(this).addClass('selected');
+                const type = $(this).data('type');
+                $('#reportTypeInput').val(type);
+            });
+        });
+
+        function validateJSON() {
+            const jsonText = $('#Configuration').val();
+            try {
+                JSON.parse(jsonText);
+                alert('@Html.Raw(Html.T("✓ تنسيق JSON صحيح!", "✓ Valid JSON!").Replace("'", "\\'"))');
+            } catch (e) {
+                alert('@Html.Raw(Html.T("✗ خطأ في تنسيق JSON:", "✗ JSON format error:").Replace("'", "\\'"))' + '\n\n' + e.message);
+            }
+        }
+
+        function loadTemplate(type) {
+            const templates = {
+                sales: `{
+  "dateRange": "monthly",
+  "groupBy": "category",
+  "metrics": ["totalRevenue", "transactionCount", "averageOrderValue"],
+  "filters": {
+    "paymentStatus": "completed",
+    "minAmount": 0
+  },
+  "charts": ["line", "bar", "pie"],
+  "exportFormats": ["pdf", "excel"]
+}`,
+                users: `{
+  "dateRange": "daily",
+  "groupBy": "role",
+  "metrics": ["totalUsers", "newRegistrations", "activeUsers"],
+  "filters": {
+    "isActive": true
+  },
+  "charts": ["bar", "pie"],
+  "exportFormats": ["excel", "csv"]
+}`,
+                courses: `{
+  "dateRange": "monthly",
+  "groupBy": "category",
+  "metrics": ["totalCourses", "publishedCourses", "enrollmentCount"],
+  "filters": {
+    "status": "published"
+  },
+  "charts": ["bar", "line"],
+  "exportFormats": ["pdf", "excel"]
+}`,
+                analytics: `{
+  "dateRange": "weekly",
+  "groupBy": "date",
+  "metrics": ["pageViews", "uniqueVisitors", "bounceRate", "conversionRate"],
+  "filters": {},
+  "charts": ["line", "area"],
+  "exportFormats": ["pdf", "excel", "csv"]
+}`
+            };
+
+            if (templates[type]) {
+                $('#Configuration').val(templates[type]);
+            }
+        }
+    </script>
+}
+

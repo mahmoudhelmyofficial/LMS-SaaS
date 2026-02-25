@@ -1,0 +1,444 @@
+@model LMS.Areas.Admin.ViewModels.FaqEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل السؤال", "Edit question");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الدعم", "Support"), null),
+        (Html.T("الأسئلة الشائعة", "FAQ"), Url.Action("Index", "Faq")),
+        (Html.T("تعديل السؤال", "Edit question"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var courses = ViewBag.Courses as List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>;
+    var lessons = ViewBag.Lessons as List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
+    <link rel="stylesheet" href="https://cdn.quilljs.com/1.3.6/quill.snow.css" />
+    <style>
+        .tag-item {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #e5e7eb;
+            border-radius: 20px;
+            margin: 4px;
+        }
+        .category-badge {
+            padding: 10px 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .category-badge.selected {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            font-weight: 600;
+        }
+        .editor-container {
+            height: 300px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="faqForm">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+        <input asp-for="Id" type="hidden" />
+
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Question -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-help-circle me-2"></i>
+                            السؤال
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label asp-for="Question" class="form-label">
+                                نص السؤال <span class="text-danger">*</span>
+                            </label>
+                            <textarea asp-for="Question" class="form-control form-control-lg" rows="3" id="questionInput"></textarea>
+                            <span asp-validation-for="Question" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Answer -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-message-square me-2"></i>
+                            الإجابة
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label asp-for="Answer" class="form-label">
+                                نص الإجابة <span class="text-danger">*</span>
+                            </label>
+                            <div id="answerEditor" class="editor-container"></div>
+                            <input asp-for="Answer" type="hidden" id="answerHidden" />
+                            <span asp-validation-for="Answer" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category & Tags -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-tag me-2"></i>
+                            @Html.T("التصنيف والوسوم", "Category and tags")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group mb-4">
+                            <label asp-for="Category" class="form-label">@Html.T("الفئة", "Category")</label>
+                            <input asp-for="Category" type="hidden" id="categoryHidden" />
+                            <div class="row g-2">
+                                <div class="col-md-3">
+                                    <div class="category-badge @(Model.Category == "عام" ? "selected" : "")" onclick="selectCategory(this, 'عام')">
+                                        <i class="feather-grid"></i>
+                                        <div>عام</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="category-badge @(Model.Category == "الدورات" ? "selected" : "")" onclick="selectCategory(this, 'الدورات')">
+                                        <i class="feather-book"></i>
+                                        <div>الدورات</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="category-badge @(Model.Category == "الدفع" ? "selected" : "")" onclick="selectCategory(this, 'الدفع')">
+                                        <i class="feather-credit-card"></i>
+                                        <div>الدفع</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="category-badge @(Model.Category == "الحساب" ? "selected" : "")" onclick="selectCategory(this, 'الحساب')">
+                                        <i class="feather-user"></i>
+                                        <div>الحساب</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="category-badge @(Model.Category == "الشهادات" ? "selected" : "")" onclick="selectCategory(this, 'الشهادات')">
+                                        <i class="feather-award"></i>
+                                        <div>الشهادات</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="category-badge @(Model.Category == "التقني" ? "selected" : "")" onclick="selectCategory(this, 'التقني')">
+                                        <i class="feather-settings"></i>
+                                        <div>التقني</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="category-badge @(Model.Category == "المدربين" ? "selected" : "")" onclick="selectCategory(this, 'المدربين')">
+                                        <i class="feather-users"></i>
+                                        <div>المدربين</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="category-badge @(Model.Category == "أخرى" ? "selected" : "")" onclick="selectCategory(this, 'أخرى')">
+                                        <i class="feather-more-horizontal"></i>
+                                        <div>أخرى</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <input type="text" class="form-control" placeholder="@Html.T("أو أدخل فئة مخصصة", "Or enter a custom category")" id="customCategory" value="@(Model.Category)" />
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label asp-for="Tags" class="form-label">@Html.T("الوسوم", "Tags")</label>
+                            <div id="tagDisplay" class="mb-2"></div>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="tagInput" placeholder="@Html.T("أدخل وسماً", "Enter a tag")" />
+                                <button type="button" class="btn btn-light" onclick="addTag()">
+                                    <i class="feather-plus"></i>
+                                </button>
+                            </div>
+                            <input asp-for="Tags" type="hidden" id="tagsHidden" value="@Model.Tags" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Related Course & Lesson -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-link me-2"></i>
+                            @Html.T("ربط بدورة أو درس", "Link to course or lesson")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group mb-4">
+                            <label asp-for="CourseId" class="form-label">@Html.T("الدورة", "Course")</label>
+                            <select asp-for="CourseId" class="form-select select2" id="courseSelect">
+                                <option value="">-- @Html.T("اختر الدورة (اختياري)", "Select course (optional)") --</option>
+                                @if (courses != null)
+                                {
+                                    @foreach (var course in courses)
+                                    {
+                                        <option value="@course.Value" selected="@(course.Value == Model.CourseId?.ToString())">@course.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="lessonSection" style="display: @(Model.CourseId.HasValue ? "block" : "none")">
+                            <label asp-for="LessonId" class="form-label">@Html.T("الدرس", "Lesson")</label>
+                            <select asp-for="LessonId" class="form-select select2" id="lessonSelect">
+                                <option value="">-- @Html.T("اختر الدرس (اختياري)", "Select lesson (optional)") --</option>
+                                @if (lessons != null)
+                                {
+                                    @foreach (var lesson in lessons)
+                                    {
+                                        <option value="@lesson.Value" selected="@(lesson.Value == Model.LessonId?.ToString())">@lesson.Text</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons -->
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="Index" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                @Html.T("إلغاء", "Cancel")
+                            </a>
+                            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-secondary">
+                                <i class="feather-eye me-2"></i>
+                                @Html.T("عرض", "View")
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-check me-2"></i>
+                                @Html.T("حفظ التغييرات", "Save changes")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Info Card -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("معلومات", "Information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="vstack gap-2">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">@Html.T("المعرف:", "ID:")</span>
+                                <span class="fw-semibold">#@Model.Id</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">@Html.T("تاريخ الإنشاء:", "Created:")</span>
+                                <span class="fw-semibold">@DateTime.Now.ToString("dd/MM/yyyy")</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-settings me-2"></i>
+                            @Html.T("إعدادات", "Settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group mb-4">
+                            <label asp-for="DisplayOrder" class="form-label">@Html.T("ترتيب العرض", "Display order")</label>
+                            <input asp-for="DisplayOrder" type="number" class="form-control" min="0" />
+                            <span asp-validation-for="DisplayOrder" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="form-check form-switch">
+                                <input asp-for="IsPublished" class="form-check-input" type="checkbox" id="publishSwitch" />
+                                <label class="form-check-label" for="publishSwitch">
+                                    <i class="feather-eye me-2"></i>
+                                    @Html.T("منشور", "Published")
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-zap me-2"></i>
+                            @Html.T("إجراءات سريعة", "Quick actions")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-light-brand">
+                                <i class="feather-eye me-2"></i>
+                                @Html.T("عرض التفاصيل", "View details")
+                            </a>
+                            <button type="button" class="btn btn-light-brand" onclick="duplicateFaq()">
+                                <i class="feather-copy me-2"></i>
+                                نسخ السؤال
+                            </button>
+                            <hr class="my-2">
+                            <button type="button" class="btn btn-danger" onclick="deleteFaq()">
+                                <i class="feather-trash-2 me-2"></i>
+                                حذف السؤال
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+    
+    <script>
+        const tags = '@Model.Tags'.split(',').filter(t => t.trim());
+        let quill;
+
+        $(document).ready(function() {
+            $('.select2').select2({ dir: 'rtl', language: 'ar' });
+
+            // Initialize Quill with existing content
+            quill = new Quill('#answerEditor', {
+                theme: 'snow',
+                modules: {
+                    toolbar: [
+                        ['bold', 'italic', 'underline'],
+                        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                        ['link'],
+                        ['clean']
+                    ]
+                }
+            });
+
+            // Set existing content
+            quill.root.innerHTML = '@Html.Raw(Model.Answer ?? "")';
+
+            quill.on('text-change', function() {
+                $('#answerHidden').val(quill.root.innerHTML);
+            });
+
+            updateTagDisplay();
+
+            $('#tagInput').keypress(function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    addTag();
+                }
+            });
+
+            $('#customCategory').on('blur', function() {
+                const value = $(this).val().trim();
+                if (value) {
+                    $('.category-badge').removeClass('selected');
+                    $('#categoryHidden').val(value);
+                }
+            });
+
+            $('#courseSelect').change(function() {
+                if ($(this).val()) {
+                    $('#lessonSection').show();
+                } else {
+                    $('#lessonSection').hide();
+                }
+            });
+        });
+
+        function selectCategory(element, category) {
+            $('.category-badge').removeClass('selected');
+            $(element).addClass('selected');
+            $('#categoryHidden').val(category);
+            $('#customCategory').val('');
+        }
+
+        function addTag() {
+            const tagInput = $('#tagInput');
+            const tag = tagInput.val().trim();
+            if (tag && !tags.includes(tag)) {
+                tags.push(tag);
+                updateTagDisplay();
+                updateTagsInput();
+                tagInput.val('');
+            }
+        }
+
+        function removeTag(tag) {
+            const index = tags.indexOf(tag);
+            if (index > -1) {
+                tags.splice(index, 1);
+                updateTagDisplay();
+                updateTagsInput();
+            }
+        }
+
+        function updateTagDisplay() {
+            const html = tags.map(tag => 
+                `<span class="tag-item">
+                    ${tag}
+                    <button type="button" class="btn-close btn-close-sm ms-2" onclick="removeTag('${tag}')"></button>
+                </span>`
+            ).join('');
+            $('#tagDisplay').html(html);
+        }
+
+        function updateTagsInput() {
+            $('#tagsHidden').val(tags.join(','));
+        }
+
+        var __FaqEditT = {
+            copyUnderDev: '@Html.Raw(Html.T("ميزة النسخ قيد التطوير", "Copy feature is under development").Replace("'", "\\'"))',
+            confirmDelete: '@Html.Raw(Html.T("هل أنت متأكد من حذف هذا السؤال؟", "Are you sure you want to delete this question?").Replace("'", "\\'"))'
+        };
+        function duplicateFaq() {
+            alert(__FaqEditT.copyUnderDev);
+        }
+
+        function deleteFaq() {
+            if (confirm(__FaqEditT.confirmDelete)) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '@Url.Action("Delete", new { id = Model.Id })';
+                
+                const token = document.createElement('input');
+                token.type = 'hidden';
+                token.name = '__RequestVerificationToken';
+                token.value = $('input[name="__RequestVerificationToken"]').val();
+                form.appendChild(token);
+                
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+    </script>
+}
+

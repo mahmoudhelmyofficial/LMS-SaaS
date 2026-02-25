@@ -1,0 +1,330 @@
+@model LMS.Areas.Instructor.ViewModels.AssignmentEditViewModel
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("تعديل التكليف", "Edit Assignment");
+    ViewData["Subtitle"] = Model.Title;
+    var lesson = ViewBag.Lesson as LMS.Domain.Entities.Courses.Lesson;
+    var indexUrl = Url.Action("Index", new { courseId = lesson?.Module?.CourseId });
+    
+    // Load platform settings
+    var maxGradeLimit = await PlatformSettings.GetIntSettingAsync("Assignment.MaxGrade.Limit", 1000);
+    var defaultMaxGrade = await PlatformSettings.GetIntSettingAsync("Assignment.MaxGrade.Default", 100);
+    var defaultLatePenalty = await PlatformSettings.GetIntSettingAsync("Assignment.LatePenalty.Default", 10);
+    var maxFileSizeMB = await PlatformSettings.GetIntSettingAsync("Assignment.MaxFileSizeMB", 100);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة", "Back") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @if (lesson != null)
+    {
+        <!-- Lesson Info -->
+        <div class="alert alert-info mb-4">
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-md bg-primary text-white">
+                        <i class="feather-book"></i>
+                    </div>
+                    <div>
+                        <h6 class="fw-bold mb-1">@Html.T("الدرس", "Lesson"): @lesson.Title</h6>
+                        <p class="mb-0 fs-13">@lesson.Module?.Title - @lesson.Module?.Course?.Title</p>
+                    </div>
+                </div>
+                @if (Model.HasSubmissions)
+                {
+                    <div class="text-end">
+                        <div class="badge bg-soft-success text-success fs-13">
+                            <i class="feather-file-text me-1"></i>
+                            @Model.SubmissionsCount @Html.T("تسليم", "submissions")
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="assignmentForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="LessonId" />
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            @Html.T("المعلومات الأساسية", "Basic information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("عنوان التكليف", "Assignment title") <span class="text-danger">*</span></label>
+                                <input asp-for="Title" class="form-control" placeholder="@Html.T("مثال: تكليف الوحدة الأولى", "e.g. Unit 1 Assignment")">
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("الوصف", "Description")</label>
+                                <textarea asp-for="Description" class="form-control" rows="4" placeholder="@Html.T("وصف مختصر عن التكليف", "Brief description of the assignment")"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("التعليمات", "Instructions")</label>
+                                <textarea asp-for="Instructions" class="form-control" rows="5" placeholder="@Html.T("اكتب التعليمات المفصلة للطلاب", "Write detailed instructions for students")"></textarea>
+                                <span asp-validation-for="Instructions" class="text-danger"></span>
+                                <div class="form-text">
+                                    <i class="feather-info me-1"></i>
+                                    @Html.T("مثال: اكتب تقريراً مفصلاً، يجب أن يحتوي على...", "e.g. Write a detailed report that includes...")
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Assignment Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-settings me-2 text-primary"></i>
+                            @Html.T("إعدادات التكليف", "Assignment settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-4">
+                                <label class="form-label">@Html.T("الدرجة القصوى", "Max grade") <span class="text-danger">*</span></label>
+                                <input asp-for="MaxGrade" type="number" min="1" max="@maxGradeLimit" class="form-control" placeholder="@defaultMaxGrade">
+                                <span asp-validation-for="MaxGrade" class="text-danger"></span>
+                                <div class="form-text">@Html.T("الحد الأقصى للدرجة (1-1000)", "Max grade (1-1000)")</div>
+                            </div>
+
+                            <div class="col-lg-4">
+                                <label class="form-label">@Html.T("درجة النجاح", "Passing grade")</label>
+                                <input asp-for="PassingScore" type="number" min="0" max="1000" class="form-control" placeholder="50">
+                                <span asp-validation-for="PassingScore" class="text-danger"></span>
+                                <div class="form-text">@Html.T("اتركه فارغاً لعدم التحديد", "Leave empty for not set")</div>
+                            </div>
+
+                            <div class="col-lg-4">
+                                <label class="form-label">@Html.T("تاريخ التسليم", "Due date")</label>
+                                <input asp-for="DueDate" type="datetime-local" class="form-control">
+                                <span asp-validation-for="DueDate" class="text-danger"></span>
+                                <div class="form-text">@Html.T("اتركه فارغاً إذا لم يكن محدداً", "Leave empty if not set")</div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4" />
+
+                        <h6 class="fw-bold mb-3">@Html.T("خيارات التسليم المتأخر", "Late submission options")</h6>
+                        
+                        <div class="row g-3">
+                            <div class="col-lg-6">
+                                <div class="form-check form-switch">
+                                    <input asp-for="AllowLateSubmissions" class="form-check-input" type="checkbox" id="allowLateSubmissions">
+                                    <label class="form-check-label" for="allowLateSubmissions">
+                                        @Html.T("السماح بالتسليم المتأخر", "Allow late submissions")
+                                    </label>
+                                </div>
+                                <div class="form-text">@Html.T("السماح للطلاب بالتسليم بعد الموعد المحدد", "Allow students to submit after the due date")</div>
+                            </div>
+
+                            <div class="col-lg-6" id="latePenaltyContainer">
+                                <label class="form-label">@Html.T("نسبة خصم التأخير (%)", "Late penalty (%)")</label>
+                                <input asp-for="LatePenaltyPercentage" type="number" min="0" max="100" class="form-control" placeholder="@defaultLatePenalty">
+                                <span asp-validation-for="LatePenaltyPercentage" class="text-danger"></span>
+                                <div class="form-text">@Html.T("الخصم على كل يوم تأخير", "Deduction per day late")</div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4" />
+
+                        <h6 class="fw-bold mb-3">@Html.T("إعدادات الملفات", "File settings")</h6>
+                        
+                        <div class="row g-3">
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("الحد الأقصى لحجم الملف (ميجابايت)", "Max file size (MB)")</label>
+                                <input asp-for="MaxFileSizeMB" type="number" min="1" max="@maxFileSizeMB" class="form-control" placeholder="10">
+                                <span asp-validation-for="MaxFileSizeMB" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("أنواع الملفات المسموحة", "Allowed file types")</label>
+                                <input asp-for="AcceptedFileTypes" class="form-control" placeholder=".pdf,.doc,.docx,.zip">
+                                <span asp-validation-for="AcceptedFileTypes" class="text-danger"></span>
+                                <div class="form-text">@Html.T("مثال: .pdf,.doc,.docx,.zip", "e.g. .pdf,.doc,.docx,.zip")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Quick Stats -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-bar-chart-2 me-2"></i>
+                            @Html.T("إحصائيات سريعة", "Quick stats")
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("عدد التسليمات", "Submissions count"):</span>
+                            <span class="fw-bold">@Model.SubmissionsCount</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("الدرجة القصوى", "Max grade"):</span>
+                            <span class="fw-bold" id="previewMaxGrade">@Model.MaxGrade</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("تاريخ التسليم", "Due date"):</span>
+                            <span class="fw-bold" id="previewDueDate">@(Model.DueDate?.ToString("yyyy/MM/dd") ?? Html.T("غير محدد", "Not set"))</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("التسليم المتأخر", "Late submission"):</span>
+                            <span class="fw-bold" id="previewLateSubmission">@(Model.AllowLateSubmissions ? Html.T("نعم", "Yes") : Html.T("لا", "No"))</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="fs-13">@Html.T("خصم التأخير", "Late penalty"):</span>
+                            <span class="fw-bold" id="previewPenalty">@(Model.AllowLateSubmissions ? Model.LatePenaltyPercentage + "%" : "--")</span>
+                        </div>
+                    </div>
+                </div>
+
+                @if (Model.HasSubmissions)
+                {
+                    <!-- Warning for existing submissions -->
+                    <div class="alert alert-warning mb-4">
+                        <i class="feather-alert-triangle me-2"></i>
+                        <strong>@Html.T("تحذير:", "Warning:")</strong> @Html.T("هذا التكليف يحتوي على", "This assignment has") @Model.SubmissionsCount @Html.T("تسليم. تغيير الإعدادات قد يؤثر على التقييمات السابقة.", "submissions. Changing settings may affect previous grades.")
+                    </div>
+                }
+
+                <!-- Submit Buttons -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-save me-2"></i>
+                            @Html.T("حفظ التغييرات", "Save changes")
+                        </button>
+                        <a href="@Url.Action("Index", new { courseId = lesson?.Module?.CourseId })" class="btn btn-light w-100 mb-2">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("إلغاء", "Cancel")
+                        </a>
+                        <a href="@Url.Action("Submissions")" class="btn btn-outline-primary w-100">
+                            <i class="feather-file-text me-2"></i>
+                            @Html.T("عرض التسليمات", "View submissions")
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Danger Zone -->
+                <div class="card stretch stretch-full border-danger">
+                    <div class="card-header bg-soft-danger">
+                        <h6 class="card-title text-danger">
+                            <i class="feather-alert-octagon me-2"></i>
+                            @Html.T("منطقة الخطر", "Danger zone")
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="fs-13 text-muted mb-3">@Html.T("حذف التكليف سيؤدي إلى حذف جميع التسليمات المرتبطة به.", "Deleting the assignment will delete all associated submissions.")</p>
+                        <form asp-action="Delete" asp-route-id="@Model.Id" method="post" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا التكليف؟ سيتم حذف جميع التسليمات المرتبطة به.", "Are you sure you want to delete this assignment? All associated submissions will be deleted.").Replace("'", "\\'"))');">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-outline-danger w-100">
+                                <i class="feather-trash-2 me-2"></i>
+                                @Html.T("حذف التكليف", "Delete assignment")
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        $(document).ready(function () {
+            // Toggle late penalty input
+            function toggleLatePenalty() {
+                if ($('#AllowLateSubmissions').is(':checked')) {
+                    $('#latePenaltyContainer').show();
+                } else {
+                    $('#latePenaltyContainer').hide();
+                }
+            }
+
+            $('#AllowLateSubmissions').on('change', toggleLatePenalty);
+            toggleLatePenalty(); // Initial state
+
+            // Update preview in real-time
+            function updatePreview() {
+                const maxGrade = $('#MaxGrade').val() || '--';
+                const dueDate = $('#DueDate').val();
+                const allowLate = $('#AllowLateSubmissions').is(':checked');
+                const penalty = $('#LatePenaltyPercentage').val() || '0';
+
+                $('#previewMaxGrade').text(maxGrade);
+                
+                if (dueDate) {
+                    const date = new Date(dueDate);
+                    $('#previewDueDate').text(date.toLocaleDateString('ar-EG') + ' ' + date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }));
+                } else {
+                    $('#previewDueDate').text('@Html.Raw(Html.T("غير محدد", "Not set").Replace("'", "\\'"))');
+                }
+
+                $('#previewLateSubmission').text(allowLate ? '@Html.Raw(Html.T("نعم", "Yes").Replace("'", "\\'"))' : '@Html.Raw(Html.T("لا", "No").Replace("'", "\\'"))');
+                $('#previewPenalty').text(allowLate ? penalty + '%' : '--');
+            }
+
+            // Attach event listeners
+            $('#MaxGrade, #DueDate, #LatePenaltyPercentage').on('input', updatePreview);
+            $('#AllowLateSubmissions').on('change', updatePreview);
+
+            // Form validation
+            $('#assignmentForm').on('submit', function(e) {
+                const title = $('#Title').val().trim();
+                const maxGrade = parseInt($('#MaxGrade').val());
+                const passingScore = parseInt($('#PassingScore').val());
+
+                if (!title || title.length < 3) {
+                    e.preventDefault();
+                    alert('@Html.Raw(Html.T("يرجى إدخال عنوان للتكليف (3 أحرف على الأقل)", "Please enter an assignment title (at least 3 characters)").Replace("'", "\\'"))');
+                    $('#Title').focus();
+                    return false;
+                }
+
+                if (isNaN(maxGrade) || maxGrade < 1 || maxGrade > 1000) {
+                    e.preventDefault();
+                    alert('@Html.Raw(Html.T("يرجى إدخال درجة قصوى صحيحة (1-1000)", "Please enter a valid max grade (1-1000)").Replace("'", "\\'"))');
+                    $('#MaxGrade').focus();
+                    return false;
+                }
+
+                if (!isNaN(passingScore) && passingScore > maxGrade) {
+                    e.preventDefault();
+                    alert('@Html.Raw(Html.T("درجة النجاح يجب أن تكون أقل من أو تساوي الدرجة القصوى", "Passing grade must be less than or equal to max grade").Replace("'", "\\'"))');
+                    $('#PassingScore').focus();
+                    return false;
+                }
+
+                return true;
+            });
+        });
+    </script>
+}
+

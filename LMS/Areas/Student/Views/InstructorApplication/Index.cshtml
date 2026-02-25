@@ -1,0 +1,354 @@
+@model LMS.Domain.Entities.Users.InstructorApplication
+@{
+    ViewData["Title"] = Html.T("حالة طلب الانضمام كمدرس", "Instructor Application Status");
+    var supportEmail = ViewBag.SupportEmail as string ?? "support@lms.com";
+}
+
+@section Styles {
+<style>
+    .status-card {
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    }
+    .status-header {
+        padding: 40px;
+        text-align: center;
+        color: white;
+    }
+    .status-header.pending {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    }
+    .status-header.under-review {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    }
+    .status-header.approved {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+    .status-header.rejected {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    }
+    .status-header.cancelled {
+        background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    }
+    .status-icon {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+    }
+    .status-icon i {
+        font-size: 48px;
+    }
+    .timeline-item {
+        position: relative;
+        padding-right: 40px;
+        padding-bottom: 30px;
+    }
+    .timeline-item:before {
+        content: '';
+        position: absolute;
+        right: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e5e7eb;
+    }
+    .timeline-item:last-child:before {
+        display: none;
+    }
+    .timeline-item:last-child {
+        padding-bottom: 0;
+    }
+    .timeline-dot {
+        position: absolute;
+        right: 8px;
+        top: 0;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #e5e7eb;
+        border: 3px solid #fff;
+        box-shadow: 0 0 0 2px #e5e7eb;
+    }
+    .timeline-dot.completed {
+        background: #10b981;
+        box-shadow: 0 0 0 2px #10b981;
+    }
+    .timeline-dot.active {
+        background: #3b82f6;
+        box-shadow: 0 0 0 2px #3b82f6;
+        animation: pulse 2s infinite;
+    }
+    @@keyframes pulse {
+        0% { box-shadow: 0 0 0 2px #3b82f6; }
+        50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.3); }
+        100% { box-shadow: 0 0 0 2px #3b82f6; }
+    }
+    .info-item {
+        display: flex;
+        align-items: flex-start;
+        padding: 12px 0;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    .info-item:last-child {
+        border-bottom: none;
+    }
+    .info-label {
+        min-width: 140px;
+        color: #6b7280;
+        font-size: 14px;
+    }
+    .info-value {
+        color: #111827;
+        font-weight: 500;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- Status Card -->
+        <div class="status-card mb-4">
+            @{
+                var statusClass = Model.Status switch
+                {
+                    LMS.Domain.Enums.InstructorApplicationStatus.Pending => "pending",
+                    LMS.Domain.Enums.InstructorApplicationStatus.UnderReview => "under-review",
+                    LMS.Domain.Enums.InstructorApplicationStatus.MoreInfoRequired => "pending",
+                    LMS.Domain.Enums.InstructorApplicationStatus.Approved => "approved",
+                    LMS.Domain.Enums.InstructorApplicationStatus.Rejected => "rejected",
+                    LMS.Domain.Enums.InstructorApplicationStatus.Cancelled => "cancelled",
+                    _ => "pending"
+                };
+                var statusIcon = Model.Status switch
+                {
+                    LMS.Domain.Enums.InstructorApplicationStatus.Pending => "feather-clock",
+                    LMS.Domain.Enums.InstructorApplicationStatus.UnderReview => "feather-eye",
+                    LMS.Domain.Enums.InstructorApplicationStatus.MoreInfoRequired => "feather-edit",
+                    LMS.Domain.Enums.InstructorApplicationStatus.Approved => "feather-check-circle",
+                    LMS.Domain.Enums.InstructorApplicationStatus.Rejected => "feather-x-circle",
+                    LMS.Domain.Enums.InstructorApplicationStatus.Cancelled => "feather-slash",
+                    _ => "feather-clock"
+                };
+                var statusText = Model.Status switch
+                {
+                    LMS.Domain.Enums.InstructorApplicationStatus.Pending => Html.T("قيد الانتظار", "Pending").ToString(),
+                    LMS.Domain.Enums.InstructorApplicationStatus.UnderReview => Html.T("قيد المراجعة", "Under review").ToString(),
+                    LMS.Domain.Enums.InstructorApplicationStatus.MoreInfoRequired => Html.T("مطلوب معلومات إضافية", "More info required").ToString(),
+                    LMS.Domain.Enums.InstructorApplicationStatus.Approved => Html.T("تمت الموافقة", "Approved").ToString(),
+                    LMS.Domain.Enums.InstructorApplicationStatus.Rejected => Html.T("مرفوض", "Rejected").ToString(),
+                    LMS.Domain.Enums.InstructorApplicationStatus.Cancelled => Html.T("ملغي", "Cancelled").ToString(),
+                    _ => Html.T("قيد الانتظار", "Pending").ToString()
+                };
+                var statusDescription = Model.Status switch
+                {
+                    LMS.Domain.Enums.InstructorApplicationStatus.Pending => Html.T("تم استلام طلبك بنجاح وهو في انتظار المراجعة من قبل فريق الإدارة.", "Your application has been received and is pending review by the admin team.").ToString(),
+                    LMS.Domain.Enums.InstructorApplicationStatus.UnderReview => Html.T("يقوم فريق الإدارة حالياً بمراجعة طلبك. سيتم إعلامك بالنتيجة قريباً.", "The admin team is currently reviewing your application. You will be notified of the result soon.").ToString(),
+                    LMS.Domain.Enums.InstructorApplicationStatus.MoreInfoRequired => Html.T("يرجى تقديم المعلومات الإضافية المطلوبة أو تعديل الطلب.", "Please provide the required additional information or edit your application.").ToString(),
+                    LMS.Domain.Enums.InstructorApplicationStatus.Approved => Html.T("مبارك! تمت الموافقة على طلبك. يمكنك الآن الوصول إلى لوحة المدرس.", "Congratulations! Your application has been approved. You can now access the instructor dashboard.").ToString(),
+                    LMS.Domain.Enums.InstructorApplicationStatus.Rejected => Html.T("للأسف، لم يتم قبول طلبك. يمكنك مراجعة الملاحظات والتقديم مرة أخرى.", "Unfortunately, your application was not accepted. You can review the feedback and apply again.").ToString(),
+                    LMS.Domain.Enums.InstructorApplicationStatus.Cancelled => Html.T("تم إلغاء هذا الطلب.", "This application has been cancelled.").ToString(),
+                    _ => ""
+                };
+                var canEditOrCancel = Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.Pending
+                    || Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.UnderReview
+                    || Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.MoreInfoRequired;
+            }
+            <div class="status-header @statusClass">
+                <div class="status-icon">
+                    <i class="@statusIcon"></i>
+                </div>
+                <h2 class="h3 fw-bold mb-2">@statusText</h2>
+                <p class="mb-0 opacity-90">@statusDescription</p>
+            </div>
+            <div class="card-body p-4">
+                @if (Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.Approved)
+                {
+                    <div class="text-center py-3">
+                        <a asp-area="Instructor" asp-controller="Dashboard" asp-action="Index" class="btn btn-success btn-lg">
+                            <i class="feather-log-in me-2"></i>
+                            @Html.T("الذهاب إلى لوحة المدرس", "Go to Instructor Dashboard")
+                        </a>
+                    </div>
+                }
+                else if (Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.Rejected && !string.IsNullOrEmpty(Model.RejectionReason))
+                {
+                    <div class="alert alert-danger mb-3">
+                        <h6 class="fw-bold mb-2">
+                            <i class="feather-alert-circle me-2"></i>
+                            @Html.T("سبب الرفض", "Reason for rejection")
+                        </h6>
+                        <p class="mb-0">@Model.RejectionReason</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-muted mb-3">
+                            @Html.T("إذا كان لديك أي استفسارات، يرجى التواصل مع الدعم الفني", "If you have any questions, please contact support")
+                        </p>
+                        <a href="mailto:@supportEmail" class="btn btn-outline-primary">
+                            <i class="feather-mail me-2"></i>
+                            @Html.T("تواصل مع الدعم", "Contact support")
+                        </a>
+                    </div>
+                }
+                @if (canEditOrCancel)
+                {
+                    <div class="d-flex gap-2 justify-content-center flex-wrap pt-3 border-top">
+                        <a asp-action="Edit" class="btn btn-primary">
+                            <i class="feather-edit me-2"></i>
+                            @Html.T("تعديل الطلب", "Edit Application")
+                        </a>
+                        <form asp-action="Cancel" method="post" class="d-inline" onsubmit="return confirm('@(Html.T("هل أنت متأكد من إلغاء الطلب؟", "Are you sure you want to cancel this application?").ToString().Replace("'", "\\'"))');">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-outline-danger">
+                                <i class="feather-slash me-2"></i>
+                                @Html.T("إلغاء الطلب", "Cancel Application")
+                            </button>
+                        </form>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Application Timeline -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-git-commit me-2"></i>
+                    @Html.T("مراحل الطلب", "Application stages")
+                </h5>
+            </div>
+            <div class="card-body">
+                @{
+                    var steps = new List<(string title, string description, bool completed, bool active)>
+                    {
+                        (Html.T("تقديم الطلب", "Submit application").ToString(), Html.T("تم تقديم الطلب في", "Application submitted on") + " " + Model.CreatedAt.ToString("dd MMMM yyyy"), true, false),
+                        (Html.T("قيد المراجعة", "Under review").ToString(), Html.T("يتم مراجعة الطلب من قبل الإدارة", "Your application is being reviewed by the admin").ToString(), 
+                            Model.Status >= LMS.Domain.Enums.InstructorApplicationStatus.UnderReview, 
+                            Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.UnderReview),
+                        (Html.T("القرار النهائي", "Final decision").ToString(), Model.ReviewedAt.HasValue ? Html.T("تم اتخاذ القرار في", "Decision made on") + " " + Model.ReviewedAt.Value.ToString("dd MMMM yyyy") : Html.T("في انتظار القرار", "Awaiting decision").ToString(), 
+                            Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.Approved || Model.Status == LMS.Domain.Enums.InstructorApplicationStatus.Rejected, 
+                            false)
+                    };
+                }
+                <div class="timeline">
+                    @foreach (var step in steps)
+                    {
+                        var dotClass = step.active ? "active" : step.completed ? "completed" : "";
+                        <div class="timeline-item">
+                            <div class="timeline-dot @dotClass"></div>
+                            <h6 class="fw-bold mb-1">@step.title</h6>
+                            <p class="text-muted fs-12 mb-0">@step.description</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Application Details -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-file-text me-2"></i>
+                    @Html.T("تفاصيل الطلب", "Application details")
+                </h5>
+                <span class="badge bg-soft-primary text-primary">
+                    @Html.T("رقم الطلب:", "Application #") #@Model.Id
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="info-item">
+                    <span class="info-label">@Html.T("الاسم الكامل", "Full name")</span>
+                    <span class="info-value">@Model.FullName</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">@Html.T("البريد الإلكتروني", "Email")</span>
+                    <span class="info-value">@Model.Email</span>
+                </div>
+                @if (!string.IsNullOrEmpty(Model.Phone))
+                {
+                    <div class="info-item">
+                        <span class="info-label">@Html.T("رقم الهاتف", "Phone number")</span>
+                        <span class="info-value">@Model.Phone</span>
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(Model.Specialization))
+                {
+                    <div class="info-item">
+                        <span class="info-label">@Html.T("التخصص", "Specialization")</span>
+                        <span class="info-value">@Model.Specialization</span>
+                    </div>
+                }
+                <div class="info-item">
+                    <span class="info-label">@Html.T("سنوات الخبرة", "Years of experience")</span>
+                    <span class="info-value">@Model.YearsOfExperience @Html.T("سنة", "years")</span>
+                </div>
+                @if (!string.IsNullOrEmpty(Model.Education))
+                {
+                    <div class="info-item">
+                        <span class="info-label">@Html.T("المؤهل التعليمي", "Education")</span>
+                        <span class="info-value">@Model.Education</span>
+                    </div>
+                }
+                <div class="info-item">
+                    <span class="info-label">@Html.T("تاريخ التقديم", "Application date")</span>
+                    <span class="info-value">@Model.CreatedAt.ToString("dd MMMM yyyy - hh:mm tt")</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Documents (if any) -->
+        @if (Model.Documents != null && Model.Documents.Any())
+        {
+            <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-paperclip me-2"></i>
+                    @Html.T("المستندات المرفقة", "Attached documents")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    @foreach (var doc in Model.Documents)
+                    {
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <i class="feather-file text-primary me-2"></i>
+                                @doc.DocumentType
+                            </div>
+                            @if (!string.IsNullOrEmpty(doc.FileUrl))
+                            {
+                                <a href="@doc.FileUrl" target="_blank" class="btn btn-sm btn-outline-primary">
+                                    <i class="feather-download me-1"></i>
+                                    @Html.T("عرض", "View")
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+        <!-- Actions -->
+        <div class="text-center">
+            <a asp-area="Student" asp-controller="Profile" asp-action="Index" class="btn btn-outline-secondary">
+                <i class="feather-arrow-right me-2"></i>
+                @Html.T("العودة للملف الشخصي", "Back to profile")
+            </a>
+        </div>
+    </div>
+</div>
+
+
+
+
+
+

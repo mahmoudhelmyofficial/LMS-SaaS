@@ -1,0 +1,369 @@
+@model LMS.Areas.Instructor.ViewModels.LearningPathEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل مسار التعلم", "Edit Learning Path");
+    ViewData["Subtitle"] = Model.Name;
+    var detailsUrl = Url.Action("Details", new { id = Model.Id });
+    var indexUrl = Url.Action("Index");
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw($@"
+        <a href='{detailsUrl}' class='btn btn-light'>
+            <i class='feather-eye me-2'></i>
+            عرض
+        </a>
+        <a href='{indexUrl}' class='btn btn-light'>
+            <i class='feather-arrow-right me-2'></i>
+            العودة
+        </a>
+    ") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="learningPathForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            المعلومات الأساسية
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("اسم المسار", "Path name") <span class="text-danger">*</span></label>
+                                <input asp-for="Name" class="form-control" placeholder="@Html.T("مثال: مسار تطوير تطبيقات الويب الكامل", "e.g. Complete web development path")">
+                                <span asp-validation-for="Name" class="text-danger"></span>
+                                <div class="form-text">@Html.T("اختر اسماً واضحاً وجذاباً للمسار", "Choose a clear, attractive name")</div>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("نبذة مختصرة", "Short description") <span class="text-danger">*</span></label>
+                                <textarea asp-for="ShortDescription" class="form-control" rows="3" placeholder="@Html.T("وصف مختصر عن المسار", "Brief description of the path")"></textarea>
+                                <span asp-validation-for="ShortDescription" class="text-danger"></span>
+                                <div class="form-text">@Html.T("وصف قصير يظهر في البطاقة (حتى 200 حرف)", "Short text for card (up to 200 chars)")</div>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("الوصف التفصيلي", "Full description")</label>
+                                <textarea asp-for="Description" class="form-control" rows="6" placeholder="@Html.T("وصف شامل عن المسار", "Full description of the path")"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                                <div class="form-text">@Html.T("وصف شامل يوضح محتويات المسار وفوائده", "Full description of path contents and benefits")</div>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("المستوى", "Level") <span class="text-danger">*</span></label>
+                                <select asp-for="Level" class="form-select">
+                                    <option value="">-- @Html.T("اختر المستوى", "Choose level") --</option>
+                                    <option value="Beginner">@Html.T("مبتدئ", "Beginner")</option>
+                                    <option value="Intermediate">@Html.T("متوسط", "Intermediate")</option>
+                                    <option value="Advanced">@Html.T("متقدم", "Advanced")</option>
+                                    <option value="AllLevels">@Html.T("جميع المستويات", "All levels")</option>
+                                </select>
+                                <span asp-validation-for="Level" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">@Html.T("ترتيب العرض", "Display order")</label>
+                                <input asp-for="DisplayOrder" type="number" class="form-control" placeholder="0">
+                                <span asp-validation-for="DisplayOrder" class="text-danger"></span>
+                                <div class="form-text">@Html.T("الترتيب في صفحة مسارات التعلم (الأقل أولاً)", "Order on learning paths page (lowest first)")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Courses Selection -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-book me-2 text-primary"></i>
+                            @Html.T("الدورات المتضمنة", "Included courses")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <label class="form-label">@Html.T("اختر الدورات", "Select courses") <span class="text-danger">*</span></label>
+                        <select asp-for="CourseIds" class="form-select" asp-items="ViewBag.Courses" multiple size="10">
+                        </select>
+                        <span asp-validation-for="CourseIds" class="text-danger"></span>
+                        <div class="form-text">
+                            <i class="feather-info me-1"></i>
+                            @Html.T("اختر دورة واحدة على الأقل. استخدم Ctrl/Cmd للاختيار المتعدد.", "Select at least one course. Use Ctrl/Cmd for multiple selection.")
+                        </div>
+
+                        <div class="alert alert-warning mt-3">
+                            <i class="feather-alert-triangle me-2"></i>
+                            @Html.T("تنبيه: تغيير الدورات قد يؤثر على الطلاب المسجلين حالياً في هذا المسار.", "Warning: Changing courses may affect students currently enrolled in this path.")
+                        </div>
+
+                        <div id="selectedCoursesPreview" class="mt-4" style="display: none;">
+                            <h6 class="fw-bold mb-3">@Html.T("الدورات المختارة (بالترتيب):", "Selected courses (in order):")</h6>
+                            <div id="selectedCoursesList" class="list-group"></div>
+                            <div class="alert alert-info mt-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>@Html.T("عدد الدورات:", "Courses count:")</span>
+                                    <span class="fw-bold" id="totalCoursesCount">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Images -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-image me-2 text-primary"></i>
+                            @Html.T("الصور", "Images")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-6">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "ThumbnailUrl" },
+                                    { "FieldId", "thumbnailUrl" },
+                                    { "Label", "الصورة المصغرة" },
+                                    { "MediaType", "Image" },
+                                    { "CurrentValue", Model.ThumbnailUrl },
+                                    { "Required", false },
+                                    { "HelpText", "الحجم الموصى به: 400x300 بكسل" },
+                                    { "AspectRatio", "4/3" }
+                                })
+                            </div>
+
+                            <div class="col-lg-6">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "BannerUrl" },
+                                    { "FieldId", "bannerUrl" },
+                                    { "Label", "صورة البانر" },
+                                    { "MediaType", "Image" },
+                                    { "CurrentValue", Model.BannerUrl },
+                                    { "Required", false },
+                                    { "HelpText", "الحجم الموصى به: 1920x600 بكسل" },
+                                    { "AspectRatio", "16/5" }
+                                })
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Quick Info -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">@Html.T("معلومات سريعة", "Quick info")</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("الحالة:", "Status:")</span>
+                            @if (Model.IsPublished)
+                            {
+                                <span class="badge bg-soft-success text-success">@Html.T("منشور", "Published")</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-soft-warning text-warning">@Html.T("مسودة", "Draft")</span>
+                            }
+                        </div>
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="fs-13">@Html.T("عدد الدورات الحالي:", "Current courses:")</span>
+                            <span class="fw-bold">@Model.CourseIds.Count</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="fs-13">@Html.T("آخر تحديث:", "Last updated:")</span>
+                            <span class="fs-12 text-muted">@Html.T("الآن", "Now")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pricing -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            @{ ViewBag.CurrencyIconClass = "me-2 text-success"; }
+                            @await Html.PartialAsync("_CurrencyIcon")
+                            @Html.T("التسعير", "Pricing")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-4">
+                            <input asp-for="IsFree" class="form-check-input" type="checkbox" id="isFreeSwitch">
+                            <label class="form-check-label" for="isFreeSwitch">
+                                @Html.T("مسار مجاني", "Free path")
+                            </label>
+                        </div>
+
+                        <div id="pricingFields">
+                            <div class="mb-3">
+                                <label class="form-label">@Html.T("السعر الأصلي", "Original price") <span class="text-danger">*</span></label>
+                                <input asp-for="Price" type="number" step="0.01" class="form-control" placeholder="0.00">
+                                <span asp-validation-for="Price" class="text-danger"></span>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">@Html.T("السعر بعد الخصم", "Discounted price")</label>
+                                <input asp-for="DiscountedPrice" type="number" step="0.01" class="form-control" placeholder="0.00">
+                                <span asp-validation-for="DiscountedPrice" class="text-danger"></span>
+                                <div class="form-text">@Html.T("اتركه فارغاً إذا لم يكن هناك خصم", "Leave empty if no discount")</div>
+                            </div>
+
+                            <div id="savingsDisplay" class="alert alert-success" style="display: none;">
+                                <div class="d-flex justify-content-between">
+                                    <span>@Html.T("نسبة الخصم:", "Discount %:")</span>
+                                    <span class="fw-bold" id="discountPercentage">0%</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>قيمة التوفير:</span>
+                                    <span class="fw-bold" id="savingsAmount">0 ر.س</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Publishing -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-eye me-2 text-info"></i>
+                            النشر
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch">
+                            <input asp-for="IsPublished" class="form-check-input" type="checkbox" id="isPublishedSwitch">
+                            <label class="form-check-label" for="isPublishedSwitch">
+                                نشر المسار
+                            </label>
+                        </div>
+                        <div class="form-text mt-2">
+                            <i class="feather-info me-1"></i>
+                            تغيير الحالة سيؤثر على ظهور المسار للطلاب
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-save me-2"></i>
+                            حفظ التغييرات
+                        </button>
+                        <a href="@Url.Action("Details", new { id = Model.Id })" class="btn btn-light w-100">
+                            <i class="feather-x me-2"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        $(document).ready(function () {
+            // Toggle pricing fields based on IsFree checkbox
+            function togglePricingFields() {
+                if ($('#isFreeSwitch').is(':checked')) {
+                    $('#pricingFields').slideUp();
+                    $('#Price').val('0');
+                    $('#DiscountedPrice').val('');
+                } else {
+                    $('#pricingFields').slideDown();
+                }
+            }
+
+            $('#isFreeSwitch').on('change', togglePricingFields);
+            togglePricingFields();
+
+            // Calculate discount percentage and savings
+            function calculateDiscount() {
+                const price = parseFloat($('#Price').val()) || 0;
+                const discountedPrice = parseFloat($('#DiscountedPrice').val()) || 0;
+
+                if (price > 0 && discountedPrice > 0 && discountedPrice < price) {
+                    const savingsAmount = price - discountedPrice;
+                    const discountPercentage = ((savingsAmount / price) * 100).toFixed(0);
+
+                    $('#discountPercentage').text(discountPercentage + '%');
+                    $('#savingsAmount').text(savingsAmount.toFixed(2) + ' ر.س');
+                    $('#savingsDisplay').slideDown();
+                } else {
+                    $('#savingsDisplay').slideUp();
+                }
+            }
+
+            $('#Price, #DiscountedPrice').on('input', calculateDiscount);
+            calculateDiscount(); // Calculate on load
+
+            // Show selected courses preview
+            $('select[name="CourseIds"]').on('change', function() {
+                const selectedOptions = $(this).find(':selected');
+                
+                if (selectedOptions.length > 0) {
+                    $('#selectedCoursesPreview').slideDown();
+                    $('#selectedCoursesList').empty();
+                    $('#totalCoursesCount').text(selectedOptions.length);
+
+                    selectedOptions.each(function(index) {
+                        const courseName = $(this).text();
+                        $('#selectedCoursesList').append(`
+                            <div class="list-group-item">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-dark">${index + 1}</span>
+                                    <span>${courseName}</span>
+                                </div>
+                            </div>
+                        `);
+                    });
+                } else {
+                    $('#selectedCoursesPreview').slideUp();
+                }
+            });
+
+            // Trigger change to show initial selection
+            $('select[name="CourseIds"]').trigger('change');
+
+            // Form validation
+            $('#learningPathForm').on('submit', function(e) {
+                const courseIds = $('select[name="CourseIds"]').val();
+                
+                if (!courseIds || courseIds.length === 0) {
+                    e.preventDefault();
+                    alert('يرجى اختيار دورة واحدة على الأقل');
+                    return false;
+                }
+
+                if (!$('#isFreeSwitch').is(':checked')) {
+                    const price = parseFloat($('#Price').val()) || 0;
+                    if (price <= 0) {
+                        e.preventDefault();
+                        alert('يرجى إدخال سعر صحيح أو اختيار "مسار مجاني"');
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+        });
+    </script>
+}
+

@@ -1,0 +1,549 @@
+@model LMS.Domain.Entities.Notifications.EmailTemplate
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل قالب البريد الإلكتروني", "Email template details");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("قوالب البريد الإلكتروني", "Email templates"), Url.Action("Index", "EmailTemplates")),
+        (Html.T("تفاصيل القالب", "Template details"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("تعديل", "Edit"), "feather-edit", Url.Action("Edit", "EmailTemplates", new { id = Model.Id }), "btn-primary"),
+        (Html.T("معاينة", "Preview"), "feather-eye", Url.Action("Preview", "EmailTemplates", new { id = Model.Id }), "btn-secondary"),
+        (Html.T("اختبار", "Test"), "feather-send", Url.Action("Test", "EmailTemplates", new { id = Model.Id }), "btn-info"),
+        (Html.T("حذف", "Delete"), "feather-trash-2", "javascript:void(0)", "btn-danger delete-btn")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .template-header {
+            background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%));
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .stats-box {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        .stats-box:hover {
+            transform: translateY(-5px);
+        }
+        .code-preview {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            direction: ltr;
+            text-align: left;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .email-preview {
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            background: white;
+            min-height: 300px;
+        }
+        .variable-badge {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Template Header -->
+    <div class="template-header">
+        <div class="d-flex align-items-start justify-content-between mb-3">
+            <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <span class="badge bg-white text-primary">@Model.Category</span>
+                    <span class="badge bg-white text-dark">@Model.Language</span>
+                    @if (Model.IsActive)
+                    {
+                        <span class="badge bg-success">
+                            <i class="feather-check-circle"></i>
+                            نشط
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">
+                            <i class="feather-x-circle"></i>
+                            غير نشط
+                        </span>
+                    }
+                    @if (Model.IsDefault)
+                    {
+                        <span class="badge bg-warning">
+                            <i class="feather-star"></i>
+                            افتراضي
+                        </span>
+                    }
+                </div>
+                <h2 class="text-white mb-2">@Model.Name</h2>
+                @if (!string.IsNullOrEmpty(Model.Description))
+                {
+                    <p class="text-white-50 mb-0">@Model.Description</p>
+                }
+            </div>
+        </div>
+        <div class="row g-3 text-white">
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">إجمالي الإرسال</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-send"></i>
+                    <span class="fw-semibold">@Model.SentCount</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">معدل الفتح</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-eye"></i>
+                    <span class="fw-semibold">
+                        @(Model.SentCount > 0 ? $"{(Model.OpenCount * 100.0 / Model.SentCount):F1}%" : "0%")
+                    </span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">معدل النقر</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-mouse-pointer"></i>
+                    <span class="fw-semibold">
+                        @(Model.SentCount > 0 ? $"{(Model.ClickCount * 100.0 / Model.SentCount):F1}%" : "0%")
+                    </span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">آخر استخدام</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-clock"></i>
+                    <span class="fw-semibold">
+                        @(Model.LastUsedAt.HasValue ? Model.LastUsedAt.Value.ToString("dd/MM/yyyy") : "لم يستخدم")
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Email Preview -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-eye me-2"></i>
+                        معاينة البريد الإلكتروني
+                    </h5>
+                    <div class="card-header-action">
+                        <a asp-action="Preview" asp-route-id="@Model.Id" class="btn btn-sm btn-primary" target="_blank">
+                            <i class="feather-external-link me-2"></i>
+                            فتح في نافذة جديدة
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>الموضوع:</strong>
+                        <div class="mt-2 p-3 bg-light rounded">
+                            @Model.Subject
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="email-preview">
+                        @Html.Raw(Model.Body)
+                    </div>
+                </div>
+            </div>
+
+            <!-- HTML Source Code -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-code me-2"></i>
+                        الكود المصدري
+                    </h5>
+                    <div class="card-header-action">
+                        <button type="button" class="btn btn-sm btn-light-brand" id="copyCodeBtn">
+                            <i class="feather-copy me-2"></i>
+                            نسخ الكود
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="code-preview" id="codePreview">
+                        <pre><code>@Model.Body</code></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics Chart -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-bar-chart me-2"></i>
+                        إحصائيات الأداء
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="performanceChart" height="100"></canvas>
+                </div>
+            </div>
+
+            <!-- Usage History -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-clock me-2"></i>
+                        سجل الاستخدام
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-success"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-1">تم إنشاء القالب</h6>
+                                <p class="text-muted mb-0">@Model.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")</p>
+                            </div>
+                        </div>
+                        @if (Model.UpdatedAt.HasValue)
+                        {
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary"></div>
+                                <div class="timeline-content">
+                                    <h6 class="mb-1">تم تحديث القالب</h6>
+                                    <p class="text-muted mb-0">@Model.UpdatedAt.Value.ToString("dd/MM/yyyy hh:mm tt")</p>
+                                </div>
+                            </div>
+                        }
+                        @if (Model.LastUsedAt.HasValue)
+                        {
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-info"></div>
+                                <div class="timeline-content">
+                                    <h6 class="mb-1">آخر استخدام</h6>
+                                    <p class="text-muted mb-0">@Model.LastUsedAt.Value.ToString("dd/MM/yyyy hh:mm tt")</p>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Statistics -->
+            <div class="row g-3 mb-4">
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-primary text-primary mb-2">
+                            <i class="feather-send"></i>
+                        </div>
+                        <h3 class="mb-1">@Model.SentCount</h3>
+                        <small class="text-muted">إجمالي الإرسال</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-success text-success mb-2">
+                            <i class="feather-eye"></i>
+                        </div>
+                        <h3 class="mb-1">@Model.OpenCount</h3>
+                        <small class="text-muted">عدد الفتح</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-info text-info mb-2">
+                            <i class="feather-mouse-pointer"></i>
+                        </div>
+                        <h3 class="mb-1">@Model.ClickCount</h3>
+                        <small class="text-muted">عدد النقرات</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-warning text-warning mb-2">
+                            <i class="feather-trending-up"></i>
+                        </div>
+                        <h3 class="mb-1">
+                            @(Model.SentCount > 0 ? $"{(Model.OpenCount * 100.0 / Model.SentCount):F1}%" : "0%")
+                        </h3>
+                        <small class="text-muted">معدل التفاعل</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Template Info -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-info me-2"></i>
+                        معلومات القالب
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="vstack gap-3">
+                        <div>
+                            <small class="text-muted d-block mb-1">التصنيف</small>
+                            <span class="badge bg-soft-primary text-primary">@Model.Category</span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block mb-1">اللغة</small>
+                            <span class="badge bg-soft-secondary text-secondary">@Model.Language</span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block mb-1">قالب التخطيط</small>
+                            <span class="fw-semibold">@(string.IsNullOrEmpty(Model.LayoutTemplate) ? "بدون قالب" : Model.LayoutTemplate)</span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block mb-1">تتبع الفتح</small>
+                            @if (Model.TrackOpens)
+                            {
+                                <span class="text-success"><i class="feather-check-circle"></i> مفعل</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted"><i class="feather-x-circle"></i> معطل</span>
+                            }
+                        </div>
+                        <div>
+                            <small class="text-muted d-block mb-1">تتبع النقرات</small>
+                            @if (Model.TrackClicks)
+                            {
+                                <span class="text-success"><i class="feather-check-circle"></i> مفعل</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted"><i class="feather-x-circle"></i> معطل</span>
+                            }
+                        </div>
+                        <div>
+                            <small class="text-muted d-block mb-1">الحالة</small>
+                            @if (Model.IsActive)
+                            {
+                                <span class="badge bg-soft-success text-success">نشط</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-soft-secondary text-secondary">غير نشط</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Variables Used -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-code me-2"></i>
+                        المتغيرات المستخدمة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2" id="variablesContainer">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-zap me-2"></i>
+                        @Html.T("إجراءات سريعة", "Quick actions")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a asp-action="Test" asp-route-id="@Model.Id" class="btn btn-light-brand">
+                            <i class="feather-send me-2"></i>
+                            إرسال بريد تجريبي
+                        </a>
+                        <a asp-action="Preview" asp-route-id="@Model.Id" class="btn btn-light-brand" target="_blank">
+                            <i class="feather-eye me-2"></i>
+                            معاينة كاملة
+                        </a>
+                        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-light-brand">
+                            <i class="feather-edit me-2"></i>
+                            تعديل القالب
+                        </a>
+                        <button type="button" class="btn btn-light-brand" id="duplicateBtn">
+                            <i class="feather-copy me-2"></i>
+                            تكرار القالب
+                        </button>
+                        <button type="button" class="btn btn-light-brand" id="exportBtn">
+                            <i class="feather-download me-2"></i>
+                            تصدير القالب
+                        </button>
+                        <hr>
+                        <button type="button" class="btn btn-danger delete-btn">
+                            <i class="feather-trash-2 me-2"></i>
+                            حذف القالب
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Form -->
+<form asp-action="Delete" asp-route-id="@Model.Id" method="post" id="deleteForm">
+    @Html.AntiForgeryToken()
+</form>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        window.__EmailTemplatesDetailsT = { deleteConfirm: '@Html.Raw(Html.T("هل أنت متأكد من حذف هذا القالب؟ لا يمكن التراجع عن هذا الإجراء.", "Are you sure you want to delete this template? This action cannot be undone.").Replace("'", "\\'"))' };
+        $(document).ready(function() {
+            // Extract and display variables used in template
+            const body = @Html.Raw(Json.Serialize(Model.Body));
+            const subject = @Html.Raw(Json.Serialize(Model.Subject));
+            const content = subject + ' ' + body;
+            const variableRegex = /{{(\w+)}}/g;
+            const variables = new Set();
+            let match;
+            
+            while ((match = variableRegex.exec(content)) !== null) {
+                variables.add(match[1]);
+            }
+
+            const container = $('#variablesContainer');
+            if (variables.size > 0) {
+                variables.forEach(variable => {
+                    container.append(`<span class="badge bg-soft-primary text-primary variable-badge">{{${variable}}}</span>`);
+                });
+            } else {
+                container.append('<small class="text-muted">لا توجد متغيرات مستخدمة</small>');
+            }
+
+            // Performance Chart
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['المرسلة', 'المفتوحة', 'المنقورة'],
+                    datasets: [{
+                        label: 'العدد',
+                        data: [@Model.SentCount, @Model.OpenCount, @Model.ClickCount],
+                        backgroundColor: [
+                            'rgba(54, 162, 235, 0.5)',
+                            'rgba(75, 192, 192, 0.5)',
+                            'rgba(255, 206, 86, 0.5)'
+                        ],
+                        borderColor: [
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(255, 206, 86, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Copy code functionality
+            $('#copyCodeBtn').click(function() {
+                const code = $('#codePreview').text();
+                navigator.clipboard.writeText(code).then(function() {
+                    const btn = $('#copyCodeBtn');
+                    const originalText = btn.html();
+                    btn.html('<i class="feather-check me-2"></i>تم النسخ!');
+                    btn.addClass('btn-success').removeClass('btn-light-brand');
+                    setTimeout(function() {
+                        btn.html(originalText);
+                        btn.removeClass('btn-success').addClass('btn-light-brand');
+                    }, 2000);
+                });
+            });
+
+            // Delete confirmation
+            $('.delete-btn').click(function() {
+                if (confirm(window.__EmailTemplatesDetailsT.deleteConfirm)) {
+                    $('#deleteForm').submit();
+                }
+            });
+
+            // Duplicate template
+            $('#duplicateBtn').click(function() {
+                window.location.href = '@Url.Action("Create", "EmailTemplates")?duplicateFrom=@Model.Id';
+            });
+
+            // Export template
+            $('#exportBtn').click(function() {
+                const template = {
+                    name: '@Model.Name',
+                    subject: '@Model.Subject',
+                    body: body,
+                    category: '@Model.Category',
+                    language: '@Model.Language'
+                };
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(template, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", "@(Model.Name?.Replace(" ", "_").ToLower() ?? "template")_template.json");
+                downloadAnchor.click();
+            });
+        });
+    </script>
+
+    <style>
+        .timeline {
+            position: relative;
+            padding-right: 30px;
+        }
+        .timeline-item {
+            position: relative;
+            padding-bottom: 25px;
+        }
+        .timeline-marker {
+            position: absolute;
+            right: -36px;
+            top: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .timeline-item:before {
+            content: '';
+            position: absolute;
+            right: -31px;
+            top: 17px;
+            width: 2px;
+            height: calc(100% - 5px);
+            background: #e5e7eb;
+        }
+        .timeline-item:last-child:before {
+            display: none;
+        }
+    </style>
+}
+

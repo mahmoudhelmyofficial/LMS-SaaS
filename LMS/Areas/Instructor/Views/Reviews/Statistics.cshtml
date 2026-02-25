@@ -1,0 +1,586 @@
+@model LMS.Areas.Instructor.ViewModels.ReviewStatisticsViewModel
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إحصائيات التقييمات", "Reviews Statistics");
+    ViewData["Subtitle"] = Html.T("تحليل شامل لتقييمات دوراتك", "Comprehensive analysis of your course reviews");
+    
+    // Load platform settings
+    var thresholdExcellent = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Excellent", 80);
+    var thresholdGood = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Good", 60);
+    var thresholdFair = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Fair", 40);
+}
+
+@{
+    var indexUrl = Url.Action("Index");
+    var actionButtonsHtml = "<a href='" + indexUrl + "' class='btn btn-light'>" +
+        "<i class='feather-arrow-right me-2'></i>" +
+        Html.T("العودة للتقييمات", "Back to reviews") +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Filter Bar -->
+    <div class="card stretch stretch-full mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label">@Html.T("الدورة", "Course")</label>
+                    <select name="courseId" class="form-select" onchange="this.form.submit()">
+                        <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                        @if (ViewBag.Courses != null)
+                        {
+                            @foreach (var course in ViewBag.Courses)
+                            {
+                                <option value="@course.Id" selected="@(ViewBag.CourseId == course.Id)">@course.Title</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-lg-3 col-md-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="feather-filter me-2"></i>@Html.T("تطبيق", "Apply")
+                    </button>
+                    <a href="@Url.Action("Statistics")" class="btn btn-light">
+                        <i class="feather-x me-2"></i>@Html.T("إعادة تعيين", "Reset")
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي التقييمات", "Total reviews") },
+                { "Value", Model.TotalReviews },
+                { "Icon", "message-square" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("متوسط التقييم", "Average rating") },
+                { "Value", Model.AverageRating.ToString("F1") + " ★" },
+                { "Icon", "star" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("معدل الرد", "Response rate") },
+                { "Value", Model.ResponseRate.ToString("F1") + "%" },
+                { "Icon", "message-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("تقييمات 5 نجوم", "5-star reviews") },
+                { "Value", Model.FiveStarCount },
+                { "Icon", "award" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Rating Distribution -->
+        <div class="col-lg-8 mb-4">
+            <div class="card stretch">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع التقييمات", "Ratings distribution")</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Star Distribution Bars -->
+                    @{
+                        var ratings = new[] { 
+                            new { Stars = 5, Count = Model.FiveStarCount, Color = "success" },
+                            new { Stars = 4, Count = Model.FourStarCount, Color = "info" },
+                            new { Stars = 3, Count = Model.ThreeStarCount, Color = "warning" },
+                            new { Stars = 2, Count = Model.TwoStarCount, Color = "orange" },
+                            new { Stars = 1, Count = Model.OneStarCount, Color = "danger" }
+                        };
+                    }
+
+                    @foreach (var rating in ratings)
+                    {
+                        var percentage = Model.TotalReviews > 0 ? (rating.Count * 100.0 / Model.TotalReviews) : 0;
+                        
+                        <div class="d-flex align-items-center gap-3 mb-3">
+                            <div style="width: 80px;">
+                                <div class="d-flex align-items-center gap-1">
+                                    @for (int i = 1; i <= 5; i++)
+                                    {
+                                        <i class="feather-star @(i <= rating.Stars ? "text-warning fill-warning" : "text-muted")" style="font-size: 14px;"></i>
+                                    }
+                                </div>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="progress" style="height: 25px;">
+                                    <div class="progress-bar bg-@rating.Color" 
+                                         role="progressbar" 
+                                         style="width: @percentage%" 
+                                         aria-valuenow="@percentage" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                        @if (percentage > 5)
+                                        {
+                                            <span class="fw-bold">@rating.Count</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="width: 60px; text-align: left;">
+                                <span class="fw-bold">@percentage.ToString("F0")%</span>
+                            </div>
+                        </div>
+                    }
+
+                    <hr class="my-4" />
+
+                    <!-- Chart -->
+                    <div class="chart-container">
+                        <canvas id="ratingsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overall Rating -->
+        <div class="col-lg-4 mb-4">
+            <div class="card stretch">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("التقييم الإجمالي", "Overall rating")</h5>
+                </div>
+                <div class="card-body text-center py-5">
+                    <h1 class="display-1 fw-bold text-warning mb-3">@Model.AverageRating.ToString("F1")</h1>
+                    
+                    <!-- Stars -->
+                    <div class="mb-3">
+                        @for (int i = 1; i <= 5; i++)
+                        {
+                            <i class="feather-star @(i <= Math.Round(Model.AverageRating) ? "text-warning fill-warning" : "text-muted")" style="font-size: 28px;"></i>
+                        }
+                    </div>
+
+                    <p class="text-muted mb-4">@Html.T("من أصل", "Out of") @Model.TotalReviews @Html.T("تقييم", "reviews")</p>
+
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="bg-soft-success text-success p-3 rounded">
+                                <div class="fs-11 mb-1">@Html.T("التقييمات الإيجابية", "Positive reviews")</div>
+                                <div class="fs-4 fw-bold">@((Model.FiveStarCount + Model.FourStarCount))</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="bg-soft-danger text-danger p-3 rounded">
+                                <div class="fs-11 mb-1">@Html.T("التقييمات السلبية", "Negative reviews")</div>
+                                <div class="fs-4 fw-bold">@((Model.OneStarCount + Model.TwoStarCount))</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Response Rate Analysis -->
+        <div class="col-lg-6 mb-4">
+            <div class="card stretch">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تحليل معدل الرد", "Response rate analysis")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <div class="chart-container chart-container-doughnut">
+                            <canvas id="responseRateChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="text-center p-3 bg-soft-success rounded">
+                                <h4 class="fw-bold text-success mb-1">@((int)(Model.TotalReviews * Model.ResponseRate / 100))</h4>
+                                <p class="text-muted fs-13 mb-0">@Html.T("تم الرد عليها", "Replied")</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center p-3 bg-soft-danger rounded">
+                                <h4 class="fw-bold text-danger mb-1">@((int)(Model.TotalReviews * (100 - Model.ResponseRate) / 100))</h4>
+                                <p class="text-muted fs-13 mb-0">@Html.T("بدون رد", "No reply")</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (Model.ResponseRate < 50)
+                    {
+                        <div class="alert alert-warning mt-3 mb-0">
+                            <i class="feather-alert-triangle me-2"></i>
+                            <strong>@Html.T("تحسين مطلوب:", "Improvement needed:")</strong> @Html.T("معدل الرد منخفض. حاول الرد على المزيد من التقييمات.", "Response rate is low. Try to reply to more reviews.")
+                        </div>
+                    }
+                    else if (Model.ResponseRate < 80)
+                    {
+                        <div class="alert alert-info mt-3 mb-0">
+                            <i class="feather-info me-2"></i>
+                            <strong>@Html.T("جيد:", "Good:")</strong> @Html.T("معدل رد جيد. استمر في التفاعل مع الطلاب.", "Good response rate. Keep engaging with students.")
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-success mt-3 mb-0">
+                            <i class="feather-check-circle me-2"></i>
+                            <strong>@Html.T("ممتاز:", "Excellent:")</strong> @Html.T("معدل رد رائع! تفاعلك مع الطلاب مميز.", "Great response rate! Your engagement with students is outstanding.")
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Score -->
+        <div class="col-lg-6 mb-4">
+            <div class="card stretch">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("مؤشر الأداء", "Performance indicator")</h5>
+                </div>
+                <div class="card-body">
+                    @{
+                        // Calculate performance score (0-100)
+                        var performanceScore = (Model.AverageRating / 5.0 * 60) + (Model.ResponseRate * 0.3) + (Model.TotalReviews > 50 ? 10 : Model.TotalReviews / 5.0);
+                        var scoreColor = performanceScore >= thresholdExcellent ? "success" : performanceScore >= thresholdGood ? "info" : performanceScore >= thresholdFair ? "warning" : "danger";
+                        var scoreLabel = performanceScore >= thresholdExcellent ? Html.T("ممتاز", "Excellent") : performanceScore >= thresholdGood ? Html.T("جيد جداً", "Very good") : performanceScore >= thresholdFair ? Html.T("جيد", "Good") : Html.T("يحتاج تحسين", "Needs improvement");
+                    }
+
+                    <div class="text-center mb-4">
+                        <div class="position-relative d-inline-block performance-gauge-container">
+                            <canvas id="performanceGauge"></canvas>
+                            <div class="position-absolute top-50 start-50 translate-middle text-center">
+                                <h2 class="fw-bold text-@scoreColor mb-0">@performanceScore.ToString("F0")</h2>
+                                <p class="text-muted fs-13 mb-0">@scoreLabel</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="list-group">
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>@Html.T("متوسط التقييم:", "Average rating:")</span>
+                                <span class="badge bg-soft-warning text-warning">@((Model.AverageRating / 5.0 * 60).ToString("F0"))/60</span>
+                            </div>
+                        </div>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>@Html.T("معدل الرد:", "Response rate:")</span>
+                                <span class="badge bg-soft-success text-success">@((Model.ResponseRate * 0.3).ToString("F0"))/30</span>
+                            </div>
+                        </div>
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>@Html.T("حجم العينة:", "Sample size:")</span>
+                                <span class="badge bg-soft-info text-info">@((Model.TotalReviews > 50 ? 10 : Model.TotalReviews / 5.0).ToString("F0"))/10</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-trending-up me-2 text-primary"></i>
+                        @Html.T("توصيات لتحسين التقييمات", "Recommendations to improve reviews")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        @if (Model.AverageRating < 4.0)
+                        {
+                            <div class="col-lg-4">
+                                <div class="d-flex gap-3">
+                                    <div class="avatar-text avatar-md bg-soft-warning text-warning">
+                                        <i class="feather-alert-circle"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold mb-2">@Html.T("تحسين المحتوى", "Improve content")</h6>
+                                        <p class="text-muted fs-13 mb-0">@Html.T("متوسط التقييم أقل من 4.0. راجع التقييمات السلبية لمعرفة نقاط التحسين.", "Average rating is below 4.0. Review negative reviews to find improvement points.")</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (Model.ResponseRate < 70)
+                        {
+                            <div class="col-lg-4">
+                                <div class="d-flex gap-3">
+                                    <div class="avatar-text avatar-md bg-soft-info text-info">
+                                        <i class="feather-message-circle"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold mb-2">@Html.T("زيادة التفاعل", "Increase engagement")</h6>
+                                        <p class="text-muted fs-13 mb-0">@Html.T("الرد على التقييمات يبني علاقة قوية مع الطلاب ويحسن السمعة.", "Replying to reviews builds a strong relationship with students and improves reputation.")</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (Model.TotalReviews < 20)
+                        {
+                            <div class="col-lg-4">
+                                <div class="d-flex gap-3">
+                                    <div class="avatar-text avatar-md bg-soft-success text-success">
+                                        <i class="feather-users"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold mb-2">@Html.T("طلب المزيد من التقييمات", "Request more reviews")</h6>
+                                        <p class="text-muted fs-13 mb-0">@Html.T("شجع الطلاب على ترك تقييماتهم لزيادة المصداقية.", "Encourage students to leave reviews to increase credibility.")</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if ((Model.OneStarCount + Model.TwoStarCount) > Model.TotalReviews * 0.2)
+                        {
+                            <div class="col-lg-4">
+                                <div class="d-flex gap-3">
+                                    <div class="avatar-text avatar-md bg-soft-danger text-danger">
+                                        <i class="feather-x-circle"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold mb-2">@Html.T("معالجة التقييمات السلبية", "Address negative reviews")</h6>
+                                        <p class="text-muted fs-13 mb-0">@Html.T("أكثر من 20% من التقييمات سلبية. تواصل مع الطلاب وحل المشاكل.", "More than 20% of reviews are negative. Reach out to students and resolve issues.")</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (Model.AverageRating >= 4.5 && Model.ResponseRate >= 80)
+                        {
+                            <div class="col-lg-4">
+                                <div class="d-flex gap-3">
+                                    <div class="avatar-text avatar-md bg-soft-success text-success">
+                                        <i class="feather-award"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold mb-2">@Html.T("أداء ممتاز!", "Excellent performance!")</h6>
+                                        <p class="text-muted fs-13 mb-0">@Html.T("تقييماتك رائعة وتفاعلك ممتاز. استمر على هذا المستوى!", "Your reviews are great and your engagement is excellent. Keep it up!")</p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <script>
+        $(document).ready(function () {
+            // Ratings Distribution Chart
+            const ratingsCtx = document.getElementById('ratingsChart').getContext('2d');
+            const ratingsChart = new Chart(ratingsCtx, {
+                type: 'line',
+                data: {
+                    labels: ['@Html.T("5 نجوم", "5 stars")', '@Html.T("4 نجوم", "4 stars")', '@Html.T("3 نجوم", "3 stars")', '@Html.T("2 نجمة", "2 stars")', '@Html.T("1 نجمة", "1 star")'],
+                    datasets: [{
+                        label: '@Html.T("عدد التقييمات", "Number of reviews")',
+                        data: [@Model.FiveStarCount, @Model.FourStarCount, @Model.ThreeStarCount, @Model.TwoStarCount, @Model.OneStarCount],
+                        borderColor: 'rgb(255, 193, 7)',
+                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Response Rate Doughnut
+            const responseCtx = document.getElementById('responseRateChart').getContext('2d');
+            const responseChart = new Chart(responseCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['@Html.T("تم الرد", "Replied")', '@Html.T("بدون رد", "No reply")'],
+                    datasets: [{
+                        data: [@Model.ResponseRate, @(100 - Model.ResponseRate)],
+                        backgroundColor: [
+                            'rgba(25, 135, 84, 0.8)',
+                            'rgba(220, 53, 69, 0.8)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // Performance Gauge (simplified as doughnut)
+            const performanceCtx = document.getElementById('performanceGauge').getContext('2d');
+            const performanceScore = @performanceScore.ToString("F0");
+            const thresholdExcellent = @thresholdExcellent;
+            const thresholdGood = @thresholdGood;
+            const thresholdFair = @thresholdFair;
+            const performanceChart = new Chart(performanceCtx, {
+                type: 'doughnut',
+                data: {
+                    datasets: [{
+                        data: [performanceScore, 100 - performanceScore],
+                        backgroundColor: [
+                            performanceScore >= thresholdExcellent ? 'rgba(25, 135, 84, 0.8)' :
+                            performanceScore >= thresholdGood ? 'rgba(13, 202, 240, 0.8)' :
+                            performanceScore >= thresholdFair ? 'rgba(255, 193, 7, 0.8)' :
+                            'rgba(220, 53, 69, 0.8)',
+                            'rgba(200, 200, 200, 0.2)'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    cutout: '75%',
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            enabled: false
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+
+}
+
+@section Styles {
+    <style>
+        /* Chart Container - Enterprise Pattern */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            max-height: 300px;
+            overflow: hidden;
+        }
+        
+        /* Doughnut charts need slightly different height */
+        .chart-container-doughnut {
+            height: 250px;
+            max-height: 250px;
+        }
+        
+        /* Performance gauge container */
+        .performance-gauge-container {
+            width: 200px;
+            height: 200px;
+        }
+        
+        .performance-gauge-container canvas {
+            width: 200px !important;
+            height: 200px !important;
+        }
+        
+        /* Ensure card body doesn't force excessive height */
+        .card.stretch .card-body {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Rating distribution bars - ensure proper spacing */
+        .card-body > .d-flex {
+            flex-shrink: 0;
+        }
+        
+        /* Chart container should grow but not exceed max */
+        .card-body > .chart-container {
+            flex: 1 1 auto;
+            min-height: 250px;
+        }
+        
+        /* Fill warning for star icons */
+        .fill-warning {
+            fill: currentColor;
+        }
+        
+        /* Responsive adjustments */
+        @@media (max-width: 991.98px) {
+            .chart-container {
+                height: 250px;
+                max-height: 250px;
+            }
+            
+            .chart-container-doughnut {
+                height: 200px;
+                max-height: 200px;
+            }
+        }
+        
+        @@media (max-width: 767.98px) {
+            .chart-container {
+                height: 200px;
+                max-height: 200px;
+            }
+            
+            .chart-container-doughnut {
+                height: 180px;
+                max-height: 180px;
+            }
+            
+            .performance-gauge-container {
+                width: 150px;
+                height: 150px;
+            }
+            
+            .performance-gauge-container canvas {
+                width: 150px !important;
+                height: 150px !important;
+            }
+        }
+    </style>
+}
+

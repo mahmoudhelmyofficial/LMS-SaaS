@@ -1,0 +1,330 @@
+@model LMS.Areas.Admin.ViewModels.BundleCreateViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء باقة دورات جديدة", "Create new course bundle");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التسويق", "Marketing"), null),
+        (Html.T("الباقات", "Bundles"), Url.Action("Index", "Bundles")),
+        (Html.T("إنشاء باقة جديدة", "Create Bundle"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
+    <style>
+        .note-editor.note-frame {
+            direction: rtl;
+            text-align: right;
+        }
+        .select2-container {
+            width: 100% !important;
+        }
+        .bundle-preview {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            background: #f9fafb;
+        }
+        .course-badge {
+            display: inline-block;
+            padding: 8px 15px;
+            background: #e0f2fe;
+            border-radius: 20px;
+            margin: 5px;
+        }
+        .savings-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-package me-2"></i>
+                        معلومات الباقة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Create" method="post" id="bundleForm">
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <!-- Name -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Name" class="form-label">
+                                @Html.T("اسم الباقة", "Bundle name") <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Name" class="form-control form-control-lg" placeholder="@Html.T("مثال: باقة المطور الشامل", "e.g. Complete Developer Bundle")" id="bundleName" />
+                            <span asp-validation-for="Name" class="text-danger"></span>
+                        </div>
+
+                        <!-- Short Description -->
+                        <div class="form-group mb-4">
+                            <label asp-for="ShortDescription" class="form-label">
+                                وصف مختصر
+                            </label>
+                            <textarea asp-for="ShortDescription" class="form-control" rows="2" placeholder="@Html.T("وصف قصير يظهر في البطاقة...", "Short description shown on the card...")" id="shortDesc"></textarea>
+                            <span asp-validation-for="ShortDescription" class="text-danger"></span>
+                            <small class="text-muted">الحد الأقصى: 500 حرف</small>
+                        </div>
+
+                        <!-- Full Description -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Description" class="form-label">
+                                الوصف الكامل
+                            </label>
+                            <textarea asp-for="Description" id="descriptionEditor" class="form-control" rows="8"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <!-- Thumbnail -->
+                        <div class="form-group mb-4">
+                            <label asp-for="ThumbnailUrl" class="form-label">
+                                صورة الغلاف
+                            </label>
+                            <input asp-for="ThumbnailUrl" class="form-control" placeholder="https://example.com/image.jpg" id="thumbnailUrl" />
+                            <span asp-validation-for="ThumbnailUrl" class="text-danger"></span>
+                        </div>
+
+                        <!-- Courses Selection -->
+                        <div class="form-group mb-4">
+                            <label class="form-label">
+                                الدورات المضمنة <span class="text-danger">*</span>
+                            </label>
+                            <select id="coursesSelect" name="CourseIds" class="form-select" multiple>
+                                @if (ViewBag.Courses != null)
+                                {
+                                    @foreach (var course in ViewBag.Courses as IEnumerable<dynamic>)
+                                    {
+                                        <option value="@course.Id">@course.Title</option>
+                                    }
+                                }
+                            </select>
+                            <small class="form-text text-muted">
+                                <i class="feather-info"></i>
+                                اختر الدورات التي ستكون ضمن الباقة (دورتين على الأقل)
+                            </small>
+                            <div id="selectedCourses" class="mt-3"></div>
+                        </div>
+
+                        <!-- Price -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Price" class="form-label">
+                                سعر الباقة <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <input asp-for="Price" type="number" class="form-control" placeholder="999" step="0.01" min="0" id="bundlePrice" />
+                                <span class="input-group-text">جنيه مصري</span>
+                            </div>
+                            <span asp-validation-for="Price" class="text-danger"></span>
+                            <div id="savingsDisplay" class="mt-2"></div>
+                        </div>
+
+                        <!-- Date Range -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="ValidFrom" class="form-label">
+                                        <i class="feather-calendar me-2"></i>
+                                        متاحة من
+                                    </label>
+                                    <input asp-for="ValidFrom" type="datetime-local" class="form-control" />
+                                    <span asp-validation-for="ValidFrom" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="ValidTo" class="form-label">
+                                        <i class="feather-calendar me-2"></i>
+                                        متاحة حتى
+                                    </label>
+                                    <input asp-for="ValidTo" type="datetime-local" class="form-control" />
+                                    <span asp-validation-for="ValidTo" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Max Sales & Display Order -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="MaxSales" class="form-label">
+                                        الحد الأقصى للمبيعات
+                                    </label>
+                                    <input asp-for="MaxSales" type="number" class="form-control" placeholder="@Html.T("غير محدود", "Unlimited")" min="1" />
+                                    <span asp-validation-for="MaxSales" class="text-danger"></span>
+                                    <small class="text-muted">اتركه فارغاً لعدم وضع حد</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="DisplayOrder" class="form-label">
+                                        ترتيب العرض
+                                    </label>
+                                    <input asp-for="DisplayOrder" type="number" class="form-control" value="0" min="0" />
+                                    <span asp-validation-for="DisplayOrder" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Options -->
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title mb-3">
+                                    <i class="feather-settings me-2"></i>
+                                    خيارات الباقة
+                                </h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActiveSwitch" checked />
+                                            <label class="form-check-label" for="isActiveSwitch">
+                                                <i class="feather-eye me-2"></i>
+                                                نشطة (متاحة للشراء)
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsFeatured" class="form-check-input" type="checkbox" id="isFeaturedSwitch" />
+                                            <label class="form-check-label" for="isFeaturedSwitch">
+                                                <i class="feather-star me-2"></i>
+                                                مميزة (تظهر في الصفحة الرئيسية)
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="Index" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-2"></i>
+                                حفظ الباقة
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview -->
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full sticky-top" style="top: 20px;">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-eye me-2"></i>
+                        معاينة الباقة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="bundle-preview position-relative">
+                        <div class="savings-badge" id="savingsBadge" style="display: none;">
+                            وفر 0%
+                        </div>
+                        <div class="text-center mb-3">
+                            <img id="previewImage" src="/assets/images/placeholder-bundle.jpg" style="width: 100%; height: 200px; object-fit: cover; border-radius: 8px;" alt="Bundle">
+                        </div>
+                        <h5 class="fw-bold mb-2" id="previewName">اسم الباقة</h5>
+                        <p class="text-muted" id="previewShortDesc">الوصف المختصر سيظهر هنا...</p>
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <h3 class="mb-0 text-primary" id="previewPrice">0 جنيه</h3>
+                                <small class="text-muted text-decoration-line-through" id="previewOriginalPrice"></small>
+                            </div>
+                            <span class="badge bg-soft-success text-success" id="previewCoursesCount">
+                                <i class="feather-layers me-1"></i>
+                                0 دورة
+                            </span>
+                        </div>
+
+                        <div id="previewCoursesList"></div>
+
+                        <div class="alert alert-info mt-3 mb-0">
+                            <i class="feather-info me-2"></i>
+                            <small>ستظهر الباقة بهذا الشكل للطلاب</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Initialize Summernote
+            $('#descriptionEditor').summernote({
+                height: 200,
+                direction: 'rtl'
+            });
+
+            // Initialize Select2
+            $('#coursesSelect').select2({
+                dir: 'rtl',
+                placeholder: 'اختر الدورات...'
+            });
+
+            // Live preview
+            $('#bundleName').on('input', function() {
+                $('#previewName').text($(this).val() || 'اسم الباقة');
+            });
+
+            $('#shortDesc').on('input', function() {
+                $('#previewShortDesc').text($(this).val() || 'الوصف المختصر سيظهر هنا...');
+            });
+
+            $('#bundlePrice').on('input', function() {
+                const price = $(this).val() || 0;
+                $('#previewPrice').text(price + ' جنيه');
+            });
+
+            $('#thumbnailUrl').on('change', function() {
+                const url = $(this).val();
+                if (url) {
+                    $('#previewImage').attr('src', url);
+                }
+            });
+
+            $('#coursesSelect').on('change', function() {
+                const selectedCount = $(this).val().length;
+                $('#previewCoursesCount').html('<i class="feather-layers me-1"></i>' + selectedCount + ' دورة');
+                
+                // Update courses list
+                let html = '<div class="mb-2"><strong>الدورات المضمنة:</strong></div>';
+                $(this).find(':selected').each(function() {
+                    html += '<div class="course-badge">' + $(this).text() + '</div>';
+                });
+                $('#previewCoursesList').html(html);
+            });
+        });
+    </script>
+}
+

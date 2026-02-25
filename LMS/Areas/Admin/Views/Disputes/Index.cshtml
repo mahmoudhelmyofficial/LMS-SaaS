@@ -1,0 +1,255 @@
+@model IEnumerable<LMS.Domain.Entities.Payments.PaymentDispute>
+@using LMS.Domain.Enums
+@{
+    ViewData["Title"] = Html.T("إدارة النزاعات", "Disputes management");
+    ViewData["Breadcrumb"] = new List<(string Text, string Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("المالية", "Financial"), "#"),
+        (Html.T("النزاعات", "Disputes"), "")
+    };
+    var filter = ViewBag.Filter as LMS.Areas.Admin.Controllers.DisputeFilterViewModel ?? new();
+}
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1">
+                <i class="fas fa-gavel text-danger me-2"></i>
+                @Html.T("إدارة النزاعات والاستردادات المصرفية", "Disputes and chargebacks management")
+            </h4>
+            <p class="text-muted mb-0">@Html.T("إدارة طلبات الاسترداد (Chargebacks) والنزاعات من بوابات الدفع", "Manage refund (Chargeback) requests and disputes from payment gateways")</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a asp-action="Dashboard" class="btn btn-outline-primary">
+                <i class="fas fa-chart-pie me-1"></i>
+                @Html.T("التحليلات", "Analytics")
+            </a>
+            <a asp-action="Export" class="btn btn-outline-success">
+                <i class="fas fa-file-export me-1"></i>
+                تصدير
+            </a>
+        </div>
+    </div>
+
+    @if (TempData["SuccessMessage"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show">
+            <i class="fas fa-check-circle me-2"></i>@TempData["SuccessMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-2">
+            <div class="card bg-primary text-white h-100">
+                <div class="card-body text-center">
+                    <h3 class="mb-0">@ViewBag.TotalDisputes</h3>
+                    <small>@Html.T("إجمالي النزاعات", "Total disputes")</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-warning text-dark h-100">
+                <div class="card-body text-center">
+                    <h3 class="mb-0">@ViewBag.OpenDisputes</h3>
+                    <small>@Html.T("نزاعات مفتوحة", "Open disputes")</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-danger text-white h-100">
+                <div class="card-body text-center">
+                    <h3 class="mb-0">@ViewBag.OverdueDisputes</h3>
+                    <small>@Html.T("منتهية المهلة", "Overdue")</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-success text-white h-100">
+                <div class="card-body text-center">
+                    <h3 class="mb-0">@ViewBag.WonDisputes</h3>
+                    <small>@Html.T("نزاعات رابحة", "Won")</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-secondary text-white h-100">
+                <div class="card-body text-center">
+                    <h3 class="mb-0">@ViewBag.LostDisputes</h3>
+                    <small>@Html.T("نزاعات خاسرة", "Lost")</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-info text-white h-100">
+                <div class="card-body text-center">
+                    <h3 class="mb-0">@(((decimal)ViewBag.TotalDisputedAmount).ToString("N0"))</h3>
+                    <small>@Html.T("إجمالي المتنازع عليه", "Total disputed")</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">@Html.T("الحالة", "Status")</label>
+                    <select name="Status" class="form-select">
+                        <option value="">@Html.T("الكل", "All")</option>
+                        @foreach (DisputeStatus status in Enum.GetValues(typeof(DisputeStatus)))
+                        {
+                            <option value="@((int)status)" selected="@(filter.Status == status)">@status</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">@Html.T("النوع", "Type")</label>
+                    <select name="Type" class="form-select">
+                        <option value="">@Html.T("الكل", "All")</option>
+                        @foreach (DisputeType type in Enum.GetValues(typeof(DisputeType)))
+                        {
+                            <option value="@((int)type)" selected="@(filter.Type == type)">@type</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                    <input type="date" name="FromDate" class="form-control" value="@filter.FromDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                    <input type="date" name="ToDate" class="form-control" value="@filter.ToDate?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">@Html.T("بحث", "Search")</label>
+                    <input type="text" name="SearchTerm" class="form-control" placeholder="@Html.T("اسم، بريد، معرف...", "Name, email, ID...")" value="@filter.SearchTerm" />
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Disputes Table -->
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>@Html.T("معرف النزاع", "Dispute ID")</th>
+                            <th>@Html.T("العميل", "Customer")</th>
+                            <th>@Html.T("المبلغ", "Amount")</th>
+                            <th>@Html.T("النوع", "Type")</th>
+                            <th>@Html.T("الحالة", "Status")</th>
+                            <th>@Html.T("تاريخ الفتح", "Opened")</th>
+                            <th>@Html.T("موعد الرد", "Response due")</th>
+                            <th>@Html.T("الإجراءات", "Actions")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var dispute in Model)
+                        {
+                            var statusClass = dispute.Status switch
+                            {
+                                DisputeStatus.Open => "warning",
+                                DisputeStatus.NeedsResponse => "danger",
+                                DisputeStatus.ResponseSubmitted => "info",
+                                DisputeStatus.Won => "success",
+                                DisputeStatus.Lost => "secondary",
+                                _ => "light"
+                            };
+                            var isUrgent = dispute.IsOverdue || (dispute.DaysToRespond.HasValue && dispute.DaysToRespond.Value <= 3);
+
+                            <tr class="@(isUrgent ? "table-danger" : "")">
+                                <td>
+                                    <strong>#@dispute.Id</strong>
+                                    @if (!string.IsNullOrEmpty(dispute.ExternalDisputeId))
+                                    {
+                                        <br><small class="text-muted">@dispute.ExternalDisputeId</small>
+                                    }
+                                </td>
+                                <td>
+                                    <div>@dispute.CustomerName</div>
+                                    <small class="text-muted">@dispute.CustomerEmail</small>
+                                </td>
+                                <td>
+                                    <strong class="text-danger">@dispute.DisputedAmount.ToString("N2") @dispute.Currency</strong>
+                                    @if (dispute.DisputeFee > 0)
+                                    {
+                                        <br><small class="text-muted">@Html.T("رسوم:", "Fee:") @dispute.DisputeFee.ToString("N2")</small>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">@dispute.Type</span>
+                                    @if (!string.IsNullOrEmpty(dispute.ReasonCode))
+                                    {
+                                        <br><small class="text-muted">@dispute.ReasonCode</small>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="badge bg-@statusClass">@dispute.Status</span>
+                                </td>
+                                <td>
+                                    @dispute.OpenedAt.ToString("dd/MM/yyyy")
+                                    <br><small class="text-muted">@dispute.OpenedAt.ToString("HH:mm")</small>
+                                </td>
+                                <td>
+                                    @if (dispute.ResponseDueDate.HasValue)
+                                    {
+                                        <span class="@(dispute.IsOverdue ? "text-danger fw-bold" : "")">
+                                            @dispute.ResponseDueDate.Value.ToString("dd/MM/yyyy")
+                                        </span>
+                                        @if (dispute.DaysToRespond.HasValue && dispute.IsActive)
+                                        {
+                                            <br>
+                                            @if (dispute.DaysToRespond.Value > 0)
+                                            {
+                                                <small class="@(dispute.DaysToRespond.Value <= 3 ? "text-danger" : "text-muted")">
+                                                    @dispute.DaysToRespond.Value @Html.T("يوم متبقي", "day(s) left")
+                                                </small>
+                                            }
+                                            else
+                                            {
+                                                <small class="text-danger fw-bold">@Html.T("منتهي!", "Overdue!")</small>
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    <a asp-action="Details" asp-route-id="@dispute.Id" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-eye me-1"></i>
+                                        @Html.T("تفاصيل", "Details")
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+
+                        @if (!Model.Any())
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center py-5">
+                                    <i class="fas fa-gavel fa-3x text-muted mb-3 d-block"></i>
+                                    <p class="text-muted">@Html.T("لا توجد نزاعات مطابقة للفلتر", "No disputes match the filter")</p>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+

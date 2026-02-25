@@ -1,0 +1,253 @@
+@model IEnumerable<LMS.Domain.Entities.Courses.LessonResource>
+
+@{
+    ViewData["Title"] = Html.T("إدارة المرفقات", "Lesson Resources Management");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة مرفقات الدروس", "View and manage lesson attachments");
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي المرفقات", "Total Resources") },
+                { "Value", ViewBag.TotalCount ?? 0 },
+                { "Icon", "paperclip" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("المستندات", "Documents") },
+                { "Value", ViewBag.DocumentCount ?? 0 },
+                { "Icon", "file" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("الروابط الخارجية", "External Links") },
+                { "Value", ViewBag.LinkCount ?? 0 },
+                { "Icon", "link" },
+                { "Color", "success" }
+            })
+        </div>
+    </div>
+
+    <!-- Resources List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة المرفقات", "Resources List")</h5>
+                    <div class="card-header-action">
+                        <select class="form-select form-select-sm" onchange="location.href='@Url.Action("Index")?courseId=' + this.value">
+                            <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                            @if (ViewBag.Courses != null)
+                            {
+                                foreach (var course in ViewBag.Courses)
+                                {
+                                    <option value="@course.Id" selected="@(ViewBag.CourseId == course.Id)">@course.Title</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var resource in Model)
+                            {
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-start gap-2">
+                                            <i class="feather-@(GetFileIcon(resource.FileType)) text-primary flex-shrink-0"></i>
+                                            <div class="min-w-0 flex-grow-1">
+                                                <div class="fw-bold text-break">@resource.Title</div>
+                                                <a href="@Url.Action("Edit", "Lessons", new { id = resource.LessonId })" class="text-muted fs-12 d-block">@resource.Lesson?.Title</a>
+                                                <span class="badge bg-soft-info">@resource.FileType</span>
+                                                @if (resource.FileSize > 0) { <span class="text-muted fs-12 ms-1">@FormatFileSize(resource.FileSize)</span> }
+                                                <div class="hstack gap-2 mt-2">
+                                                    @if (!string.IsNullOrEmpty(resource.FileUrl))
+                                                    {
+                                                        <a href="@resource.FileUrl" target="_blank" class="btn btn-sm btn-outline-primary"><i class="feather-external-link"></i></a>
+                                                    }
+                                                    <form method="post" action="@Url.Action("Delete", new { id = resource.Id })" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا المرفق؟", "Are you sure you want to delete this resource?"))')">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger"><i class="feather-trash-2"></i></button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("المرفق", "Resource")</th>
+                                            <th>@Html.T("الدرس", "Lesson")</th>
+                                            <th>@Html.T("النوع", "Type")</th>
+                                            <th>@Html.T("الحجم", "Size")</th>
+                                            <th>@Html.T("قابل للتحميل", "Downloadable")</th>
+                                            <th>@Html.T("تاريخ الإضافة", "Added")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var resource in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="feather-@(GetFileIcon(resource.FileType)) text-primary"></i>
+                                                    <div>
+                                                        <div class="fw-bold">@resource.Title</div>
+                                                        @if (!string.IsNullOrEmpty(resource.Description))
+                                                        {
+                                                            <p class="fs-11 text-muted mb-0">@resource.Description</p>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Edit", "Lessons", new { id = resource.LessonId })" class="text-muted">
+                                                    @resource.Lesson?.Title
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-info">@resource.FileType</span>
+                                            </td>
+                                            <td>
+                                                <span class="text-muted">
+                                                    @if (resource.FileSize > 0)
+                                                    {
+                                                        @FormatFileSize(resource.FileSize)
+                                                    }
+                                                    else
+                                                    {
+                                                        <text>-</text>
+                                                    }
+                                                </span>
+                                            </td>
+                                            <td>
+                                                @if (resource.IsDownloadable)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">@Html.T("نعم", "Yes")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">@Html.T("لا", "No")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="fs-12 text-muted">@resource.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    @if (!string.IsNullOrEmpty(resource.FileUrl))
+                                                    {
+                                                        <a href="@resource.FileUrl" target="_blank" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("فتح", "Open")">
+                                                            <i class="feather-external-link"></i>
+                                                        </a>
+                                                    }
+                                                    <form method="post" action="@Url.Action("Delete", new { id = resource.Id })" class="d-inline">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="avatar-text avatar-md border-0 bg-transparent text-danger" 
+                                                                onclick="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا المرفق؟", "Are you sure you want to delete this resource?"))')" 
+                                                                data-bs-toggle="tooltip" title="@Html.T("حذف", "Delete")">
+                                                            <i class="feather-trash-2"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+
+                        <!-- Pagination -->
+                        @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                            ViewData,
+                            ("CurrentPage", ViewBag.Page ?? 1),
+                            ("TotalPages", ViewBag.TotalPages ?? 1),
+                            ("TotalItems", ViewBag.TotalItems ?? ViewBag.TotalCount ?? 0),
+                            ("PageSize", ViewBag.PageSize ?? 20),
+                            ("Action", "Index"),
+                            ("Controller", "LessonResources")
+                        ))
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-paperclip"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد مرفقات", "No resources")</h5>
+                            <p class="text-muted mb-4">@Html.T("قم بإضافة مرفقات إلى دروسك", "Add resources to your lessons")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    private string GetFileIcon(string? fileType)
+    {
+        if (string.IsNullOrEmpty(fileType)) return "file";
+        
+        return fileType.ToLower() switch
+        {
+            "pdf" => "file-text",
+            "doc" or "docx" => "file-text",
+            "xls" or "xlsx" => "file",
+            "ppt" or "pptx" => "file",
+            "zip" or "rar" => "archive",
+            "jpg" or "jpeg" or "png" or "gif" => "image",
+            "mp4" or "avi" or "mov" => "video",
+            "mp3" or "wav" => "music",
+            _ => "file"
+        };
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+}
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

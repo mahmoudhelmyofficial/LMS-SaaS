@@ -1,0 +1,246 @@
+@model LMS.Areas.Instructor.ViewModels.LiveSessionScheduleEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل جدول الحصص", "Edit Session Schedule");
+    ViewData["Subtitle"] = Model.Title;
+    var indexUrl = Url.Action("Index");
+    var hasEnrollments = (bool)(ViewBag.HasEnrollments ?? false);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة للقائمة", "Back to List") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @if (hasEnrollments)
+    {
+        <div class="alert alert-warning mb-4">
+            <i class="feather-alert-triangle me-2"></i>
+            <strong>@Html.T("تنبيه:", "Notice:")</strong> @Html.T("يوجد طلاب مشتركون في هذا الجدول. بعض التغييرات قد تؤثر عليهم.", "There are enrolled students in this schedule. Some changes may affect them.")
+        </div>
+    }
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger mb-4">
+            <h6 class="alert-heading mb-2">
+                <i class="feather-alert-circle me-2"></i>
+                @Html.T("يرجى تصحيح الأخطاء التالية:", "Please correct the following errors:")
+            </h6>
+            @Html.ValidationSummary(false, "", new { @class = "mb-0" })
+        </div>
+    }
+
+    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="scheduleForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            @Html.T("المعلومات الأساسية", "Basic Information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="Title">@Html.T("عنوان الجدول", "Schedule Title") <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" asp-for="Title" required />
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="TitleAr">@Html.T("العنوان بالعربية", "Arabic Title")</label>
+                                <input type="text" class="form-control" asp-for="TitleAr" />
+                                <span asp-validation-for="TitleAr" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Description">@Html.T("الوصف", "Description")</label>
+                                <textarea class="form-control" asp-for="Description" rows="4"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="CourseId">@Html.T("الدورة المرتبطة", "Associated Course")</label>
+                                <select asp-for="CourseId" class="form-select">
+                                    <option value="">-- @Html.T("بدون دورة", "No Course") --</option>
+                                    @if (ViewBag.Courses != null)
+                                    {
+                                        foreach (var course in ViewBag.Courses as Microsoft.AspNetCore.Mvc.Rendering.SelectList)
+                                        {
+                                            <option value="@course.Value" selected="@(course.Selected)">@course.Text</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="MaxStudents">@Html.T("الحد الأقصى للطلاب", "Max Students")</label>
+                                <input type="number" class="form-control" asp-for="MaxStudents" min="1" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule Period -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-calendar me-2 text-primary"></i>
+                            @Html.T("فترة الجدول", "Schedule Period")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="StartDate">@Html.T("تاريخ البداية", "Start Date") <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" asp-for="StartDate" required />
+                                <span asp-validation-for="StartDate" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="EndDate">@Html.T("تاريخ النهاية", "End Date") <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" asp-for="EndDate" required />
+                                <span asp-validation-for="EndDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Existing Sessions -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-video me-2 text-primary"></i>
+                            @Html.T("الجلسات", "Sessions") (@Model.Sessions.Count)
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>@Html.T("العنوان", "Title")</th>
+                                        <th>@Html.T("الموضوع", "Subject")</th>
+                                        <th>@Html.T("تاريخ البدء", "Start Date")</th>
+                                        <th>@Html.T("المدة", "Duration")</th>
+                                        <th>@Html.T("المنصة", "Platform")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (int i = 0; i < Model.Sessions.Count; i++)
+                                    {
+                                        <tr>
+                                            <td>@(i + 1)</td>
+                                            <td class="fw-medium">@Model.Sessions[i].Title</td>
+                                            <td class="text-muted">@(Model.Sessions[i].Subject ?? "-")</td>
+                                            <td>@Model.Sessions[i].ScheduledStartTime.ToString("dd/MM/yyyy hh:mm tt")</td>
+                                            <td><span class="badge bg-soft-info text-info">@Model.Sessions[i].DurationMinutes @Html.T("دقيقة", "min")</span></td>
+                                            <td>@Model.Sessions[i].Platform</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="p-3 text-muted fs-12">
+                            <i class="feather-info me-1"></i>
+                            @Html.T("لتعديل الجلسات، يمكنك تعديل كل جلسة على حدة من قائمة البث المباشر.", "To edit sessions, you can edit each session individually from the live classes list.")
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Status -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الحالة", "Status")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">@Html.T("الحالة الحالية", "Current Status")</span>
+                            @switch (Model.Status)
+                            {
+                                case LMS.Domain.Enums.LiveScheduleStatus.Draft:
+                                    <span class="badge bg-soft-secondary text-secondary">@Html.T("مسودة", "Draft")</span>
+                                    break;
+                                case LMS.Domain.Enums.LiveScheduleStatus.Published:
+                                    <span class="badge bg-soft-primary text-primary">@Html.T("منشور", "Published")</span>
+                                    break;
+                                case LMS.Domain.Enums.LiveScheduleStatus.Active:
+                                    <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span>
+                                    break;
+                                default:
+                                    <span class="badge bg-soft-info text-info">@Model.Status</span>
+                                    break;
+                            }
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">@Html.T("المشتركون", "Subscribers")</span>
+                            <span class="fw-bold">@Model.EnrolledCount</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="text-muted">@Html.T("الإيرادات", "Revenue")</span>
+                            <span class="fw-bold text-success">@Model.TotalRevenue.ToString("N0") @Html.T("ج.م", "EGP")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pricing -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-dollar-sign me-2 text-success"></i>
+                            @Html.T("التسعير", "Pricing")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label" asp-for="Price">@Html.T("سعر الاشتراك", "Subscription Price") (@Html.T("ج.م", "EGP"))</label>
+                            @if (hasEnrollments)
+                            {
+                                <input type="number" class="form-control" asp-for="Price" step="0.01" min="0" readonly />
+                            }
+                            else
+                            {
+                                <input type="number" class="form-control" asp-for="Price" step="0.01" min="0" />
+                            }
+                            <span asp-validation-for="Price" class="text-danger"></span>
+                            @if (hasEnrollments)
+                            {
+                                <div class="form-text text-warning">@Html.T("لا يمكن تغيير السعر بعد وجود اشتراكات", "Price cannot be changed after enrollments exist")</div>
+                            }
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" asp-for="OriginalPrice">@Html.T("السعر قبل الخصم", "Price Before Discount")</label>
+                            <input type="number" class="form-control" asp-for="OriginalPrice" step="0.01" min="0" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <div class="card">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-save me-2"></i>
+                            @Html.T("حفظ التعديلات", "Save Changes")
+                        </button>
+                        <a href="@Url.Action("Details", new { id = Model.Id })" class="btn btn-light w-100">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("إلغاء", "Cancel")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

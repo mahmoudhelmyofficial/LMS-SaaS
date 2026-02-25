@@ -1,0 +1,491 @@
+@model LMS.Domain.Entities.LiveSessions.LiveClass
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل الفصل المباشر", "Live Session Details");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الفصول المباشرة", "Live Sessions"), Url.Action("Index", "LiveClasses")),
+        (Html.T("تفاصيل الفصل", "Session Details"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("تعديل", "Edit"), "feather-edit", Url.Action("Edit", "LiveClasses", new { id = Model.Id }), "btn-primary"),
+        (Html.T("حذف", "Delete"), "feather-trash-2", "javascript:void(0)", "btn-danger delete-btn")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .class-header { background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%)); color: white; padding: 30px; border-radius: 10px; margin-bottom: 20px; }
+        .stats-box { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.3s; }
+        .stats-box:hover { transform: translateY(-5px); }
+        .attendee-item { padding: 12px; border-radius: 6px; background: #f8f9fa; margin-bottom: 10px; }
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        
+        @@keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        }
+        
+        .live-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background-color: #dc3545;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+            margin-left: 8px;
+        }
+        
+        @@keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        
+        .status-live { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); }
+        .status-scheduled { background: linear-gradient(135deg, #007bff 0%, #6610f2 100%); }
+        .status-completed { background: linear-gradient(135deg, #6c757d 0%, #495057 100%); }
+        .status-cancelled { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); }
+        .status-postponed { background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%); }
+        
+        .action-card .d-grid { gap: 0.75rem !important; }
+        .action-card .btn { font-weight: 500; }
+        .action-card .btn i { font-size: 1rem; }
+        
+        .extension-btn-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .extension-btn-group form {
+            flex: 1;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="class-header">
+        <div class="d-flex align-items-start justify-content-between">
+            <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    @{
+                        var statusColor = Model.Status switch
+                        {
+                            LMS.Domain.Enums.LiveClassStatus.Scheduled => "bg-primary",
+                            LMS.Domain.Enums.LiveClassStatus.Live => "bg-success",
+                            LMS.Domain.Enums.LiveClassStatus.Completed => "bg-secondary",
+                            LMS.Domain.Enums.LiveClassStatus.Cancelled => "bg-danger",
+                            _ => "bg-secondary"
+                        };
+                        var statusText = Model.Status switch
+                        {
+                            LMS.Domain.Enums.LiveClassStatus.Scheduled => Html.T("مجدول", "Scheduled"),
+                            LMS.Domain.Enums.LiveClassStatus.Live => Html.T("مباشر", "Live"),
+                            LMS.Domain.Enums.LiveClassStatus.Completed => Html.T("مكتمل", "Completed"),
+                            LMS.Domain.Enums.LiveClassStatus.Cancelled => Html.T("ملغي", "Cancelled"),
+                            _ => Model.Status.ToString()
+                        };
+                    }
+                    <span class="status-badge @statusColor">@statusText</span>
+                    @if (Model.IsRecordingEnabled)
+                    {
+                        <span class="badge bg-white text-primary"><i class="feather-video"></i> @Html.T("تسجيل مفعّل", "Recording Enabled")</span>
+                    }
+                </div>
+                <h2 class="text-white mb-2">@Model.Title</h2>
+                @if (!string.IsNullOrEmpty(Model.Description))
+                {
+                    <p class="text-white-50 mb-0">@Model.Description</p>
+                }
+            </div>
+        </div>
+        <hr class="my-3 border-white opacity-25">
+        <div class="row g-3 text-white">
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">@Html.T("تاريخ ووقت البداية", "Start Date & Time")</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-calendar"></i>
+                    <span class="fw-semibold">@Model.StartTime.ToString("dd/MM/yyyy hh:mm tt")</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">@Html.T("المدة", "Duration")</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-clock"></i>
+                    <span class="fw-semibold">@Model.Duration @Html.T("دقيقة", "minutes")</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">@Html.T("المدرس", "Instructor")</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-user"></i>
+                    <span class="fw-semibold">@($"{Model.Instructor?.FirstName} {Model.Instructor?.LastName}")</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">@Html.T("الحضور", "Attendance")</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-users"></i>
+                    <span class="fw-semibold">@Model.Attendances?.Count() / @Model.MaxParticipants</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title"><i class="feather-info me-2"></i>@Html.T("معلومات الفصل", "Session Information")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">@Html.T("الدورة", "Course")</small>
+                            <span class="fw-semibold">@Model.Course?.Title</span>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">@Html.T("منصة الاجتماع", "Meeting Platform")</small>
+                            <span class="fw-semibold">@Model.MeetingPlatform</span>
+                        </div>
+                        @if (!string.IsNullOrEmpty(Model.MeetingUrl))
+                        {
+                            <div class="col-12">
+                                <small class="text-muted d-block mb-1">@Html.T("رابط الفصل", "Session Link")</small>
+                                <a href="@Model.MeetingUrl" target="_blank" class="btn btn-sm btn-primary">
+                                    <i class="feather-external-link me-2"></i>
+                                    @Html.T("الانضمام للفصل", "Join Session")
+                                </a>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(Model.RecordingUrl))
+                        {
+                            <div class="col-12">
+                                <small class="text-muted d-block mb-1">@Html.T("رابط التسجيل", "Recording Link")</small>
+                                <a href="@Model.RecordingUrl" target="_blank" class="btn btn-sm btn-secondary">
+                                    <i class="feather-video me-2"></i>
+                                    @Html.T("مشاهدة التسجيل", "Watch Recording")
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title"><i class="feather-users me-2"></i>@Html.T("قائمة الحضور", "Attendance List") (@Model.Attendances?.Count())</h5>
+                    <div class="card-header-action">
+                        <button class="btn btn-sm btn-primary" id="exportAttendanceBtn">
+                            <i class="feather-download me-2"></i>
+                            @Html.T("تصدير", "Export")
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("الطالب", "Student")</th>
+                                    <th>@Html.T("وقت الانضمام", "Join Time")</th>
+                                    <th>@Html.T("وقت المغادرة", "Leave Time")</th>
+                                    <th>@Html.T("المدة", "Duration")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.Attendances != null && Model.Attendances.Any())
+                                {
+                                    @foreach (var attendance in Model.Attendances)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center">
+                                                    <div class="avatar-text bg-soft-primary text-primary me-2">
+                                                        @attendance.Student.FirstName.Substring(0, 1)
+                                                    </div>
+                                                    <span>@($"{attendance.Student.FirstName} {attendance.Student.LastName}")</span>
+                                                </div>
+                                            </td>
+                                            <td>@(attendance.JoinedAt?.ToString("hh:mm tt") ?? "-")</td>
+                                            <td>@(attendance.LeftAt?.ToString("hh:mm tt") ?? "-")</td>
+                                            <td>
+                                                @if (attendance.JoinedAt.HasValue && attendance.LeftAt.HasValue)
+                                                {
+                                                    var duration = (attendance.LeftAt.Value - attendance.JoinedAt.Value).TotalMinutes;
+                                                    <span>@duration.ToString("F0") @Html.T("دقيقة", "min")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (attendance.IsPresent)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">@Html.T("حاضر", "Present")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger">@Html.T("غائب", "Absent")</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted">@Html.T("لا يوجد حضور بعد", "No attendance yet")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="row g-3 mb-4">
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-primary text-primary mb-2">
+                            <i class="feather-users"></i>
+                        </div>
+                        <h3 class="mb-1">@Model.Attendances?.Count()</h3>
+                        <small class="text-muted">@Html.T("مسجل", "registered")</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-success text-success mb-2">
+                            <i class="feather-check"></i>
+                        </div>
+                        <h3 class="mb-1">@Model.Attendances?.Count(a => a.IsPresent)</h3>
+                        <small class="text-muted">@Html.T("حضر", "attended")</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card stretch stretch-full action-card">
+                <div class="card-header">
+                    <h5 class="card-title"><i class="feather-zap me-2"></i>@Html.T("إجراءات سريعة", "Quick Actions")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        @if (!string.IsNullOrEmpty(Model.MeetingUrl))
+                        {
+                            <a href="@Model.MeetingUrl" target="_blank" class="btn btn-primary">
+                                <i class="feather-video me-2"></i>
+                                @Html.T("الانضمام للفصل", "Join Session")
+                            </a>
+                        }
+                        
+                        @switch (Model.Status)
+                        {
+                            case LMS.Domain.Enums.LiveClassStatus.Scheduled:
+                                <div class="alert alert-primary py-2 text-center mb-2">
+                                    <i class="feather-calendar me-1"></i> @Html.T("الحصة مجدولة", "Session Scheduled")
+                                    <small class="d-block mt-1">@Model.ScheduledStartTime.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                </div>
+                                <form asp-action="StartNow" asp-route-id="@Model.Id" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-success w-100">
+                                        <i class="feather-play me-2"></i>
+                                        @Html.T("بدء البث الآن", "Start Stream Now")
+                                    </button>
+                                </form>
+                                <form asp-action="Postpone" asp-route-id="@Model.Id" method="post" 
+                                      onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من تأجيل هذه الحصة؟", "Are you sure you want to postpone this session?").Replace("'", "\\'"))');">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-warning w-100">
+                                        <i class="feather-clock me-2"></i>
+                                        @Html.T("تأجيل الحصة", "Postpone Session")
+                                    </button>
+                                </form>
+                                <form asp-action="Cancel" asp-route-id="@Model.Id" method="post" 
+                                      onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إلغاء هذه الحصة؟", "Are you sure you want to cancel this session?").Replace("'", "\\'"))');">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-outline-danger w-100">
+                                        <i class="feather-x-circle me-2"></i>
+                                        @Html.T("إلغاء الحصة", "Cancel Session")
+                                    </button>
+                                </form>
+                                break;
+                                
+                            case LMS.Domain.Enums.LiveClassStatus.Live:
+                                <div class="alert alert-success py-2 text-center mb-2">
+                                    <span class="live-indicator"></span>
+                                    <strong>@Html.T("البث مباشر الآن", "Live Now")</strong>
+                                    @if (Model.ActualStartTime.HasValue)
+                                    {
+                                        var elapsed = (DateTime.UtcNow - Model.ActualStartTime.Value).TotalMinutes;
+                                        <small class="d-block mt-1">@Html.T("مدة البث:", "Stream duration:") @((int)elapsed) @Html.T("دقيقة", "min")</small>
+                                    }
+                                </div>
+                                <form asp-action="End" asp-route-id="@Model.Id" method="post"
+                                      onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إنهاء البث المباشر؟ سيتم تحديث حالة الحصة إلى مكتملة.", "Are you sure you want to end the live stream? The session status will be updated to completed.").Replace("'", "\\'"))');">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-danger w-100">
+                                        <i class="feather-square me-2"></i>
+                                        @Html.T("إنهاء البث", "End Stream")
+                                    </button>
+                                </form>
+                                <div class="mt-2">
+                                    <label class="small text-muted mb-2 d-block">@Html.T("تمديد وقت البث:", "Extend stream time:")</label>
+                                    <div class="extension-btn-group">
+                                        <form asp-action="ExtendTime" asp-route-id="@Model.Id" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="extensionMinutes" value="5" />
+                                            <button type="submit" class="btn btn-outline-warning w-100">
+                                                <i class="feather-plus me-1"></i> 5 @Html.T("دقائق", "min")
+                                            </button>
+                                        </form>
+                                        <form asp-action="ExtendTime" asp-route-id="@Model.Id" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="extensionMinutes" value="10" />
+                                            <button type="submit" class="btn btn-outline-warning w-100">
+                                                <i class="feather-plus me-1"></i> 10 @Html.T("دقائق", "min")
+                                            </button>
+                                        </form>
+                                        <form asp-action="ExtendTime" asp-route-id="@Model.Id" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="extensionMinutes" value="15" />
+                                            <button type="submit" class="btn btn-outline-warning w-100">
+                                                <i class="feather-plus me-1"></i> 15 @Html.T("دقيقة", "min")
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                                break;
+                                
+                            case LMS.Domain.Enums.LiveClassStatus.Postponed:
+                                <div class="alert alert-warning py-2 text-center mb-2">
+                                    <i class="feather-pause-circle me-1"></i> @Html.T("الحصة مؤجلة", "Session Postponed")
+                                    @if (!string.IsNullOrEmpty(Model.CancellationReason))
+                                    {
+                                        <small class="d-block mt-1">@Model.CancellationReason</small>
+                                    }
+                                </div>
+                                <form asp-action="Resume" asp-route-id="@Model.Id" method="post">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-info w-100">
+                                        <i class="feather-play-circle me-2"></i>
+                                        @Html.T("استئناف الجدولة", "Resume Scheduling")
+                                    </button>
+                                </form>
+                                <form asp-action="Cancel" asp-route-id="@Model.Id" method="post" 
+                                      onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إلغاء هذه الحصة نهائياً؟", "Are you sure you want to permanently cancel this session?").Replace("'", "\\'"))');">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-outline-danger w-100">
+                                        <i class="feather-x-circle me-2"></i>
+                                        @Html.T("إلغاء نهائي", "Permanent Cancellation")
+                                    </button>
+                                </form>
+                                break;
+                                
+                            case LMS.Domain.Enums.LiveClassStatus.Completed:
+                                <div class="alert alert-secondary py-2 text-center mb-2">
+                                    <i class="feather-check-circle me-1"></i> @Html.T("الحصة مكتملة", "Session Completed")
+                                    @if (Model.ActualStartTime.HasValue && Model.ActualEndTime.HasValue)
+                                    {
+                                        var actualDuration = (Model.ActualEndTime.Value - Model.ActualStartTime.Value).TotalMinutes;
+                                        <small class="d-block mt-1">@Html.T("المدة الفعلية:", "Actual duration:") @((int)actualDuration) @Html.T("دقيقة", "min")</small>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(Model.RecordingUrl))
+                                {
+                                    <a href="@Model.RecordingUrl" target="_blank" class="btn btn-secondary w-100">
+                                        <i class="feather-film me-2"></i>
+                                        @Html.T("مشاهدة التسجيل", "Watch Recording")
+                                    </a>
+                                }
+                                break;
+                                
+                            case LMS.Domain.Enums.LiveClassStatus.Cancelled:
+                                <div class="alert alert-danger py-2 text-center mb-2">
+                                    <i class="feather-x-circle me-1"></i> @Html.T("الحصة ملغية", "Session Cancelled")
+                                    @if (!string.IsNullOrEmpty(Model.CancellationReason))
+                                    {
+                                        <small class="d-block mt-1">@Model.CancellationReason</small>
+                                    }
+                                </div>
+                                break;
+                        }
+                        
+                        <hr class="my-2">
+                        
+                        @if (Model.Status == LMS.Domain.Enums.LiveClassStatus.Scheduled || 
+                             Model.Status == LMS.Domain.Enums.LiveClassStatus.Postponed)
+                        {
+                            <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-light-brand">
+                                <i class="feather-edit me-2"></i>
+                                @Html.T("تعديل الفصل", "Edit Session")
+                            </a>
+                        }
+                        
+                        @if (Model.Status == LMS.Domain.Enums.LiveClassStatus.Scheduled)
+                        {
+                            <button type="button" class="btn btn-light-brand" id="sendReminderBtn">
+                                <i class="feather-bell me-2"></i>
+                                @Html.T("إرسال تذكير", "Send Reminder")
+                            </button>
+                        }
+                        
+                        @if (Model.Status != LMS.Domain.Enums.LiveClassStatus.Live && 
+                             Model.Status != LMS.Domain.Enums.LiveClassStatus.Completed)
+                        {
+                            <hr class="my-2">
+                            <button type="button" class="btn btn-outline-danger delete-btn">
+                                <i class="feather-trash-2 me-2"></i>
+                                @Html.T("حذف الفصل", "Delete Session")
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form asp-action="Delete" asp-route-id="@Model.Id" method="post" id="deleteForm">
+    @Html.AntiForgeryToken()
+</form>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            $('.delete-btn').click(function() {
+                if (confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا الفصل؟", "Are you sure you want to delete this session?").Replace("'", "\\'"))')) {
+                    $('#deleteForm').submit();
+                }
+            });
+
+            $('#exportAttendanceBtn').click(function() {
+                window.location.href = '@Url.Action("ExportAttendance", "LiveClasses", new { id = Model.Id })';
+            });
+
+            $('#sendReminderBtn').click(function() {
+                if (confirm('@Html.Raw(Html.T("هل تريد إرسال تذكير لجميع الطلاب المسجلين؟", "Do you want to send a reminder to all enrolled students?").Replace("'", "\\'"))')) {
+                    $.post('@Url.Action("SendReminder", "LiveClasses", new { id = Model.Id })', function() {
+                        alert('@Html.Raw(Html.T("تم إرسال التذكير بنجاح", "Reminder sent successfully").Replace("'", "\\'"))');
+                    });
+                }
+            });
+        });
+    </script>
+}

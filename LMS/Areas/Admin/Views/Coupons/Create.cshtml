@@ -1,0 +1,286 @@
+@model LMS.Areas.Admin.ViewModels.CouponCreateViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء كوبون جديد", "Create new coupon");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإدارة المالية", "Financial"), null),
+        (Html.T("الكوبونات", "Coupons"), Url.Action("Index", "Coupons")),
+        (Html.T("إنشاء كوبون جديد", "Create new coupon"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .coupon-preview {
+            border: 2px dashed #3b82f6;
+            border-radius: 10px;
+            padding: 30px;
+            background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%));
+            color: white;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .coupon-preview::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(255,255,255,0.1) 10px,
+                rgba(255,255,255,0.1) 20px
+            );
+            animation: slide 20s linear infinite;
+        }
+        @@keyframes slide {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+        .coupon-code {
+            font-size: 2.5rem;
+            font-weight: bold;
+            letter-spacing: 5px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-tag me-2"></i>
+                        معلومات الكوبون
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Create" method="post">
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-8">
+                                <label asp-for="Code" class="form-label">
+                                    @Html.T("كود الكوبون", "Coupon code") <span class="text-danger">*</span>
+                                </label>
+                                <input asp-for="Code" class="form-control form-control-lg font-monospace" placeholder="SUMMER2024" style="text-transform: uppercase;" id="couponCode" />
+                                <span asp-validation-for="Code" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">&nbsp;</label>
+                                <button type="button" class="btn btn-secondary w-100" onclick="generateCode()">
+                                    <i class="feather-refresh-cw me-2"></i>
+                                    @Html.T("توليد كود", "Generate code")
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="Description" class="form-label">@Html.T("الوصف", "Description")</label>
+                            <textarea asp-for="Description" class="form-control" rows="2" placeholder="@Html.T("وصف الكوبون...", "Coupon description...")"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <label asp-for="DiscountType" class="form-label">
+                                    @Html.T("نوع الخصم", "Discount type") <span class="text-danger">*</span>
+                                </label>
+                                <select asp-for="DiscountType" class="form-select" id="discountType">
+                                    <option value="@DiscountType.Percentage">@Html.T("نسبة مئوية (%)", "Percentage (%)")</option>
+                                    <option value="@DiscountType.FixedAmount">@Html.T("مبلغ ثابت (جنيه)", "Fixed amount")</option>
+                                </select>
+                                <span asp-validation-for="DiscountType" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="DiscountValue" class="form-label">
+                                    قيمة الخصم <span class="text-danger">*</span>
+                                </label>
+                                <input asp-for="DiscountValue" type="number" class="form-control" step="0.01" min="0" id="discountValue" />
+                                <span asp-validation-for="DiscountValue" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-4">
+                                <label asp-for="MaxDiscountAmount" class="form-label">@Html.T("الحد الأقصى للخصم", "Max discount amount")</label>
+                                <input asp-for="MaxDiscountAmount" type="number" class="form-control" step="0.01" min="0" />
+                                <small class="text-muted">@Html.T("للنسبة المئوية فقط", "For percentage only")</small>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label asp-for="MinimumPurchaseAmount" class="form-label">@Html.T("الحد الأدنى للشراء", "Minimum purchase amount")</label>
+                                <input asp-for="MinimumPurchaseAmount" type="number" class="form-control" step="0.01" min="0" />
+                                <span asp-validation-for="MinimumPurchaseAmount" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Currency" class="form-label">@Html.T("العملة", "Currency")</label>
+                                <select asp-for="Currency" class="form-select">
+                                    <option value="EGP" selected>@Html.T("جنيه مصري (EGP)", "Egyptian Pound (EGP)")</option>
+                                    <option value="USD">@Html.T("دولار أمريكي (USD)", "US Dollar (USD)")</option>
+                                    <option value="SAR">@Html.T("ريال سعودي (SAR)", "Saudi Riyal (SAR)")</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label asp-for="ValidFrom" class="form-label">
+                                    <i class="feather-calendar me-2"></i>
+                                    ساري من
+                                </label>
+                                <input asp-for="ValidFrom" type="datetime-local" class="form-control" />
+                                <span asp-validation-for="ValidFrom" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="ValidTo" class="form-label">
+                                    <i class="feather-calendar me-2"></i>
+                                    ساري حتى <span class="text-danger">*</span>
+                                </label>
+                                <input asp-for="ValidTo" type="datetime-local" class="form-control" />
+                                <span asp-validation-for="ValidTo" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label asp-for="MaxUses" class="form-label">@Html.T("الحد الأقصى للاستخدام", "Max uses")</label>
+                                <input asp-for="MaxUses" type="number" class="form-control" min="1" />
+                                <small class="text-muted">@Html.T("اتركه فارغاً لعدم وجود حد", "Leave empty for no limit")</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="MaxUsesPerUser" class="form-label">
+                                    الحد الأقصى لكل مستخدم <span class="text-danger">*</span>
+                                </label>
+                                <input asp-for="MaxUsesPerUser" type="number" class="form-control" value="1" min="1" />
+                                <span asp-validation-for="MaxUsesPerUser" class="text-danger"></span>
+                            </div>
+                        </div>
+
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title mb-3">
+                                    <i class="feather-settings me-2"></i>
+                                    خيارات إضافية
+                                </h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="FirstPurchaseOnly" class="form-check-input" type="checkbox" />
+                                            <label class="form-check-label" asp-for="FirstPurchaseOnly">
+                                                للمشتريات الأولى فقط
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsActive" class="form-check-input" type="checkbox" checked />
+                                            <label class="form-check-label" asp-for="IsActive">
+                                                نشط (متاح للاستخدام)
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="Index" class="btn btn-light">
+                                <i class="feather-x me-2"></i>إلغاء
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-2"></i>حفظ الكوبون
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full sticky-top" style="top: 20px;">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-eye me-2"></i>معاينة الكوبون
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="coupon-preview mb-4">
+                        <div style="position: relative; z-index: 1;">
+                            <small class="text-white-50 d-block mb-2">كود الخصم</small>
+                            <div class="coupon-code" id="previewCode">COUPON</div>
+                            <div class="mt-3">
+                                <h3 class="text-white mb-1" id="previewDiscount">0%</h3>
+                                <small class="text-white-50">خصم</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mb-0">
+                        <i class="feather-info me-2"></i>
+                        <small>@Html.T("سيرى المستخدمون الكوبون بهذا الشكل عند التطبيق", "Users will see the coupon in this form when applied")</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            $('#couponCode').on('input', function() {
+                const code = $(this).val().toUpperCase() || 'COUPON';
+                $(this).val(code);
+                $('#previewCode').text(code);
+            });
+
+            function updatePreview() {
+                const type = $('#discountType').val();
+                const value = $('#discountValue').val() || 0;
+                
+                if (type == '0') { // Percentage
+                    $('#previewDiscount').text(value + '%');
+                } else {
+                    $('#previewDiscount').text(value + ' جنيه');
+                }
+            }
+
+            $('#discountType, #discountValue').on('change input', updatePreview);
+        });
+
+        function generateCode() {
+            const token = document.querySelector('input[name="__RequestVerificationToken"]');
+            if (!token || !token.value) {
+                $('#couponCode').val(randomCodeClient()).trigger('input');
+                return;
+            }
+            fetch('@Url.Action("GenerateCode", "Coupons")', {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': token.value, 'Content-Type': 'application/json' },
+                body: '{}'
+            })
+            .then(r => r.json())
+            .then(data => { if (data.code) $('#couponCode').val(data.code).trigger('input'); else $('#couponCode').val(randomCodeClient()).trigger('input'); })
+            .catch(() => $('#couponCode').val(randomCodeClient()).trigger('input'));
+        }
+        function randomCodeClient() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = ''; for (let i = 0; i < 8; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+            return code;
+        }
+    </script>
+}
+

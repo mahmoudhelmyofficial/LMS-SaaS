@@ -1,0 +1,454 @@
+@model LMS.Areas.Admin.ViewModels.BadgeEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل الشارة", "Edit badge");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التحفيز", "Gamification"), null),
+        (Html.T("الشارات", "Badges"), Url.Action("Index", "Badges")),
+        (Html.T("تعديل الشارة", "Edit badge"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .badge-preview {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 4rem;
+            margin: 0 auto;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .badge-preview::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+        }
+        .badge-preview:hover {
+            transform: scale(1.1) rotate(5deg);
+        }
+        .rarity-selector .form-check {
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .rarity-selector .form-check:hover {
+            border-color: #3b82f6;
+            background: #f0f9ff;
+        }
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .icon-option {
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .icon-option:hover, .icon-option.active {
+            border-color: #3b82f6;
+            background: #f0f9ff;
+        }
+        .rarity-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <!-- Form Section -->
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-edit-2 me-2"></i>
+                        تعديل معلومات الشارة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="badgeForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="Id" />
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <!-- Name -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Name" class="form-label">
+                                @Html.T("اسم الشارة", "Badge name") <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Name" class="form-control form-control-lg" placeholder="@Html.T("مثال: شارة المتفوق", "e.g. Top Performer Badge")" id="badgeName" />
+                            <span asp-validation-for="Name" class="text-danger"></span>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Description" class="form-label">
+                                @Html.T("الوصف", "Description") <span class="text-danger">*</span>
+                            </label>
+                            <textarea asp-for="Description" class="form-control" rows="4" placeholder="@Html.T("وصف الشارة وكيفية الحصول عليها...", "Describe the badge and how to earn it...")" id="badgeDescription"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                            <div class="d-flex justify-content-between mt-1">
+                                <small class="form-text text-muted">
+                                    <i class="feather-info"></i>
+                                    @Html.T("اشرح للطلاب كيف يمكنهم الحصول على هذه الشارة", "Explain to students how they can earn this badge")
+                                </small>
+                                <small class="text-muted" id="charCount">@(Model.Description?.Length ?? 0) / 1000</small>
+                            </div>
+                        </div>
+
+                        <!-- Icon Selection -->
+                        <div class="form-group mb-4">
+                            <label class="form-label">
+                                أيقونة الشارة <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="IconUrl" type="hidden" id="iconUrl" />
+                            
+                            <div class="card border">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label class="form-label">@Html.T("رابط الصورة", "Image URL")</label>
+                                            <input type="text" class="form-control mb-3" id="customIconUrl" placeholder="@Html.T("أدخل رابط الصورة", "Enter image URL")" value="@Model.IconUrl">
+                                            <button type="button" class="btn btn-sm btn-light-brand" onclick="updateCustomIcon()">
+                                                <i class="feather-upload me-2"></i>
+                                                @Html.T("استخدام الرابط", "Use URL")
+                                            </button>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">@Html.T("أو اختر أيقونة", "Or choose an icon")</label>
+                                            <div class="icon-grid">
+                                                <div class="icon-option" data-icon="shield" onclick="selectIcon(this, 'feather-shield')">
+                                                    <i class="feather-shield fs-2"></i>
+                                                </div>
+                                                <div class="icon-option" data-icon="award" onclick="selectIcon(this, 'feather-award')">
+                                                    <i class="feather-award fs-2"></i>
+                                                </div>
+                                                <div class="icon-option" data-icon="star" onclick="selectIcon(this, 'feather-star')">
+                                                    <i class="feather-star fs-2"></i>
+                                                </div>
+                                                <div class="icon-option" data-icon="trophy" onclick="selectIcon(this, 'feather-award')">
+                                                    <i class="feather-award fs-2"></i>
+                                                </div>
+                                                <div class="icon-option" data-icon="target" onclick="selectIcon(this, 'feather-target')">
+                                                    <i class="feather-target fs-2"></i>
+                                                </div>
+                                                <div class="icon-option" data-icon="zap" onclick="selectIcon(this, 'feather-zap')">
+                                                    <i class="feather-zap fs-2"></i>
+                                                </div>
+                                                <div class="icon-option" data-icon="trending-up" onclick="selectIcon(this, 'feather-trending-up')">
+                                                    <i class="feather-trending-up fs-2"></i>
+                                                </div>
+                                                <div class="icon-option" data-icon="check-circle" onclick="selectIcon(this, 'feather-check-circle')">
+                                                    <i class="feather-check-circle fs-2"></i>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <span asp-validation-for="IconUrl" class="text-danger"></span>
+                        </div>
+
+                        <!-- Rarity -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Rarity" class="form-label">
+                                ندرة الشارة <span class="text-danger">*</span>
+                            </label>
+                            <div class="rarity-selector">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" asp-for="Rarity" value="@BadgeRarity.Common" id="rarityCommon">
+                                    <label class="form-check-label w-100 d-flex justify-content-between align-items-center" for="rarityCommon">
+                                        <span>
+                                            <i class="feather-circle text-secondary me-2"></i>
+                                            <strong>شائعة (Common)</strong>
+                                            <small class="d-block text-muted">سهلة الحصول عليها</small>
+                                        </span>
+                                        <span class="rarity-badge bg-soft-secondary text-secondary">شائعة</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" asp-for="Rarity" value="@BadgeRarity.Uncommon" id="rarityUncommon">
+                                    <label class="form-check-label w-100 d-flex justify-content-between align-items-center" for="rarityUncommon">
+                                        <span>
+                                            <i class="feather-circle text-success me-2"></i>
+                                            <strong>غير شائعة (Uncommon)</strong>
+                                            <small class="d-block text-muted">تحتاج مجهود متوسط</small>
+                                        </span>
+                                        <span class="rarity-badge bg-soft-success text-success">غير شائعة</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" asp-for="Rarity" value="@BadgeRarity.Rare" id="rarityRare">
+                                    <label class="form-check-label w-100 d-flex justify-content-between align-items-center" for="rarityRare">
+                                        <span>
+                                            <i class="feather-circle text-primary me-2"></i>
+                                            <strong>نادرة (Rare)</strong>
+                                            <small class="d-block text-muted">تحتاج مجهود كبير</small>
+                                        </span>
+                                        <span class="rarity-badge bg-soft-primary text-primary">نادرة</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" asp-for="Rarity" value="@BadgeRarity.Epic" id="rarityEpic">
+                                    <label class="form-check-label w-100 d-flex justify-content-between align-items-center" for="rarityEpic">
+                                        <span>
+                                            <i class="feather-circle text-warning me-2"></i>
+                                            <strong>ملحمية (Epic)</strong>
+                                            <small class="d-block text-muted">تحدي كبير</small>
+                                        </span>
+                                        <span class="rarity-badge bg-soft-warning text-warning">ملحمية</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" asp-for="Rarity" value="@BadgeRarity.Legendary" id="rarityLegendary">
+                                    <label class="form-check-label w-100 d-flex justify-content-between align-items-center" for="rarityLegendary">
+                                        <span>
+                                            <i class="feather-circle text-danger me-2"></i>
+                                            <strong>أسطورية (Legendary)</strong>
+                                            <small class="d-block text-muted">نادرة جداً - للمتميزين فقط</small>
+                                        </span>
+                                        <span class="rarity-badge bg-soft-danger text-danger">أسطورية</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <span asp-validation-for="Rarity" class="text-danger"></span>
+                        </div>
+
+                        <!-- Required Points -->
+                        <div class="form-group mb-4">
+                            <label asp-for="RequiredPoints" class="form-label">
+                                النقاط المطلوبة <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="feather-award"></i>
+                                </span>
+                                <input asp-for="RequiredPoints" type="number" class="form-control" min="0" id="requiredPoints" />
+                                <span class="input-group-text">نقطة</span>
+                            </div>
+                            <span asp-validation-for="RequiredPoints" class="text-danger"></span>
+                        </div>
+
+                        <!-- Is Active -->
+                        <div class="form-group mb-4">
+                            <div class="form-check form-switch">
+                                <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActiveSwitch" />
+                                <label class="form-check-label" for="isActiveSwitch">
+                                    <i class="feather-eye me-2"></i>
+                                    نشطة (متاحة للطلاب)
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-2 justify-content-between">
+                            <a asp-action="Index" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-secondary" id="previewBtn">
+                                    <i class="feather-eye me-2"></i>
+                                    معاينة
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="feather-save me-2"></i>
+                                    حفظ التغييرات
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Section -->
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full sticky-top" style="top: 20px;">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-eye me-2"></i>
+                        معاينة الشارة
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="badge-preview bg-gradient-primary text-white mb-3" id="badgePreview">
+                        @if (!string.IsNullOrEmpty(Model.IconUrl))
+                        {
+                            @if (Model.IconUrl.StartsWith("feather-"))
+                            {
+                                <i class="@Model.IconUrl"></i>
+                            }
+                            else
+                            {
+                                <img src="@Model.IconUrl" style="width: 80px; height: 80px; object-fit: cover;" alt="Badge">
+                            }
+                        }
+                        else
+                        {
+                            <i class="feather-shield"></i>
+                        }
+                    </div>
+                    <h5 class="fw-bold mb-2" id="previewName">@Model.Name</h5>
+                    <span class="rarity-badge bg-soft-secondary text-secondary mb-3" id="previewRarity">شائعة</span>
+                    <p class="text-muted mt-3" id="previewDescription">@Model.Description</p>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="d-flex justify-content-around">
+                        <div>
+                            <h4 class="fw-bold text-primary mb-1" id="previewPoints">@Model.RequiredPoints</h4>
+                            <small class="text-muted">نقطة مطلوبة</small>
+                        </div>
+                        <div>
+                            <h4 class="fw-bold text-success mb-1">
+                                <span id="previewStatus">
+                                    @if (Model.IsActive)
+                                    {
+                                        <i class="feather-check-circle"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="feather-x-circle"></i>
+                                    }
+                                </span>
+                            </h4>
+                            <small class="text-muted">@(Model.IsActive ? "نشطة" : "غير نشطة")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Set initial rarity preview
+            updateRarityPreview('@((int)Model.Rarity)');
+
+            // Character count for description
+            $('#badgeDescription').on('input', function() {
+                const length = $(this).val().length;
+                $('#charCount').text(length + ' / 1000');
+            });
+
+            // Live preview updates
+            $('#badgeName').on('input', function() {
+                const name = $(this).val() || 'شارة جديدة';
+                $('#previewName').text(name);
+            });
+
+            $('#badgeDescription').on('input', function() {
+                const desc = $(this).val() || 'وصف الشارة سيظهر هنا...';
+                $('#previewDescription').text(desc);
+            });
+
+            $('#requiredPoints').on('input', function() {
+                const points = $(this).val() || '0';
+                $('#previewPoints').text(points);
+            });
+
+            // Rarity change
+            $('input[name="Rarity"]').on('change', function() {
+                const rarity = $(this).val();
+                updateRarityPreview(rarity);
+            });
+
+            // Active status
+            $('#isActiveSwitch').on('change', function() {
+                if ($(this).is(':checked')) {
+                    $('#previewStatus').html('<i class="feather-check-circle"></i>');
+                    $('#previewStatus').parent().parent().find('small').text('نشطة');
+                } else {
+                    $('#previewStatus').html('<i class="feather-x-circle"></i>');
+                    $('#previewStatus').parent().parent().find('small').text('غير نشطة');
+                }
+            });
+
+            function updateRarityPreview(rarity) {
+                const rarityConfig = {
+                    '0': { name: 'شائعة', color: 'secondary', gradient: 'bg-gradient-secondary' },
+                    '1': { name: 'غير شائعة', color: 'success', gradient: 'bg-gradient-success' },
+                    '2': { name: 'نادرة', color: 'primary', gradient: 'bg-gradient-primary' },
+                    '3': { name: 'ملحمية', color: 'warning', gradient: 'bg-gradient-warning' },
+                    '4': { name: 'أسطورية', color: 'danger', gradient: 'bg-gradient-danger' }
+                };
+
+                const config = rarityConfig[rarity];
+                if (config) {
+                    $('#previewRarity')
+                        .removeClass()
+                        .addClass('rarity-badge bg-soft-' + config.color + ' text-' + config.color + ' mb-3')
+                        .text(config.name);
+                    
+                    $('#badgePreview')
+                        .removeClass()
+                        .addClass('badge-preview ' + config.gradient + ' text-white mb-3');
+                }
+            }
+
+            // Unsaved changes warning
+            let hasUnsavedChanges = false;
+            $('#badgeForm input, #badgeForm select, #badgeForm textarea').on('change', function() {
+                hasUnsavedChanges = true;
+            });
+
+            $('#badgeForm').on('submit', function() {
+                hasUnsavedChanges = false;
+            });
+
+            $(window).on('beforeunload', function() {
+                if (hasUnsavedChanges) {
+                    return 'لديك تغييرات غير محفوظة. هل أنت متأكد من المغادرة؟';
+                }
+            });
+        });
+
+        function selectIcon(element, iconClass) {
+            $('.icon-option').removeClass('active');
+            $(element).addClass('active');
+            $('#badgePreview').html('<i class="' + iconClass + '"></i>');
+            $('#iconUrl').val(iconClass);
+        }
+
+        function updateCustomIcon() {
+            const url = $('#customIconUrl').val();
+            if (url) {
+                $('#iconUrl').val(url);
+                $('#badgePreview').html('<img src="' + url + '" style="width: 80px; height: 80px; object-fit: cover;" alt="Badge">');
+                $('.icon-option').removeClass('active');
+            }
+        }
+    </script>
+}
+

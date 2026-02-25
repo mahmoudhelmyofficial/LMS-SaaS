@@ -1,0 +1,395 @@
+@model dynamic
+
+@{
+    ViewData["Title"] = Html.T("تقرير أداء المدرسين", "Instructors report");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("التحليلات", "Analytics"), Url.Action("Index", "Analytics")),
+        (Html.T("أداء المدرسين", "Instructors report"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    
+    var page = ViewBag.Page ?? 1;
+    var totalInstructors = ViewBag.TotalInstructors ?? 0;
+    
+    // Safe calculations for stats
+    var modelList = Model != null ? (IEnumerable<dynamic>)Model : new List<dynamic>();
+    var verifiedCount = 0;
+    var totalCourses = 0;
+    decimal totalEarnings = 0;
+    
+    try
+    {
+        foreach (var item in modelList)
+        {
+            if ((bool)(item.IsVerified ?? false)) verifiedCount++;
+            totalCourses += (int)(item.CoursesCount ?? 0);
+            totalEarnings += (decimal)(item.TotalEarnings ?? 0m);
+        }
+    }
+    catch { /* Ignore calculation errors */ }
+}
+
+@section Styles {
+    <style>
+        .instructor-card {
+            transition: all 0.3s ease;
+        }
+        .instructor-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                        <i class="feather-award"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">إجمالي المدرسين</span>
+                        <h3 class="fw-bold mb-0">@totalInstructors</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                        <i class="feather-check-circle"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">مدرسون موثقون</span>
+                        <h3 class="fw-bold mb-0">@verifiedCount</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                        <i class="feather-book"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">إجمالي الدورات</span>
+                        <h3 class="fw-bold mb-0">@totalCourses</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                        <i class="feather-dollar-sign"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">إجمالي الإيرادات</span>
+                        <h3 class="fw-bold mb-0">@totalEarnings.ToEGP()</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("البحث", "Search")</label>
+                            <input type="text" class="form-control" id="searchInstructor" placeholder="@Html.T("ابحث عن مدرس...", "Search for instructor...")">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("الحالة", "Status")</label>
+                            <select class="form-select" id="verificationFilter">
+                                <option value="">@Html.T("الكل", "All")</option>
+                                <option value="verified">@Html.T("موثق", "Verified")</option>
+                                <option value="unverified">@Html.T("غير موثق", "Unverified")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("الترتيب حسب", "Sort by")</label>
+                            <select class="form-select" id="sortBy">
+                                <option value="earnings">@Html.T("الإيرادات", "Earnings")</option>
+                                <option value="students">@Html.T("عدد الطلاب", "Students count")</option>
+                                <option value="courses">@Html.T("عدد الدورات", "Courses count")</option>
+                                <option value="rating">@Html.T("التقييم", "Rating")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">&nbsp;</label>
+                            <div class="btn-group w-100">
+                                <button type="button" class="btn btn-success dropdown-toggle w-100" data-bs-toggle="dropdown">
+                                    <i class="feather-download me-2"></i>@Html.T("تصدير البيانات", "Export data")
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="/api/export/users?format=csv&role=Instructor"><i class="feather-file-text me-2"></i>@Html.T("CSV", "CSV")</a></li>
+                                    <li><a class="dropdown-item" href="/api/export/users?format=excel&role=Instructor"><i class="feather-file me-2"></i>@Html.T("إكسل", "Excel")</a></li>
+                                    <li><a class="dropdown-item" href="/api/export/users?format=pdf&role=Instructor"><i class="feather-file-text me-2"></i>@Html.T("PDF", "PDF")</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="window.print()"><i class="feather-printer me-2"></i>@Html.T("طباعة", "Print")</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructors Table -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أداء المدرسين", "Instructor performance")</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="instructorsTable">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>@Html.T("المدرس", "Instructor")</th>
+                                    <th>@Html.T("البريد الإلكتروني", "Email")</th>
+                                    <th>@Html.T("عدد الدورات", "Courses")</th>
+                                    <th>@Html.T("الدورات المنشورة", "Published")</th>
+                                    <th>@Html.T("عدد الطلاب", "Students")</th>
+                                    <th>@Html.T("إجمالي الإيرادات", "Total earnings")</th>
+                                    <th>@Html.T("الرصيد المتاح", "Available balance")</th>
+                                    <th>@Html.T("التقييم", "Rating")</th>
+                                    <th>@Html.T("عدد التقييمات", "Reviews")</th>
+                                    <th>@Html.T("تاريخ الانضمام", "Join date")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var instructor in modelList)
+                                {
+                                    var instructorName = (string)(instructor.Name ?? Html.T("غير معروف", "Unknown"));
+                                    var instructorEmail = (string)(instructor.Email ?? "");
+                                    <tr class="instructor-card">
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                                    @(instructorName.Length > 0 ? instructorName.Substring(0, 1) : "?")
+                                                </div>
+                                                <div>
+                                                    <span class="fw-semibold d-block">@instructorName</span>
+                                                    <small class="text-muted">@Html.T("المعرف:", "ID:") @instructor.InstructorId</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>@instructorEmail</td>
+                                        <td>
+                                            <span class="badge bg-soft-primary text-primary">@instructor.CoursesCount</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-success text-success">@instructor.PublishedCourses</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-info text-info">@instructor.TotalStudents</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold text-success">@instructor.TotalEarnings.ToEGP()</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-semibold">@instructor.AvailableBalance.ToEGP()</span>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-1">
+                                                @for (int i = 1; i <= 5; i++)
+                                                {
+                                                    if (i <= Math.Floor(instructor.AverageRating))
+                                                    {
+                                                        <i class="feather-star text-warning" style="font-size: 12px;"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="feather-star text-muted" style="font-size: 12px;"></i>
+                                                    }
+                                                }
+                                                <span class="fw-semibold ms-1">@instructor.AverageRating.ToString("F1")</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-warning text-warning">@instructor.TotalReviews</span>
+                                        </td>
+                                        <td>
+                                            <span>@instructor.JoinedDate.ToString("dd/MM/yyyy")</span>
+                                        </td>
+                                        <td>
+                                            @if (instructor.IsVerified)
+                                            {
+                                                <span class="badge bg-soft-success text-success">
+                                                    <i class="feather-check-circle"></i>
+                                                    موثق
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-warning text-warning">
+                                                    <i class="feather-alert-circle"></i>
+                                                    غير موثق
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a asp-controller="Instructors" asp-action="Details" asp-route-id="@instructor.InstructorId" 
+                                                   class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض التفاصيل", "View details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                <a asp-controller="Instructors" asp-action="Edit" asp-route-id="@instructor.InstructorId"
+                                                   class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                    <i class="feather-edit"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                @if (!modelList.Any())
+                {
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-warning text-warning mx-auto mb-3">
+                            <i class="feather-inbox"></i>
+                        </div>
+                        <h5>@Html.T("لا يوجد مدرسون", "No instructors")</h5>
+                        <p class="text-muted">لم يتم العثور على أي مدرسين</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Instructors Cards -->
+    <div class="row mt-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أفضل المدرسين", "Top instructors")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        @{
+                            // Get top 3 instructors safely
+                            var topInstructors = modelList
+                                .OrderByDescending(i => (decimal)(i.TotalEarnings ?? 0m))
+                                .Take(3)
+                                .ToList();
+                        }
+                        @foreach (var instructor in topInstructors)
+                        {
+                            var topName = (string)(instructor.Name ?? "غير معروف");
+                            var topEmail = (string)(instructor.Email ?? "");
+                            <div class="col-lg-4">
+                                <div class="card border">
+                                    <div class="card-body text-center">
+                                        <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                                            @(topName.Length > 0 ? topName.Substring(0, 1) : "?")
+                                        </div>
+                                        <h5 class="mb-1">@topName</h5>
+                                        <p class="text-muted mb-3">@topEmail</p>
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-4">
+                                                <div class="p-2 bg-soft-primary rounded">
+                                                    <h6 class="mb-0">@instructor.CoursesCount</h6>
+                                                    <small class="text-muted">دورة</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="p-2 bg-soft-success rounded">
+                                                    <h6 class="mb-0">@instructor.TotalStudents</h6>
+                                                    <small class="text-muted">طالب</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="p-2 bg-soft-warning rounded">
+                                                    <h6 class="mb-0">@instructor.AverageRating.ToString("F1")</h6>
+                                                    <small class="text-muted">تقييم</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="p-3 bg-soft-success rounded">
+                                            <h5 class="text-success mb-0">@instructor.TotalEarnings.ToEGP()</h5>
+                                            <small class="text-muted">إجمالي الإيرادات</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function exportData() {
+            alert('@Html.Raw(Html.T("وظيفة التصدير قيد التطوير", "Export feature is under development").Replace("'", "\\'"))');
+        }
+
+        $(document).ready(function() {
+            // Search functionality
+            $('#searchInstructor').on('keyup', function() {
+                var value = $(this).val().toLowerCase();
+                $('#instructorsTable tbody tr').filter(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+                });
+            });
+
+            // Verification filter
+            $('#verificationFilter').on('change', function() {
+                var filter = $(this).val();
+                if (filter === '') {
+                    $('#instructorsTable tbody tr').show();
+                } else if (filter === 'verified') {
+                    $('#instructorsTable tbody tr').hide();
+                    $('#instructorsTable tbody tr').filter(function() {
+                        return $(this).find('.badge:contains("موثق")').length > 0;
+                    }).show();
+                } else {
+                    $('#instructorsTable tbody tr').hide();
+                    $('#instructorsTable tbody tr').filter(function() {
+                        return $(this).find('.badge:contains("غير موثق")').length > 0;
+                    }).show();
+                }
+            });
+
+            // Initialize tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+

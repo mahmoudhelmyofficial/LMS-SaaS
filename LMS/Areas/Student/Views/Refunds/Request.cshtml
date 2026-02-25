@@ -1,0 +1,288 @@
+@model RefundRequestViewModel
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("طلب استرداد", "Refund Request");
+    
+    // Refund settings
+    var refundWindowDays = await PlatformSettings.GetIntSettingAsync("Refund.WindowDays", 30);
+    var refundMaxProgress = await PlatformSettings.GetIntSettingAsync("Refund.MaxProgressPercent", 30);
+    var refundReviewDays = await PlatformSettings.GetSettingAsync("Refund.ReviewDays", "3-5");
+}
+
+@section Styles {
+<style>
+    .refund-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .course-info-box {
+        background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+    }
+    
+    .refund-policy {
+        background: #fef3c7;
+        border-right: 4px solid #f59e0b;
+        padding: 20px;
+        border-radius: 8px;
+    }
+    
+    .reason-card {
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 15px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .reason-card:hover {
+        border-color: #667eea;
+        background-color: #f9fafb;
+    }
+    
+    .reason-card.selected {
+        border-color: #667eea;
+        background-color: #eef2ff;
+    }
+    
+    .reason-card input[type="radio"] {
+        width: 20px;
+        height: 20px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<div class="refund-container">
+    <!-- Back Button -->
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-sm btn-light">
+            <i class="feather-arrow-right me-2"></i>
+            @Html.T("العودة للاسترداد", "Back to Refunds")
+        </a>
+    </div>
+    
+    <!-- Header -->
+    <div class="card stretch stretch-full mb-4" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+        <div class="card-body py-4">
+            <div class="text-center text-white">
+                <div class="mb-3">
+                    <i class="feather-refresh-cw" style="font-size: 3rem;"></i>
+                </div>
+                <h2 class="fw-bold mb-2">@Html.T("طلب استرداد", "Refund Request")</h2>
+                <p class="opacity-75 mb-0">@Html.T("نأسف لرؤيتك تغادر. يرجى إخبارنا بسبب طلب الاسترداد", "We're sorry to see you go. Please let us know the reason for your refund request")</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Course Information -->
+    <div class="course-info-box mb-4">
+        <h5 class="fw-bold mb-3">
+            <i class="feather-book-open text-primary me-2"></i>
+            @Html.T("معلومات الدورة", "Course Information")
+        </h5>
+        <div class="row">
+            <div class="col-md-6 mb-2">
+                <small class="text-muted d-block">@Html.T("اسم الدورة", "Course Name")</small>
+                <strong>@Model.CourseName</strong>
+            </div>
+            <div class="col-md-6 mb-2">
+                <small class="text-muted d-block">@Html.T("المبلغ المدفوع", "Amount Paid")</small>
+                <strong class="text-success">@Model.RefundAmount.ToEGP(2)</strong>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Refund Policy -->
+    <div class="refund-policy mb-4">
+        <h6 class="fw-bold mb-3">
+            <i class="feather-alert-circle me-2"></i>
+            @Html.T("سياسة الاسترداد", "Refund Policy")
+        </h6>
+        <ul class="mb-0 small">
+            <li class="mb-2">@Html.T("يمكن طلب الاسترداد خلال", "Refund can be requested within") @refundWindowDays @Html.T("يوماً من تاريخ الشراء", "days from the purchase date")</li>
+            <li class="mb-2">@Html.T("لا يمكن طلب الاسترداد إذا تم إكمال أكثر من", "Refund cannot be requested if more than") @refundMaxProgress% @Html.T("من الدورة", "of the course is completed")</li>
+            <li class="mb-2">@Html.T("سيتم مراجعة الطلب خلال", "The request will be reviewed within") @refundReviewDays @Html.T("أيام عمل", "business days")</li>
+            <li class="mb-2">@Html.T("سيتم إرجاع المبلغ لنفس طريقة الدفع المستخدمة", "The amount will be returned to the same payment method used")</li>
+            <li>@Html.T("قد تستغرق عملية الاسترداد 5-10 أيام عمل حسب البنك", "The refund process may take 5-10 business days depending on the bank")</li>
+        </ul>
+    </div>
+    
+    <!-- Refund Form -->
+    <div class="card stretch stretch-full">
+        <div class="card-body p-4">
+            <form asp-action="Request" method="post">
+                <input type="hidden" asp-for="PaymentId" />
+                <input type="hidden" asp-for="RefundAmount" />
+                <input type="hidden" asp-for="Currency" />
+                <input type="hidden" asp-for="CourseName" />
+                
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+                
+                <!-- Refund Reason -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold mb-3">
+                        @Html.T("سبب طلب الاسترداد", "Reason for Refund Request")
+                        <span class="text-danger">*</span>
+                    </label>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="reason-card" onclick="selectReason(this, '@Html.T("المحتوى لا يطابق التوقعات", "Content does not match expectations")')">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="radio" name="Reason" value="@Html.T("المحتوى لا يطابق التوقعات", "Content does not match expectations")" />
+                                    <div>
+                                        <div class="fw-semibold">@Html.T("المحتوى لا يطابق التوقعات", "Content does not match expectations")</div>
+                                        <small class="text-muted">@Html.T("المادة العلمية مختلفة عن الوصف", "The course material differs from the description")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="reason-card" onclick="selectReason(this, '@Html.T("مشاكل تقنية", "Technical issues")')">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="radio" name="Reason" value="@Html.T("مشاكل تقنية", "Technical issues")" />
+                                    <div>
+                                        <div class="fw-semibold">@Html.T("مشاكل تقنية", "Technical issues")</div>
+                                        <small class="text-muted">@Html.T("صعوبة في الوصول أو مشاكل في الفيديو", "Difficulty accessing or video issues")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="reason-card" onclick="selectReason(this, '@Html.T("وجدت دورة أفضل", "Found a better course")')">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="radio" name="Reason" value="@Html.T("وجدت دورة أفضل", "Found a better course")" />
+                                    <div>
+                                        <div class="fw-semibold">@Html.T("وجدت دورة أفضل", "Found a better course")</div>
+                                        <small class="text-muted">@Html.T("وجدت بديل أكثر ملاءمة", "Found a more suitable alternative")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="reason-card" onclick="selectReason(this, '@Html.T("ظروف مالية", "Financial reasons")')">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="radio" name="Reason" value="@Html.T("ظروف مالية", "Financial reasons")" />
+                                    <div>
+                                        <div class="fw-semibold">@Html.T("ظروف مالية", "Financial reasons")</div>
+                                        <small class="text-muted">@Html.T("لا أستطيع إكمال الدورة مالياً", "I cannot afford to continue the course")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="reason-card" onclick="selectReason(this, '@Html.T("شراء بالخطأ", "Purchased by mistake")')">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="radio" name="Reason" value="@Html.T("شراء بالخطأ", "Purchased by mistake")" />
+                                    <div>
+                                        <div class="fw-semibold">@Html.T("شراء بالخطأ", "Purchased by mistake")</div>
+                                        <small class="text-muted">@Html.T("اشتريت الدورة عن طريق الخطأ", "I purchased the course by mistake")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="reason-card" onclick="selectReason(this, '@Html.T("سبب آخر", "Other reason")')">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="radio" name="Reason" value="@Html.T("سبب آخر", "Other reason")" />
+                                    <div>
+                                        <div class="fw-semibold">@Html.T("سبب آخر", "Other reason")</div>
+                                        <small class="text-muted">@Html.T("سبب مختلف", "A different reason")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <span asp-validation-for="Reason" class="text-danger"></span>
+                </div>
+                
+                <!-- Additional Details -->
+                <div class="mb-4">
+                    <label asp-for="Details" class="form-label fw-bold">
+                        @Html.T("تفاصيل إضافية", "Additional Details")
+                        <span class="text-danger">*</span>
+                    </label>
+                    <textarea asp-for="Details" class="form-control" rows="5" 
+                              placeholder="@Html.T("يرجى توضيح سبب طلبك للاسترداد بالتفصيل. هذا يساعدنا على تحسين خدماتنا...", "Please explain the reason for your refund request in detail. This helps us improve our services...")"></textarea>
+                    <small class="text-muted">@Html.T("الحد الأدنى 50 حرف", "Minimum 50 characters")</small>
+                    <span asp-validation-for="Details" class="text-danger"></span>
+                </div>
+                
+                <!-- Confirmation -->
+                <div class="alert alert-warning mb-4">
+                    <div class="d-flex gap-2">
+                        <i class="feather-alert-triangle"></i>
+                        <div class="small">
+                            <strong>@Html.T("تنبيه:", "Warning:")</strong> @Html.T("بتقديم هذا الطلب، سيتم إلغاء وصولك للدورة فوراً وسيتم مراجعة طلبك. لن تتمكن من الوصول للمحتوى حتى في حالة رفض الطلب.", "By submitting this request, your access to the course will be immediately revoked and your request will be reviewed. You will not be able to access the content even if the request is rejected.")
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Submit Buttons -->
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-danger flex-grow-1">
+                        <i class="feather-send me-2"></i>
+                        @Html.T("تقديم طلب الاسترداد", "Submit Refund Request")
+                    </button>
+                    <a asp-controller="Courses" asp-action="Index" class="btn btn-light">
+                        @Html.T("إلغاء", "Cancel")
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Help Section -->
+    <div class="text-center mt-4">
+        <p class="text-muted mb-2">@Html.T("هل تواجه مشكلة معينة؟", "Having a specific issue?")</p>
+        <a asp-controller="Support" asp-action="Create" class="btn btn-outline-primary btn-sm">
+            <i class="feather-help-circle me-2"></i>
+            @Html.T("تواصل مع الدعم الفني", "Contact Technical Support")
+        </a>
+    </div>
+</div>
+
+@section Scripts {
+@{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+<script>
+    function selectReason(card, reason) {
+        // Remove selected class from all cards
+        document.querySelectorAll('.reason-card').forEach(c => c.classList.remove('selected'));
+        
+        // Add selected class to clicked card
+        card.classList.add('selected');
+        
+        // Check the radio button
+        card.querySelector('input[type="radio"]').checked = true;
+    }
+    
+    // Prevent navigation if form is dirty
+    let formModified = false;
+    document.querySelectorAll('input, textarea').forEach(element => {
+        element.addEventListener('change', () => formModified = true);
+    });
+    
+    window.addEventListener('beforeunload', function(e) {
+        if (formModified) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+    
+    // Clear flag on form submit
+    document.querySelector('form').addEventListener('submit', () => formModified = false);
+</script>
+}
+

@@ -1,0 +1,438 @@
+@model IEnumerable<LMS.Domain.Entities.Social.Comment>
+
+@{
+    ViewData["Title"] = Html.T("إدارة التعليقات", "Comments management");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التواصل", "Communications"), null),
+        (Html.T("التعليقات", "Comments"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+    <style>
+        .comment-content {
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .comment-thread {
+            padding-right: 20px;
+            border-right: 3px solid #e5e7eb;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-message-square"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي التعليقات", "Total Comments")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("معتمدة", "Approved")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(c => c.IsApproved).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-clock"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("بانتظار المراجعة", "Pending Review")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(c => !c.IsApproved).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                            <i class="feather-flag"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("محذوفة", "Deleted")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(c => c.IsDeleted).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section FilterDropdown {
+    <a href="javascript:void(0);" class="dropdown-item filter-all">
+        <i class="feather-eye me-3"></i>
+        <span>@Html.T("الكل", "All")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-approved">
+        <i class="feather-check-circle me-3"></i>
+        <span>@Html.T("معتمدة", "Approved")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-pending">
+        <i class="feather-clock me-3"></i>
+        <span>@Html.T("بانتظار المراجعة", "Pending Review")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-reported">
+        <i class="feather-flag me-3"></i>
+        <span>@Html.T("محتوى مبلغ عنه", "Reported Content")</span>
+    </a>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    @Html.AntiForgeryToken()
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("التعليقات", "Comments")</h5>
+                    <div class="card-header-action">
+                        <button class="btn btn-sm btn-success me-2" onclick="bulkApprove()" id="bulkApproveBtn" style="display:none;">
+                            <i class="feather-check me-2"></i>
+                            @Html.T("اعتماد المحدد", "Approve selected") (<span id="selectedCount">0</span>)
+                        </button>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                                <i class="feather-download me-2"></i>@Html.T("تصدير", "Export")
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item disabled" href="javascript:void(0)" title="@Html.T("قريباً", "Coming soon")">
+                                        <i class="feather-file-text me-2 text-muted"></i>@Html.T("تصدير CSV", "Export CSV") <small class="text-muted">(@Html.T("قريباً", "Coming soon"))</small>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item disabled" href="javascript:void(0)" title="@Html.T("قريباً", "Coming soon")">
+                                        <i class="feather-file me-2 text-muted"></i>@Html.T("تصدير Excel", "Export Excel") <small class="text-muted">(@Html.T("قريباً", "Coming soon"))</small>
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item disabled" href="javascript:void(0)" title="@Html.T("قريباً", "Coming soon")">
+                                        <i class="feather-file-text me-2 text-muted"></i>@Html.T("تصدير PDF", "Export PDF") <small class="text-muted">(@Html.T("قريباً", "Coming soon"))</small>
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0)" onclick="window.print()">
+                                        <i class="feather-printer me-2 text-secondary"></i>@Html.T("طباعة", "Print")
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="commentsTable">
+                            <thead>
+                                <tr>
+                                    <th class="wd-30">
+                                        <div class="custom-control custom-checkbox ms-1">
+                                            <input type="checkbox" class="custom-control-input" id="checkAll">
+                                            <label class="custom-control-label" for="checkAll"></label>
+                                        </div>
+                                    </th>
+                                    <th>@Html.T("المستخدم", "User")</th>
+                                    <th>@Html.T("التعليق", "Comment")</th>
+                                    <th>@Html.T("الدورة/الدرس", "Course/Lesson")</th>
+                                    <th>@Html.T("التاريخ", "Date")</th>
+                                    <th>@Html.T("الردود", "Replies")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var comment in Model.OrderByDescending(c => c.CreatedAt))
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="item-checkbox ms-1">
+                                                <div class="custom-control custom-checkbox">
+                                                    <input type="checkbox" class="custom-control-input comment-checkbox" 
+                                                           id="checkBox_@comment.Id" 
+                                                           data-id="@comment.Id"
+                                                           data-approved="@comment.IsApproved"
+                                                           @(comment.IsApproved ? "disabled" : "")>
+                                                    <label class="custom-control-label" for="checkBox_@comment.Id"></label>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (comment.User != null)
+                                            {
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                        @comment.User.FirstName?.Substring(0, 1)
+                                                    </div>
+                                                    <div>
+                                                        <span class="fw-semibold d-block">@comment.User.FirstName @comment.User.LastName</span>
+                                                        <small class="text-muted">@comment.User.Email</small>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="comment-content">
+                                                @comment.Content
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (comment.Lesson != null)
+                                            {
+                                                <div>
+                                                    <i class="feather-video text-primary me-1"></i>
+                                                    <span>@comment.Lesson.Title</span>
+                                                </div>
+                                            }
+                                            else if (comment.Course != null)
+                                            {
+                                                <div>
+                                                    <i class="feather-book text-success me-1"></i>
+                                                    <span>@comment.Course.Title</span>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="d-flex flex-column">
+                                                <span class="small">@comment.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                                <span class="text-muted smaller">@comment.CreatedAt.ToString("hh:mm tt")</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (comment.Replies != null && comment.Replies.Any())
+                                            {
+                                                <span class="badge bg-soft-info text-info">@comment.Replies.Count() رد</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">@Html.T("لا يوجد", "None")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (comment.IsApproved)
+                                            {
+                                                <span class="badge bg-soft-success text-success">@Html.T("معتمد", "Approved")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-warning text-warning">@Html.T("بانتظار المراجعة", "Pending Review")</span>
+                                            }
+                                            @if (comment.IsReported)
+                                            {
+                                                <span class="badge bg-soft-danger text-danger ms-1">@Html.T("مبلغ عنه", "Reported")</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="@Url.Action("Details", "Comments", new { id = comment.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل والردود", "Details and replies")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                @if (!comment.IsApproved)
+                                                {
+                                                    <form asp-action="Approve" asp-route-id="@comment.Id" method="post" class="d-inline">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="avatar-text avatar-md text-success border-0 bg-transparent" data-bs-toggle="tooltip" title="@Html.T("اعتماد", "Approve")">
+                                                            <i class="feather-check"></i>
+                                                        </button>
+                                                    </form>
+                                                }
+                                                <div class="dropdown">
+                                                    <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown">
+                                                        <i class="feather-more-horizontal"></i>
+                                                    </a>
+                                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        <li>
+                                                            <a class="dropdown-item" href="@Url.Action("Edit", "Comments", new { id = comment.Id })">
+                                                                <i class="feather-edit me-3"></i>
+                                                                تعديل
+                                                            </a>
+                                                        </li>
+                                                        @if (comment.IsApproved)
+                                                        {
+                                                            <li>
+                                                                <form asp-action="Reject" asp-route-id="@comment.Id" method="post" class="d-inline">
+                                                                    @Html.AntiForgeryToken()
+                                                                    <button type="submit" class="dropdown-item">
+                                                                        <i class="feather-x-circle me-3"></i>
+                                                                        إلغاء الاعتماد
+                                                                    </button>
+                                                                </form>
+                                                            </li>
+                                                        }
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@comment.Id')">
+                                                                <i class="feather-trash-2 me-3"></i>
+                                                                حذف
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            var table = $('#commentsTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[4, "desc"]],
+                "pageLength": 25
+            });
+
+            // Checkbox events
+            $('#checkAll').on('change', function() {
+                $('.comment-checkbox:not(:disabled)').prop('checked', $(this).prop('checked'));
+                updateBulkApproveButton();
+            });
+
+            $('.comment-checkbox').on('change', function() {
+                updateBulkApproveButton();
+            });
+
+            function updateBulkApproveButton() {
+                const selectedCount = $('.comment-checkbox:checked').length;
+                $('#selectedCount').text(selectedCount);
+                if (selectedCount > 0) {
+                    $('#bulkApproveBtn').show();
+                } else {
+                    $('#bulkApproveBtn').hide();
+                }
+            }
+
+            $('.filter-all').on('click', function() {
+                table.search('').columns().search('').draw();
+            });
+
+            $('.filter-approved').on('click', function() {
+                table.column(6).search('معتمد').draw();
+            });
+
+            $('.filter-pending').on('click', function() {
+                table.column(6).search('بانتظار المراجعة').draw();
+            });
+
+            $('.filter-reported').on('click', function() {
+                table.column(6).search('مبلغ عنه').draw();
+            });
+
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+
+        function bulkApprove() {
+            const selectedIds = [];
+            $('.comment-checkbox:checked').each(function() {
+                selectedIds.push($(this).data('id'));
+            });
+
+            if (selectedIds.length === 0) {
+                alert('@Html.Raw(Html.T("الرجاء تحديد تعليق واحد على الأقل", "Please select at least one comment").ToString().Replace("'", "\\'"))');
+                return;
+            }
+
+            if (confirm('@Html.Raw(Html.T("هل تريد اعتماد", "Do you want to approve").ToString().Replace("'", "\\'")) ' + selectedIds.length + ' @Html.Raw(Html.T("تعليق؟", "comment(s)?").ToString().Replace("'", "\\'"))')) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '@Url.Action("BulkApprove", "Comments")';
+                
+                selectedIds.forEach(id => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'commentIds';
+                    input.value = id;
+                    form.appendChild(input);
+                });
+                
+                const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                const tokenInput = document.createElement('input');
+                tokenInput.type = 'hidden';
+                tokenInput.name = '__RequestVerificationToken';
+                tokenInput.value = token;
+                form.appendChild(tokenInput);
+                
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+
+        function confirmDelete(commentId) {
+            if (confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا التعليق؟", "Are you sure you want to delete this comment?").ToString().Replace("'", "\\'"))')) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '@Url.Action("Delete", "Comments")';
+                
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'id';
+                input.value = commentId;
+                form.appendChild(input);
+                
+                const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                const tokenInput = document.createElement('input');
+                tokenInput.type = 'hidden';
+                tokenInput.name = '__RequestVerificationToken';
+                tokenInput.value = token;
+                form.appendChild(tokenInput);
+                
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+    </script>
+}
+

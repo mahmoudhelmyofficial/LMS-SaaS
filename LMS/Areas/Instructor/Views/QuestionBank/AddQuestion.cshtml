@@ -1,0 +1,423 @@
+@model LMS.Areas.Instructor.ViewModels.QuestionBankQuestionCreateViewModel
+
+@{
+    ViewData["Title"] = Html.T("إضافة سؤال", "Add Question");
+    ViewData["Subtitle"] = ViewBag.BankName;
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw($@"<a href='{Url.Action("Details", new { id = Model.QuestionBankId })}' class='btn btn-light'><i class='feather-arrow-right me-2'></i>العودة</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="AddQuestion" method="post" id="questionForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="QuestionBankId" />
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header"><h5 class="card-title">معلومات السؤال</h5></div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label class="form-label" asp-for="QuestionText">نص السؤال <span class="text-danger">*</span></label>
+                                <textarea class="form-control" asp-for="QuestionText" rows="4" required></textarea>
+                                <span asp-validation-for="QuestionText" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="QuestionType">نوع السؤال <span class="text-danger">*</span></label>
+                                <select asp-for="QuestionType" class="form-select" id="questionType" required>
+                                    <option value="SingleChoice">اختيار واحد</option>
+                                    <option value="MultipleChoice">اختيارات متعددة</option>
+                                    <option value="TrueFalse">صح أو خطأ</option>
+                                    <option value="ShortAnswer">إجابة قصيرة</option>
+                                    <option value="Essay">مقالي</option>
+                                    <option value="FillInTheBlanks">ملء الفراغات</option>
+                                    <option value="Matching">مطابقة</option>
+                                    <option value="Ordering">ترتيب</option>
+                                    <option value="FileUpload">رفع ملف</option>
+                                </select>
+                                <span asp-validation-for="QuestionType" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="Points">الدرجة <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" asp-for="Points" min="1" max="100" required />
+                                <span asp-validation-for="Points" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="DifficultyLevel">مستوى الصعوبة</label>
+                                <select asp-for="DifficultyLevel" class="form-select">
+                                    <option value="Easy">سهل</option>
+                                    <option value="Medium" selected>متوسط</option>
+                                    <option value="Hard">صعب</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="Tags">الوسوم</label>
+                                <input type="text" class="form-control" asp-for="Tags" placeholder="الوسوم مفصولة بفواصل" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Explanation">الشرح</label>
+                                <textarea class="form-control" asp-for="Explanation" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Options Card (for SingleChoice, MultipleChoice) -->
+                <div class="card" id="optionsCard">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">الخيارات</h5>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="addOption()">
+                            <i class="feather-plus me-1"></i>إضافة خيار
+                        </button>
+                    </div>
+                    <div class="card-body" id="optionsContainer"></div>
+                    <div class="card-footer bg-light">
+                        <small class="text-muted" id="optionsHelp">أضف الخيارات وحدد الإجابة الصحيحة</small>
+                    </div>
+                </div>
+
+                <!-- True/False Card -->
+                <div class="card" id="trueFalseCard" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">الإجابة الصحيحة</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex gap-4">
+                            <div class="form-check form-check-lg">
+                                <input class="form-check-input" type="radio" name="TrueFalseAnswer" id="answerTrue" value="true" checked>
+                                <label class="form-check-label fw-bold text-success" for="answerTrue">
+                                    <i class="feather-check me-1"></i>صح
+                                </label>
+                            </div>
+                            <div class="form-check form-check-lg">
+                                <input class="form-check-input" type="radio" name="TrueFalseAnswer" id="answerFalse" value="false">
+                                <label class="form-check-label fw-bold text-danger" for="answerFalse">
+                                    <i class="feather-x me-1"></i>خطأ
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Short Answer Card -->
+                <div class="card" id="shortAnswerCard" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">الإجابة المتوقعة</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">الإجابات المقبولة <span class="text-danger">*</span></label>
+                            <textarea class="form-control" name="ExpectedAnswers" rows="3" placeholder="أدخل الإجابات المقبولة (كل إجابة في سطر جديد)"></textarea>
+                            <small class="text-muted">يمكنك إدخال عدة إجابات مقبولة، كل إجابة في سطر منفصل</small>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="CaseSensitive" id="caseSensitive">
+                            <label class="form-check-label" for="caseSensitive">مطابقة حالة الأحرف</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fill in Blanks Card -->
+                <div class="card" id="fillBlanksCard" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">إعداد الفراغات</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="feather-info me-2"></i>
+                            استخدم <code>[___]</code> أو <code>___</code> في نص السؤال لتحديد مكان الفراغ
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">الإجابات بالترتيب <span class="text-danger">*</span></label>
+                            <div id="blanksContainer"></div>
+                            <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addBlankAnswer()">
+                                <i class="feather-plus me-1"></i>إضافة إجابة فراغ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Matching Card -->
+                <div class="card" id="matchingCard" style="display: none;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">أزواج المطابقة</h5>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="addMatchingPair()">
+                            <i class="feather-plus me-1"></i>إضافة زوج
+                        </button>
+                    </div>
+                    <div class="card-body" id="matchingContainer"></div>
+                </div>
+
+                <!-- Ordering Card -->
+                <div class="card" id="orderingCard" style="display: none;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">العناصر للترتيب</h5>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="addOrderingItem()">
+                            <i class="feather-plus me-1"></i>إضافة عنصر
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info mb-3">
+                            <i class="feather-info me-2"></i>
+                            أدخل العناصر بالترتيب الصحيح
+                        </div>
+                        <div id="orderingContainer"></div>
+                    </div>
+                </div>
+
+                <!-- Essay/FileUpload Info Card -->
+                <div class="card" id="noOptionsCard" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">معلومات إضافية</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-soft-info mb-0">
+                            <i class="feather-info me-2"></i>
+                            <span id="noOptionsMessage">هذا النوع من الأسئلة لا يتطلب خيارات محددة. سيتم تقييم الإجابة يدوياً.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-check me-2"></i>إضافة السؤال
+                        </button>
+                        <a href="@Url.Action("Details", new { id = Model.QuestionBankId })" class="btn btn-light w-100"><i class="feather-x me-2"></i>إلغاء</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        let optionIndex = 0;
+        let blankIndex = 0;
+        let matchingIndex = 0;
+        let orderingIndex = 0;
+        let currentQuestionType = 'SingleChoice';
+
+        // Add option for SingleChoice/MultipleChoice
+        function addOption() {
+            const isMultiple = currentQuestionType === 'MultipleChoice';
+            const inputType = isMultiple ? 'checkbox' : 'radio';
+            const inputName = isMultiple ? `Options[${optionIndex}].IsCorrect` : 'CorrectOptionIndex';
+            
+            const html = `
+                <div class="option-item mb-3 p-3 border rounded bg-light" id="option_${optionIndex}">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="badge bg-secondary">خيار ${optionIndex + 1}</span>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeOption(${optionIndex})">
+                            <i class="feather-trash-2"></i>
+                        </button>
+                    </div>
+                    <div class="mb-2">
+                        <input type="text" class="form-control" name="Options[${optionIndex}].OptionText" placeholder="نص الخيار" required />
+                    </div>
+                    <div class="form-check">
+                        ${isMultiple ? `<input type="hidden" name="Options[${optionIndex}].IsCorrect" value="false" />` : ''}
+                        <input class="form-check-input correct-option" type="${inputType}" name="${inputName}" value="${isMultiple ? 'true' : optionIndex}" id="correct_${optionIndex}" />
+                        <label class="form-check-label" for="correct_${optionIndex}">
+                            <i class="feather-check text-success me-1"></i>إجابة صحيحة
+                        </label>
+                    </div>
+                    <input type="hidden" name="Options[${optionIndex}].DisplayOrder" value="${optionIndex}" />
+                </div>
+            `;
+            document.getElementById('optionsContainer').insertAdjacentHTML('beforeend', html);
+            optionIndex++;
+        }
+
+        function removeOption(index) {
+            document.getElementById(`option_${index}`).remove();
+            updateOptionNumbers();
+        }
+
+        function updateOptionNumbers() {
+            const items = document.querySelectorAll('#optionsContainer .option-item');
+            items.forEach((item, i) => {
+                item.querySelector('.badge').textContent = `خيار ${i + 1}`;
+            });
+        }
+
+        // Add blank answer for FillInTheBlanks
+        function addBlankAnswer() {
+            const html = `
+                <div class="input-group mb-2" id="blank_${blankIndex}">
+                    <span class="input-group-text">فراغ ${blankIndex + 1}</span>
+                    <input type="text" class="form-control" name="BlankAnswers[${blankIndex}]" placeholder="الإجابة الصحيحة" required />
+                    <button type="button" class="btn btn-outline-danger" onclick="removeBlank(${blankIndex})">
+                        <i class="feather-x"></i>
+                    </button>
+                </div>
+            `;
+            document.getElementById('blanksContainer').insertAdjacentHTML('beforeend', html);
+            blankIndex++;
+        }
+
+        function removeBlank(index) {
+            document.getElementById(`blank_${index}`).remove();
+        }
+
+        // Add matching pair
+        function addMatchingPair() {
+            const html = `
+                <div class="row mb-3 align-items-center" id="matching_${matchingIndex}">
+                    <div class="col-5">
+                        <input type="text" class="form-control" name="MatchingPairs[${matchingIndex}].Left" placeholder="العنصر الأيسر" required />
+                    </div>
+                    <div class="col-2 text-center">
+                        <i class="feather-arrow-left-right text-muted"></i>
+                    </div>
+                    <div class="col-4">
+                        <input type="text" class="form-control" name="MatchingPairs[${matchingIndex}].Right" placeholder="العنصر الأيمن" required />
+                    </div>
+                    <div class="col-1">
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeMatching(${matchingIndex})">
+                            <i class="feather-x"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('matchingContainer').insertAdjacentHTML('beforeend', html);
+            matchingIndex++;
+        }
+
+        function removeMatching(index) {
+            document.getElementById(`matching_${index}`).remove();
+        }
+
+        // Add ordering item
+        function addOrderingItem() {
+            const html = `
+                <div class="input-group mb-2" id="ordering_${orderingIndex}">
+                    <span class="input-group-text bg-primary text-white">${orderingIndex + 1}</span>
+                    <input type="text" class="form-control" name="OrderingItems[${orderingIndex}]" placeholder="العنصر" required />
+                    <button type="button" class="btn btn-outline-danger" onclick="removeOrdering(${orderingIndex})">
+                        <i class="feather-x"></i>
+                    </button>
+                </div>
+            `;
+            document.getElementById('orderingContainer').insertAdjacentHTML('beforeend', html);
+            orderingIndex++;
+        }
+
+        function removeOrdering(index) {
+            document.getElementById(`ordering_${index}`).remove();
+            updateOrderingNumbers();
+        }
+
+        function updateOrderingNumbers() {
+            const items = document.querySelectorAll('#orderingContainer .input-group');
+            items.forEach((item, i) => {
+                item.querySelector('.input-group-text').textContent = i + 1;
+            });
+        }
+
+        // Hide all question type cards
+        function hideAllCards() {
+            document.getElementById('optionsCard').style.display = 'none';
+            document.getElementById('trueFalseCard').style.display = 'none';
+            document.getElementById('shortAnswerCard').style.display = 'none';
+            document.getElementById('fillBlanksCard').style.display = 'none';
+            document.getElementById('matchingCard').style.display = 'none';
+            document.getElementById('orderingCard').style.display = 'none';
+            document.getElementById('noOptionsCard').style.display = 'none';
+        }
+
+        // Handle question type change
+        function handleQuestionTypeChange(type) {
+            currentQuestionType = type;
+            hideAllCards();
+            
+            // Clear existing options when switching types
+            document.getElementById('optionsContainer').innerHTML = '';
+            optionIndex = 0;
+
+            switch(type) {
+                case 'SingleChoice':
+                    document.getElementById('optionsCard').style.display = 'block';
+                    document.getElementById('optionsHelp').textContent = 'أضف الخيارات وحدد الإجابة الصحيحة الواحدة';
+                    // Add default options
+                    addOption();
+                    addOption();
+                    addOption();
+                    addOption();
+                    break;
+
+                case 'MultipleChoice':
+                    document.getElementById('optionsCard').style.display = 'block';
+                    document.getElementById('optionsHelp').textContent = 'أضف الخيارات وحدد الإجابات الصحيحة (يمكن اختيار أكثر من إجابة)';
+                    // Add default options
+                    addOption();
+                    addOption();
+                    addOption();
+                    addOption();
+                    break;
+
+                case 'TrueFalse':
+                    document.getElementById('trueFalseCard').style.display = 'block';
+                    break;
+
+                case 'ShortAnswer':
+                    document.getElementById('shortAnswerCard').style.display = 'block';
+                    break;
+
+                case 'FillInTheBlanks':
+                    document.getElementById('fillBlanksCard').style.display = 'block';
+                    document.getElementById('blanksContainer').innerHTML = '';
+                    blankIndex = 0;
+                    addBlankAnswer();
+                    break;
+
+                case 'Matching':
+                    document.getElementById('matchingCard').style.display = 'block';
+                    document.getElementById('matchingContainer').innerHTML = '';
+                    matchingIndex = 0;
+                    addMatchingPair();
+                    addMatchingPair();
+                    break;
+
+                case 'Ordering':
+                    document.getElementById('orderingCard').style.display = 'block';
+                    document.getElementById('orderingContainer').innerHTML = '';
+                    orderingIndex = 0;
+                    addOrderingItem();
+                    addOrderingItem();
+                    addOrderingItem();
+                    break;
+
+                case 'Essay':
+                    document.getElementById('noOptionsCard').style.display = 'block';
+                    document.getElementById('noOptionsMessage').textContent = 'السؤال المقالي يتطلب تقييم يدوي. يمكنك إضافة معايير التقييم في حقل الشرح.';
+                    break;
+
+                case 'FileUpload':
+                    document.getElementById('noOptionsCard').style.display = 'block';
+                    document.getElementById('noOptionsMessage').textContent = 'سؤال رفع ملف - سيقوم الطالب برفع ملف للتقييم اليدوي.';
+                    break;
+            }
+        }
+
+        $(document).ready(function() {
+            $('#questionType').change(function() {
+                handleQuestionTypeChange($(this).val());
+            });
+            
+            // Initialize with default type
+            handleQuestionTypeChange($('#questionType').val());
+        });
+    </script>
+}
+

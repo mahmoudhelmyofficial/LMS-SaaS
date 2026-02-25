@@ -1,0 +1,394 @@
+@model LMS.Domain.Entities.Payments.Refund
+@{
+    ViewData["Title"] = Html.T("تفاصيل طلب الاسترداد", "Refund Request Details");
+}
+
+@section Styles {
+<style>
+    .refund-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    
+    .status-timeline {
+        position: relative;
+        padding-right: 40px;
+    }
+    
+    .timeline-item {
+        position: relative;
+        padding-bottom: 30px;
+    }
+    
+    .timeline-item:last-child {
+        padding-bottom: 0;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        right: -40px;
+        top: 0;
+        width: 2px;
+        height: 100%;
+        background: #e5e7eb;
+    }
+    
+    .timeline-item:last-child::before {
+        display: none;
+    }
+    
+    .timeline-dot {
+        position: absolute;
+        right: -48px;
+        top: 0;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 3px solid #e5e7eb;
+        background: white;
+    }
+    
+    .timeline-dot.active {
+        border-color: #667eea;
+        background: #667eea;
+    }
+    
+    .timeline-dot.success {
+        border-color: #10b981;
+        background: #10b981;
+    }
+    
+    .timeline-dot.danger {
+        border-color: #ef4444;
+        background: #ef4444;
+    }
+    
+    .info-box {
+        background: #f9fafb;
+        border-right: 4px solid #667eea;
+        padding: 20px;
+        border-radius: 8px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<div class="refund-container">
+    <!-- Back Button -->
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-sm btn-light">
+            <i class="feather-arrow-right me-2"></i>
+            @Html.T("العودة للطلبات", "Back to Requests")
+        </a>
+    </div>
+    
+    <!-- Header -->
+    <div class="card stretch stretch-full mb-4">
+        <div class="card-body py-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h3 class="fw-bold mb-2">
+                        <i class="feather-refresh-cw text-primary me-2"></i>
+                        @Html.T("طلب استرداد", "Refund Request") #@Model.Id
+                    </h3>
+                    <p class="text-muted mb-0">
+                        @Html.T("تم التقديم في", "Submitted on") @Model.RequestedAt.ToString("dd MMMM yyyy - HH:mm")
+                    </p>
+                </div>
+                <div class="col-md-4 text-md-start">
+                    @if (Model.Status == LMS.Domain.Enums.RefundStatus.Pending)
+                    {
+                        <span class="badge bg-warning fs-5 px-3 py-2">
+                            <i class="feather-clock me-1"></i>
+                            @Html.T("قيد المراجعة", "Under Review")
+                        </span>
+                    }
+                    else if (Model.Status == LMS.Domain.Enums.RefundStatus.Approved)
+                    {
+                        <span class="badge bg-success fs-5 px-3 py-2">
+                            <i class="feather-check-circle me-1"></i>
+                            @Html.T("تمت الموافقة", "Approved")
+                        </span>
+                    }
+                    else if (Model.Status == LMS.Domain.Enums.RefundStatus.Rejected)
+                    {
+                        <span class="badge bg-danger fs-5 px-3 py-2">
+                            <i class="feather-x-circle me-1"></i>
+                            @Html.T("مرفوض", "Rejected")
+                        </span>
+                    }
+                    else if (Model.Status == LMS.Domain.Enums.RefundStatus.Processing)
+                    {
+                        <span class="badge bg-info fs-5 px-3 py-2">
+                            <i class="feather-loader me-1"></i>
+                            @Html.T("قيد المعالجة", "Processing")
+                        </span>
+                    }
+                    else if (Model.Status == LMS.Domain.Enums.RefundStatus.Completed)
+                    {
+                        <span class="badge bg-success fs-5 px-3 py-2">
+                            <i class="feather-check-circle me-1"></i>
+                            @Html.T("مكتمل", "Completed")
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row g-4">
+        <!-- Main Details -->
+        <div class="col-lg-8">
+            <!-- Refund Information -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">@Html.T("معلومات الاسترداد", "Refund Information")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">@Html.T("رقم المعاملة الأصلية", "Original Transaction ID")</small>
+                            <code class="text-primary">@Model.OriginalTransactionId</code>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">@Html.T("المبلغ", "Amount")</small>
+                            <h4 class="fw-bold text-success mb-0">
+                                @Model.RefundAmount.ToEGP(2)
+                            </h4>
+                        </div>
+                        
+                        <div class="col-md-12">
+                            <small class="text-muted d-block mb-1">@Html.T("الدورة", "Course")</small>
+                            <strong>@(Model.Payment?.Course?.Title ?? Html.T("غير متاح", "N/A"))</strong>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <small class="text-muted d-block mb-1">@Html.T("تاريخ الطلب", "Request Date")</small>
+                            <strong>@Model.RequestedAt.ToString("dd MMMM yyyy")</strong>
+                        </div>
+                        
+                        @if (Model.ProcessedAt.HasValue)
+                        {
+                            <div class="col-md-6">
+                                <small class="text-muted d-block mb-1">@Html.T("تاريخ المعالجة", "Processed Date")</small>
+                                <strong>@Model.ProcessedAt.Value.ToString("dd MMMM yyyy")</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Reason Details -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">@Html.T("سبب الطلب", "Request Reason")</h5>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(Model.Reason))
+                    {
+                        <div class="alert alert-info mb-3">
+                            <strong>@Html.T("السبب:", "Reason:")</strong> @Model.Reason
+                        </div>
+                    }
+                    
+                    @if (!string.IsNullOrEmpty(Model.Details))
+                    {
+                        <div class="info-box">
+                            <h6 class="fw-bold mb-2">@Html.T("التفاصيل:", "Details:")</h6>
+                            <p class="mb-0">@Model.Details</p>
+                        </div>
+                    }
+                </div>
+            </div>
+            
+            <!-- Processor Response -->
+            @if (!string.IsNullOrEmpty(Model.ProcessorResponse) || !string.IsNullOrEmpty(Model.RejectionNotes))
+            {
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="fw-bold mb-0">
+                            @if (Model.Status == LMS.Domain.Enums.RefundStatus.Rejected)
+                            {
+                                <i class="feather-x-circle text-danger me-2"></i>
+                                <span>@Html.T("سبب الرفض", "Rejection Reason")</span>
+                            }
+                            else
+                            {
+                                <i class="feather-message-square text-primary me-2"></i>
+                                <span>@Html.T("استجابة المعالج", "Processor Response")</span>
+                            }
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrEmpty(Model.RejectionNotes))
+                        {
+                            <div class="alert alert-danger">
+                                <strong>@Html.T("ملاحظات الرفض:", "Rejection Notes:")</strong>
+                                <p class="mb-0 mt-2">@Model.RejectionNotes</p>
+                            </div>
+                        }
+                        
+                        @if (!string.IsNullOrEmpty(Model.ProcessorResponse))
+                        {
+                            <div class="info-box">
+                                <p class="mb-0">@Model.ProcessorResponse</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+        
+        <!-- Status Timeline -->
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">@Html.T("حالة الطلب", "Request Status")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="status-timeline">
+                        <!-- Requested -->
+                        <div class="timeline-item">
+                            <div class="timeline-dot active"></div>
+                            <div>
+                                <div class="fw-bold">@Html.T("تم تقديم الطلب", "Request Submitted")</div>
+                                <small class="text-muted">@Model.RequestedAt.ToString("dd/MM/yyyy HH:mm")</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Under Review -->
+                        <div class="timeline-item">
+                            <div class="timeline-dot @(Model.Status != LMS.Domain.Enums.RefundStatus.Pending ? "active" : "")"></div>
+                            <div>
+                                <div class="fw-bold">@Html.T("قيد المراجعة", "Under Review")</div>
+                                <small class="text-muted">
+                                    @if (Model.Status != LMS.Domain.Enums.RefundStatus.Pending)
+                                    {
+                                        <span>@Html.T("تمت المراجعة ✓", "Reviewed ✓")</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@Html.T("يستغرق 3-5 أيام عمل", "Takes 3-5 business days")</span>
+                                    }
+                                </small>
+                            </div>
+                        </div>
+                        
+                        @if (Model.Status == LMS.Domain.Enums.RefundStatus.Rejected)
+                        {
+                            <!-- Rejected -->
+                            <div class="timeline-item">
+                                <div class="timeline-dot danger"></div>
+                                <div>
+                                    <div class="fw-bold text-danger">@Html.T("تم الرفض", "Rejected")</div>
+                                    @if (Model.ProcessedAt.HasValue)
+                                    {
+                                        <small class="text-muted">@Model.ProcessedAt.Value.ToString("dd/MM/yyyy HH:mm")</small>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <!-- Approved -->
+                            <div class="timeline-item">
+                                <div class="timeline-dot @(Model.Status == LMS.Domain.Enums.RefundStatus.Approved || Model.Status == LMS.Domain.Enums.RefundStatus.Processing || Model.Status == LMS.Domain.Enums.RefundStatus.Completed ? "active" : "")"></div>
+                                <div>
+                                    <div class="fw-bold">@Html.T("تمت الموافقة", "Approved")</div>
+                                    <small class="text-muted">
+                                        @if (Model.Status == LMS.Domain.Enums.RefundStatus.Approved || Model.Status == LMS.Domain.Enums.RefundStatus.Processing || Model.Status == LMS.Domain.Enums.RefundStatus.Completed)
+                                        {
+                                            if (Model.ProcessedAt.HasValue)
+                                            {
+                                                @Model.ProcessedAt.Value.ToString("dd/MM/yyyy HH:mm")
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span>@Html.T("في انتظار الموافقة", "Awaiting approval")</span>
+                                        }
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <!-- Processing -->
+                            <div class="timeline-item">
+                                <div class="timeline-dot @(Model.Status == LMS.Domain.Enums.RefundStatus.Processing || Model.Status == LMS.Domain.Enums.RefundStatus.Completed ? "active" : "")"></div>
+                                <div>
+                                    <div class="fw-bold">@Html.T("قيد المعالجة", "Processing")</div>
+                                    <small class="text-muted">
+                                        @if (Model.Status == LMS.Domain.Enums.RefundStatus.Completed)
+                                        {
+                                            <span>@Html.T("تمت المعالجة ✓", "Processed ✓")</span>
+                                        }
+                                        else if (Model.Status == LMS.Domain.Enums.RefundStatus.Processing)
+                                        {
+                                            <span>@Html.T("جاري التحويل للبنك", "Transferring to bank")</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@Html.T("5-10 أيام عمل", "5-10 business days")</span>
+                                        }
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <!-- Completed -->
+                            <div class="timeline-item">
+                                <div class="timeline-dot @(Model.Status == LMS.Domain.Enums.RefundStatus.Completed ? "success" : "")"></div>
+                                <div>
+                                    <div class="fw-bold">@Html.T("تم الاسترداد", "Refunded")</div>
+                                    <small class="text-muted">
+                                        @if (Model.Status == LMS.Domain.Enums.RefundStatus.Completed)
+                                        {
+                                            <span class="text-success">@Html.T("المبلغ في حسابك ✓", "Amount in your account ✓")</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@Html.T("في انتظار الإكمال", "Awaiting completion")</span>
+                                        }
+                                    </small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Help Box -->
+            <div class="card stretch stretch-full mt-3">
+                <div class="card-body">
+                    <div class="text-center">
+                        <i class="feather-help-circle text-primary mb-3" style="font-size: 2.5rem;"></i>
+                        <h6 class="fw-bold mb-2">@Html.T("هل تحتاج مساعدة؟", "Need help?")</h6>
+                        <p class="text-muted small mb-3">@Html.T("تواصل مع فريق الدعم للمساعدة", "Contact support for assistance")</p>
+                        <a asp-controller="Support" asp-action="Create" class="btn btn-sm btn-primary">
+                            <i class="feather-message-circle me-2"></i>
+                            @Html.T("إرسال تذكرة", "Submit Ticket")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Auto-refresh for pending status
+    @if (Model.Status == LMS.Domain.Enums.RefundStatus.Pending || Model.Status == LMS.Domain.Enums.RefundStatus.Processing)
+    {
+        <text>
+        // Refresh page every 30 seconds if status is pending or processing
+        setTimeout(() => {
+            location.reload();
+        }, 30000);
+        </text>
+    }
+</script>
+}
+

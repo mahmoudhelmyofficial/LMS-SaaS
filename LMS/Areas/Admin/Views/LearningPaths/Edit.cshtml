@@ -1,0 +1,485 @@
+@model LMS.Areas.Admin.ViewModels.LearningPathEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل المسار التعليمي", "Edit Learning Path");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("المسارات التعليمية", "Learning paths"), Url.Action("Index", "LearningPaths")),
+        (Html.T("تعديل المسار", "Edit path"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.css" rel="stylesheet" />
+    <style>
+        .note-editor.note-frame { direction: rtl; text-align: right; }
+        .course-item {
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: move;
+            transition: all 0.3s;
+        }
+        .course-item:hover { border-color: #667eea; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .course-item.sortable-ghost { opacity: 0.4; background: #f8f9fa; }
+        .course-item.sortable-chosen { background: #f8f9fa; }
+        .drag-handle { cursor: grab; color: #6c757d; }
+        .drag-handle:active { cursor: grabbing; }
+        .stats-card {
+            background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%));
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .course-card.selected {
+            background: #e7f1ff;
+            border-color: #667eea !important;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-edit-2 me-2"></i>
+                        تعديل معلومات المسار
+                    </h5>
+                    <div class="card-header-action">
+                        <span class="badge bg-soft-info text-info">
+                            <i class="feather-users me-1"></i>
+                            @Model.EnrolledStudentsCount طالب مسجل
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="learningPathEditForm" enctype="multipart/form-data">
+                        <input type="hidden" asp-for="Id" />
+                        <input type="hidden" asp-for="EnrolledStudentsCount" />
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="Title" class="form-label">
+                                عنوان المسار <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Title" class="form-control form-control-lg" />
+                            <span asp-validation-for="Title" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="Slug" class="form-label">
+                                الرابط المخصص <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">/learning-paths/</span>
+                                <input asp-for="Slug" class="form-control" />
+                            </div>
+                            <span asp-validation-for="Slug" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="Description" class="form-label">
+                                الوصف <span class="text-danger">*</span>
+                            </label>
+                            <textarea asp-for="Description" id="descriptionEditor" class="form-control" rows="8"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="CategoryId" class="form-label">
+                                        التصنيف <span class="text-danger">*</span>
+                                    </label>
+                                    <select asp-for="CategoryId" class="form-select" id="categorySelect">
+                                        <option value="">@Html.T("اختر التصنيف", "Select category")</option>
+                                        @if (Model.AvailableCategories != null)
+                                        {
+                                            @foreach (var category in Model.AvailableCategories)
+                                            {
+                                                <option value="@category.Value">@category.Text</option>
+                                            }
+                                        }
+                                    </select>
+                                    <span asp-validation-for="CategoryId" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label asp-for="Level" class="form-label">
+                                        المستوى <span class="text-danger">*</span>
+                                    </label>
+                                    <select asp-for="Level" class="form-select">
+                                        <option value="">@Html.T("اختر المستوى", "Select level")</option>
+                                        <option value="Beginner">@Html.T("مبتدئ", "Beginner")</option>
+                                        <option value="Intermediate">@Html.T("متوسط", "Intermediate")</option>
+                                        <option value="Advanced">@Html.T("متقدم", "Advanced")</option>
+                                        <option value="AllLevels">@Html.T("جميع المستويات", "All levels")</option>
+                                    </select>
+                                    <span asp-validation-for="Level" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label asp-for="EstimatedDuration" class="form-label">
+                                        المدة التقديرية (ساعات) <span class="text-danger">*</span>
+                                    </label>
+                                    <input asp-for="EstimatedDuration" type="number" class="form-control" min="1" />
+                                    <span asp-validation-for="EstimatedDuration" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label asp-for="Price" class="form-label">
+                                        السعر (ريال)
+                                    </label>
+                                    <input asp-for="Price" type="number" class="form-control" min="0" step="0.01" />
+                                    <span asp-validation-for="Price" class="text-danger"></span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label asp-for="DiscountPrice" class="form-label">
+                                        السعر بعد الخصم (ريال)
+                                    </label>
+                                    <input asp-for="DiscountPrice" type="number" class="form-control" min="0" step="0.01" />
+                                    <span asp-validation-for="DiscountPrice" class="text-danger"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="ImageFile" class="form-label">
+                                صورة المسار
+                            </label>
+                            @if (!string.IsNullOrEmpty(Model.CurrentImageUrl))
+                            {
+                                <div class="mb-2">
+                                    <img src="@Model.CurrentImageUrl" alt="Current" class="img-thumbnail" style="max-width: 200px;">
+                                </div>
+                            }
+                            <input asp-for="ImageFile" type="file" class="form-control" accept="image/*" id="imageInput" />
+                            <span asp-validation-for="ImageFile" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label class="form-label">
+                                الدورات في المسار <span class="text-danger">*</span>
+                            </label>
+                            <div id="selectedCourses">
+                                @if (Model.SelectedCourses != null && Model.SelectedCourses.Any())
+                                {
+                                    var index = 1;
+                                    @foreach (var courseId in Model.SelectedCourses)
+                                    {
+                                        var courseTitle = Model.AvailableCourses?.FirstOrDefault(c => c.Value == courseId.ToString())?.Text ?? $"دورة {courseId}";
+                                        <div class="course-item" data-course-id="@courseId" data-course-title="@courseTitle">
+                                            <div class="d-flex align-items-center">
+                                                <i class="feather-menu drag-handle me-2"></i>
+                                                <div class="flex-grow-1">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <span class="badge bg-soft-primary text-primary order-badge">@index</span>
+                                                        <h6 class="mb-0">@courseTitle</h6>
+                                                    </div>
+                                                </div>
+                                                <button type="button" class="btn btn-sm btn-danger remove-course-btn" data-course-id="@courseId">
+                                                    <i class="feather-x"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        index++;
+                                    }
+                                }
+                            </div>
+                            <div id="courseIdsContainer">
+                                @if (Model.SelectedCourses != null)
+                                {
+                                    @foreach (var courseId in Model.SelectedCourses)
+                                    {
+                                        <input type="hidden" name="CourseIds" value="@courseId" />
+                                    }
+                                }
+                            </div>
+                            <input type="hidden" name="CourseIdsCsv" id="courseIdsCsv" value="@(Model.SelectedCourses != null ? string.Join(",", Model.SelectedCourses) : "")" />
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="Prerequisites" class="form-label">
+                                المتطلبات الأساسية
+                            </label>
+                            <textarea asp-for="Prerequisites" class="form-control" rows="3"></textarea>
+                            <span asp-validation-for="Prerequisites" class="text-danger"></span>
+                        </div>
+
+                        <div class="form-group mb-4">
+                            <label asp-for="WhatYouWillLearn" class="form-label">
+                                ماذا ستتعلم
+                            </label>
+                            <textarea asp-for="WhatYouWillLearn" class="form-control" rows="4"></textarea>
+                            <span asp-validation-for="WhatYouWillLearn" class="text-danger"></span>
+                        </div>
+
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title mb-3">
+                                    <i class="feather-settings me-2"></i>
+                                    خيارات المسار
+                                </h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActiveSwitch" />
+                                            <label class="form-check-label" for="isActiveSwitch">
+                                                <i class="feather-check-circle me-2"></i>
+                                                مسار نشط
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IsFeatured" class="form-check-input" type="checkbox" id="isFeaturedSwitch" />
+                                            <label class="form-check-label" for="isFeaturedSwitch">
+                                                <i class="feather-star me-2"></i>
+                                                مسار مميز
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="RequireSequentialCompletion" class="form-check-input" type="checkbox" id="sequentialSwitch" />
+                                            <label class="form-check-label" for="sequentialSwitch">
+                                                <i class="feather-arrow-right me-2"></i>
+                                                يتطلب إتمام تسلسلي
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-check form-switch">
+                                            <input asp-for="IssueCertificate" class="form-check-input" type="checkbox" id="certificateSwitch" />
+                                            <label class="form-check-label" for="certificateSwitch">
+                                                <i class="feather-award me-2"></i>
+                                                إصدار شهادة عند الإتمام
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 justify-content-between">
+                            <div class="d-flex gap-2">
+                                <a asp-action="Index" class="btn btn-light">
+                                    <i class="feather-x me-2"></i>
+                                    إلغاء
+                                </a>
+                                <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-secondary">
+                                    <i class="feather-eye me-2"></i>
+                                    @Html.T("عرض التفاصيل", "View details")
+                                </a>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-2"></i>
+                                حفظ التغييرات
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-body stats-card">
+                    <h6 class="text-white mb-4">
+                        <i class="feather-bar-chart me-2"></i>
+                        إحصائيات المسار
+                    </h6>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h3 class="text-white mb-1">@Model.EnrolledStudentsCount</h3>
+                                <small class="text-white-50">@Html.T("طالب", "Student(s)")</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h3 class="text-white mb-1">@Model.CompletedCount</h3>
+                                <small class="text-white-50">@Html.T("أتموا", "Completed")</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-book me-2"></i>
+                        إضافة دورات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <input type="text" class="form-control mb-3" id="searchCourses" placeholder="@Html.T("البحث عن دورة...", "Search for a course...")">
+                    <div class="available-courses" id="availableCoursesList" style="max-height: 400px; overflow-y: auto;">
+                        @if (Model.AvailableCourses != null && Model.AvailableCourses.Any())
+                        {
+                            @foreach (var course in Model.AvailableCourses)
+                            {
+                                <div class="course-card" data-course-id="@course.Value" data-course-title="@course.Text" style="border: 1px solid #dee2e6; border-radius: 6px; padding: 12px; margin-bottom: 8px; cursor: pointer;">
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1">@course.Text</h6>
+                                            <small class="text-muted">
+                                                <i class="feather-clock me-1"></i>
+                                                @(course.Value) دقيقة
+                                            </small>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-primary add-course-btn">
+                                            <i class="feather-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            let selectedCourses = [];
+            
+            // Load selected courses
+            $('#selectedCourses .course-item').each(function() {
+                var courseId = $(this).data('course-id');
+                selectedCourses.push(courseId);
+                // Mark as selected in available courses list
+                $('.course-card[data-course-id="' + courseId + '"]')
+                    .addClass('selected')
+                    .find('.add-course-btn').html('<i class="feather-check"></i>');
+            });
+            updateCourseIds();
+
+            $('#descriptionEditor').summernote({ height: 200, direction: 'rtl' });
+            $('#categorySelect').select2({ dir: 'rtl' });
+
+            // Sortable
+            new Sortable(document.getElementById('selectedCourses'), {
+                animation: 150,
+                handle: '.drag-handle',
+                onEnd: function() {
+                    updateOrder();
+                    updateCourseIds();
+                }
+            });
+
+            $(document).on('click', '.add-course-btn', function() {
+                const card = $(this).closest('.course-card');
+                const courseId = card.data('course-id');
+                const courseTitle = card.data('course-title');
+                if (!selectedCourses.includes(courseId)) {
+                    selectedCourses.push(courseId);
+                    addCourseToPath(courseId, courseTitle, selectedCourses.length);
+                    card.addClass('selected').find('.add-course-btn').html('<i class="feather-check"></i>');
+                    updateCourseIds();
+                }
+            });
+
+            $(document).on('click', '.remove-course-btn', function() {
+                const courseId = $(this).data('course-id');
+                selectedCourses = selectedCourses.filter(id => id !== courseId);
+                $(this).closest('.course-item').remove();
+                $('.course-card[data-course-id="' + courseId + '"]').removeClass('selected').find('.add-course-btn').html('<i class="feather-plus"></i>');
+                updateOrder();
+                updateCourseIds();
+            });
+
+            function addCourseToPath(courseId, courseTitle, order) {
+                const courseHtml = `
+                    <div class="course-item" data-course-id="${courseId}">
+                        <div class="d-flex align-items-center">
+                            <i class="feather-menu drag-handle me-2"></i>
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-soft-primary text-primary order-badge">${order}</span>
+                                    <h6 class="mb-0">${courseTitle}</h6>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-danger remove-course-btn" data-course-id="${courseId}">
+                                <i class="feather-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                $('#selectedCourses').append(courseHtml);
+            }
+
+            function updateOrder() {
+                $('#selectedCourses .course-item').each(function(index) {
+                    $(this).find('.order-badge').text(index + 1);
+                });
+            }
+
+            function updateCourseIds() {
+                $('#courseIdsContainer').empty();
+                var ids = [];
+                $('#selectedCourses .course-item').each(function() {
+                    var courseId = $(this).data('course-id');
+                    $('#courseIdsContainer').append(
+                        '<input type="hidden" name="CourseIds" value="' + courseId + '" />'
+                    );
+                    ids.push(courseId);
+                });
+                $('#courseIdsCsv').val(ids.join(','));
+            }
+
+            $('#searchCourses').on('input', function() {
+                const searchTerm = $(this).val().toLowerCase();
+                $('.course-card').each(function() {
+                    const title = $(this).data('course-title').toLowerCase();
+                    $(this).toggle(title.includes(searchTerm));
+                });
+            });
+
+            // Unsaved changes warning
+            let hasUnsavedChanges = false;
+            $('#learningPathEditForm input, #learningPathEditForm select, #learningPathEditForm textarea').on('change', function() {
+                hasUnsavedChanges = true;
+            });
+
+            $('#learningPathEditForm').on('submit', function() {
+                updateCourseIds();
+                hasUnsavedChanges = false;
+            });
+
+            $(window).on('beforeunload', function() {
+                if (hasUnsavedChanges) {
+                    return 'لديك تغييرات غير محفوظة. هل أنت متأكد من المغادرة؟';
+                }
+            });
+        });
+    </script>
+}
+

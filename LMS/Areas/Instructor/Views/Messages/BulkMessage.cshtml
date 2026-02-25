@@ -1,0 +1,437 @@
+@model LMS.Areas.Instructor.ViewModels.BulkMessageViewModel
+@using LMS.Areas.Instructor.ViewModels
+
+@{
+    ViewData["Title"] = Html.T("رسالة جماعية", "Bulk Message");
+    ViewData["Subtitle"] = Html.T("إرسال رسالة لعدة طلاب", "Send message to multiple students");
+    var coursesList = (ViewBag.Courses as IEnumerable<CourseWithCountDto>) ?? Enumerable.Empty<CourseWithCountDto>();
+}
+
+@{
+    var indexUrl = Url.Action("Index");
+    var actionButtonsHtml = "<a href='" + indexUrl + "' class='btn btn-light'>" +
+        "<i class='feather-arrow-right me-2'></i>" +
+        "إلغاء" +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="alert alert-info mb-4">
+        <div class="d-flex align-items-center gap-3">
+            <div class="avatar-text avatar-md bg-primary text-white">
+                <i class="feather-users"></i>
+            </div>
+            <div>
+                <h6 class="fw-bold mb-1">@Html.T("إرسال رسالة جماعية", "Send bulk message")</h6>
+                <p class="mb-0">سيتم إرسال الرسالة لجميع الطلاب في الدورة المحددة أو جميع طلابك</p>
+            </div>
+        </div>
+    </div>
+
+    <form asp-action="BulkMessage" method="post" id="bulkMessageForm">
+        @Html.AntiForgeryToken()
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Recipients Selection -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-users me-2 text-primary"></i>
+                            اختيار المستلمين
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">الدورة</label>
+                                <select asp-for="CourseId" class="form-select" id="courseSelect">
+                                    <option value="">جميع الطلاب في جميع دوراتي</option>
+                                    @foreach (var course in coursesList)
+                                    {
+                                        <option value="@course.Id" data-students="@course.TotalStudents">
+                                            @course.Title (@course.TotalStudents طالب)
+                                        </option>
+                                    }
+                                </select>
+                                <span asp-validation-for="CourseId" class="text-danger"></span>
+                                <div class="form-text">
+                                    <i class="feather-info me-1"></i>
+                                    اختر دورة محددة أو أرسل لجميع طلابك
+                                </div>
+                            </div>
+
+                            <!-- Recipients Count Display -->
+                            <div class="col-lg-12">
+                                <div class="alert alert-success" id="recipientsCount" style="display: none;">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="feather-users"></i>
+                                        <span>سيتم إرسال الرسالة إلى: <strong><span id="countNumber">0</span> طالب</strong></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Message Form -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-send me-2 text-primary"></i>
+                            محتوى الرسالة
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <!-- Subject -->
+                            <div class="col-lg-12">
+                                <label class="form-label">الموضوع <span class="text-danger">*</span></label>
+                                <input asp-for="Subject" class="form-control" placeholder="@Html.T("مثال: إعلان مهم للجميع", "e.g. Important announcement for everyone")">
+                                <span asp-validation-for="Subject" class="text-danger"></span>
+                                <div id="charCountSubject" class="form-text text-end">0 / 200 حرف</div>
+                            </div>
+
+                            <!-- Message Body -->
+                            <div class="col-lg-12">
+                                <label class="form-label">الرسالة <span class="text-danger">*</span></label>
+                                <textarea asp-for="Body" class="form-control" rows="12" placeholder="@Html.T("اكتب رسالتك هنا... ملاحظة: سيتم إرسال نفس الرسالة لجميع المستلمين", "Write your message here... Note: The same message will be sent to all recipients")"></textarea>
+                                <span asp-validation-for="Body" class="text-danger"></span>
+                                <div id="charCountBody" class="form-text text-end">0 / 2000 حرف</div>
+                            </div>
+
+                            <!-- Warning -->
+                            <div class="col-lg-12">
+                                <div class="alert alert-warning">
+                                    <i class="feather-alert-triangle me-2"></i>
+                                    <strong>تنبيه:</strong> تأكد من محتوى الرسالة قبل الإرسال. سيتم إرسال الرسالة لجميع المستلمين المحددين ولا يمكن التراجع.
+                                </div>
+                            </div>
+
+                            <!-- Confirmation Checkbox -->
+                            <div class="col-lg-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="confirmSend">
+                                    <label class="form-check-label" for="confirmSend">
+                                        أؤكد أنني راجعت المحتوى وأريد إرسال هذه الرسالة لجميع المستلمين
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <div class="col-lg-12">
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary" id="sendBtn" disabled>
+                                        <i class="feather-send me-2"></i>
+                                        إرسال الرسالة الجماعية
+                                    </button>
+                                    <a href="@Url.Action("Index")" class="btn btn-light">
+                                        <i class="feather-x me-2"></i>
+                                        إلغاء
+                                    </a>
+                                    <button type="button" class="btn btn-light" id="clearBtn">
+                                        <i class="feather-refresh-cw me-2"></i>
+                                        مسح
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Preview -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-eye me-2"></i>
+                            معاينة الرسالة
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="fs-11 text-muted mb-1">الموضوع:</div>
+                            <h6 class="fw-bold" id="previewSubject">
+                                <em class="text-muted fs-14">اكتب الموضوع...</em>
+                            </h6>
+                        </div>
+                        <hr />
+                        <div>
+                            <div class="fs-11 text-muted mb-2">الرسالة:</div>
+                            <div class="bg-soft-light p-3 rounded" style="min-height: 100px;">
+                                <p id="previewBody" class="mb-0 fs-13" style="white-space: pre-wrap;">
+                                    <em class="text-muted">اكتب رسالتك...</em>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Templates -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">
+                            <i class="feather-zap me-2"></i>
+                            قوالب الإعلانات
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn" 
+                                    data-subject="إعلان: محتوى جديد متاح"
+                                    data-body="أعزائي الطلاب،
+
+يسرني إبلاغكم بإضافة محتوى جديد للدورة:
+- درس جديد: [اسم الدرس]
+- موارد إضافية
+- اختبار تقييمي
+
+بالتوفيق للجميع!">
+                                <i class="feather-book me-2 text-primary"></i>
+                                محتوى جديد
+                            </button>
+
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn"
+                                    data-subject="تذكير: موعد نهائي قادم"
+                                    data-body="السلام عليكم،
+
+أذكركم بالموعد النهائي القادم:
+- المهمة/الاختبار: [الاسم]
+- الموعد النهائي: [التاريخ]
+
+يرجى إكمال العمل في الوقت المحدد.
+
+تحياتي">
+                                <i class="feather-clock me-2 text-warning"></i>
+                                تذكير بموعد
+                            </button>
+
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn"
+                                    data-subject="تحديث مهم على الدورة"
+                                    data-body="أعزائي الطلاب،
+
+هناك تحديث مهم على الدورة:
+
+[اشرح التحديث بالتفصيل]
+
+إذا كان لديكم أي استفسارات، لا تترددوا بالتواصل.
+
+شكراً لكم">
+                                <i class="feather-alert-circle me-2 text-info"></i>
+                                تحديث مهم
+                            </button>
+
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn"
+                                    data-subject="رسالة تحفيزية"
+                                    data-body="أحبائي الطلاب،
+
+أشكركم على اجتهادكم وتفاعلكم الرائع في الدورة!
+
+استمروا في العمل الجاد، والنجاح ينتظركم.
+
+أنا فخور بكم جميعاً!">
+                                <i class="feather-award me-2 text-success"></i>
+                                رسالة تحفيزية
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="card stretch stretch-full mb-4 bg-soft-info">
+                    <div class="card-body">
+                        <h6 class="fw-bold text-info mb-3">
+                            <i class="feather-bar-chart-2 me-2"></i>
+                            معلومات مفيدة
+                        </h6>
+                        <ul class="list-unstyled mb-0 fs-13">
+                            <li class="mb-2">
+                                <i class="feather-check me-2 text-success"></i>
+                                الرسالة تصل فوراً
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check me-2 text-success"></i>
+                                يتم إنشاء إشعار لكل طالب
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check me-2 text-success"></i>
+                                يمكنك تتبع الرسائل المقروءة
+                            </li>
+                            <li class="mb-0">
+                                <i class="feather-check me-2 text-success"></i>
+                                الطلاب يمكنهم الرد عليك
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Warning Card -->
+                <div class="alert alert-warning">
+                    <i class="feather-alert-triangle me-2"></i>
+                    <strong>انتبه:</strong> تجنب الإرسال المتكرر للرسائل الجماعية. استخدمها فقط للإعلانات المهمة.
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        $(document).ready(function () {
+            const subjectInput = $('#Subject');
+            const bodyTextarea = $('#Body');
+            const previewSubject = $('#previewSubject');
+            const previewBody = $('#previewBody');
+            const charCountSubject = $('#charCountSubject');
+            const charCountBody = $('#charCountBody');
+            const confirmCheckbox = $('#confirmSend');
+            const sendBtn = $('#sendBtn');
+            const courseSelect = $('#courseSelect');
+            const recipientsCount = $('#recipientsCount');
+            const countNumber = $('#countNumber');
+
+            // Update preview and character count
+            function updatePreview() {
+                // Subject preview
+                const subject = subjectInput.val().trim();
+                if (subject) {
+                    previewSubject.text(subject).removeClass('text-muted');
+                } else {
+                    previewSubject.html('<em class="text-muted fs-14">اكتب الموضوع...</em>');
+                }
+
+                // Body preview
+                const body = bodyTextarea.val();
+                if (body.trim()) {
+                    previewBody.text(body).removeClass('text-muted');
+                } else {
+                    previewBody.html('<em class="text-muted">اكتب رسالتك...</em>');
+                }
+
+                // Character counts
+                charCountSubject.text(subject.length + ' / 200 حرف');
+                charCountBody.text(body.length + ' / 2000 حرف');
+            }
+
+            subjectInput.on('input', updatePreview);
+            bodyTextarea.on('input', updatePreview);
+            updatePreview();
+
+            // Course selection - show recipient count
+            courseSelect.on('change', function() {
+                const selectedOption = $(this).find(':selected');
+                const studentsCount = parseInt(selectedOption.data('students')) || 0;
+                
+                if ($(this).val()) {
+                    countNumber.text(studentsCount);
+                    recipientsCount.slideDown();
+                } else {
+                    // Calculate total students across all courses
+                    let totalStudents = 0;
+                    $('#courseSelect option[data-students]').each(function() {
+                        const count = parseInt($(this).data('students')) || 0;
+                        totalStudents += count;
+                    });
+                    countNumber.text(totalStudents);
+                    recipientsCount.slideDown();
+                }
+            });
+
+            // Trigger initial count
+            if (courseSelect.length > 0) {
+                courseSelect.trigger('change');
+            }
+
+            // Enable/disable send button based on confirmation
+            confirmCheckbox.on('change', function() {
+                sendBtn.prop('disabled', !$(this).is(':checked'));
+            });
+
+            // Quick templates
+            $('.template-btn').on('click', function() {
+                const subject = $(this).data('subject');
+                const body = $(this).data('body');
+                
+                subjectInput.val(subject);
+                bodyTextarea.val(body);
+                updatePreview();
+
+                $('html, body').animate({
+                    scrollTop: bodyTextarea.offset().top - 100
+                }, 500);
+            });
+
+            // Clear button
+            $('#clearBtn').on('click', function() {
+                if (confirm('هل تريد مسح جميع الحقول؟')) {
+                    subjectInput.val('');
+                    bodyTextarea.val('');
+                    confirmCheckbox.prop('checked', false);
+                    sendBtn.prop('disabled', true);
+                    updatePreview();
+                }
+            });
+
+            // Form validation
+            $('#bulkMessageForm').on('submit', function(e) {
+                const subject = subjectInput.val().trim();
+                const body = bodyTextarea.val().trim();
+
+                if (!confirmCheckbox.is(':checked')) {
+                    e.preventDefault();
+                    alert('يرجى تأكيد الإرسال بتحديد المربع أعلاه');
+                    return false;
+                }
+
+                if (!subject || subject.length < 5) {
+                    e.preventDefault();
+                    alert('الموضوع يجب أن يكون 5 أحرف على الأقل');
+                    subjectInput.focus();
+                    return false;
+                }
+
+                if (!body || body.length < 10) {
+                    e.preventDefault();
+                    alert('الرسالة يجب أن تكون 10 أحرف على الأقل');
+                    bodyTextarea.focus();
+                    return false;
+                }
+
+                // Final confirmation
+                const recipients = countNumber.text() || '0';
+                const recipientsNum = parseInt(recipients) || 0;
+                if (recipientsNum === 0) {
+                    e.preventDefault();
+                    alert('لا يوجد مستلمين محددين');
+                    return false;
+                }
+                if (!confirm(`هل أنت متأكد من إرسال هذه الرسالة إلى ${recipients} طالب؟`)) {
+                    e.preventDefault();
+                    return false;
+                }
+
+                return true;
+            });
+        });
+    </script>
+
+    <style>
+        .template-btn {
+            text-align: right !important;
+            white-space: normal;
+            line-height: 1.4;
+        }
+    </style>
+}
+

@@ -1,0 +1,256 @@
+@model IEnumerable<LMS.Domain.Entities.Settings.TaxSetting>
+
+@{
+    ViewData["Title"] = Html.T("إعدادات الضرائب", "Tax Settings");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإدارة المالية", "Finance"), null),
+        (Html.T("إعدادات الضرائب", "Tax Settings"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إضافة ضريبة", "Add Tax"), "feather-plus", Url.Action("Create", "TaxSettings"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-percent"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي الضرائب", "Total Taxes")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("ضرائب مفعلة", "Active Taxes")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(t => t.IsEnabled).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-star"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("الضريبة الافتراضية", "Default Tax")</span>
+                            @{
+                                var defaultTax = Model.FirstOrDefault(t => t.IsDefault);
+                            }
+                            <h3 class="fw-bolder d-block">@(defaultTax?.TaxRate.ToString("N1") ?? "0")%</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-globe"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("الدول المغطاة", "Countries covered")</span>
+                            <h3 class="fw-bolder d-block">@Model.Select(t => t.Country).Distinct().Count(c => !string.IsNullOrEmpty(c)).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة الضرائب", "Tax list")</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="taxSettingsTable">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("اسم الضريبة", "Tax name")</th>
+                                        <th>@Html.T("النوع", "Type")</th>
+                                        <th>@Html.T("النسبة", "Rate")</th>
+                                        <th>@Html.T("الدولة", "Country")</th>
+                                        <th>@Html.T("التطبيق على", "Applies to")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                        <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var tax in Model.OrderBy(t => t.DisplayOrder))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <span class="fw-bold">@tax.TaxName</span>
+                                                    @if (tax.IsDefault)
+                                                    {
+                                                        <span class="badge bg-soft-warning text-warning">@Html.T("افتراضي", "Default")</span>
+                                                    }
+                                                </div>
+                                                @if (!string.IsNullOrEmpty(tax.Description))
+                                                {
+                                                    <small class="text-muted d-block">@tax.Description</small>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-info text-info">@tax.TaxType</span>
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold text-primary">@tax.TaxRate.ToString("N2")%</span>
+                                            </td>
+                                            <td>
+                                                @if (!string.IsNullOrEmpty(tax.Country))
+                                                {
+                                                    <span>@tax.Country</span>
+                                                    @if (!string.IsNullOrEmpty(tax.State))
+                                                    {
+                                                        <small class="text-muted"> - @tax.State</small>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">@Html.T("جميع الدول", "All countries")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    @if (tax.ApplyToDigitalProducts)
+                                                    {
+                                                        <span class="badge bg-soft-primary text-primary fs-10">@Html.T("رقمي", "Digital")</span>
+                                                    }
+                                                    @if (tax.ApplyToPhysicalProducts)
+                                                    {
+                                                        <span class="badge bg-soft-secondary text-secondary fs-10">@Html.T("مادي", "Physical")</span>
+                                                    }
+                                                    @if (tax.ApplyToSubscriptions)
+                                                    {
+                                                        <span class="badge bg-soft-success text-success fs-10">@Html.T("اشتراكات", "Subscriptions")</span>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (tax.IsEnabled)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-check-circle fs-12 me-1"></i>
+                                                        مفعل
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger">
+                                                        <i class="feather-x-circle fs-12 me-1"></i>
+                                                        معطل
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Edit", "TaxSettings", new { id = tax.Id })" 
+                                                       class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                        <i class="feather-edit"></i>
+                                                    </a>
+                                                    <form asp-action="ToggleStatus" asp-route-id="@tax.Id" method="post" class="d-inline">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="avatar-text avatar-md border-0 bg-transparent" 
+                                                                data-bs-toggle="tooltip" title="@(tax.IsEnabled ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))">
+                                                            <i class="feather-@(tax.IsEnabled ? "toggle-right text-success" : "toggle-left text-muted")"></i>
+                                                        </button>
+                                                    </form>
+                                                    <form asp-action="Delete" asp-route-id="@tax.Id" method="post" class="d-inline"
+                                                          onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذه الضريبة؟", "Are you sure you want to delete this tax?").ToString().Replace("'", "\\'"))')">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="avatar-text avatar-md border-0 bg-transparent" 
+                                                                data-bs-toggle="tooltip" title="@Html.T("حذف", "Delete")">
+                                                            <i class="feather-trash-2 text-danger"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                                <i class="feather-percent"></i>
+                            </div>
+                            <h5>@Html.T("لا توجد إعدادات ضرائب", "No tax settings")</h5>
+                            <p class="text-muted mb-3">@Html.T("ابدأ بإضافة إعدادات الضرائب الخاصة بمنصتك", "Start by adding tax settings for your platform")</p>
+                            <a asp-action="Create" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                إضافة ضريبة جديدة
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            $('#taxSettingsTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[0, "asc"]],
+                "pageLength": 25
+            });
+
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}

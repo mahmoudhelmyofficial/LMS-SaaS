@@ -1,0 +1,350 @@
+@model IEnumerable<LMS.Domain.Entities.Content.Document>
+
+@{
+    ViewData["Title"] = Html.T("إدارة المستندات", "Documents management");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("المحتوى", "Content"), null),
+        (Html.T("المستندات", "Documents"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("رفع مستند", "Upload document"), "feather-upload", "#uploadModal", "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+    <style>
+        .document-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .document-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-3px);
+        }
+        .document-icon {
+            width: 60px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-size: 2rem;
+        }
+        .doc-pdf { background: linear-gradient(135deg, #e53935 0%, #b71c1c 100%); }
+        .doc-word { background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%); }
+        .doc-excel { background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%); }
+        .doc-ppt { background: linear-gradient(135deg, #ff9800 0%, #e65100 100%); }
+        .doc-other { background: linear-gradient(135deg, #9e9e9e 0%, #616161 100%); }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-file-text"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي المستندات", "Total documents")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                            <i class="feather-file"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("ملفات PDF", "PDF files")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(d => d.FileType == "pdf").ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-download"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("تم تحميلها", "Downloads")</span>
+                            <h3 class="fw-bolder d-block">0</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-hard-drive"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("المساحة المستخدمة", "Storage used")</span>
+                            <h3 class="fw-bolder d-block">0 MB</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <!-- View Options -->
+        <div class="col-lg-12 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="btn-group">
+                            <button class="btn btn-light active" id="gridViewBtn">
+                                <i class="feather-grid"></i>
+                            </button>
+                            <button class="btn btn-light" id="listViewBtn">
+                                <i class="feather-list"></i>
+                            </button>
+                        </div>
+                        <div class="input-group" style="width: 300px;">
+                            <input type="text" class="form-control" placeholder="@Html.T("بحث في المستندات...", "Search documents...")">
+                            <button class="btn btn-light" type="button">
+                                <i class="feather-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Documents Grid View -->
+        <div id="gridView" class="col-lg-12">
+            <div class="row">
+                @if (Model != null && Model.Any())
+                {
+                    @foreach (var document in Model)
+                    {
+                        var iconClass = document.FileType?.ToLower() switch
+                        {
+                            "pdf" => "doc-pdf",
+                            "doc" or "docx" => "doc-word",
+                            "xls" or "xlsx" => "doc-excel",
+                            "ppt" or "pptx" => "doc-ppt",
+                            _ => "doc-other"
+                        };
+
+                        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+                            <div class="card document-card">
+                                <div class="card-body text-center p-3">
+                                    <div class="document-icon @iconClass text-white mx-auto mb-2">
+                                        <i class="feather-file-text"></i>
+                                    </div>
+                                    <h6 class="mb-1 small text-truncate">@document.Title</h6>
+                                    <small class="text-muted d-block mb-2">@((document.FileSize / 1024.0 / 1024.0).ToString("F2")) MB</small>
+                                    <div class="btn-group btn-group-sm w-100">
+                                        <a href="@document.FileUrl" target="_blank" class="btn btn-light">
+                                            <i class="feather-eye"></i>
+                                        </a>
+                                        <a href="@document.FileUrl" download class="btn btn-light">
+                                            <i class="feather-download"></i>
+                                        </a>
+                                        <button class="btn btn-light" onclick="shareDocument('@document.Id')">
+                                            <i class="feather-share-2"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="col-lg-12">
+                        <div class="card">
+                            <div class="card-body text-center py-5">
+                                <i class="feather-file-text fs-1 text-muted mb-3"></i>
+                                <h5>@Html.T("لا توجد مستندات بعد", "No documents yet")</h5>
+                                <p class="text-muted mb-4">@Html.T("ابدأ برفع المستندات الخاصة بالدورات", "Start by uploading course documents")</p>
+                                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                                    <i class="feather-upload me-2"></i>
+                                    @Html.T("رفع مستند", "Upload document")
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Documents List View -->
+        <div id="listView" class="col-lg-12" style="display: none;">
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="documentsTable">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("المستند", "Document")</th>
+                                    <th>@Html.T("النوع", "Type")</th>
+                                    <th>@Html.T("الحجم", "Size")</th>
+                                    <th>@Html.T("المالك", "Owner")</th>
+                                    <th>@Html.T("تاريخ الرفع", "Upload date")</th>
+                                    <th>@Html.T("التحميلات", "Downloads")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var document in Model)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <i class="feather-file-text text-primary"></i>
+                                                <span class="fw-semibold">@document.Title</span>
+                                            </div>
+                                        </td>
+                                        <td><span class="badge bg-soft-secondary text-secondary">@document.FileType?.ToUpper()</span></td>
+                                        <td>@((document.FileSize / 1024.0 / 1024.0).ToString("F2")) MB</td>
+                                        <td>
+                                            @if (document.User != null)
+                                            {
+                                                <span>@document.User.FirstName @document.User.LastName</span>
+                                            }
+                                        </td>
+                                        <td>@document.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                        <td><span class="badge bg-soft-info text-info">0 @Html.T("مرة", "times")</span></td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="@document.FileUrl" target="_blank" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض", "View")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                <a href="@document.FileUrl" download class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تحميل", "Download")">
+                                                    <i class="feather-download"></i>
+                                                </a>
+                                                <button class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("مشاركة", "Share")" onclick="shareDocument('@document.Id')">
+                                                    <i class="feather-share-2"></i>
+                                                </button>
+                                                <button class="avatar-text avatar-md text-danger" data-bs-toggle="tooltip" title="@Html.T("حذف", "Delete")" onclick="confirmDelete('@document.Id')">
+                                                    <i class="feather-trash-2"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal fade" id="uploadModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Html.T("رفع مستند جديد", "Upload new document")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form asp-action="Upload" method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("عنوان المستند", "Document title")</label>
+                        <input type="text" class="form-control" name="Title" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("الوصف", "Description")</label>
+                        <textarea class="form-control" name="Description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("الملف", "File")</label>
+                        <input type="file" class="form-control" name="File" required />
+                        <small class="text-muted">@Html.T("الحد الأقصى: 50 ميجابايت | الصيغ المدعومة: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX", "Max: 50 MB | Supported: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX")</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("الدورة المرتبطة (اختياري)", "Related course (optional)")</label>
+                        <select class="form-select" name="CourseId">
+                            <option value="">@Html.T("اختر دورة", "Select course")</option>
+                        </select>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="feather-upload me-2"></i>
+                            @Html.T("رفع المستند", "Upload document")
+                        </button>
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            $('#documentsTable').DataTable({
+                "language": { "url": dataTableLangUrl }
+            });
+
+            $('#gridViewBtn').on('click', function() {
+                $(this).addClass('active');
+                $('#listViewBtn').removeClass('active');
+                $('#gridView').show();
+                $('#listView').hide();
+            });
+
+            $('#listViewBtn').on('click', function() {
+                $(this).addClass('active');
+                $('#gridViewBtn').removeClass('active');
+                $('#gridView').hide();
+                $('#listView').show();
+            });
+
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+
+        function shareDocument(docId) {
+            // Share document logic
+            prompt('@Html.Raw(Html.T("رابط المشاركة:", "Share link:").Replace("'", "\\'"))', window.location.origin + '/documents/' + docId);
+        }
+
+        function confirmDelete(docId) {
+            if (confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا المستند؟", "Are you sure you want to delete this document?").Replace("'", "\\'"))')) {
+                window.location.href = '@Url.Action("Delete", "Documents")?id=' + docId;
+            }
+        }
+    </script>
+}

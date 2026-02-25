@@ -1,0 +1,427 @@
+@model LMS.Areas.Admin.ViewModels.SmsSettingViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء إعدادات SMS", "Create SMS Settings");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("إعدادات المنصة", "Platform Settings"), Url.Action("Index", "PlatformSettings")),
+        (Html.T("إعدادات SMS", "SMS Settings"), Url.Action("Index", "SmsSettings")),
+        (Html.T("إنشاء جديد", "Create new"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .setup-wizard {
+            counter-reset: step-counter;
+        }
+        .wizard-step {
+            position: relative;
+            padding-right: 3rem;
+            margin-bottom: 2rem;
+        }
+        .wizard-step:before {
+            counter-increment: step-counter;
+            content: counter(step-counter);
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 35px;
+            height: 35px;
+            background: #e9ecef;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #6c757d;
+        }
+        .wizard-step.completed:before {
+            background: #10b981;
+            color: white;
+            content: "✓";
+        }
+        .provider-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid #e9ecef;
+        }
+        .provider-card:hover {
+            border-color: var(--bs-primary);
+            transform: translateY(-2px);
+        }
+        .provider-card.active {
+            border-color: var(--bs-primary);
+            background-color: #f0f7ff;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <form asp-action="SaveSmsSetting" method="post" id="smsSetupForm">
+        @Html.AntiForgeryToken()
+        <div class="row">
+            <!-- Setup Wizard -->
+            <div class="col-lg-8">
+                <!-- Welcome Card -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                            <i class="feather-smartphone" style="font-size: 3rem;"></i>
+                        </div>
+                        <h3 class="fw-bold mb-2">@Html.T("إعداد خدمة الرسائل النصية (SMS)", "Set up SMS service")</h3>
+                        <p class="text-muted mb-4">@Html.T("قم بتكوين خدمة SMS لإرسال الإشعارات والرسائل للمستخدمين", "Configure SMS service to send notifications and messages to users")</p>
+                        <div class="row justify-content-center">
+                            <div class="col-md-10">
+                                <div class="alert alert-info text-start">
+                                    <strong>@Html.T("لماذا تحتاج SMS؟", "Why do you need SMS?")</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li>@Html.T("إرسال رموز التحقق للمصادقة الثنائية", "Send verification codes for two-factor authentication")</li>
+                                        <li>@Html.T("إشعارات فورية للتسجيل والدفع", "Instant notifications for registration and payment")</li>
+                                        <li>@Html.T("تذكير بالدورات والمواعيد المهمة", "Reminders for courses and important dates")</li>
+                                        <li>@Html.T("استعادة كلمة المرور وإشعارات الأمان", "Password recovery and security notifications")</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 1: Choose Provider -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <div class="setup-wizard">
+                            <div class="wizard-step">
+                                <h5 class="card-title mb-1">@Html.T("اختر مزود الخدمة", "Choose service provider")</h5>
+                                <p class="text-muted small mb-0">@Html.T("حدد المزود الذي تريد استخدامه لإرسال الرسائل", "Select the provider you want to use for sending messages")</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="provider-card card text-center p-3 h-100" onclick="selectProvider('Twilio')">
+                                    <div class="card-body">
+                                        <i class="feather-message-circle" style="font-size: 3rem; color: #F22F46;"></i>
+                                        <h6 class="fw-bold mt-3 mb-2">Twilio</h6>
+                                        <p class="text-muted small mb-2">@Html.T("الأكثر شهرة عالمياً", "Most popular globally")</p>
+                                        <span class="badge bg-soft-success text-success">@Html.T("موصى به", "Recommended")</span>
+                                        <div class="mt-3">
+                                            <small class="text-muted">
+                                                • @Html.T("تغطية عالمية", "Global coverage")<br>
+                                                • @Html.T("وثائق ممتازة", "Excellent documentation")<br>
+                                                • @Html.T("دعم فني قوي", "Strong support")
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="provider-card card text-center p-3 h-100" onclick="selectProvider('Nexmo')">
+                                    <div class="card-body">
+                                        <i class="feather-send" style="font-size: 3rem; color: #00A8E1;"></i>
+                                        <h6 class="fw-bold mt-3 mb-2">Nexmo (Vonage)</h6>
+                                        <p class="text-muted small mb-2">@Html.T("حلول متقدمة", "Advanced solutions")</p>
+                                        <span class="badge bg-soft-primary text-primary">@Html.T("احترافي", "Professional")</span>
+                                        <div class="mt-3">
+                                            <small class="text-muted">
+                                                • @Html.T("APIs متطورة", "Advanced APIs")<br>
+                                                • @Html.T("أسعار تنافسية", "Competitive pricing")<br>
+                                                • @Html.T("سهولة التكامل", "Easy integration")
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="provider-card card text-center p-3 h-100" onclick="selectProvider('Unifonic')">
+                                    <div class="card-body">
+                                        <i class="feather-mail" style="font-size: 3rem; color: #00B2A9;"></i>
+                                        <h6 class="fw-bold mt-3 mb-2">Unifonic</h6>
+                                        <p class="text-muted small mb-2">@Html.T("للمنطقة العربية", "For the Arab Region")</p>
+                                        <span class="badge bg-soft-warning text-warning">@Html.T("محلي", "Local")</span>
+                                        <div class="mt-3">
+                                            <small class="text-muted">
+                                                • @Html.T("متخصص بالشرق الأوسط", "Middle East specialist")<br>
+                                                • @Html.T("دعم عربي", "Arabic support")<br>
+                                                • @Html.T("خطط مرنة", "Flexible plans")
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" asp-for="Provider" id="providerInput" />
+                        <span asp-validation-for="Provider" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- Step 2: API Credentials -->
+                <div class="card stretch stretch-full mb-4" id="credentialsSection" style="display: none;">
+                    <div class="card-header">
+                        <div class="setup-wizard">
+                            <div class="wizard-step">
+                                <h5 class="card-title mb-1">@Html.T("أدخل بيانات الاعتماد", "Enter credentials")</h5>
+                                <p class="text-muted small mb-0">@Html.T("المعلومات المطلوبة من حسابك في", "Information required from your account at") <span id="selectedProvider">@Html.T("المزود", "Provider")</span></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <label asp-for="ApiKey" class="form-label">
+                                مفتاح API <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <input asp-for="ApiKey" type="password" class="form-control" placeholder="@Html.T("أدخل مفتاح API", "Enter API key")" id="apiKeyInput" />
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('apiKeyInput', this)">
+                                    <i class="feather-eye"></i>
+                                </button>
+                            </div>
+                            <span asp-validation-for="ApiKey" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="ApiSecret" class="form-label">
+                                المفتاح السري (API Secret)
+                            </label>
+                            <div class="input-group">
+                                <input asp-for="ApiSecret" type="password" class="form-control" placeholder="@Html.T("أدخل المفتاح السري", "Enter secret key")" id="apiSecretInput" />
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePassword('apiSecretInput', this)">
+                                    <i class="feather-eye"></i>
+                                </button>
+                            </div>
+                            <span asp-validation-for="ApiSecret" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-4">
+                            <label asp-for="SenderId" class="form-label">
+                                معرف المرسل (Sender ID)
+                            </label>
+                            <input asp-for="SenderId" class="form-control" placeholder="@Html.T("مثال: LMS", "e.g. LMS")" maxlength="11" />
+                            <span asp-validation-for="SenderId" class="text-danger"></span>
+                            <small class="text-muted">@Html.T("الاسم الذي يظهر للمستلم (11 حرف كحد أقصى)", "Name shown to recipient (11 characters max)")</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Basic Settings -->
+                <div class="card stretch stretch-full mb-4" id="settingsSection" style="display: none;">
+                    <div class="card-header">
+                        <div class="setup-wizard">
+                            <div class="wizard-step">
+                                <h5 class="card-title mb-1">@Html.T("الإعدادات الأساسية", "Basic settings")</h5>
+                                <p class="text-muted small mb-0">@Html.T("قم بتكوين الخيارات الأساسية للخدمة", "Configure basic options for the service")</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <label asp-for="MaxRetryAttempts" class="form-label">
+                                    محاولات إعادة الإرسال
+                                </label>
+                                <input asp-for="MaxRetryAttempts" type="number" class="form-control" min="0" max="10" value="3" />
+                                <small class="text-muted">@Html.T("في حالة فشل الإرسال (0-10)", "On send failure (0-10)")</small>
+                            </div>
+
+                            <div class="col-md-6 mb-4">
+                                <label asp-for="RetryDelaySeconds" class="form-label">
+                                    التأخير بين المحاولات (ثواني)
+                                </label>
+                                <input asp-for="RetryDelaySeconds" type="number" class="form-control" min="0" max="3600" value="60" />
+                                <small class="text-muted">@Html.T("المدة بين كل محاولة", "Delay between each attempt")</small>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="IsEnabled" class="form-check-input" type="checkbox" />
+                                    <label class="form-check-label" asp-for="IsEnabled">
+                                        <strong>@Html.T("تفعيل الخدمة", "Enable service")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("ابدأ بإرسال الرسائل مباشرة", "Start sending messages immediately")</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="TestMode" class="form-check-input" type="checkbox" checked />
+                                    <label class="form-check-label" asp-for="TestMode">
+                                        <strong>@Html.T("وضع الاختبار", "Test mode")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("للتجربة بدون إرسال فعلي", "To test without actual sending")</small>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch mb-3">
+                                    <input asp-for="EnableDeliveryReports" class="form-check-input" type="checkbox" checked />
+                                    <label class="form-check-label" asp-for="EnableDeliveryReports">
+                                        <strong>@Html.T("تقارير التسليم", "Delivery reports")</strong>
+                                        <br>
+                                        <small class="text-muted">@Html.T("تتبع حالة الرسائل", "Track message status")</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-success">
+                            <div class="d-flex align-items-start">
+                                <i class="feather-check-circle me-2 mt-1"></i>
+                                <div>
+                                    <strong>@Html.T("نصيحة:", "Tip:")</strong> @Html.T("ننصح بتفعيل \"وضع الاختبار\" في البداية للتأكد من عمل الإعدادات بشكل صحيح قبل البدء بالإرسال الفعلي.", "We recommend enabling \"Test mode\" first to ensure settings work correctly before actual sending.")
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-2 justify-content-between mb-4">
+                    <a asp-action="Index" class="btn btn-light">
+                        <i class="feather-x me-2"></i>إلغاء
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-lg" id="submitBtn" disabled>
+                        <i class="feather-save me-2"></i>@Html.T("حفظ الإعدادات وابدأ", "Save settings and start")
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Progress Tracker -->
+                <div class="card stretch stretch-full mb-4" style="position: sticky; top: 20px;">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-list me-2"></i>خطوات الإعداد
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="setup-wizard">
+                            <div class="wizard-step" id="step1">
+                                <h6 class="fw-bold mb-1">@Html.T("اختر المزود", "Choose provider")</h6>
+                                <p class="text-muted small mb-0">@Html.T("حدد مزود خدمة SMS", "Select SMS service provider")</p>
+                            </div>
+                            <div class="wizard-step" id="step2">
+                                <h6 class="fw-bold mb-1">@Html.T("بيانات الاعتماد", "Credentials")</h6>
+                                <p class="text-muted small mb-0">@Html.T("أدخل مفاتيح API", "Enter API keys")</p>
+                            </div>
+                            <div class="wizard-step" id="step3">
+                                <h6 class="fw-bold mb-1">@Html.T("الإعدادات", "Settings")</h6>
+                                <p class="text-muted small mb-0">@Html.T("قم بتكوين الخيارات", "Configure options")</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help Card -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-help-circle me-2"></i>تحتاج مساعدة؟
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="small mb-3">@Html.T("للحصول على مفاتيح API:", "To get API keys:")</p>
+                        <ol class="small">
+                            <li class="mb-2">@Html.T("قم بالتسجيل في موقع المزود", "Register on the provider's website")</li>
+                            <li class="mb-2">@Html.T("انتقل إلى لوحة التحكم", "Go to the dashboard")</li>
+                            <li class="mb-2">@Html.T("اذهب لقسم API أو Developer", "Go to API or Developer section")</li>
+                            <li class="mb-2">@Html.T("انسخ المفاتيح المطلوبة", "Copy the required keys")</li>
+                        </ol>
+                        <hr>
+                        <div class="d-grid">
+                            <a href="#" class="btn btn-sm btn-light mb-2">
+                                <i class="feather-book me-2"></i>دليل الإعداد
+                            </a>
+                            <a href="#" class="btn btn-sm btn-light">
+                                <i class="feather-message-circle me-2"></i>تواصل مع الدعم
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        let currentStep = 1;
+
+        function selectProvider(provider) {
+            // Update UI
+            $('.provider-card').removeClass('active');
+            event.currentTarget.classList.add('active');
+            
+            // Update hidden input
+            $('#providerInput').val(provider);
+            $('#selectedProvider').text(provider);
+            
+            // Mark step 1 as completed
+            $('#step1').addClass('completed');
+            
+            // Show credentials section
+            $('#credentialsSection').slideDown();
+            currentStep = 2;
+            
+            // Scroll to next section
+            $('html, body').animate({
+                scrollTop: $('#credentialsSection').offset().top - 100
+            }, 500);
+        }
+
+        function togglePassword(inputId, button) {
+            const input = document.getElementById(inputId);
+            const icon = button.querySelector('i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('feather-eye');
+                icon.classList.add('feather-eye-off');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('feather-eye-off');
+                icon.classList.add('feather-eye');
+            }
+        }
+
+        $(document).ready(function() {
+            // Watch API Key input
+            $('#apiKeyInput').on('input', function() {
+                if ($(this).val().length >= 10) {
+                    $('#step2').addClass('completed');
+                    $('#settingsSection').slideDown();
+                    $('#submitBtn').prop('disabled', false);
+                    currentStep = 3;
+                }
+            });
+
+            // Form validation
+            $('#smsSetupForm').on('submit', function(e) {
+                if (!$('#providerInput').val()) {
+                    e.preventDefault();
+                    alert('@Html.Raw(Html.T("الرجاء اختيار مزود الخدمة", "Please select a service provider").Replace("'", "\\'"))');
+                    return false;
+                }
+                
+                if ($('#apiKeyInput').val().length < 10) {
+                    e.preventDefault();
+                    alert('@Html.Raw(Html.T("الرجاء إدخال مفتاح API صحيح", "Please enter a valid API key").Replace("'", "\\'"))');
+                    return false;
+                }
+            });
+        });
+    </script>
+}
+

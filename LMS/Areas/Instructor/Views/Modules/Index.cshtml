@@ -1,0 +1,1142 @@
+@model IEnumerable<LMS.Domain.Entities.Courses.Module>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    var showAllModules = ViewBag.ShowAllModules as bool? ?? true;
+    var course = ViewBag.Course as LMS.Domain.Entities.Courses.Course;
+    var courses = ViewBag.Courses as IEnumerable<dynamic>;
+    var currentCourseId = ViewBag.CourseId as int?;
+    
+    ViewData["Title"] = showAllModules ? Html.T("إدارة جميع الوحدات", "Manage All Modules") : Html.T("إدارة الوحدات", "Manage Modules");
+    ViewData["Subtitle"] = showAllModules ? Html.T("عرض وإدارة وحدات جميع الدورات", "View and manage modules of all courses") : (Html.T("وحدات الدورة", "Course modules") + ": " + course?.Title);
+    
+    // Load platform settings
+    var defaultPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Default", 20);
+    var lessonPreviewLimit = await PlatformSettings.GetIntSettingAsync("UI.LessonPreview.Limit", 5);
+
+    var totalModules = ViewBag.TotalModules as int? ?? Model?.Count() ?? 0;
+    var publishedModules = ViewBag.PublishedModules as int? ?? 0;
+    var draftModules = ViewBag.DraftModules as int? ?? 0;
+    var totalLessons = ViewBag.TotalLessons as int? ?? 0;
+}
+
+<style>
+    /* Statistics Cards */
+    .stat-card {
+        border: none;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    }
+    .stat-card .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+    }
+    .stat-card .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .stat-card .stat-label {
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-top: 4px;
+    }
+    .stat-card.clickable { cursor: pointer; }
+    .stat-card.clickable.active { border: 2px solid var(--bs-primary) !important; }
+
+    /* Search & Filter Bar */
+    .filter-bar {
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid #e9ecef;
+    }
+
+    /* Bulk Action Bar */
+    .bulk-action-bar {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 12px 20px;
+        margin-bottom: 16px;
+        display: none;
+        animation: slideDown 0.3s ease;
+    }
+    .bulk-action-bar.show { display: flex; }
+    @@keyframes slideDown {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .bulk-action-bar .btn {
+        color: white;
+        border-color: rgba(255,255,255,0.3);
+        font-size: 0.85rem;
+        padding: 4px 12px;
+    }
+    .bulk-action-bar .btn:hover {
+        background: rgba(255,255,255,0.2);
+        border-color: rgba(255,255,255,0.5);
+    }
+
+    /* Module Cards */
+    .module-item {
+        border-bottom: 1px solid #f0f0f0;
+        padding: 16px 20px;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+    .module-item:hover {
+        background-color: #f8f9ff;
+    }
+    .module-item:last-child { border-bottom: none; }
+    .module-item .module-checkbox {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        margin-left: 8px;
+    }
+    .module-item .drag-handle {
+        cursor: move;
+        padding: 4px;
+        color: #adb5bd;
+        transition: color 0.2s;
+    }
+    .module-item .drag-handle:hover { color: #495057; }
+
+    /* Inline Edit */
+    .inline-editable {
+        cursor: text;
+        border-bottom: 1px dashed transparent;
+        padding: 2px 4px;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
+    .inline-editable:hover {
+        border-bottom-color: #4e73df;
+        background: #f0f4ff;
+    }
+    .inline-editable.editing {
+        background: white;
+        border: 1px solid #4e73df;
+        box-shadow: 0 0 0 3px rgba(78,115,223,0.15);
+        outline: none;
+        padding: 4px 8px;
+    }
+
+    /* Expandable Lessons */
+    .lessons-accordion {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.4s ease, opacity 0.3s ease;
+        opacity: 0;
+    }
+    .lessons-accordion.expanded {
+        max-height: 2000px;
+        opacity: 1;
+    }
+    .expand-toggle {
+        cursor: pointer;
+        user-select: none;
+        color: #4e73df;
+        font-size: 0.85rem;
+    }
+    .expand-toggle:hover { text-decoration: underline; }
+    .expand-toggle i {
+        transition: transform 0.3s ease;
+    }
+    .expand-toggle.expanded i {
+        transform: rotate(90deg);
+    }
+    .lesson-preview-item {
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: #f8f9fa;
+        margin-bottom: 4px;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .lesson-preview-item:hover { background: #e9ecef; }
+
+    /* View Toggle */
+    .view-toggle .btn { padding: 6px 10px; }
+    .view-toggle .btn.active { background: #4e73df; color: white; border-color: #4e73df; }
+
+    /* Card View */
+    .module-card-grid .module-grid-card {
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        padding: 20px;
+        height: 100%;
+        transition: all 0.3s ease;
+        background: white;
+    }
+    .module-card-grid .module-grid-card:hover {
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+
+    /* Quick Action Buttons */
+    .quick-actions .btn {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        font-size: 14px;
+    }
+
+    /* Empty State */
+    .empty-state-icon {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 48px;
+        margin: 0 auto 24px;
+    }
+
+    /* Sortable Ghost */
+    .sortable-ghost {
+        opacity: 0.4;
+        background: #e3e8ff !important;
+    }
+
+    /* Loading Spinner */
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255,255,255,0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+        border-radius: 12px;
+    }
+    .loading-overlay.hidden { display: none; }
+</style>
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="fs-12 fw-medium text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+        <ul class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Dashboard")">@Html.T("الرئيسية", "Home")</a></li>
+            @if (!showAllModules && course != null)
+            {
+                <li class="breadcrumb-item"><a href="@Url.Action("Index", "Courses")">@Html.T("الدورات", "Courses")</a></li>
+                <li class="breadcrumb-item"><a href="@Url.Action("CreateWizard", "Courses", new { id = course.Id, step = 3 })">@course.Title</a></li>
+            }
+            <li class="breadcrumb-item active">@Html.T("الوحدات", "Modules")</li>
+        </ul>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex align-items-center gap-2">
+            @if (!showAllModules && course != null)
+            {
+                <a href="@Url.Action("CreateWizard", "Courses", new { id = course.Id, step = 3 })" class="btn btn-light">
+                    <i class="feather-arrow-right me-2"></i>
+                    @Html.T("العودة للدورة", "Back to Course")
+                </a>
+                <a href="@Url.Action("Create", new { courseId = course.Id })" class="btn btn-primary">
+                    <i class="feather-plus me-2"></i>
+                    @Html.T("إضافة وحدة جديدة", "Add New Module")
+                </a>
+            }
+            else
+            {
+                <a href="@Url.Action("Index", "Courses")" class="btn btn-light">
+                    <i class="feather-book me-2"></i>
+                    @Html.T("الدورات", "Courses")
+                </a>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+    @Html.AntiForgeryToken()
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4 g-3">
+        <div class="col-md-3 col-6">
+            <div class="card stat-card clickable" data-filter="all" onclick="filterByStatus('all')">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon bg-soft-primary text-primary me-3">
+                            <i class="feather-layers"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value text-primary" id="stat-total">@totalModules</div>
+                            <div class="stat-label">@Html.T("إجمالي الوحدات", "Total Modules")</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card stat-card clickable" data-filter="published" onclick="filterByStatus('published')">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon bg-soft-success text-success me-3">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value text-success">@publishedModules</div>
+                            <div class="stat-label">@Html.T("منشورة", "Published")</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card stat-card clickable" data-filter="draft" onclick="filterByStatus('draft')">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon bg-soft-warning text-warning me-3">
+                            <i class="feather-edit-3"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value text-warning">@draftModules</div>
+                            <div class="stat-label">@Html.T("مسودة", "Draft")</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="card stat-card">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon bg-soft-info text-info me-3">
+                            <i class="feather-book-open"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value text-info">@totalLessons</div>
+                            <div class="stat-label">@Html.T("إجمالي الدروس", "Total Lessons")</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!showAllModules && course != null)
+    {
+        <!-- Course Summary Card (only for course-specific view) -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center">
+                        @if (!string.IsNullOrEmpty(course.ThumbnailUrl))
+                        {
+                            <img src="@course.ThumbnailUrl" alt="@course.Title" class="rounded me-3" style="width: 80px; height: 60px; object-fit: cover;">
+                        }
+                        else
+                        {
+                            <div class="avatar-text avatar-lg bg-soft-primary text-primary me-3">
+                                <i class="feather-book-open"></i>
+                            </div>
+                        }
+                        <div>
+                            <h5 class="mb-1">@course.Title</h5>
+                            <p class="text-muted mb-0">
+                                <span class="badge bg-@(course.Status == LMS.Domain.Enums.CourseStatus.Published ? "success" : "warning")">
+                                    @(course.Status == LMS.Domain.Enums.CourseStatus.Published ? Html.T("منشورة", "Published") : Html.T("مسودة", "Draft"))
+                                </span>
+                                <span class="ms-2">
+                                    <i class="feather-layers me-1"></i>
+                                    @(Model?.Count() ?? 0) @Html.T("وحدات", "modules")
+                                </span>
+                                <span class="ms-2">
+                                    <i class="feather-file-text me-1"></i>
+                                    @(Model?.SelectMany(m => m.Lessons).Count() ?? 0) @Html.T("دروس", "lessons")
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="hstack gap-2">
+                        <a href="@Url.Action("Details", "Courses", new { id = course.Id })" class="btn btn-light">
+                            <i class="feather-eye me-2"></i>
+                            @Html.T("عرض الدورة", "View course")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Search & Filter Bar -->
+    <div class="filter-bar p-3 mb-4">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-4">
+                <div class="input-group">
+                    <span class="input-group-text bg-transparent border-end-0"><i class="feather-search text-muted"></i></span>
+                    <input type="text" class="form-control border-start-0" id="searchInput" placeholder="@Html.T("بحث في الوحدات...", "Search modules...")" oninput="filterModules()">
+                </div>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" id="statusFilter" onchange="filterModules()">
+                    <option value="">@Html.T("جميع الحالات", "All statuses")</option>
+                    <option value="published">@Html.T("منشورة", "Published")</option>
+                    <option value="draft">@Html.T("مسودة", "Draft")</option>
+                </select>
+            </div>
+            @if (showAllModules)
+            {
+                <div class="col-md-3">
+                    <select class="form-select" id="courseFilter" onchange="filterModules()">
+                        <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                        @if (courses != null)
+                        {
+                            foreach (var c in courses)
+                            {
+                                var isSelected = currentCourseId.HasValue && currentCourseId.Value == (int)c.Id;
+                                <option value="@c.Id" data-title="@c.Title" selected="@isSelected">@c.Title</option>
+                            }
+                        }
+                    </select>
+                </div>
+            }
+            <div class="col-md-auto ms-auto">
+                <div class="view-toggle btn-group" role="group">
+                    <button type="button" class="btn btn-outline-secondary" id="listViewBtn" onclick="switchView('list')">
+                        <i class="feather-list"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary active" id="cardViewBtn" onclick="switchView('card')">
+                        <i class="feather-grid"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Action Bar -->
+    <div class="bulk-action-bar align-items-center justify-content-between" id="bulkActionBar">
+        <div class="d-flex align-items-center gap-3">
+            <span id="selectedCount">0</span> @Html.T("عنصر محدد", "item(s) selected")
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-light btn-sm" onclick="bulkAction('publish')">
+                <i class="feather-eye me-1"></i> @Html.T("نشر", "Publish")
+            </button>
+            <button class="btn btn-outline-light btn-sm" onclick="bulkAction('unpublish')">
+                <i class="feather-eye-off me-1"></i> @Html.T("إلغاء النشر", "Unpublish")
+            </button>
+            <button class="btn btn-outline-light btn-sm" onclick="bulkAction('delete')">
+                <i class="feather-trash-2 me-1"></i> @Html.T("حذف", "Delete")
+            </button>
+            <button class="btn btn-outline-light btn-sm" onclick="clearSelection()">
+                <i class="feather-x me-1"></i> @Html.T("إلغاء التحديد", "Clear selection")
+            </button>
+        </div>
+    </div>
+
+    <!-- Modules List View -->
+    <div class="row d-none" id="listView">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full" style="position:relative;">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-layers text-primary me-2"></i>
+                        @(showAllModules ? Html.T("جميع الوحدات", "All modules") : Html.T("وحدات الدورة", "Course modules"))
+                    </h5>
+                    <div class="card-header-action d-flex align-items-center gap-2">
+                        <div class="form-check mb-0">
+                            <input class="form-check-input module-checkbox" type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)">
+                            <label class="form-check-label small" for="selectAllCheckbox">@Html.T("تحديد الكل", "Select all")</label>
+                        </div>
+                        <span class="badge bg-primary">@(Model?.Count() ?? 0) @Html.T("وحدة", "module(s)")</span>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    <div class="loading-overlay hidden" id="loadingOverlay">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">@Html.T("جاري التحميل...", "Loading...")</span>
+                        </div>
+                    </div>
+
+                    @if (Model != null && Model.Any())
+                    {
+                        <div id="modules-sortable" class="sortable-container">
+                            @foreach (var module in Model.OrderBy(m => showAllModules ? m.Course?.Title : "").ThenBy(m => m.OrderIndex))
+                            {
+                                var lessonCount = module.Lessons?.Count ?? 0;
+                                var publishedLessons = module.Lessons?.Count(l => l.IsPublished) ?? 0;
+                                var totalDuration = module.Lessons?.Sum(l => l.DurationSeconds) ?? 0;
+                                var durationFormatted = totalDuration > 0 ? TimeSpan.FromSeconds(totalDuration).ToString(@"hh\:mm") : "";
+                                
+                                <div class="module-item" data-module-id="@module.Id" data-published="@(module.IsPublished ? "true" : "false")" data-title="@module.Title" data-course-id="@module.CourseId" data-course-title="@(module.Course?.Title ?? "")">
+                                    <div class="d-flex align-items-center">
+                                        <!-- Checkbox -->
+                                        <div class="form-check me-2">
+                                            <input class="form-check-input module-checkbox item-checkbox" type="checkbox" value="@module.Id" onchange="updateBulkBar()">
+                                        </div>
+                                        
+                                        <!-- Drag Handle (only for course-specific view) -->
+                                        @if (!showAllModules)
+                                        {
+                                            <div class="drag-handle me-3">
+                                                <i class="feather-menu text-muted"></i>
+                                            </div>
+                                        }
+                                        
+                                        <!-- Module Icon -->
+                                        <div class="avatar-text avatar-md bg-soft-@(module.IsPublished ? "success" : "warning") text-@(module.IsPublished ? "success" : "warning") me-3">
+                                            <i class="feather-folder"></i>
+                                        </div>
+                                        
+                                        <!-- Module Info -->
+                                        <div class="flex-grow-1 min-w-0">
+                                            <div class="d-flex align-items-center mb-1 flex-wrap gap-2">
+                                                <h6 class="mb-0 inline-editable text-break" data-module-id="@module.Id" data-field="title" ondblclick="startInlineEdit(this)" title="@Html.T("انقر مرتين للتعديل", "Double-click to edit")">
+                                                    @module.Title
+                                                </h6>
+                                                <span class="badge bg-soft-@(module.IsPublished ? "success" : "warning") text-@(module.IsPublished ? "success" : "warning")">
+                                                    @(module.IsPublished ? Html.T("منشورة", "Published") : Html.T("مسودة", "Draft"))
+                                                </span>
+                                                @if (lessonCount > 0)
+                                                {
+                                                    <span class="badge bg-soft-info text-info">
+                                                        <i class="feather-book-open me-1"></i>@lessonCount @Html.T("درس", "lesson(s)")
+                                                    </span>
+                                                }
+                                                @if (!string.IsNullOrEmpty(durationFormatted))
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">
+                                                        <i class="feather-clock me-1"></i>@durationFormatted
+                                                    </span>
+                                                }
+                                            </div>
+                                            @if (showAllModules && module.Course != null)
+                                            {
+                                                <p class="text-primary small mb-1">
+                                                    <i class="feather-book me-1"></i>
+                                                    <a href="@Url.Action("Index", new { courseId = module.CourseId })" class="text-primary">@module.Course.Title</a>
+                                                </p>
+                                            }
+                                            @if (!string.IsNullOrEmpty(module.Description))
+                                            {
+                                                <p class="text-muted small mb-0 mt-1">
+                                                    @(module.Description.Length > 100 ? module.Description.Substring(0, 100) + "..." : module.Description)
+                                                </p>
+                                            }
+                                        </div>
+                                        
+                                        <!-- Quick Actions -->
+                                        <div class="quick-actions hstack gap-1">
+                                            <a href="@Url.Action("Create", "Lessons", new { moduleId = module.Id })" class="btn btn-sm btn-light" data-bs-toggle="tooltip" title="@Html.T("إضافة درس", "Add lesson")">
+                                                <i class="feather-plus"></i>
+                                            </a>
+                                            <a href="@Url.Action("Edit", new { id = module.Id })" class="btn btn-sm btn-light" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                <i class="feather-edit-2"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-@(module.IsPublished ? "success" : "warning")" data-bs-toggle="tooltip" title="@(module.IsPublished ? Html.T("إلغاء النشر", "Unpublish") : Html.T("نشر", "Publish"))" onclick="togglePublish(@module.Id)">
+                                                <i class="feather-@(module.IsPublished ? "eye-off" : "eye")"></i>
+                                            </button>
+                                            <div class="dropdown">
+                                                <button class="btn btn-sm btn-light" data-bs-toggle="dropdown">
+                                                    <i class="feather-more-vertical"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <li>
+                                                        <a class="dropdown-item" href="@Url.Action("Details", new { id = module.Id })">
+                                                            <i class="feather-eye me-2"></i>
+                                                            @Html.T("عرض التفاصيل", "View details")
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="@Url.Action("Edit", new { id = module.Id })">
+                                                            <i class="feather-edit-2 me-2"></i>
+                                                            @Html.T("تعديل", "Edit")
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="@Url.Action("Create", "Lessons", new { moduleId = module.Id })">
+                                                            <i class="feather-plus me-2"></i>
+                                                            @Html.T("إضافة درس", "Add lesson")
+                                                        </a>
+                                                    </li>
+                                                    @if (showAllModules && module.Course != null)
+                                                    {
+                                                        <li>
+                                                            <a class="dropdown-item" href="@Url.Action("Index", new { courseId = module.CourseId })">
+                                                                <i class="feather-layers me-2"></i>
+                                                                @Html.T("عرض وحدات الدورة", "View course modules")
+                                                            </a>
+                                                        </li>
+                                                    }
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@Url.Action("Delete", new { id = module.Id })', '@Html.Raw((Html.T("هل أنت متأكد من حذف الوحدة: ", "Are you sure you want to delete the module: ") + (module.Title ?? "").Replace("'", "\\'") + "؟").Replace("'", "\\'"))')">
+                                                            <i class="feather-trash-2 me-2"></i>
+                                                            @Html.T("حذف", "Delete")
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Expandable Lessons Preview -->
+                                    @if (module.Lessons != null && module.Lessons.Any())
+                                    {
+                                        <div class="mt-2 @(!showAllModules ? "ps-5" : "")">
+                                            <div class="expand-toggle" onclick="toggleLessons(this)" data-module-id="@module.Id">
+                                                <i class="feather-chevron-left me-1" style="font-size:14px;"></i>
+                                                @Html.T("عرض الدروس", "View lessons") (@lessonCount)
+                                            </div>
+                                            <div class="lessons-accordion mt-2" id="lessons-@module.Id">
+                                                @foreach (var lesson in module.Lessons.OrderBy(l => l.OrderIndex))
+                                                {
+                                                    var lessonIcon = lesson.Type switch
+                                                    {
+                                                        LMS.Domain.Enums.LessonType.Video => "video",
+                                                        LMS.Domain.Enums.LessonType.Quiz => "help-circle",
+                                                        LMS.Domain.Enums.LessonType.Assignment => "briefcase",
+                                                        LMS.Domain.Enums.LessonType.Article => "file-text",
+                                                        _ => "book"
+                                                    };
+                                                    var lessonColor = lesson.Type switch
+                                                    {
+                                                        LMS.Domain.Enums.LessonType.Video => "primary",
+                                                        LMS.Domain.Enums.LessonType.Quiz => "warning",
+                                                        LMS.Domain.Enums.LessonType.Assignment => "success",
+                                                        LMS.Domain.Enums.LessonType.Article => "info",
+                                                        _ => "secondary"
+                                                    };
+                                                    <div class="lesson-preview-item">
+                                                        <i class="feather-@lessonIcon text-@lessonColor" style="font-size:14px;"></i>
+                                                        <a href="@Url.Action("Edit", "Lessons", new { id = lesson.Id })" class="text-dark flex-grow-1 small">@lesson.Title</a>
+                                                        @if (lesson.DurationSeconds > 0)
+                                                        {
+                                                            <span class="text-muted small">@TimeSpan.FromSeconds(lesson.DurationSeconds).ToString(@"mm\:ss")</span>
+                                                        }
+                                                        <span class="badge bg-soft-@(lesson.IsPublished ? "success" : "warning") text-@(lesson.IsPublished ? "success" : "warning")" style="font-size:10px;">
+                                                            @(lesson.IsPublished ? Html.T("منشور", "Published") : Html.T("مسودة", "Draft"))
+                                                        </span>
+                                                        @if (lesson.IsPreviewable)
+                                                        {
+                                                            <span class="badge bg-soft-info text-info" style="font-size:10px;">@Html.T("معاينة", "Preview")</span>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (showAllModules && ViewBag.TotalPages > 1)
+                        {
+                            <!-- Pagination -->
+                            @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                                ViewData,
+                                ("CurrentPage", ViewBag.Page ?? 1),
+                                ("TotalPages", ViewBag.TotalPages ?? 1),
+                                ("TotalItems", ViewBag.TotalCount ?? 0),
+                                ("PageSize", defaultPageSize),
+                                ("Action", "Index"),
+                                ("Controller", "Modules")
+                            ))
+                        }
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="empty-state-icon bg-soft-primary text-primary">
+                                <i class="feather-layers"></i>
+                            </div>
+                            @if (showAllModules)
+                            {
+                                <h5 class="fw-bold mb-2">@Html.T("لا توجد وحدات بعد", "No modules yet")</h5>
+                                <p class="text-muted mb-4">@Html.T("قم بإنشاء دورة أولاً ثم أضف وحدات لها لتنظيم المحتوى التعليمي", "Create a course first then add modules to organize your content")</p>
+                                <a href="@Url.Action("CreateWizard", "Courses")" class="btn btn-primary">
+                                    <i class="feather-plus me-2"></i>
+                                    @Html.T("إنشاء دورة جديدة", "Create new course")
+                                </a>
+                            }
+                            else
+                            {
+                                <h5 class="fw-bold mb-2">@Html.T("لا توجد وحدات بعد", "No modules yet")</h5>
+                                <p class="text-muted mb-4">@Html.T("ابدأ بإضافة وحدة جديدة لتنظيم محتوى دورتك التعليمي", "Start by adding a new module to organize your course content")</p>
+                                <a href="@Url.Action("Create", new { courseId = course?.Id })" class="btn btn-primary">
+                                    <i class="feather-plus me-2"></i>
+                                    @Html.T("إضافة أول وحدة", "Add first module")
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card/Grid View -->
+    <div class="row module-card-grid g-3" id="cardView">
+        @if (Model != null && Model.Any())
+        {
+            foreach (var module in Model.OrderBy(m => showAllModules ? m.Course?.Title : "").ThenBy(m => m.OrderIndex))
+            {
+                var lessonCount = module.Lessons?.Count ?? 0;
+                var publishedLessons = module.Lessons?.Count(l => l.IsPublished) ?? 0;
+                var totalDuration = module.Lessons?.Sum(l => l.DurationSeconds) ?? 0;
+                var durationFormatted = totalDuration > 0 ? TimeSpan.FromSeconds(totalDuration).ToString(@"hh\:mm") : "0:00";
+
+                <div class="col-12 col-md-6 col-lg-4 module-card-item" data-module-id="@module.Id" data-published="@(module.IsPublished ? "true" : "false")" data-title="@module.Title" data-course-id="@module.CourseId" data-course-title="@(module.Course?.Title ?? "")">
+                    <div class="module-grid-card">
+                        <div class="d-flex justify-content-between mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input item-checkbox-card" type="checkbox" value="@module.Id" onchange="updateBulkBar()">
+                            </div>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-light" data-bs-toggle="dropdown">
+                                    <i class="feather-more-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="@Url.Action("Edit", new { id = module.Id })"><i class="feather-edit-2 me-2"></i>@Html.T("تعديل", "Edit")</a></li>
+                                    <li><a class="dropdown-item" href="@Url.Action("Create", "Lessons", new { moduleId = module.Id })"><i class="feather-plus me-2"></i>@Html.T("إضافة درس", "Add lesson")</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@Url.Action("Delete", new { id = module.Id })', '@Html.Raw((Html.T("هل أنت متأكد من حذف الوحدة: ", "Are you sure you want to delete the module: ") + (module.Title ?? "").Replace("'", "\\'") + "؟").Replace("'", "\\'"))')"><i class="feather-trash-2 me-2"></i>@Html.T("حذف", "Delete")</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="avatar-text avatar-lg bg-soft-@(module.IsPublished ? "success" : "warning") text-@(module.IsPublished ? "success" : "warning") mb-3">
+                            <i class="feather-folder"></i>
+                        </div>
+                        <h6 class="mb-1">
+                            <a href="@Url.Action("Edit", new { id = module.Id })" class="text-dark">@module.Title</a>
+                        </h6>
+                        @if (showAllModules && module.Course != null)
+                        {
+                            <p class="text-primary small mb-2">
+                                <i class="feather-book me-1"></i>@module.Course.Title
+                            </p>
+                        }
+                        <span class="badge bg-soft-@(module.IsPublished ? "success" : "warning") text-@(module.IsPublished ? "success" : "warning") mb-3">
+                            @(module.IsPublished ? Html.T("منشورة", "Published") : Html.T("مسودة", "Draft"))
+                        </span>
+                        <div class="d-flex justify-content-between text-muted small pt-3 border-top">
+                            <span><i class="feather-book-open me-1"></i>@lessonCount @Html.T("درس", "lesson(s)")</span>
+                            <span><i class="feather-clock me-1"></i>@durationFormatted</span>
+                            <span><i class="feather-check me-1"></i>@publishedLessons @Html.T("منشور", "published")</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <!-- No results message -->
+    <div class="text-center py-5 d-none" id="noResultsMessage">
+        <div class="avatar-text avatar-lg bg-soft-warning text-warning mb-3 mx-auto">
+            <i class="feather-search"></i>
+        </div>
+        <h6>@Html.T("لا توجد نتائج مطابقة", "No matching results")</h6>
+        <p class="text-muted small">@Html.T("جرّب تعديل معايير البحث أو التصفية", "Try adjusting your search or filter criteria")</p>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DeleteModal")
+
+<!-- Bulk Delete Confirmation Modal -->
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title text-danger"><i class="feather-alert-triangle me-2"></i>@Html.T("تأكيد الحذف المجمع", "Confirm bulk delete")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>@Html.T("هل أنت متأكد من حذف", "Are you sure you want to delete") <strong id="bulkDeleteCount">0</strong> @Html.T("وحدة؟", "module(s)?")</p>
+                <p class="text-danger small">@Html.T("سيتم حذف جميع الدروس والمحتوى المرتبط بها. هذه العملية لا يمكن التراجع عنها.", "All lessons and related content will be deleted. This action cannot be undone.")</p>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                <button type="button" class="btn btn-danger" id="confirmBulkDelete" onclick="executeBulkDelete()">
+                    <i class="feather-trash-2 me-1"></i>@Html.T("حذف", "Delete")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script>
+        var csrfToken = document.querySelector('input[name="__RequestVerificationToken"]').value;
+
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            // Initialize sortable (only for course-specific view)
+            @if (!showAllModules)
+            {
+                <text>
+                var sortableEl = document.getElementById('modules-sortable');
+                if (sortableEl) {
+                    new Sortable(sortableEl, {
+                        animation: 150,
+                        handle: '.drag-handle',
+                        ghostClass: 'sortable-ghost',
+                        onEnd: function (evt) {
+                            var items = [];
+                            document.querySelectorAll('.module-item').forEach(function (el, index) {
+                                items.push({
+                                    Id: parseInt(el.dataset.moduleId),
+                                    Order: index + 1
+                                });
+                            });
+
+                            fetch('@Url.Action("UpdateOrder")', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': csrfToken,
+                                    'RequestVerificationToken': csrfToken
+                                },
+                                body: JSON.stringify(items)
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    showToast('نجاح', data.message, 'success');
+                                }
+                            });
+                        }
+                    });
+                }
+                </text>
+            }
+        });
+
+        // ==================== Search & Filter ====================
+        function filterModules() {
+            var searchVal = document.getElementById('searchInput').value.toLowerCase();
+            var statusVal = document.getElementById('statusFilter').value;
+            var courseVal = document.getElementById('courseFilter') ? document.getElementById('courseFilter').value : '';
+
+            var listItems = document.querySelectorAll('#modules-sortable .module-item');
+            var cardItems = document.querySelectorAll('#cardView .module-card-item');
+            var visibleCount = 0;
+
+            function shouldShow(el) {
+                var title = (el.dataset.title || '').toLowerCase();
+                var published = el.dataset.published;
+                var courseId = el.dataset.courseId;
+
+                if (searchVal && title.indexOf(searchVal) === -1) return false;
+                if (statusVal === 'published' && published !== 'true') return false;
+                if (statusVal === 'draft' && published !== 'false') return false;
+                if (courseVal && courseId !== courseVal) return false;
+                return true;
+            }
+
+            listItems.forEach(function(el) {
+                var show = shouldShow(el);
+                el.style.display = show ? '' : 'none';
+                if (show) visibleCount++;
+            });
+
+            cardItems.forEach(function(el) {
+                var show = shouldShow(el);
+                el.style.display = show ? '' : 'none';
+            });
+
+            document.getElementById('noResultsMessage').classList.toggle('d-none', visibleCount > 0 || !document.querySelectorAll('#modules-sortable .module-item').length);
+        }
+
+        function filterByStatus(status) {
+            document.querySelectorAll('.stat-card.clickable').forEach(c => c.classList.remove('active'));
+            if (status !== 'all') {
+                document.querySelector(`.stat-card[data-filter="${status}"]`).classList.add('active');
+                document.getElementById('statusFilter').value = status;
+            } else {
+                document.getElementById('statusFilter').value = '';
+            }
+            filterModules();
+        }
+
+        // ==================== View Toggle ====================
+        function switchView(mode) {
+            if (mode === 'card') {
+                document.getElementById('listView').classList.add('d-none');
+                document.getElementById('cardView').classList.remove('d-none');
+                document.getElementById('cardViewBtn').classList.add('active');
+                document.getElementById('listViewBtn').classList.remove('active');
+            } else {
+                document.getElementById('listView').classList.remove('d-none');
+                document.getElementById('cardView').classList.add('d-none');
+                document.getElementById('listViewBtn').classList.add('active');
+                document.getElementById('cardViewBtn').classList.remove('active');
+            }
+        }
+
+        // ==================== Inline Editing ====================
+        function startInlineEdit(el) {
+            if (el.classList.contains('editing')) return;
+
+            var originalText = el.textContent.trim();
+            el.setAttribute('contenteditable', 'true');
+            el.classList.add('editing');
+            el.focus();
+
+            // Select all text
+            var range = document.createRange();
+            range.selectNodeContents(el);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+
+            function saveEdit() {
+                var newText = el.textContent.trim();
+                el.removeAttribute('contenteditable');
+                el.classList.remove('editing');
+                el.removeEventListener('blur', saveEdit);
+                el.removeEventListener('keydown', handleKeys);
+
+                if (newText && newText !== originalText) {
+                    var moduleId = el.dataset.moduleId;
+                    fetch('@Url.Action("QuickEditModule")', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                            'RequestVerificationToken': csrfToken
+                        },
+                        body: JSON.stringify({ id: parseInt(moduleId), title: newText })
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast('نجاح', data.message, 'success');
+                            // Update data-title attribute for filtering
+                            el.closest('.module-item').dataset.title = newText;
+                        } else {
+                            el.textContent = originalText;
+                            showToast('خطأ', data.message, 'error');
+                        }
+                    })
+                    .catch(() => {
+                        el.textContent = originalText;
+                        showToast('خطأ', 'حدث خطأ أثناء الحفظ', 'error');
+                    });
+                } else if (!newText) {
+                    el.textContent = originalText;
+                }
+            }
+
+            function handleKeys(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    el.blur();
+                } else if (e.key === 'Escape') {
+                    el.textContent = originalText;
+                    el.removeAttribute('contenteditable');
+                    el.classList.remove('editing');
+                    el.removeEventListener('blur', saveEdit);
+                    el.removeEventListener('keydown', handleKeys);
+                }
+            }
+
+            el.addEventListener('blur', saveEdit);
+            el.addEventListener('keydown', handleKeys);
+        }
+
+        // ==================== Expandable Lessons ====================
+        function toggleLessons(toggleEl) {
+            var moduleId = toggleEl.dataset.moduleId;
+            var accordion = document.getElementById('lessons-' + moduleId);
+
+            toggleEl.classList.toggle('expanded');
+            accordion.classList.toggle('expanded');
+        }
+
+        // ==================== Bulk Operations ====================
+        function toggleSelectAll(checkbox) {
+            var listView = !document.getElementById('listView').classList.contains('d-none');
+            var selector = listView ? '.item-checkbox' : '.item-checkbox-card';
+            document.querySelectorAll(selector).forEach(function (cb) {
+                if (cb.closest('.module-item, .module-card-item').style.display !== 'none') {
+                    cb.checked = checkbox.checked;
+                }
+            });
+            updateBulkBar();
+        }
+
+        function updateBulkBar() {
+            var listView = !document.getElementById('listView').classList.contains('d-none');
+            var selector = listView ? '.item-checkbox:checked' : '.item-checkbox-card:checked';
+            var count = document.querySelectorAll(selector).length;
+            document.getElementById('selectedCount').textContent = count;
+            document.getElementById('bulkActionBar').classList.toggle('show', count > 0);
+        }
+
+        function clearSelection() {
+            document.querySelectorAll('.item-checkbox, .item-checkbox-card').forEach(function (cb) { cb.checked = false; });
+            document.getElementById('selectAllCheckbox').checked = false;
+            updateBulkBar();
+        }
+
+        function getSelectedIds() {
+            var listView = !document.getElementById('listView').classList.contains('d-none');
+            var selector = listView ? '.item-checkbox:checked' : '.item-checkbox-card:checked';
+            return Array.from(document.querySelectorAll(selector)).map(cb => parseInt(cb.value));
+        }
+
+        function bulkAction(action) {
+            var ids = getSelectedIds();
+            if (!ids.length) return;
+
+            if (action === 'delete') {
+                document.getElementById('bulkDeleteCount').textContent = ids.length;
+                new bootstrap.Modal(document.getElementById('bulkDeleteModal')).show();
+                return;
+            }
+
+            var url = action === 'publish' ? '@Url.Action("BulkPublish")' : '@Url.Action("BulkUnpublish")';
+            showLoading(true);
+
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'RequestVerificationToken': csrfToken
+                },
+                body: JSON.stringify({ ids: ids })
+            })
+            .then(r => r.json())
+            .then(data => {
+                showLoading(false);
+                if (data.success) {
+                    showToast('نجاح', data.message, 'success');
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    showToast('خطأ', data.message, 'error');
+                }
+            })
+            .catch(() => {
+                showLoading(false);
+                showToast('خطأ', 'حدث خطأ أثناء تنفيذ العملية', 'error');
+            });
+        }
+
+        function executeBulkDelete() {
+            var ids = getSelectedIds();
+            if (!ids.length) return;
+
+            bootstrap.Modal.getInstance(document.getElementById('bulkDeleteModal')).hide();
+            showLoading(true);
+
+            fetch('@Url.Action("BulkDeleteModules")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'RequestVerificationToken': csrfToken
+                },
+                body: JSON.stringify({ ids: ids })
+            })
+            .then(r => r.json())
+            .then(data => {
+                showLoading(false);
+                if (data.success) {
+                    showToast('نجاح', data.message, 'success');
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    showToast('خطأ', data.message, 'error');
+                }
+            })
+            .catch(() => {
+                showLoading(false);
+                showToast('خطأ', 'حدث خطأ أثناء الحذف', 'error');
+            });
+        }
+
+        // ==================== Toggle Publish (AJAX) ====================
+        function togglePublish(moduleId) {
+            // Use form submission for TogglePublish since it expects standard form post
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '@Url.Action("TogglePublish", "Modules", new { area = "Instructor" })' + '?id=' + moduleId;
+
+            var tokenInput = document.createElement('input');
+            tokenInput.type = 'hidden';
+            tokenInput.name = '__RequestVerificationToken';
+            tokenInput.value = csrfToken;
+            form.appendChild(tokenInput);
+
+            var idInput = document.createElement('input');
+            idInput.type = 'hidden';
+            idInput.name = 'id';
+            idInput.value = moduleId;
+            form.appendChild(idInput);
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        // ==================== Helpers ====================
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('hidden', !show);
+        }
+
+        function confirmDelete(url, message) {
+            $('#deleteModal form').attr('action', url);
+            $('#deleteModal .modal-body p').text(message);
+            new bootstrap.Modal(document.getElementById('deleteModal')).show();
+        }
+
+        function showToast(title, message, type) {
+            var bgClass = type === 'success' ? 'bg-success' : 'bg-danger';
+            var toastHtml = `
+                <div class="toast align-items-center text-white ${bgClass} border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">${message}</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>`;
+            
+            var toastContainer = document.querySelector('.toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+                toastContainer.style.zIndex = '9999';
+                document.body.appendChild(toastContainer);
+            }
+            
+            toastContainer.innerHTML = toastHtml;
+            var toast = new bootstrap.Toast(toastContainer.querySelector('.toast'));
+            toast.show();
+        }
+    </script>
+}

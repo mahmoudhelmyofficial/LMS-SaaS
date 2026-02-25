@@ -1,0 +1,228 @@
+@model LMS.Areas.Student.Controllers.LeaderboardViewModel
+
+@{
+    ViewData["Title"] = Html.T("لوحة المتصدرين", "Leaderboard");
+}
+
+@section Styles {
+<style>
+    .leaderboard-item {
+        transition: all 0.2s ease;
+    }
+    .leaderboard-item:hover {
+        background-color: #f9fafb;
+    }
+    .leaderboard-item.current-user {
+        background-color: #eff6ff;
+    }
+    .rank-badge {
+        width: 50px;
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        border-radius: 50%;
+    }
+    .rank-1 { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: white; }
+    .rank-2 { background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%); color: white; }
+    .rank-3 { background: linear-gradient(135deg, #d97706 0%, #92400e 100%); color: white; }
+    .user-rank-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    .table-responsive { -webkit-overflow-scrolling: touch; max-width: 100%; }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- User Rank Card -->
+<div class="card stretch stretch-full user-rank-card mb-4">
+    <div class="card-body py-4">
+        <div class="row align-items-center g-3">
+            <div class="col-6 col-lg-3 text-center border-end border-white border-opacity-25">
+                <div class="rank-badge mx-auto mb-2" style="background: white; color: #667eea; width: 80px; height: 80px; font-size: 32px;">
+                    #@Model.CurrentUserRank
+                </div>
+                <h5 class="text-white mb-0">@Html.T("ترتيبك", "Your rank")</h5>
+            </div>
+            <div class="col-6 col-lg-3 text-center border-end border-white border-opacity-25">
+                <h2 class="text-white fw-bold mb-2">@Model.CurrentUserPoints.ToString("N0")</h2>
+                <p class="text-white opacity-75 mb-0">@Html.T("نقطة", "pts")</p>
+            </div>
+            <div class="col-6 col-lg-3 text-center border-end border-white border-opacity-25">
+                <h2 class="text-white fw-bold mb-2">@Model.CurrentUserBadges</h2>
+                <p class="text-white opacity-75 mb-0">@Html.T("شارة", "badge")</p>
+            </div>
+            <div class="col-6 col-lg-3 text-center">
+                <h2 class="text-white fw-bold mb-2">@Model.CurrentUserCompletedCourses</h2>
+                <p class="text-white opacity-75 mb-0">@Html.T("دورة مكتملة", "completed course")</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div>
+                <h5 class="fw-bold mb-1">@Html.T("لوحة المتصدرين", "Leaderboard")</h5>
+                <p class="text-muted mb-0">@Html.T("تنافس مع الطلاب الآخرين", "Compete with other students")</p>
+            </div>
+            <div class="btn-group" role="group">
+                <a asp-action="Index" asp-route-period="week" 
+                   class="btn @(Model.Period == "week" ? "btn-primary" : "btn-outline-primary")">@Html.T("الأسبوع", "Week")</a>
+                <a asp-action="Index" asp-route-period="month" 
+                   class="btn @(Model.Period == "month" ? "btn-primary" : "btn-outline-primary")">@Html.T("الشهر", "Month")</a>
+                <a asp-action="Index" asp-route-period="all" 
+                   class="btn @(Model.Period == "all" ? "btn-primary" : "btn-outline-primary")">@Html.T("كل الوقت", "All time")</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Leaderboard -->
+<div class="card stretch stretch-full">
+    <div class="card-body p-0">
+        @if (Model.Entries.Any())
+        {
+            <!-- Mobile: card list -->
+            <div class="d-md-none p-3">
+                @foreach (var entry in Model.Entries)
+                {
+                    var rankClass = entry.Rank switch {
+                        1 => "rank-1",
+                        2 => "rank-2",
+                        3 => "rank-3",
+                        _ => "bg-soft-secondary text-secondary"
+                    };
+                    var avatarColors = new[] { "primary", "success", "info", "warning", "danger" };
+                    var avatarColor = avatarColors[(entry.Rank - 1) % avatarColors.Length];
+                    <div class="leaderboard-item card mb-3 @(entry.IsCurrentUser ? "current-user" : "")">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="rank-badge @rankClass flex-shrink-0">
+                                    @entry.Rank
+                                </div>
+                                @if (!string.IsNullOrEmpty(entry.ProfileImageUrl))
+                                {
+                                    <img src="@entry.ProfileImageUrl" alt="@entry.FullName" class="avatar-md rounded-circle flex-shrink-0" style="object-fit: cover;" />
+                                }
+                                else
+                                {
+                                    <div class="avatar-text avatar-md bg-@avatarColor text-white flex-shrink-0">
+                                        @entry.FullName.Substring(0, 1)
+                                    </div>
+                                }
+                                <div class="flex-grow-1 min-w-0">
+                                    <h6 class="fw-bold mb-0 text-break">
+                                        @entry.FullName
+                                        @if (entry.IsCurrentUser)
+                                        {
+                                            <span class="badge bg-primary ms-2">@Html.T("أنت", "You")</span>
+                                        }
+                                    </h6>
+                                    <small class="text-muted">@entry.LevelName</small>
+                                </div>
+                                <div class="text-end flex-shrink-0">
+                                    <strong class="text-primary fs-5">@entry.Points.ToString("N0")</strong>
+                                    <div class="d-flex gap-1 justify-content-end mt-1">
+                                        <span class="badge bg-soft-success text-success">@entry.CompletedCourses</span>
+                                        <span class="badge bg-soft-warning text-warning">@entry.BadgesCount</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <!-- Desktop: table -->
+            <div class="d-none d-md-block">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th width="80">@Html.T("المركز", "Rank")</th>
+                                <th>@Html.T("الطالب", "Student")</th>
+                                <th class="text-center">@Html.T("الدورات", "Courses")</th>
+                                <th class="text-center">@Html.T("الشارات", "Badges")</th>
+                                <th class="text-center">@Html.T("النقاط", "Points")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var entry in Model.Entries)
+                            {
+                                var rankClass = entry.Rank switch {
+                                    1 => "rank-1",
+                                    2 => "rank-2",
+                                    3 => "rank-3",
+                                    _ => "bg-soft-secondary text-secondary"
+                                };
+                                var avatarColors = new[] { "primary", "success", "info", "warning", "danger" };
+                                var avatarColor = avatarColors[(entry.Rank - 1) % avatarColors.Length];
+                                <tr class="leaderboard-item @(entry.IsCurrentUser ? "current-user" : "")">
+                                    <td>
+                                        <div class="rank-badge @rankClass">
+                                            @entry.Rank
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            @if (!string.IsNullOrEmpty(entry.ProfileImageUrl))
+                                            {
+                                                <img src="@entry.ProfileImageUrl" alt="@entry.FullName" 
+                                                     class="avatar-md rounded-circle me-3" style="object-fit: cover;" />
+                                            }
+                                            else
+                                            {
+                                                <div class="avatar-text avatar-md bg-@avatarColor text-white me-3">
+                                                    @entry.FullName.Substring(0, 1)
+                                                </div>
+                                            }
+                                            <div>
+                                                <h6 class="fw-bold mb-0">
+                                                    @entry.FullName
+                                                    @if (entry.IsCurrentUser)
+                                                    {
+                                                        <span class="badge bg-primary ms-2">@Html.T("أنت", "You")</span>
+                                                    }
+                                                </h6>
+                                                <small class="text-muted">@entry.LevelName</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-soft-success text-success">@entry.CompletedCourses</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-soft-warning text-warning">@entry.BadgesCount</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <strong class="text-primary fs-5">@entry.Points.ToString("N0")</strong>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="text-center py-5">
+                <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                    <i class="feather-users"></i>
+                </div>
+                <h5 class="fw-bold mb-2">@Html.T("لا توجد بيانات بعد", "No data yet")</h5>
+                <p class="text-muted">@Html.T("ابدأ رحلتك التعليمية لتظهر في لوحة المتصدرين!", "Start your learning journey to appear on the leaderboard!")</p>
+                <a asp-controller="Courses" asp-action="Browse" class="btn btn-primary mt-2">
+                    <i class="feather-book-open me-2"></i>
+                    @Html.T("تصفح الدورات", "Browse Courses")
+                </a>
+            </div>
+        }
+    </div>
+</div>

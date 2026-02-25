@@ -1,0 +1,479 @@
+@model LMS.Domain.Entities.Payments.Refund
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل طلب الاسترداد", "Refund request details");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("طلبات الاسترداد", "Refund requests"), Url.Action("Index", "Refunds")),
+        (Html.T("تفاصيل الطلب", "Request details"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>();
+    
+    if (Model.Status == LMS.Domain.Enums.RefundStatus.Pending)
+    {
+        actions.Add((Html.T("معالجة الطلب", "Process request"), "feather-check-circle", Url.Action("Process", "Refunds", new { id = Model.Id }), "btn-primary"));
+    }
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .refund-header {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .status-timeline {
+            position: relative;
+            padding: 20px 0;
+        }
+        .timeline-step {
+            position: relative;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .timeline-step::before {
+            content: '';
+            position: absolute;
+            right: 20px;
+            top: 40px;
+            width: 2px;
+            height: calc(100% + 20px);
+            background: #e5e7eb;
+        }
+        .timeline-step:last-child::before {
+            display: none;
+        }
+        .timeline-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+        .info-row {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Refund Header -->
+    <div class="refund-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <div class="d-flex align-items-center gap-3 mb-3">
+                    <h3 class="text-white mb-0">طلب استرداد #@Model.Id</h3>
+                    @{
+                        var statusColor = Model.Status switch
+                        {
+                            LMS.Domain.Enums.RefundStatus.Pending => "warning",
+                            LMS.Domain.Enums.RefundStatus.Approved => "success",
+                            LMS.Domain.Enums.RefundStatus.Rejected => "danger",
+                            _ => "secondary"
+                        };
+                        var statusText = Model.Status switch
+                        {
+                            LMS.Domain.Enums.RefundStatus.Pending => "قيد الانتظار",
+                            LMS.Domain.Enums.RefundStatus.Approved => "موافق عليه",
+                            LMS.Domain.Enums.RefundStatus.Rejected => "مرفوض",
+                            _ => "غير محدد"
+                        };
+                    }
+                    <span class="badge bg-@statusColor" style="font-size: 1rem; padding: 8px 15px;">
+                        @statusText
+                    </span>
+                </div>
+                <div class="row g-3 text-white">
+                    <div class="col-md-4">
+                        <small class="text-white-50 d-block">المبلغ المطلوب</small>
+                        <h5 class="mb-0">@Model.RefundAmount.ToEGP() @Model.Currency</h5>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-white-50 d-block">تاريخ الطلب</small>
+                        <span class="fw-semibold">@Model.RequestedAt.ToString("dd/MM/yyyy")</span>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-white-50 d-block">رقم الدفعة</small>
+                        <span class="fw-semibold">#@Model.PaymentId</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="avatar-text avatar-xxl bg-white text-primary mx-auto">
+                    <i class="feather-dollar-sign fs-1"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Student Information -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-user me-2"></i>
+                        معلومات الطالب
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 mb-4">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary">
+                            @Model.Payment.Student.FirstName.Substring(0, 1)@Model.Payment.Student.LastName.Substring(0, 1)
+                        </div>
+                        <div>
+                            <h6 class="mb-1">@Model.Payment.Student.FirstName @Model.Payment.Student.LastName</h6>
+                            <p class="text-muted mb-0">@Model.Payment.Student.Email</p>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <small class="text-muted d-block mb-1">رقم الهاتف</small>
+                                <span class="fw-semibold">@(Model.Payment.Student.PhoneNumber ?? "غير محدد")</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <small class="text-muted d-block mb-1">تاريخ التسجيل</small>
+                                <span class="fw-semibold">@Model.Payment.Student.CreatedAt.ToString("dd/MM/yyyy")</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <a asp-controller="Users" asp-action="Details" asp-route-id="@Model.Payment.StudentId" class="btn btn-light-brand btn-sm">
+                            <i class="feather-external-link me-2"></i>
+                            عرض ملف الطالب
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Course & Payment Information -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-book me-2"></i>
+                        معلومات الدورة والدفع
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.Payment.Course != null)
+                    {
+                        <h6 class="mb-3">@Model.Payment.Course.Title</h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <div class="info-row">
+                                    <small class="text-muted d-block mb-1">المدرس</small>
+                                    <span class="fw-semibold">@Model.Payment.Course.Instructor.FirstName @Model.Payment.Course.Instructor.LastName</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="info-row">
+                                    <small class="text-muted d-block mb-1">السعر</small>
+                                    <span class="fw-semibold">@Model.Payment.Course.Price.ToEGP()</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    
+                    <hr class="my-3">
+                    
+                    <h6 class="mb-3">تفاصيل الدفع</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <small class="text-muted d-block mb-1">المبلغ الأصلي</small>
+                                <span class="fw-semibold">@Model.Payment.OriginalAmount.ToEGP()</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <small class="text-muted d-block mb-1">المبلغ المدفوع</small>
+                                <span class="fw-semibold">@Model.Payment.TotalAmount.ToEGP()</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <small class="text-muted d-block mb-1">تاريخ الدفع</small>
+                                <span class="fw-semibold">@Model.Payment.CreatedAt.ToString("dd/MM/yyyy")</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-row">
+                                <small class="text-muted d-block mb-1">طريقة الدفع</small>
+                                <span class="fw-semibold">@Model.Payment.PaymentMethod</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <a asp-controller="Payments" asp-action="Details" asp-route-id="@Model.PaymentId" class="btn btn-light-brand btn-sm">
+                            <i class="feather-external-link me-2"></i>
+                            عرض تفاصيل الدفع
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Refund Reason -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-message-square me-2"></i>
+                        سبب طلب الاسترداد
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(Model.Reason))
+                    {
+                        <div class="alert alert-info">
+                            <i class="feather-info me-2"></i>
+                            @Model.Reason
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0">لم يتم تقديم سبب محدد</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Processing Information -->
+            @if (Model.Status != LMS.Domain.Enums.RefundStatus.Pending)
+            {
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-check-square me-2"></i>
+                            معلومات المعالجة
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            @if (Model.ProcessedAt.HasValue)
+                            {
+                                <div class="col-md-6">
+                                    <div class="info-row">
+                                        <small class="text-muted d-block mb-1">تاريخ المعالجة</small>
+                                        <span class="fw-semibold">@Model.ProcessedAt.Value.ToString("dd/MM/yyyy hh:mm tt")</span>
+                                    </div>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(Model.ProcessedBy))
+                            {
+                                <div class="col-md-6">
+                                    <div class="info-row">
+                                        <small class="text-muted d-block mb-1">تمت المعالجة بواسطة</small>
+                                        <span class="fw-semibold">
+                                            @if (Model.Processor != null)
+                                            {
+                                                @($"{Model.Processor.FirstName} {Model.Processor.LastName}")
+                                            }
+                                            else
+                                            {
+                                                @Model.ProcessedBy
+                                            }
+                                        </span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        
+                        @if (Model.Status == LMS.Domain.Enums.RefundStatus.Approved && Model.RefundedAt.HasValue)
+                        {
+                            <div class="alert alert-success mt-3 mb-0">
+                                <i class="feather-check-circle me-2"></i>
+                                <strong>تم الاسترداد بنجاح</strong><br>
+                                التاريخ: @Model.RefundedAt.Value.ToString("dd/MM/yyyy hh:mm tt")<br>
+                                طريقة الاسترداد: @(Model.RefundMethod ?? "الطريقة الأصلية")
+                            </div>
+                        }
+                        
+                        @if (Model.Status == LMS.Domain.Enums.RefundStatus.Rejected && !string.IsNullOrEmpty(Model.RejectionNotes))
+                        {
+                            <div class="alert alert-danger mt-3 mb-0">
+                                <i class="feather-x-circle me-2"></i>
+                                <strong>سبب الرفض:</strong><br>
+                                @Model.RejectionNotes
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Status Timeline -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-clock me-2"></i>
+                        المراحل
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="status-timeline">
+                        <!-- Requested -->
+                        <div class="timeline-step">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="timeline-icon bg-soft-primary text-primary">
+                                    <i class="feather-file-text"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">تم تقديم الطلب</h6>
+                                    <small class="text-muted">@Model.RequestedAt.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Processing -->
+                        @if (Model.Status != LMS.Domain.Enums.RefundStatus.Pending)
+                        {
+                            <div class="timeline-step">
+                                <div class="d-flex align-items-start gap-3">
+                                    <div class="timeline-icon bg-soft-@statusColor text-@statusColor">
+                                        <i class="feather-@(Model.Status == LMS.Domain.Enums.RefundStatus.Approved ? "check" : "x")"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">تمت المعالجة</h6>
+                                        <small class="text-muted">@Model.ProcessedAt?.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                        <p class="mb-0 mt-1">
+                                            <span class="badge bg-soft-@statusColor text-@statusColor">@statusText</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Refunded -->
+                        @if (Model.Status == LMS.Domain.Enums.RefundStatus.Approved && Model.RefundedAt.HasValue)
+                        {
+                            <div class="timeline-step">
+                                <div class="d-flex align-items-start gap-3">
+                                    <div class="timeline-icon bg-soft-success text-success">
+                                        <i class="feather-dollar-sign"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">تم الاسترداد</h6>
+                                        <small class="text-muted">@Model.RefundedAt.Value.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Refund Summary -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-file-text me-2"></i>
+                        ملخص الاسترداد
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="vstack gap-3">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">رقم الطلب:</span>
+                            <span class="fw-semibold">#@Model.Id</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">المبلغ:</span>
+                            <span class="fw-semibold text-success">@Model.RefundAmount.ToEGP()</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">العملة:</span>
+                            <span class="fw-semibold">@Model.Currency</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">الحالة:</span>
+                            <span class="badge bg-soft-@statusColor text-@statusColor">@statusText</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">رقم الدفعة:</span>
+                            <span class="fw-semibold">#@Model.PaymentId</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            @if (Model.Status == LMS.Domain.Enums.RefundStatus.Pending)
+            {
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-zap me-2"></i>
+                            إجراءات
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a asp-action="Process" asp-route-id="@Model.Id" class="btn btn-primary">
+                                <i class="feather-check-circle me-2"></i>
+                                معالجة الطلب
+                            </a>
+                            <button type="button" class="btn btn-light-brand" onclick="window.print()">
+                                <i class="feather-printer me-2"></i>
+                                طباعة
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2"></i>
+                            إجراءات
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-light-brand" onclick="window.print()">
+                                <i class="feather-printer me-2"></i>
+                                طباعة
+                            </button>
+                            <a asp-action="Index" class="btn btn-light">
+                                <i class="feather-arrow-right me-2"></i>
+                                العودة للقائمة
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Print functionality
+            window.onbeforeprint = function() {
+                document.body.classList.add('print-mode');
+            };
+            
+            window.onafterprint = function() {
+                document.body.classList.remove('print-mode');
+            };
+        });
+    </script>
+}
+

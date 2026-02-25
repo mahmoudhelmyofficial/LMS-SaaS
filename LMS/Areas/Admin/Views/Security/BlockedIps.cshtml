@@ -1,0 +1,406 @@
+@model IEnumerable<LMS.Domain.Entities.Security.BlockedIp>
+
+@{
+    ViewData["Title"] = Html.T("عناوين IP المحظورة", "Blocked IP addresses");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("الأمان", "Security"), Url.Action("Dashboard", "Security")),
+        (Html.T("عناوين IP المحظورة", "Blocked IPs"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    
+    var page = ViewBag.Page ?? 1;
+}
+
+@section Styles {
+    <style>
+        .ip-card {
+            transition: all 0.3s ease;
+            border-right: 3px solid #f06548;
+        }
+        .ip-card:hover {
+            box-shadow: 0 5px 15px rgba(240, 101, 72, 0.2);
+            transform: translateY(-2px);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                        <i class="feather-shield-off"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("إجمالي IP المحظور", "Total Blocked IPs")</span>
+                        <h3 class="fw-bold mb-0">@Model.Count()</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                        <i class="feather-check-circle"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">نشط</span>
+                        <h3 class="fw-bold mb-0">@Model.Count(b => b.IsActive)</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                        <i class="feather-clock"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">دائم</span>
+                        <h3 class="fw-bold mb-0">@Model.Count(b => !b.ExpiresAt.HasValue)</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                        <i class="feather-alert-triangle"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("محاولات محظورة", "Blocked Attempts")</span>
+                        <h3 class="fw-bold mb-0">@Model.Sum(b => b.AttemptCount)</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Actions Bar -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("البحث عن IP", "Search IP")</label>
+                            <input type="text" class="form-control" id="searchIp" placeholder="@(Html.T("ابحث عن عنوان IP...", "Search for IP..."))" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("الحالة", "Status")</label>
+                            <select class="form-select" id="statusFilter">
+                                <option value="">@Html.T("الكل", "All")</option>
+                                <option value="active">@Html.T("نشط", "Active")</option>
+                                <option value="inactive">@Html.T("غير نشط", "Inactive")</option>
+                                <option value="permanent">@Html.T("دائم", "Permanent")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <a asp-action="AddBlockedIp" class="btn btn-danger w-100">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("حظر IP", "Block IP")
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Blocked IPs Table -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("عناوين IP المحظورة", "Blocked IP Addresses")</h5>
+                    <div class="card-header-action">
+                        <form asp-action="CleanupExpiredIps" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('@(Html.T("هل أنت متأكد من حذف جميع العناوين المنتهية؟", "Are you sure you want to delete all expired addresses?"))');">
+                                <i class="feather-trash-2 me-2"></i>
+                                @Html.T("حذف المنتهية", "Delete Expired")
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="ipsTable">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>@Html.T("عنوان IP", "IP Address")</th>
+                                    <th>@Html.T("السبب", "Reason")</th>
+                                    <th>@Html.T("تاريخ الحظر", "Blocked At")</th>
+                                    <th>@Html.T("ينتهي في", "Expires At")</th>
+                                    <th>@Html.T("عدد المحاولات", "Attempts")</th>
+                                    <th>@Html.T("حُظر بواسطة", "Blocked By")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var blockedIp in Model)
+                                {
+                                    var isExpired = blockedIp.ExpiresAt.HasValue && blockedIp.ExpiresAt.Value < DateTime.UtcNow;
+                                    
+                                    <tr class="ip-card">
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="avatar-text avatar-sm bg-soft-danger text-danger">
+                                                    <i class="feather-shield-off"></i>
+                                                </div>
+                                                <div>
+                                                    <code class="text-danger fw-bold">@blockedIp.IpAddress</code>
+                                                    @if (!string.IsNullOrEmpty(blockedIp.Country))
+                                                    {
+                                                        <small class="d-block text-muted">
+                                                            <i class="feather-map-pin"></i>
+                                                            @blockedIp.Country
+                                                        </small>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="text-muted" data-bs-toggle="tooltip" title="@blockedIp.Reason">
+                                                @(blockedIp.Reason?.Length > 40 ? blockedIp.Reason.Substring(0, 40) + "..." : blockedIp.Reason)
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div>
+                                                <span class="d-block">@blockedIp.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                                <small class="text-muted">@blockedIp.CreatedAt.ToString("hh:mm tt")</small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (blockedIp.ExpiresAt.HasValue)
+                                            {
+                                                <div>
+                                                    <span class="d-block">@blockedIp.ExpiresAt.Value.ToString("dd/MM/yyyy")</span>
+                                                    <small class="@(isExpired ? "text-danger" : "text-muted")">
+                                                        @(isExpired ? Html.T("منتهي", "Expired") : blockedIp.ExpiresAt.Value.ToString("hh:mm tt"))
+                                                    </small>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">@Html.T("دائم", "Permanent")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-warning text-warning">@blockedIp.AttemptCount</span>
+                                        </td>
+                                        <td>
+                                            @if (blockedIp.BlockedByUser != null)
+                                            {
+                                                <div>
+                                                    <span class="d-block fw-semibold">@blockedIp.BlockedByUser.FirstName @blockedIp.BlockedByUser.LastName</span>
+                                                    <small class="text-muted">@blockedIp.BlockedByUser.Email</small>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">@Html.T("النظام", "System")</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (blockedIp.IsActive && !isExpired)
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">
+                                                    <i class="feather-shield-off me-1"></i>
+                                                    @Html.T("محظور", "Blocked")
+                                                </span>
+                                            }
+                                            else if (isExpired)
+                                            {
+                                                <span class="badge bg-soft-secondary text-secondary">
+                                                    <i class="feather-clock me-1"></i>
+                                                    @Html.T("منتهي", "Expired")
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-success text-success">
+                                                    <i class="feather-check-circle me-1"></i>
+                                                    @Html.T("غير نشط", "Inactive")
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                @if (blockedIp.IsActive && !isExpired)
+                                                {
+                                                    <form asp-controller="Security" asp-action="UnblockIp" asp-route-id="@blockedIp.Id" method="post" style="display: inline;">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="avatar-text avatar-md text-success" 
+                                                                data-bs-toggle="tooltip" title="@(Html.T("إلغاء الحظر", "Unblock"))"
+                                                                onclick="return confirm('@(Html.T("هل أنت متأكد من إلغاء حظر هذا العنوان?", "Are you sure you want to unblock this address?"))');">
+                                                            <i class="feather-check-circle"></i>
+                                                        </button>
+                                                    </form>
+                                                }
+                                                <button class="avatar-text avatar-md" title="@(Html.T("تفاصيل", "Details"))" 
+                                                        data-bs-target="#detailsModal@(blockedIp.Id)" data-bs-toggle="modal">
+                                                    <i class="feather-info"></i>
+                                                </button>
+                                                <form asp-action="DeleteBlockedIp" asp-route-id="@blockedIp.Id" method="post" style="display: inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="avatar-text avatar-md text-danger" 
+                                                            data-bs-toggle="tooltip" title="@Html.T("حذف", "Delete")"
+                                                            onclick="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا العنوان نهائياً؟", "Are you sure you want to permanently delete this address?"))')">
+                                                        <i class="feather-trash-2"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                            
+                                            @* Details Modal *@
+                                            <div class="modal fade" id="detailsModal@(blockedIp.Id)" tabindex="-1" data-bs-backdrop="false">
+                                                <div class="modal-dialog">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title"><i class="feather-info me-2"></i>@Html.T("تفاصيل العنوان المحظور", "Blocked Address Details")</h5>
+                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <table class="table table-borderless">
+                                                                <tr><td class="text-muted">@Html.T("عنوان IP:", "IP Address:")</td><td><code class="text-danger">@blockedIp.IpAddress</code></td></tr>
+                                                                <tr><td class="text-muted">@Html.T("السبب:", "Reason:")</td><td>@blockedIp.Reason</td></tr>
+                                                                <tr><td class="text-muted">@Html.T("الدولة:", "Country:")</td><td>@(blockedIp.Country ?? "-")</td></tr>
+                                                                <tr><td class="text-muted">@Html.T("تاريخ الحظر:", "Blocked At:")</td><td>@blockedIp.CreatedAt.ToString("yyyy/MM/dd hh:mm tt")</td></tr>
+                                                                <tr><td class="text-muted">@Html.T("ينتهي في:", "Expires At:")</td><td>@(blockedIp.ExpiresAt?.ToString("yyyy/MM/dd hh:mm tt") ?? Html.T("دائم", "Permanent"))</td></tr>
+                                                                <tr><td class="text-muted">@Html.T("عدد المحاولات:", "Attempts:")</td><td>@blockedIp.AttemptCount</td></tr>
+                                                                <tr><td class="text-muted">@Html.T("حظر تلقائي:", "Auto-blocked:")</td><td>@(blockedIp.IsAutoBlocked ? Html.T("نعم", "Yes") : Html.T("لا", "No"))</td></tr>
+                                                                @if (!string.IsNullOrEmpty(blockedIp.Notes))
+                                                                {
+                                                                    <tr><td class="text-muted">@Html.T("ملاحظات:", "Notes:")</td><td>@blockedIp.Notes</td></tr>
+                                                                }
+                                                            </table>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إغلاق", "Close")</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                @if (!Model.Any())
+                {
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-success text-success mx-auto mb-3">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <h5>لا توجد عناوين IP محظورة</h5>
+                        <p class="text-muted">لم يتم حظر أي عنوان IP حتى الآن</p>
+                        <a asp-action="AddBlockedIp" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            حظر عنوان IP
+                        </a>
+                    </div>
+                }
+                else
+                {
+                    @* Pagination *@
+                    var currentPage = (int)(ViewBag.Page ?? 1);
+                    var hasMore = Model.Count() == 20;
+                    
+                    <div class="card-footer d-flex justify-content-between align-items-center">
+                        <div class="text-muted small">
+                            عرض @Model.Count() عنوان - صفحة @currentPage
+                        </div>
+                        <nav>
+                            <ul class="pagination pagination-sm mb-0">
+                                @if (currentPage > 1)
+                                {
+                                    <li class="page-item">
+                                        <a class="page-link" asp-action="BlockedIps" asp-route-page="@(currentPage - 1)">
+                                            <i class="feather-chevron-right"></i> السابق
+                                        </a>
+                                    </li>
+                                }
+                                <li class="page-item active"><span class="page-link">@currentPage</span></li>
+                                @if (hasMore)
+                                {
+                                    <li class="page-item">
+                                        <a class="page-link" asp-action="BlockedIps" asp-route-page="@(currentPage + 1)">
+                                            التالي <i class="feather-chevron-left"></i>
+                                        </a>
+                                    </li>
+                                }
+                            </ul>
+                        </nav>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Search functionality (works on current page only)
+            $('#searchIp').on('keyup', function() {
+                var value = $(this).val().toLowerCase();
+                $('#ipsTable tbody tr').each(function() {
+                    var text = $(this).text().toLowerCase();
+                    $(this).toggle(text.indexOf(value) > -1);
+                });
+            });
+
+            // Status filter (works on current page only)
+            $('#statusFilter').on('change', function() {
+                var status = $(this).val();
+                if (status === '') {
+                    $('#ipsTable tbody tr').show();
+                } else {
+                    $('#ipsTable tbody tr').each(function() {
+                        var $row = $(this);
+                        var show = false;
+                        
+                        if (status === 'active') {
+                            show = $row.find('.badge.bg-soft-danger:contains("محظور")').length > 0;
+                        } else if (status === 'inactive') {
+                            show = $row.find('.badge.bg-soft-success:contains("غير نشط")').length > 0 ||
+                                   $row.find('.badge.bg-soft-secondary:contains("منتهي")').length > 0;
+                        } else if (status === 'permanent') {
+                            show = $row.find('.badge.bg-soft-danger:contains("دائم")').length > 0;
+                        }
+                        
+                        $row.toggle(show);
+                    });
+                }
+            });
+
+            // Initialize tooltips - exclude modal triggers
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+

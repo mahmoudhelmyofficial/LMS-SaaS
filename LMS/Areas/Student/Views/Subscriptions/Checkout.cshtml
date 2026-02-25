@@ -1,0 +1,529 @@
+@model LMS.Areas.Student.ViewModels.SubscriptionCheckoutViewModel
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = Html.T("اشتراك جديد", "New Subscription");
+    var stripePublishableKey = Configuration["PaymentSettings:Stripe:PublishableKey"] ?? "";
+}
+
+@section Styles {
+<style>
+    :root {
+        --sub-primary: #8b5cf6;
+        --sub-primary-dark: #7c3aed;
+        --sub-success: #10b981;
+        --sub-bg: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+    }
+    
+    .subscription-checkout {
+        background: var(--sub-bg);
+        min-height: 100vh;
+        padding: 3rem 0;
+    }
+    
+    .plan-card {
+        background: white;
+        border-radius: 24px;
+        box-shadow: 0 10px 40px rgba(139, 92, 246, 0.15);
+        overflow: hidden;
+        position: relative;
+    }
+    
+    .plan-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 6px;
+        background: linear-gradient(90deg, var(--sub-primary), var(--sub-primary-dark));
+    }
+    
+    .plan-header {
+        text-align: center;
+        padding: 2.5rem 2rem 1.5rem;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .plan-icon {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(135deg, var(--sub-primary), var(--sub-primary-dark));
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        font-size: 2rem;
+        color: white;
+        box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3);
+    }
+    
+    .plan-name {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+    }
+    
+    .plan-price {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 0.25rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .plan-price .amount {
+        font-size: 3rem;
+        font-weight: 800;
+        color: var(--sub-primary);
+    }
+    
+    .plan-price .currency {
+        font-size: 1.25rem;
+        color: #64748b;
+    }
+    
+    .plan-price .period {
+        font-size: 1rem;
+        color: #94a3b8;
+    }
+    
+    .plan-features {
+        padding: 2rem;
+    }
+    
+    .feature-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .feature-item:last-child {
+        border-bottom: none;
+    }
+    
+    .feature-icon {
+        width: 24px;
+        height: 24px;
+        background: #d1fae5;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #10b981;
+        font-size: 0.75rem;
+    }
+    
+    .checkout-form {
+        background: white;
+        border-radius: 24px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+        padding: 2rem;
+    }
+    
+    .form-section-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .form-section-title i {
+        color: var(--sub-primary);
+    }
+    
+    #stripe-subscription-element {
+        padding: 1rem;
+        background: #f8fafc;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+    }
+    
+    #stripe-subscription-element.StripeElement--focus {
+        border-color: var(--sub-primary);
+        box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+    }
+    
+    .subscribe-btn {
+        width: 100%;
+        padding: 1.25rem;
+        background: linear-gradient(135deg, var(--sub-primary), var(--sub-primary-dark));
+        color: white;
+        border: none;
+        border-radius: 14px;
+        font-size: 1.15rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        box-shadow: 0 6px 25px rgba(139, 92, 246, 0.35);
+    }
+    
+    .subscribe-btn:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 35px rgba(139, 92, 246, 0.45);
+    }
+    
+    .subscribe-btn:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .billing-toggle {
+        display: flex;
+        background: #f1f5f9;
+        border-radius: 12px;
+        padding: 4px;
+        margin-bottom: 1.5rem;
+    }
+    
+    .billing-option {
+        flex: 1;
+        padding: 0.75rem;
+        text-align: center;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-weight: 600;
+    }
+    
+    .billing-option.active {
+        background: white;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        color: var(--sub-primary);
+    }
+    
+    .savings-badge {
+        display: inline-block;
+        background: #fef3c7;
+        color: #92400e;
+        padding: 0.25rem 0.5rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: 0.5rem;
+    }
+    
+    .guarantee-card {
+        background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-top: 1.5rem;
+        border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    
+    .cancel-anytime {
+        text-align: center;
+        padding: 1rem;
+        background: #f8fafc;
+        border-radius: 12px;
+        margin-top: 1rem;
+    }
+</style>
+}
+
+<div class="subscription-checkout">
+    <div class="container">
+        <div class="row g-4 justify-content-center">
+            <!-- Plan Summary -->
+            <div class="col-lg-5">
+                <div class="plan-card">
+                    <div class="plan-header">
+                        <div class="plan-icon">
+                            <i class="feather-award"></i>
+                        </div>
+                        <h2 class="plan-name">@Model.Plan.Name</h2>
+                        <div class="plan-price">
+                            <span class="amount">@Model.Plan.Price.ToString("N0")</span>
+                            <span class="currency">@Html.T("ج.م", "EGP")</span>
+                            <span class="period">/ @(Model.Plan.BillingCycle == "monthly" ? "شهرياً" : "سنوياً")</span>
+                        </div>
+                        @if (Model.Plan.BillingCycle == "yearly" && Model.Plan.MonthlyEquivalent > 0)
+                        {
+                            <div class="text-muted small">
+                                <span class="savings-badge">@Html.T("وفر", "Save") @Model.Plan.YearlySavingsPercent%</span>
+                                @Html.T("يعادل", "Equivalent to") @Model.Plan.MonthlyEquivalent.ToEGP(0) @Html.T("شهرياً", "monthly")
+                            </div>
+                        }
+                    </div>
+                    
+                    <div class="plan-features">
+                        <h6 class="fw-bold mb-3">@Html.T("ما يتضمنه اشتراكك:", "What your subscription includes:")</h6>
+                        @foreach (var feature in Model.Plan.Features)
+                        {
+                            <div class="feature-item">
+                                <div class="feature-icon">
+                                    <i class="feather-check"></i>
+                                </div>
+                                <span>@feature</span>
+                            </div>
+                        }
+                    </div>
+                    
+                    <div class="guarantee-card mx-3 mb-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="flex-shrink-0">
+                                <i class="feather-shield text-success" style="font-size: 2rem;"></i>
+                            </div>
+                            <div>
+                                <h6 class="fw-bold mb-1">@Html.T("ضمان استرداد المال 30 يوماً", "30-day money-back guarantee")</h6>
+                                <small class="text-muted">@Html.T("إذا لم تكن راضياً، استرد أموالك بالكامل", "If not satisfied, get a full refund")</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Form -->
+            <div class="col-lg-5">
+                <div class="checkout-form">
+                    <form id="subscription-form">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="planId" value="@Model.Plan.Id" />
+                        
+                        <!-- Billing Cycle Toggle -->
+                        @if (Model.AlternativePlans.Any())
+                        {
+                            <div class="mb-4">
+                                <div class="form-section-title">
+                                    <i class="feather-calendar"></i>
+                                    @Html.T("دورة الفوترة", "Billing cycle")
+                                </div>
+                                <div class="billing-toggle">
+                                    @foreach (var plan in Model.AlternativePlans)
+                                    {
+                                        <div class="billing-option @(plan.Id == Model.Plan.Id ? "active" : "")" 
+                                             onclick="switchPlan(@plan.Id)">
+                                            @(plan.BillingCycle == "monthly" ? Html.T("شهري", "Monthly") : Html.T("سنوي", "Yearly"))
+                                            @if (plan.BillingCycle == "yearly" && plan.YearlySavingsPercent > 0)
+                                            {
+                                                <span class="savings-badge ms-1">@Html.T("وفر", "Save") @plan.YearlySavingsPercent%</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        
+                        <!-- Personal Info -->
+                        <div class="mb-4">
+                            <div class="form-section-title">
+                                <i class="feather-user"></i>
+                                @Html.T("معلوماتك", "Your information")
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <input type="text" name="name" class="form-control form-control-lg" 
+                                           placeholder="@Html.T("الاسم الكامل", "Full name")" value="@Model.UserName" required style="border-radius: 12px;" />
+                                </div>
+                                <div class="col-12">
+                                    <input type="email" name="email" class="form-control form-control-lg" 
+                                           placeholder="@Html.T("البريد الإلكتروني", "Email")" value="@Model.UserEmail" required style="border-radius: 12px;" />
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Payment Method -->
+                        <div class="mb-4">
+                            <div class="form-section-title">
+                                <i class="feather-credit-card"></i>
+                                @Html.T("بيانات الدفع", "Payment details")
+                            </div>
+                            <div id="stripe-subscription-element">
+                                <!-- Stripe Elements -->
+                            </div>
+                            <div id="card-errors" class="text-danger small mt-2"></div>
+                        </div>
+                        
+                        <!-- Coupon -->
+                        <div class="mb-4">
+                            <div class="form-section-title">
+                                <i class="feather-tag"></i>
+                                @Html.T("كود الخصم (اختياري)", "Discount code (optional)")
+                            </div>
+                            <div class="input-group">
+                                <input type="text" name="couponCode" id="coupon-code" class="form-control form-control-lg" 
+                                       placeholder="@Html.T("أدخل كود الخصم", "Enter discount code")" style="border-radius: 12px 0 0 12px;" />
+                                <button type="button" class="btn btn-outline-primary" id="apply-coupon" style="border-radius: 0 12px 12px 0;">
+                                    @Html.T("تطبيق", "Apply")
+                                </button>
+                            </div>
+                            <div id="coupon-message" class="small mt-2"></div>
+                        </div>
+                        
+                        <!-- Summary -->
+                        <div class="bg-light rounded-3 p-3 mb-4">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>@Html.T("سعر الاشتراك", "Subscription price")</span>
+                                <span id="plan-price">@Model.Plan.Price.ToEGP(2)</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2 text-success" id="discount-row" style="display: none !important;">
+                                <span>@Html.T("الخصم", "Discount")</span>
+                                <span id="discount-amount">-0.00 @Html.T("ج.م", "EGP")</span>
+                            </div>
+                            <hr />
+                            <div class="d-flex justify-content-between">
+                                <strong>@Html.T("الإجمالي", "Total") @(Model.Plan.BillingCycle == "monthly" ? Html.T("شهرياً", "monthly") : Html.T("سنوياً", "yearly"))</strong>
+                                <strong class="text-primary" id="total-price">@Model.Plan.Price.ToEGP(2)</strong>
+                            </div>
+                        </div>
+                        
+                        <!-- Terms -->
+                        <div class="form-check mb-4">
+                            <input class="form-check-input" type="checkbox" id="agree-terms" required>
+                            <label class="form-check-label small" for="agree-terms">
+                                @Html.Raw(Html.T("أوافق على", "I agree to").ToString()) <a href="/terms">@Html.T("الشروط والأحكام", "Terms and Conditions")</a> @Html.Raw(Html.T("و", "and").ToString()) <a href="/subscription-terms">@Html.T("شروط الاشتراك", "Subscription terms")</a>
+                            </label>
+                        </div>
+                        
+                        <!-- Submit -->
+                        <button type="submit" class="subscribe-btn" id="submit-btn">
+                            <i class="feather-lock"></i>
+                            <span id="btn-text">@Html.T("بدء الاشتراك الآن", "Start subscription now")</span>
+                        </button>
+                        
+                        <div class="cancel-anytime">
+                            <i class="feather-info text-muted me-1"></i>
+                            <small class="text-muted">@Html.T("يمكنك إلغاء اشتراكك في أي وقت بدون رسوم إضافية", "You can cancel your subscription at any time with no extra fees")</small>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    window.__T = window.__T || {};
+    window.__T.StartSubscriptionNow = '@Html.Raw(Html.T("بدء الاشتراك الآن", "Start subscription now").ToString().Replace("'", "\\'"))';
+    window.__T.CurrencySuffix = ' @Html.Raw(Html.T("ج.م", "EGP").ToString().Replace("'", "\\'"))';
+    window.__T.SubscriptionError = '@Html.Raw(Html.T("حدث خطأ أثناء إنشاء الاشتراك", "An error occurred while creating the subscription").ToString().Replace("'", "\\'"))';
+    const stripe = Stripe('@stripePublishableKey');
+    const elements = stripe.elements({ locale: 'ar' });
+    
+    const cardElement = elements.create('card', {
+        style: {
+            base: {
+                fontSize: '16px',
+                color: '#1e293b',
+                '::placeholder': { color: '#94a3b8' },
+            },
+            invalid: { color: '#ef4444' },
+        },
+        hidePostalCode: true
+    });
+    
+    cardElement.mount('#stripe-subscription-element');
+    
+    cardElement.on('change', function(event) {
+        const displayError = document.getElementById('card-errors');
+        displayError.textContent = event.error ? event.error.message : '';
+    });
+    
+    function switchPlan(planId) {
+        window.location.href = '@Url.Action("Checkout")?planId=' + planId;
+    }
+    
+    document.getElementById('apply-coupon')?.addEventListener('click', async function() {
+        const code = document.getElementById('coupon-code').value.trim();
+        if (!code) return;
+        
+        try {
+            const response = await fetch('@Url.Action("ValidateSubscriptionCoupon")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                },
+                body: JSON.stringify({ code: code, planId: @Model.Plan.Id })
+            });
+            
+            const result = await response.json();
+            const messageEl = document.getElementById('coupon-message');
+            
+            if (result.success) {
+                messageEl.innerHTML = '<span class="text-success">✓ ' + result.message + '</span>';
+                document.getElementById('discount-row').style.display = 'flex';
+                var cur = (window.__T && window.__T.CurrencySuffix) || ' EGP';
+                document.getElementById('discount-amount').textContent = '-' + result.discountAmount + cur;
+                document.getElementById('total-price').textContent = result.finalPrice + cur;
+            } else {
+                messageEl.innerHTML = '<span class="text-danger">' + result.message + '</span>';
+            }
+        } catch (error) {
+            console.error('Coupon error:', error);
+        }
+    });
+    
+    document.getElementById('subscription-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const submitBtn = document.getElementById('submit-btn');
+        const btnText = document.getElementById('btn-text');
+        
+        submitBtn.disabled = true;
+        btnText.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> ' + (window.__T && window.__T.Processing || 'Processing...');
+        
+        try {
+            const {paymentMethod, error} = await stripe.createPaymentMethod({
+                type: 'card',
+                card: cardElement,
+                billing_details: {
+                    name: document.querySelector('input[name="name"]').value,
+                    email: document.querySelector('input[name="email"]').value,
+                },
+            });
+            
+            if (error) {
+                throw new Error(error.message);
+            }
+            
+            const response = await fetch('@Url.Action("CreateSubscription")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value
+                },
+                body: JSON.stringify({
+                    planId: @Model.Plan.Id,
+                    paymentMethodId: paymentMethod.id,
+                    couponCode: document.getElementById('coupon-code').value.trim()
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                if (result.requiresAction) {
+                    const {error: confirmError} = await stripe.confirmCardPayment(result.clientSecret);
+                    if (confirmError) {
+                        throw new Error(confirmError.message);
+                    }
+                }
+                
+                window.location.href = '@Url.Action("Success")?subscriptionId=' + result.subscriptionId;
+            } else {
+                throw new Error(result.message || (window.__T && window.__T.SubscriptionError) || 'An error occurred while creating the subscription');
+            }
+        } catch (error) {
+            document.getElementById('card-errors').textContent = error.message;
+            submitBtn.disabled = false;
+            btnText.innerHTML = '<i class="feather-lock me-2"></i> ' + (window.__T && window.__T.StartSubscriptionNow || 'Start subscription now');
+        }
+    });
+</script>
+}
+

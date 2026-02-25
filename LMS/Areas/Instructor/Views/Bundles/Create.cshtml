@@ -1,0 +1,328 @@
+@model LMS.Areas.Instructor.ViewModels.BundleCreateViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء باقة جديدة", "Create New Bundle");
+    ViewData["Subtitle"] = Html.T("أضف باقة دورات تعليمية جديدة", "Add new course bundle");
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Create" method="post" enctype="multipart/form-data" id="bundleForm">
+        @Html.AntiForgeryToken()
+        
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-4"></div>
+        
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            @Html.T("المعلومات الأساسية", "Basic information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("اسم الباقة", "Bundle name") <span class="text-danger">*</span></label>
+                                <input asp-for="Name" class="form-control" placeholder="@Html.T("مثال: باقة تطوير الويب الشاملة", "e.g. Complete web development bundle")">
+                                <span asp-validation-for="Name" class="text-danger"></span>
+                                <div class="form-text">@Html.T("اختر اسماً واضحاً وجذاباً للباقة", "Choose a clear, attractive name")</div>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("نبذة مختصرة", "Short description") <span class="text-danger">*</span></label>
+                                <textarea asp-for="ShortDescription" class="form-control" rows="3" placeholder="@Html.T("وصف مختصر عن الباقة", "Brief description of the bundle")"></textarea>
+                                <span asp-validation-for="ShortDescription" class="text-danger"></span>
+                                <div class="form-text">@Html.T("وصف قصير يظهر في البطاقة (حتى 200 حرف)", "Short text for card (up to 200 chars)")</div>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">@Html.T("الوصف التفصيلي", "Detailed description")</label>
+                                <textarea asp-for="Description" class="form-control" rows="6" id="descriptionEditor"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                                <div class="form-text">@Html.T("وصف شامل يوضح محتويات الباقة وفوائدها", "Full description of bundle contents and benefits")</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Courses Selection -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-book me-2 text-primary"></i>
+                            @Html.T("الدورات المتضمنة", "Included courses")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <label class="form-label">@Html.T("اختر الدورات", "Select courses") <span class="text-danger">*</span></label>
+                        <select asp-for="CourseIds" class="form-select" asp-items="ViewBag.Courses" multiple size="10">
+                        </select>
+                        <span asp-validation-for="CourseIds" class="text-danger"></span>
+                        <div class="form-text">
+                            <i class="feather-info me-1"></i>
+                            @Html.T("اختر دورتين على الأقل لإنشاء باقة. استخدم Ctrl/Cmd للاختيار المتعدد", "Select at least 2 courses. Use Ctrl/Cmd for multiple selection")
+                        </div>
+
+                        <div id="selectedCoursesPreview" class="mt-4" style="display: none;">
+                            <h6 class="fw-bold mb-3">@Html.T("الدورات المختارة:", "Selected courses:")</h6>
+                            <div id="selectedCoursesList" class="list-group"></div>
+                            <div class="alert alert-info mt-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>@Html.T("السعر الإجمالي الأصلي:", "Total original price:")</span>
+                                    <span class="fw-bold" id="totalOriginalPrice">0.00 ر.س</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thumbnail -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-image me-2 text-primary"></i>
+                            @Html.T("صورة الباقة", "Bundle image")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                            { "FieldName", "ThumbnailUrl" },
+                            { "FieldId", "thumbnailUrl" },
+                            { "Label", "صورة الباقة المصغرة" },
+                            { "MediaType", "Image" },
+                            { "CurrentValue", "" },
+                            { "Required", false },
+                            { "HelpText", "الحجم الموصى به: 1280x720 بكسل" },
+                            { "AspectRatio", "16/9" }
+                        })
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Pricing -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("التسعير", "Pricing")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("سعر الباقة", "Bundle price") <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input asp-for="Price" type="number" class="form-control" min="0" step="0.01" placeholder="299.00">
+                                <span class="input-group-text">ر.س</span>
+                            </div>
+                            <span asp-validation-for="Price" class="text-danger"></span>
+                            <div class="form-text">@Html.T("السعر بعد الخصم", "Price after discount")</div>
+                        </div>
+
+                        <div class="alert alert-success" id="savingsAlert" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>@Html.T("السعر الأصلي:", "Original price:")</span>
+                                <span class="fw-bold" id="originalPriceDisplay">0.00 ر.س</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>@Html.T("سعر الباقة:", "Bundle price:")</span>
+                                <span class="fw-bold" id="bundlePriceDisplay">0.00 ر.س</span>
+                            </div>
+                            <hr>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-bold">@Html.T("التوفير:", "Savings:")</span>
+                                <span class="fw-bold text-success" id="savingsDisplay">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Availability Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إعدادات التوفر", "Availability")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("تاريخ البدء", "Start date")</label>
+                            <input asp-for="ValidFrom" type="datetime-local" class="form-control">
+                            <span asp-validation-for="ValidFrom" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("تاريخ الانتهاء", "End date")</label>
+                            <input asp-for="ValidTo" type="datetime-local" class="form-control">
+                            <span asp-validation-for="ValidTo" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("الحد الأقصى للمبيعات", "Max sales")</label>
+                            <input asp-for="MaxSales" type="number" class="form-control" min="0" placeholder="100">
+                            <span asp-validation-for="MaxSales" class="text-danger"></span>
+                            <div class="form-text">@Html.T("اتركه فارغاً لعدم وجود حد", "Leave empty for no limit")</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Display Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إعدادات العرض", "Display settings")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("ترتيب العرض", "Display order")</label>
+                            <input asp-for="DisplayOrder" type="number" class="form-control" min="0" value="0">
+                            <span asp-validation-for="DisplayOrder" class="text-danger"></span>
+                            <div class="form-text">@Html.T("الترتيب في صفحة الباقات (0 = الأول)", "Order on bundles page (0 = first)")</div>
+                        </div>
+
+                        <div class="form-check form-switch">
+                            <input asp-for="IsActive" class="form-check-input" type="checkbox" id="isActive" checked>
+                            <label class="form-check-label" for="isActive">@Html.T("تفعيل الباقة", "Activate bundle")</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between gap-3">
+                            <a href="@Url.Action("Index")" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-check me-2"></i>
+                                حفظ الباقة
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    @await Html.PartialAsync("_TinyMCEScripts")
+    <script>
+        // Initialize TinyMCE for description editor
+        initTinyMCE('#descriptionEditor', { height: 300, plugins: 'lists link code' });
+
+        // Course selection handler
+        const courseSelect = document.querySelector('select[name="CourseIds"]');
+        const priceInput = document.querySelector('input[name="Price"]');
+
+        courseSelect.addEventListener('change', updateSelectedCourses);
+        priceInput.addEventListener('input', calculateSavings);
+
+        function updateSelectedCourses() {
+            const selectedOptions = Array.from(courseSelect.selectedOptions);
+            const preview = document.getElementById('selectedCoursesPreview');
+            const list = document.getElementById('selectedCoursesList');
+
+            if (selectedOptions.length > 0) {
+                preview.style.display = 'block';
+                list.innerHTML = '';
+
+                selectedOptions.forEach(option => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item';
+                    item.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>${option.text}</span>
+                            <span class="badge bg-soft-primary text-primary">@Html.T("دورة", "Course")</span>
+                        </div>
+                    `;
+                    list.appendChild(item);
+                });
+
+                calculateSavings();
+            } else {
+                preview.style.display = 'none';
+            }
+        }
+
+        function calculateSavings() {
+            const selectedCount = courseSelect.selectedOptions.length;
+            const bundlePrice = parseFloat(priceInput.value) || 0;
+            
+            // Simulated original price calculation (you should get actual prices from server)
+            const estimatedOriginalPrice = selectedCount * 150; // Average price per course
+
+            if (bundlePrice > 0 && estimatedOriginalPrice > 0) {
+                const savings = ((estimatedOriginalPrice - bundlePrice) / estimatedOriginalPrice * 100).toFixed(0);
+                
+                document.getElementById('totalOriginalPrice').textContent = estimatedOriginalPrice.toFixed(2) + ' ر.س';
+                document.getElementById('originalPriceDisplay').textContent = estimatedOriginalPrice.toFixed(2) + ' ر.س';
+                document.getElementById('bundlePriceDisplay').textContent = bundlePrice.toFixed(2) + ' ر.س';
+                document.getElementById('savingsDisplay').textContent = savings + '%';
+                document.getElementById('savingsAlert').style.display = 'block';
+            } else {
+                document.getElementById('savingsAlert').style.display = 'none';
+            }
+        }
+
+        // Form validation and submission handler
+        document.getElementById('bundleForm').addEventListener('submit', function(e) {
+            // Sync TinyMCE content to textarea before submission
+            try {
+                const editor = tinymce.get('descriptionEditor');
+                if (editor) {
+                    editor.save(); // Ensure content is synced to textarea
+                }
+            } catch (err) {
+                console.warn('TinyMCE sync warning:', err);
+            }
+
+            // Validate required fields
+            const name = document.querySelector('[name="Name"]').value.trim();
+            const selectedCourses = courseSelect.selectedOptions.length;
+            const price = parseFloat(priceInput.value);
+
+            let hasErrors = false;
+            let errorMessages = [];
+
+            // Validate name
+            if (!name) {
+                hasErrors = true;
+                errorMessages.push('اسم الباقة مطلوب');
+            }
+
+            // Validate courses (at least 2 courses required for a bundle)
+            if (selectedCourses < 2) {
+                hasErrors = true;
+                errorMessages.push('يجب اختيار دورتين على الأقل لإنشاء باقة');
+            }
+
+            // Validate price
+            if (!price || price <= 0) {
+                hasErrors = true;
+                errorMessages.push('يرجى إدخال سعر صحيح للباقة (أكبر من صفر)');
+            }
+
+            // If there are validation errors, prevent submission
+            if (hasErrors) {
+                e.preventDefault();
+                alert(errorMessages.join('\n'));
+                return false;
+            }
+
+            // If validation passes, allow form submission
+            return true;
+        });
+    </script>
+
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

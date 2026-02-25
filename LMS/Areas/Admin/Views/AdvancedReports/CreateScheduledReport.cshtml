@@ -1,0 +1,499 @@
+@model LMS.Areas.Admin.ViewModels.ScheduledReportViewModel
+
+@{
+    ViewData["Title"] = Html.T("جدولة تقرير جديد", "Schedule new report");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التقارير المتقدمة", "Advanced reports"), null),
+        (Html.T("التقارير المجدولة", "Scheduled reports"), Url.Action("ScheduledReports")),
+        (Html.T("جدولة تقرير جديد", "Schedule new report"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var templates = ViewBag.Templates as IEnumerable<dynamic>;
+}
+
+@section Styles {
+    <style>
+        .frequency-option {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        .frequency-option:hover {
+            border-color: #3b82f6;
+            background: #f0f9ff;
+            transform: translateY(-2px);
+        }
+        .frequency-option.selected {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+        .frequency-icon {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 1.5rem;
+        }
+        .time-picker-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .format-badge {
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .format-badge:hover {
+            transform: scale(1.05);
+        }
+        .format-badge.selected {
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        }
+        .recipient-tag {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #e5e7eb;
+            border-radius: 20px;
+            margin: 4px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <form asp-action="CreateScheduledReport" method="post" id="scheduleForm">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <div class="row">
+            <!-- Main Form -->
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("المعلومات الأساسية", "Basic information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Report Name -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Name" class="form-label">
+                                @Html.T("اسم التقرير", "Report name") <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Name" class="form-control form-control-lg" placeholder="@Html.T("مثال: تقرير المبيعات الأسبوعي", "e.g. Weekly sales report")" />
+                            <span asp-validation-for="Name" class="text-danger"></span>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Description" class="form-label">
+                                @Html.T("الوصف", "Description")
+                            </label>
+                            <textarea asp-for="Description" class="form-control" rows="3" placeholder="@Html.T("وصف مختصر للتقرير...", "Brief description of the report...")"></textarea>
+                            <span asp-validation-for="Description" class="text-danger"></span>
+                        </div>
+
+                        <!-- Template Selection -->
+                        <div class="form-group mb-4">
+                            <label asp-for="TemplateId" class="form-label">
+                                @Html.T("قالب التقرير", "Report template") <span class="text-danger">*</span>
+                            </label>
+                            <select asp-for="TemplateId" class="form-select form-select-lg" id="templateSelect">
+                                <option value="">-- @Html.T("اختر القالب", "Select template") --</option>
+                                @if (templates != null)
+                                {
+                                    @foreach (var template in templates)
+                                    {
+                                        <option value="@template.Id">@template.Name</option>
+                                    }
+                                }
+                            </select>
+                            <span asp-validation-for="TemplateId" class="text-danger"></span>
+                            <small class="form-text text-muted">
+                                <i class="feather-info"></i>
+                                @Html.T("اختر قالب التقرير الذي تريد جدولته", "Select the report template you want to schedule")
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule Configuration -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-calendar me-2"></i>
+                            @Html.T("إعدادات الجدولة", "Schedule settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Frequency -->
+                        <div class="form-group mb-4">
+                            <label class="form-label">
+                                @Html.T("التكرار", "Frequency") <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Frequency" type="hidden" id="frequencyInput" />
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="frequency-option" data-frequency="Daily">
+                                        <div class="frequency-icon bg-soft-primary text-primary">
+                                            <i class="feather-sun"></i>
+                                        </div>
+                                        <h6 class="fw-bold mb-1">@Html.T("يومي", "Daily")</h6>
+                                        <small class="text-muted">@Html.T("كل يوم", "Every day")</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="frequency-option" data-frequency="Weekly">
+                                        <div class="frequency-icon bg-soft-success text-success">
+                                            <i class="feather-calendar"></i>
+                                        </div>
+                                        <h6 class="fw-bold mb-1">@Html.T("أسبوعي", "Weekly")</h6>
+                                        <small class="text-muted">@Html.T("كل أسبوع", "Every week")</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="frequency-option" data-frequency="Monthly">
+                                        <div class="frequency-icon bg-soft-warning text-warning">
+                                            <i class="feather-repeat"></i>
+                                        </div>
+                                        <h6 class="fw-bold mb-1">@Html.T("شهري", "Monthly")</h6>
+                                        <small class="text-muted">@Html.T("كل شهر", "Every month")</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <span asp-validation-for="Frequency" class="text-danger"></span>
+                        </div>
+
+                        <!-- Day of Week (for Weekly) -->
+                        <div class="form-group mb-4" id="dayOfWeekSection" style="display: none;">
+                            <label asp-for="DayOfWeek" class="form-label">
+                                @Html.T("يوم الأسبوع", "Day of week") <span class="text-danger">*</span>
+                            </label>
+                            <select asp-for="DayOfWeek" class="form-select">
+                                <option value="">-- @Html.T("اختر اليوم", "Select day") --</option>
+                                <option value="0">@Html.T("الأحد", "Sunday")</option>
+                                <option value="1">@Html.T("الاثنين", "Monday")</option>
+                                <option value="2">@Html.T("الثلاثاء", "Tuesday")</option>
+                                <option value="3">@Html.T("الأربعاء", "Wednesday")</option>
+                                <option value="4">@Html.T("الخميس", "Thursday")</option>
+                                <option value="5">@Html.T("الجمعة", "Friday")</option>
+                                <option value="6">@Html.T("السبت", "Saturday")</option>
+                            </select>
+                        </div>
+
+                        <!-- Day of Month (for Monthly) -->
+                        <div class="form-group mb-4" id="dayOfMonthSection" style="display: none;">
+                            <label asp-for="DayOfMonth" class="form-label">
+                                @Html.T("يوم الشهر", "Day of month") <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="DayOfMonth" type="number" class="form-control" min="1" max="31" placeholder="1-31" />
+                            <small class="form-text text-muted">
+                                <i class="feather-info"></i>
+                                @Html.T("أدخل رقم اليوم من الشهر (1-31)", "Enter day of month (1-31)")
+                            </small>
+                        </div>
+
+                        <!-- Time of Day -->
+                        <div class="form-group mb-4">
+                            <label class="form-label">
+                                @Html.T("وقت التنفيذ", "Execution time") <span class="text-danger">*</span>
+                            </label>
+                            <div class="time-picker-wrapper">
+                                <select id="hourSelect" class="form-select" style="width: auto;">
+                                    @for (int i = 0; i < 24; i++)
+                                    {
+                                        <option value="@i">@i.ToString("00")</option>
+                                    }
+                                </select>
+                                <span>:</span>
+                                <select id="minuteSelect" class="form-select" style="width: auto;">
+                                    @for (int i = 0; i < 60; i += 15)
+                                    {
+                                        <option value="@i">@i.ToString("00")</option>
+                                    }
+                                </select>
+                                <input asp-for="TimeOfDay" type="hidden" id="timeOfDayInput" />
+                            </div>
+                            <small class="form-text text-muted">
+                                <i class="feather-clock"></i>
+                                @Html.T("حدد الوقت بتوقيت الخادم (UTC)", "Specify time in server time (UTC)")
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Output Configuration -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-file-text me-2"></i>
+                            @Html.T("إعدادات الإخراج", "Output settings")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Format -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Format" class="form-label">
+                                @Html.T("تنسيق الملف", "File format") <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="Format" type="hidden" id="formatInput" />
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="format-badge bg-soft-danger text-danger text-center" data-format="PDF" onclick="selectFormat(this, 'PDF')">
+                                        <i class="feather-file-text fs-1"></i>
+                                        <h6 class="fw-bold mt-2 mb-0">@Html.T("PDF", "PDF")</h6>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="format-badge bg-soft-success text-success text-center" data-format="Excel" onclick="selectFormat(this, 'Excel')">
+                                        <i class="feather-file fs-1"></i>
+                                        <h6 class="fw-bold mt-2 mb-0">@Html.T("إكسل", "Excel")</h6>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="format-badge bg-soft-info text-info text-center" data-format="CSV" onclick="selectFormat(this, 'CSV')">
+                                        <i class="feather-database fs-1"></i>
+                                        <h6 class="fw-bold mt-2 mb-0">@Html.T("CSV", "CSV")</h6>
+                                    </div>
+                                </div>
+                            </div>
+                            <span asp-validation-for="Format" class="text-danger"></span>
+                        </div>
+
+                        <!-- Recipients -->
+                        <div class="form-group mb-4">
+                            <label asp-for="Recipients" class="form-label">
+                                @Html.T("المستلمون (البريد الإلكتروني)", "Recipients (email)") <span class="text-danger">*</span>
+                            </label>
+                            <div id="recipientTags" class="mb-2"></div>
+                            <div class="input-group">
+                                <input type="email" class="form-control" id="recipientInput" placeholder="@Html.T("أدخل البريد الإلكتروني واضغط Enter", "Enter email and press Enter")" />
+                                <button type="button" class="btn btn-light" onclick="addRecipient()">
+                                    <i class="feather-plus"></i>
+                                </button>
+                            </div>
+                            <input asp-for="Recipients" type="hidden" id="recipientsHidden" />
+                            <span asp-validation-for="Recipients" class="text-danger"></span>
+                            <small class="form-text text-muted">
+                                <i class="feather-info"></i>
+                                @Html.T("سيتم إرسال التقرير تلقائياً إلى هذه العناوين", "The report will be sent automatically to these addresses")
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons -->
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex gap-2 justify-content-end">
+                            <a asp-action="ScheduledReports" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                @Html.T("إلغاء", "Cancel")
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-check me-2"></i>
+                                @Html.T("حفظ الجدولة", "Save schedule")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Preview Card -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-eye me-2"></i>
+                            @Html.T("معاينة الجدولة", "Schedule preview")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center mb-4">
+                            <div class="avatar-text bg-soft-primary text-primary avatar-xl mx-auto mb-3">
+                                <i class="feather-clock fs-1"></i>
+                            </div>
+                            <h6 class="fw-bold" id="previewName">@Html.T("تقرير جديد", "New report")</h6>
+                            <span class="badge bg-soft-success text-success" id="previewFrequency">@Html.T("غير محدد", "Not set")</span>
+                        </div>
+
+                        <div class="vstack gap-2 small">
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">@Html.T("التكرار", "Frequency"):</span>
+                                <span class="fw-semibold" id="previewFreqText">-</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">@Html.T("الوقت", "Time"):</span>
+                                <span class="fw-semibold" id="previewTime">00:00</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">@Html.T("التنسيق", "Format"):</span>
+                                <span class="fw-semibold" id="previewFormat">-</span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">@Html.T("المستلمون", "Recipients"):</span>
+                                <span class="fw-semibold" id="previewRecipients">0</span>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info mt-4 mb-0">
+                            <i class="feather-info me-2"></i>
+                            <small>@Html.T("سيتم إنشاء التقرير وإرساله تلقائياً حسب الجدولة", "The report will be generated and sent automatically according to the schedule")</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tips Card -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-help-circle me-2"></i>
+                            @Html.T("نصائح مفيدة", "Useful tips")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="vstack gap-3">
+                            <div class="alert alert-light mb-0">
+                                <i class="feather-zap me-2 text-primary"></i>
+                                <small><strong>@Html.T("تلقائي", "Automatic"):</strong> @Html.T("سيتم إنشاء التقرير تلقائياً حسب الجدولة", "The report will be generated automatically according to the schedule")</small>
+                            </div>
+                            <div class="alert alert-light mb-0">
+                                <i class="feather-mail me-2 text-success"></i>
+                                <small><strong>@Html.T("إرسال", "Delivery"):</strong> @Html.T("سيتم إرسال التقرير عبر البريد الإلكتروني", "The report will be sent via email")</small>
+                            </div>
+                            <div class="alert alert-light mb-0">
+                                <i class="feather-clock me-2 text-warning"></i>
+                                <small><strong>@Html.T("مهم", "Important"):</strong> @Html.T("الوقت المحدد هو بتوقيت UTC", "The specified time is in UTC")</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
+    <script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
+    
+    <script>
+        const recipients = [];
+
+        $(document).ready(function() {
+            // Frequency selection
+            $('.frequency-option').click(function() {
+                $('.frequency-option').removeClass('selected');
+                $(this).addClass('selected');
+                const freq = $(this).data('frequency');
+                $('#frequencyInput').val(freq);
+                updatePreview();
+                
+                // Show/hide day selectors
+                $('#dayOfWeekSection, #dayOfMonthSection').hide();
+                if (freq === 'Weekly') {
+                    $('#dayOfWeekSection').show();
+                } else if (freq === 'Monthly') {
+                    $('#dayOfMonthSection').show();
+                }
+            });
+
+            // Time selection
+            $('#hourSelect, #minuteSelect').change(function() {
+                const hour = $('#hourSelect').val().padStart(2, '0');
+                const minute = $('#minuteSelect').val().padStart(2, '0');
+                $('#timeOfDayInput').val(hour + ':' + minute + ':00');
+                $('#previewTime').text(hour + ':' + minute);
+            });
+
+            // Name preview
+            $('#Name').on('input', function() {
+                $('#previewName').text($(this).val() || '@Html.Raw(Html.T("تقرير جديد", "New report").ToString().Replace("'", "\\'"))');
+            });
+
+            // Recipient input
+            $('#recipientInput').keypress(function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    addRecipient();
+                }
+            });
+        });
+
+        function selectFormat(element, format) {
+            $('.format-badge').removeClass('selected');
+            $(element).addClass('selected');
+            $('#formatInput').val(format);
+            $('#previewFormat').text(format);
+        }
+
+        function addRecipient() {
+            const email = $('#recipientInput').val().trim();
+            if (email && validateEmail(email)) {
+                if (!recipients.includes(email)) {
+                    recipients.push(email);
+                    updateRecipientTags();
+                    updateRecipientsInput();
+                    $('#recipientInput').val('');
+                }
+            } else {
+                alert('@Html.Raw(Html.T("الرجاء إدخال بريد إلكتروني صحيح", "Please enter a valid email address").ToString().Replace("'", "\\'"))');
+            }
+        }
+
+        function removeRecipient(email) {
+            const index = recipients.indexOf(email);
+            if (index > -1) {
+                recipients.splice(index, 1);
+                updateRecipientTags();
+                updateRecipientsInput();
+            }
+        }
+
+        function updateRecipientTags() {
+            const html = recipients.map(email => 
+                `<span class="recipient-tag">
+                    ${email}
+                    <button type="button" class="btn-close btn-close-sm ms-2" onclick="removeRecipient('${email}')"></button>
+                </span>`
+            ).join('');
+            $('#recipientTags').html(html);
+            $('#previewRecipients').text(recipients.length);
+        }
+
+        function updateRecipientsInput() {
+            $('#recipientsHidden').val(recipients.join(','));
+        }
+
+        function validateEmail(email) {
+            return /^[^\s@@]+@@[^\s@@]+\.[^\s@@]+$/.test(email);
+        }
+
+        function updatePreview() {
+            const freq = $('#frequencyInput').val();
+            const freqText = {
+                'Daily': '@Html.Raw(Html.T("يومي", "Daily").ToString().Replace("'", "\\'"))',
+                'Weekly': '@Html.Raw(Html.T("أسبوعي", "Weekly").ToString().Replace("'", "\\'"))',
+                'Monthly': '@Html.Raw(Html.T("شهري", "Monthly").ToString().Replace("'", "\\'"))'
+            };
+            const notSet = '@Html.Raw(Html.T("غير محدد", "Not set").ToString().Replace("'", "\\'"))';
+            $('#previewFreqText').text(freqText[freq] || '-');
+            $('#previewFrequency').text(freqText[freq] || notSet);
+        }
+    </script>
+}
+

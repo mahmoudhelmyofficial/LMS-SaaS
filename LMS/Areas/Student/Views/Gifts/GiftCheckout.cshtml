@@ -1,0 +1,632 @@
+@model LMS.Areas.Student.Controllers.GiftCheckoutViewModel
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@{
+    ViewData["Title"] = Html.T("إتمام دفع الهدية", "Gift Checkout");
+    ViewData["ActiveMenu"] = "Gifts";
+    var stripePublishableKey = Configuration["PaymentSettings:Stripe:PublishableKey"] ?? "";
+}
+
+@section Styles {
+<style>
+    :root {
+        --gift-primary: #ec4899;
+        --gift-primary-dark: #db2777;
+        --gift-success: #10b981;
+        --gift-bg: #fdf4ff;
+        --gift-card-bg: #ffffff;
+        --gift-border: #f3e8ff;
+        --gift-text: #1e293b;
+        --gift-text-muted: #64748b;
+    }
+    
+    .gift-checkout-container {
+        background: linear-gradient(180deg, var(--gift-bg) 0%, #ffffff 100%);
+        min-height: 100vh;
+        padding: 2rem 0;
+    }
+    
+    .gift-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    
+    .gift-icon {
+        width: 100px;
+        height: 100px;
+        background: linear-gradient(135deg, var(--gift-primary), var(--gift-primary-dark));
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+        box-shadow: 0 10px 40px rgba(236, 72, 153, 0.3);
+        animation: pulse 2s infinite;
+    }
+    
+    @@keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+    
+    .gift-icon i {
+        font-size: 2.5rem;
+        color: white;
+    }
+    
+    .gift-card {
+        background: var(--gift-card-bg);
+        border-radius: 20px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+        border: 2px solid var(--gift-border);
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+    
+    .gift-card-header {
+        background: linear-gradient(135deg, #fdf4ff, #fce7f3);
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--gift-border);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .gift-card-header h5 {
+        margin: 0;
+        font-weight: 700;
+        color: var(--gift-text);
+    }
+    
+    .gift-card-header .icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, var(--gift-primary), var(--gift-primary-dark));
+        color: white;
+    }
+    
+    .gift-card-body {
+        padding: 1.5rem;
+    }
+    
+    .gift-preview {
+        background: linear-gradient(135deg, #fdf4ff 0%, #fce7f3 50%, #fbcfe8 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .gift-preview::before {
+        content: '🎀';
+        position: absolute;
+        top: -10px;
+        right: 20px;
+        font-size: 3rem;
+        transform: rotate(15deg);
+    }
+    
+    .gift-preview-content {
+        position: relative;
+        z-index: 1;
+    }
+    
+    .gift-code-display {
+        background: white;
+        border-radius: 12px;
+        padding: 1rem 2rem;
+        display: inline-block;
+        margin: 1rem 0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .gift-code-display h3 {
+        font-family: monospace;
+        letter-spacing: 4px;
+        font-size: 1.5rem;
+        margin: 0;
+        color: var(--gift-primary);
+    }
+    
+    .recipient-card {
+        background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+        border: 2px dashed #86efac;
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+    }
+    
+    .recipient-card .label {
+        font-size: 0.75rem;
+        color: #16a34a;
+        text-transform: uppercase;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+    
+    .personal-message {
+        background: #fffbeb;
+        border-right: 4px solid #fbbf24;
+        padding: 1rem;
+        border-radius: 0 8px 8px 0;
+        font-style: italic;
+        color: #92400e;
+    }
+    
+    .personal-message::before {
+        content: '"';
+        font-size: 2rem;
+        color: #fbbf24;
+        line-height: 1;
+        margin-left: 0.25rem;
+    }
+    
+    /* Stripe Elements */
+    #stripe-card-element {
+        padding: 1rem;
+        background: #f8fafc;
+        border: 2px solid var(--gift-border);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+    }
+    
+    #stripe-card-element.StripeElement--focus {
+        border-color: var(--gift-primary);
+        box-shadow: 0 0 0 4px rgba(236, 72, 153, 0.1);
+    }
+    
+    #stripe-card-element.StripeElement--invalid {
+        border-color: #ef4444;
+    }
+    
+    #card-errors {
+        color: #ef4444;
+        font-size: 0.875rem;
+        margin-top: 0.75rem;
+        min-height: 1.5rem;
+    }
+    
+    /* Price Summary */
+    .price-summary {
+        background: linear-gradient(135deg, #fdf4ff, #fce7f3);
+        border-radius: 16px;
+        padding: 1.5rem;
+    }
+    
+    .price-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.75rem 0;
+        border-bottom: 1px dashed var(--gift-border);
+    }
+    
+    .price-row:last-child {
+        border-bottom: none;
+    }
+    
+    .price-row.total {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--gift-primary);
+        padding-top: 1rem;
+        margin-top: 0.5rem;
+        border-top: 2px solid var(--gift-primary);
+        border-bottom: none;
+    }
+    
+    /* Submit Button */
+    .gift-submit {
+        width: 100%;
+        padding: 1.25rem;
+        background: linear-gradient(135deg, var(--gift-primary), var(--gift-primary-dark));
+        color: white;
+        border: none;
+        border-radius: 16px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        box-shadow: 0 4px 20px rgba(236, 72, 153, 0.4);
+    }
+    
+    .gift-submit:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 30px rgba(236, 72, 153, 0.5);
+    }
+    
+    .gift-submit:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .gift-submit .spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    /* Security Badge */
+    .security-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        justify-content: center;
+        padding: 1rem;
+        background: #f8fafc;
+        border-radius: 12px;
+        margin-top: 1.5rem;
+    }
+    
+    .security-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        color: var(--gift-text-muted);
+    }
+    
+    .security-badge i {
+        color: var(--gift-success);
+    }
+    
+    /* Delivery Date */
+    .delivery-info {
+        background: linear-gradient(135deg, #eff6ff, #dbeafe);
+        border-radius: 12px;
+        padding: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    
+    .delivery-info i {
+        font-size: 1.5rem;
+        color: #3b82f6;
+    }
+</style>
+}
+
+<div class="gift-checkout-container">
+    <div class="container">
+        <!-- Header -->
+        <div class="gift-header">
+            <div class="gift-icon">
+                <i class="feather-gift"></i>
+            </div>
+            <h2 class="fw-bold mb-2">@Html.T("إتمام دفع الهدية", "Complete gift payment")</h2>
+            <p class="text-muted">@Html.T("خطوة واحدة أخيرة لإرسال هديتك المميزة", "One last step to send your special gift")</p>
+        </div>
+
+        <div class="row g-4 justify-content-center">
+            <!-- Gift Preview -->
+            <div class="col-lg-5">
+                <div class="gift-card">
+                    <div class="gift-card-header">
+                        <div class="icon">
+                            <i class="feather-package"></i>
+                        </div>
+                        <h5>@Html.T("معاينة الهدية", "Gift preview")</h5>
+                    </div>
+                    <div class="gift-card-body">
+                        <!-- Gift Preview Card -->
+                        <div class="gift-preview mb-4">
+                            <div class="gift-preview-content">
+                                <h4 class="fw-bold mb-3">🎁 @Model.ProductTitle</h4>
+                                <div class="gift-code-display">
+                                    <small class="text-muted d-block mb-1">@Html.T("رمز الهدية", "Gift code")</small>
+                                    <h3>@Model.GiftCode</h3>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recipient Info -->
+                        <div class="recipient-card">
+                            <div class="label">
+                                <i class="feather-user me-1"></i>
+                                @Html.T("المستلم", "Recipient")
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    @if (!string.IsNullOrEmpty(Model.RecipientName))
+                                    {
+                                        <strong>@Model.RecipientName</strong>
+                                        <br/>
+                                    }
+                                    <span class="text-muted">@Model.RecipientEmail</span>
+                                </div>
+                                <i class="feather-mail text-muted fs-4"></i>
+                            </div>
+                        </div>
+
+                        <!-- Personal Message -->
+                        @if (!string.IsNullOrEmpty(Model.PersonalMessage))
+                        {
+                            <div class="personal-message mb-3">
+                                @Model.PersonalMessage
+                            </div>
+                        }
+
+                        <!-- Delivery Date -->
+                        @if (Model.DeliveryDate.HasValue)
+                        {
+                            <div class="delivery-info">
+                                <i class="feather-calendar"></i>
+                                <div>
+                                    <strong>@Html.T("موعد الإرسال المجدول", "Scheduled delivery date")</strong>
+                                    <div class="text-muted">@Model.DeliveryDate.Value.ToString("dddd, dd MMMM yyyy")</div>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="delivery-info">
+                                <i class="feather-zap"></i>
+                                <div>
+                                    <strong>@Html.T("إرسال فوري", "Send now")</strong>
+                                    <div class="text-muted">@Html.T("سيتم إرسال الهدية فور إتمام الدفع", "The gift will be sent immediately after payment")</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Price Summary -->
+                <div class="price-summary">
+                    <div class="price-row">
+                        <span>@Html.T("قيمة المنتج", "Product value")</span>
+                        <span class="fw-semibold">@Model.FormattedAmount</span>
+                    </div>
+                    <div class="price-row">
+                        <span>@Html.T("رسوم الإهداء", "Gift fee")</span>
+                        <span class="fw-semibold text-success">@Html.T("مجاناً", "Free")</span>
+                    </div>
+                    <div class="price-row total">
+                        <span>@Html.T("الإجمالي", "Total")</span>
+                        <span>@Model.FormattedAmount</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Form -->
+            <div class="col-lg-5">
+                <form id="payment-form">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="GiftId" value="@Model.GiftId" />
+                    
+                    <div class="gift-card">
+                        <div class="gift-card-header">
+                            <div class="icon">
+                                <i class="feather-credit-card"></i>
+                            </div>
+                            <h5>@Html.T("معلومات الدفع", "Payment information")</h5>
+                        </div>
+                        <div class="gift-card-body">
+                            <!-- Stripe Card Element -->
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold mb-3">
+                                    <i class="feather-lock me-1 text-success"></i>
+                                    @Html.T("بيانات البطاقة الائتمانية", "Credit card details")
+                                </label>
+                                <div id="stripe-card-element">
+                                    <!-- Stripe Elements will be inserted here -->
+                                </div>
+                                <div id="card-errors" role="alert"></div>
+                            </div>
+
+                            <!-- Terms -->
+                            <div class="form-check mb-4">
+                                <input class="form-check-input" type="checkbox" id="agree-terms" required>
+                                <label class="form-check-label" for="agree-terms">
+                                    @Html.T("أوافق على", "I agree to")
+                                    <a href="/terms" target="_blank" class="text-primary">@Html.T("الشروط والأحكام", "Terms and Conditions")</a>
+                                    @Html.T("الخاصة بإهداء المنتجات", "for gifting products")
+                                </label>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <button type="submit" class="gift-submit" id="submit-btn">
+                                <i class="feather-gift"></i>
+                                <span id="submit-text">@Html.T("إرسال الهدية", "Send gift")</span>
+                                <span class="amount-display">(@Model.FormattedAmount)</span>
+                            </button>
+
+                            <!-- Security Badges -->
+                            <div class="security-badges">
+                                <div class="security-badge">
+                                    <i class="feather-shield"></i>
+                                    <span>@Html.T("دفع آمن 256-bit SSL", "Secure 256-bit SSL payment")</span>
+                                </div>
+                                <div class="security-badge">
+                                    <i class="feather-check-circle"></i>
+                                    <span>@Html.T("ضمان التوصيل", "Delivery guarantee")</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Info Card -->
+                    <div class="gift-card" style="background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-color: #86efac;">
+                        <div class="gift-card-body">
+                            <div class="d-flex gap-3">
+                                <div class="flex-shrink-0">
+                                    <div style="width: 48px; height: 48px; background: rgba(34, 197, 94, 0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                                        <i class="feather-info text-success fs-4"></i>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold mb-1">@Html.T("كيف يعمل الأمر؟", "How does it work?")</h6>
+                                    <small class="text-muted">
+                                        @Html.T("بعد إتمام الدفع، سيتم إرسال بريد إلكتروني للمستلم يحتوي على رمز الهدية وتعليمات الاسترداد. يمكنه استخدام الرمز للوصول إلى المحتوى فوراً.", "After payment, an email will be sent to the recipient with the gift code and redemption instructions. They can use the code to access the content immediately.")
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Back Link -->
+                    <div class="text-center mt-3">
+                        <a asp-action="Index" class="btn btn-link text-muted">
+                            <i class="feather-arrow-right me-1"></i>
+                            @Html.T("العودة لقائمة الهدايا", "Back to gifts list")
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    window.__T = window.__T || {};
+    window.__T.SendGift = '@Html.Raw(Html.T("إرسال الهدية", "Send gift").ToString().Replace("'", "\\'"))';
+    window.__T.AgreeTerms = '@Html.Raw(Html.T("يجب الموافقة على الشروط والأحكام", "You must agree to the terms and conditions").ToString().Replace("'", "\\'"))';
+    window.__T.Processing = '@Html.Raw(Html.T("جاري المعالجة...", "Processing...").ToString().Replace("'", "\\'"))';
+    window.__T.PaymentError = '@Html.Raw(Html.T("حدث خطأ أثناء معالجة الدفع", "An error occurred while processing payment").ToString().Replace("'", "\\'"))';
+    // Initialize Stripe
+    const stripe = Stripe('@stripePublishableKey');
+    const elements = stripe.elements({
+        locale: 'ar',
+        fonts: [
+            {
+                cssSrc: 'https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap',
+            }
+        ]
+    });
+    
+    // Create card element
+    const cardElement = elements.create('card', {
+        style: {
+            base: {
+                fontSize: '16px',
+                fontFamily: 'Tajawal, sans-serif',
+                color: '#1e293b',
+                '::placeholder': {
+                    color: '#94a3b8',
+                },
+            },
+            invalid: {
+                color: '#ef4444',
+                iconColor: '#ef4444',
+            },
+        },
+        hidePostalCode: true
+    });
+    
+    cardElement.mount('#stripe-card-element');
+    
+    // Handle card errors
+    cardElement.on('change', function(event) {
+        const displayError = document.getElementById('card-errors');
+        if (event.error) {
+            displayError.textContent = event.error.message;
+        } else {
+            displayError.textContent = '';
+        }
+    });
+    
+    // Form submission
+    const form = document.getElementById('payment-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const submitText = document.getElementById('submit-text');
+    
+    form.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        if (!document.getElementById('agree-terms').checked) {
+            alert((window.__T && window.__T.AgreeTerms) || 'You must agree to the terms and conditions');
+            return;
+        }
+        
+        submitBtn.disabled = true;
+        submitText.innerHTML = '<span class="spinner"></span> ' + ((window.__T && window.__T.Processing) || 'Processing...');
+        
+        try {
+            // Create payment method
+            const {paymentMethod, error} = await stripe.createPaymentMethod({
+                type: 'card',
+                card: cardElement,
+            });
+            
+            if (error) {
+                throw new Error(error.message);
+            }
+            
+            // Process payment on server
+            const response = await fetch('@Url.Action("ProcessGiftPayment", "Checkout")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? ''
+                },
+                body: JSON.stringify({
+                    GiftId: @Model.GiftId,
+                    PaymentMethodId: paymentMethod.id
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.message || ((window.__T && window.__T.PaymentError) || 'An error occurred while processing payment'));
+            }
+            
+            // Confirm payment
+            if (result.clientSecret) {
+                const {paymentIntent, error: confirmError} = await stripe.confirmCardPayment(result.clientSecret);
+                
+                if (confirmError) {
+                    throw new Error(confirmError.message);
+                }
+                
+                if (paymentIntent && paymentIntent.status === 'succeeded') {
+                    const confirmResponse = await fetch('@Url.Action("ConfirmGiftPayment", "Checkout", new { area = "Student" })', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? ''
+                        },
+                        body: JSON.stringify({ PaymentIntentId: paymentIntent.id })
+                    });
+                    const confirmResult = await confirmResponse.json();
+                    if (confirmResult.success) {
+                        window.location.href = '@Url.Action("GiftPaymentSuccess", "Gifts", new { area = "Student" })';
+                    } else {
+                        throw new Error(confirmResult.message || 'فشل تأكيد الدفع');
+                    }
+                } else if (paymentIntent && paymentIntent.status === 'requires_action') {
+                    submitText.textContent = (window.__T && window.__T.Verifying) || 'Verifying...';
+                } else {
+                    throw new Error((window.__T && window.__T.PaymentError) || 'Payment could not be completed');
+                }
+            } else {
+                window.location.href = '@Url.Action("Index", "Gifts", new { area = "Student" })';
+            }
+            
+        } catch (error) {
+            console.error('Payment error:', error);
+            document.getElementById('card-errors').textContent = error.message;
+            submitBtn.disabled = false;
+            submitText.innerHTML = '<i class="feather-gift"></i> ' + (window.__T && window.__T.SendGift || 'Send gift');
+        }
+    });
+</script>
+}
+

@@ -1,0 +1,751 @@
+@model LMS.Areas.Instructor.ViewModels.LessonEditViewModel
+
+@{
+    ViewData["Title"] = Html.T("تعديل الدرس", "Edit Lesson");
+    ViewData["Subtitle"] = $"تعديل: {Model.Title}";
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex gap-2">
+            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-light">
+                <i class="feather-eye me-2"></i>
+                معاينة
+            </a>
+            <a asp-action="Index" asp-route-moduleId="@Model.ModuleId" class="btn btn-light">
+                <i class="feather-arrow-right me-2"></i>
+                العودة للدروس
+            </a>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Edit" method="post" enctype="multipart/form-data">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="ModuleId" />
+        <input type="hidden" asp-for="ExistingVideoUrl" />
+
+        <div class="row">
+            <!-- Main Content -->
+            <div class="col-lg-8">
+                <!-- Stats -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="feather-eye text-primary fs-4"></i>
+                                    <div>
+                                        <h5 class="mb-0">@(ViewBag.ViewCount ?? 0)</h5>
+                                        <p class="fs-11 text-muted mb-0">مشاهدة</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="feather-check-circle text-success fs-4"></i>
+                                    <div>
+                                        <h5 class="mb-0">@(ViewBag.CompletionCount ?? 0)</h5>
+                                        <p class="fs-11 text-muted mb-0">إكمال</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="feather-clock text-warning fs-4"></i>
+                                    <div>
+                                        <h5 class="mb-0">@(ViewBag.AverageWatchTime ?? 0)د</h5>
+                                        <p class="fs-11 text-muted mb-0">متوسط المشاهدة</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="feather-message-circle text-info fs-4"></i>
+                                    <div>
+                                        <h5 class="mb-0">@(ViewBag.CommentsCount ?? 0)</h5>
+                                        <p class="fs-11 text-muted mb-0">تعليق</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Basic Information (Similar to Create with pre-filled data) -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">المعلومات الأساسية</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-lg-12">
+                                <label class="form-label">عنوان الدرس <span class="text-danger">*</span></label>
+                                <input asp-for="Title" class="form-control" required>
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-12">
+                                <label class="form-label">الوصف <span class="text-danger">*</span></label>
+                                <textarea asp-for="Description" class="form-control" rows="4" required></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">المدة (بالدقائق) <span class="text-danger">*</span></label>
+                                <input asp-for="DurationMinutes" type="number" class="form-control" min="1" required>
+                                <span asp-validation-for="DurationMinutes" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-lg-6">
+                                <label class="form-label">ترتيب الدرس</label>
+                                <input asp-for="OrderIndex" type="number" class="form-control" min="1">
+                                <span asp-validation-for="OrderIndex" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Content Based on Type -->
+                @if (Model.Type == LMS.Domain.Enums.LessonType.Video)
+                {
+                    <div class="card stretch stretch-full mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title">محتوى الفيديو</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-4">
+                                <div class="col-lg-12">
+                                    <label class="form-label">نوع الفيديو</label>
+                                    @{
+                                        var currentSourceType = "library";
+                                        if (!string.IsNullOrEmpty(Model.VideoProvider))
+                                        {
+                                            if (Model.VideoProvider.Equals("YouTube", StringComparison.OrdinalIgnoreCase))
+                                                currentSourceType = "youtube";
+                                            else if (Model.VideoProvider.Equals("Vimeo", StringComparison.OrdinalIgnoreCase))
+                                                currentSourceType = "vimeo";
+                                            else if (Model.VideoProvider.Equals("Local", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(Model.VideoUrl) && (Model.VideoUrl.StartsWith("http://") || Model.VideoUrl.StartsWith("https://")))
+                                                currentSourceType = "url";
+                                        }
+                                    }
+                                    <select class="form-select" id="videoSourceType" onchange="toggleVideoSource()">
+                                        @if (currentSourceType == "library")
+                                        {
+                                            <option value="library" selected>من مكتبة الوسائط</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="library">من مكتبة الوسائط</option>
+                                        }
+                                        @if (currentSourceType == "youtube")
+                                        {
+                                            <option value="youtube" selected>رابط YouTube</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="youtube">رابط YouTube</option>
+                                        }
+                                        @if (currentSourceType == "vimeo")
+                                        {
+                                            <option value="vimeo" selected>رابط Vimeo</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="vimeo">رابط Vimeo</option>
+                                        }
+                                        @if (currentSourceType == "url")
+                                        {
+                                            <option value="url" selected>رابط مباشر</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="url">رابط مباشر</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="col-lg-12" id="videoLibrary" style="display: @(currentSourceType == "library" ? "block" : "none");">
+                                    @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                        { "FieldName", "VideoUrlLibrary" },
+                                        { "FieldId", "videoUrlPicker" },
+                                        { "Label", "فيديو الدرس" },
+                                        { "MediaType", "Video" },
+                                        { "CurrentValue", currentSourceType == "library" ? Model.ExistingVideoUrl : "" },
+                                        { "Required", false },
+                                        { "HelpText", "اختر فيديو من مكتبتك أو ارفع فيديو جديد" },
+                                        { "AspectRatio", "16/9" }
+                                    })
+                                </div>
+
+                                <div class="col-lg-12" id="videoUrl" style="display: @(currentSourceType != "library" ? "block" : "none");">
+                                    <label class="form-label">رابط الفيديو</label>
+                                    <input type="text" class="form-control" placeholder="https://..." id="videoUrlInput" 
+                                           value="@(currentSourceType != "library" ? Model.VideoUrl : "")">
+                                    <div class="form-text" id="videoUrlHelp">
+                                        @if (currentSourceType == "youtube")
+                                        {
+                                            <text>مثال: https://youtube.com/watch?v=dQw4w9WgXcQ</text>
+                                        }
+                                        else if (currentSourceType == "vimeo")
+                                        {
+                                            <text>مثال: https://vimeo.com/123456789</text>
+                                        }
+                                        else
+                                        {
+                                            <text>أدخل رابط الفيديو المباشر</text>
+                                        }
+                                    </div>
+                                </div>
+                                
+                                <input type="hidden" name="VideoUrl" id="finalVideoUrl" value="@Model.VideoUrl" />
+
+                                <!-- Video Preview -->
+                                @if (!string.IsNullOrEmpty(Model.VideoUrl) && currentSourceType != "library")
+                                {
+                                    <div class="col-lg-12" id="videoPreviewContainer">
+                                        <label class="form-label">معاينة الفيديو الحالي</label>
+                                        <div class="ratio ratio-16x9 bg-dark rounded">
+                                            @if (currentSourceType == "youtube" && !string.IsNullOrEmpty(Model.VideoId))
+                                            {
+                                                <iframe src="https://www.youtube.com/embed/@Model.VideoId" allowfullscreen></iframe>
+                                            }
+                                            else if (currentSourceType == "vimeo" && !string.IsNullOrEmpty(Model.VideoId))
+                                            {
+                                                <iframe src="https://player.vimeo.com/video/@Model.VideoId" allowfullscreen></iframe>
+                                            }
+                                            else if (currentSourceType == "url")
+                                            {
+                                                <video src="@Model.VideoUrl" controls class="w-100"></video>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (Model.Type == LMS.Domain.Enums.LessonType.Text)
+                {
+                    <div class="card stretch stretch-full mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title">المحتوى النصي</h5>
+                        </div>
+                        <div class="card-body">
+                            <textarea asp-for="TextContent" id="textContentEditor" class="form-control" rows="10"></textarea>
+                        </div>
+                    </div>
+                }
+
+                <!-- Resources -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-paperclip me-2 text-primary"></i>
+                            المرفقات والموارد
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @if (ViewBag.ExistingResources != null && ViewBag.ExistingResources.Count > 0)
+                        {
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">الموارد الحالية</label>
+                                <div class="list-group">
+                                    @foreach (var resource in ViewBag.ExistingResources)
+                                    {
+                                        <div class="list-group-item d-flex align-items-center justify-content-between">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <i class="feather-file text-primary"></i>
+                                                <div>
+                                                    <span class="fw-medium">@resource.Title</span>
+                                                    @if (!string.IsNullOrEmpty(resource.FileUrl))
+                                                    {
+                                                        <small class="text-muted d-block text-truncate" style="max-width: 300px;">@resource.FileUrl</small>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                @if (!string.IsNullOrEmpty(resource.FileUrl))
+                                                {
+                                                    <a href="@resource.FileUrl" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                        <i class="feather-download"></i>
+                                                    </a>
+                                                }
+                                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteResource(@resource.Id)">
+                                                    <i class="feather-trash-2"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        
+                        <div class="alert alert-soft-info mb-4">
+                            <i class="feather-info me-2"></i>
+                            يمكنك إضافة ملفات PDF، مستندات Word، ملفات مضغوطة، أو أي موارد إضافية للدرس
+                        </div>
+                        
+                        <label class="form-label fw-bold">إضافة موارد جديدة</label>
+                        <div id="resourcesContainer">
+                            <!-- Resource rows will be added here -->
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="addResource()">
+                            <i class="feather-plus me-2"></i>
+                            إضافة مورد جديد
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar (Similar to Create) -->
+            <div class="col-lg-4">
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">خيارات النشر</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input asp-for="IsFree" class="form-check-input" type="checkbox" id="isFree">
+                            <label class="form-check-label" for="isFree">درس مجاني</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input asp-for="IsPublished" class="form-check-input" type="checkbox" id="isPublished">
+                            <label class="form-check-label" for="isPublished">نشر الدرس</label>
+                        </div>
+
+                        <div class="form-check form-switch">
+                            <input asp-for="AllowDownload" class="form-check-input" type="checkbox" id="allowDownload">
+                            <label class="form-check-label" for="allowDownload">السماح بالتحميل</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">إعدادات إضافية</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">المدة المطلوبة للمشاهدة (%)</label>
+                            <input asp-for="MinimumWatchPercentage" type="number" class="form-control" min="0" max="100">
+                        </div>
+
+                        <div class="form-check">
+                            <input asp-for="PreventSkipping" class="form-check-input" type="checkbox" id="preventSkipping">
+                            <label class="form-check-label" for="preventSkipping">
+                                منع تخطي الفيديو
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Content Scheduling -->
+                <div class="card stretch stretch-full mb-4" id="contentDripCard">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-clock me-2 text-info"></i>
+                            جدولة المحتوى
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        @{
+                            var currentDripType = "Immediate";
+                            if (Model.AvailableAfterDays.HasValue)
+                            {
+                                currentDripType = "DaysAfterEnrollment";
+                            }
+                            else if (Model.AvailableFrom.HasValue)
+                            {
+                                currentDripType = "SpecificDate";
+                            }
+                        }
+                        <div class="mb-3">
+                            <label class="form-label">نوع الجدولة</label>
+                            <select class="form-select" name="ContentDripType" id="contentDripType" onchange="toggleDripFields()">
+                                <option value="Immediate" selected="@(currentDripType == "Immediate")">متاح فوراً</option>
+                                <option value="DaysAfterEnrollment" selected="@(currentDripType == "DaysAfterEnrollment")">بعد أيام من التسجيل</option>
+                                <option value="AfterPreviousCompletion" selected="@(currentDripType == "AfterPreviousCompletion")">بعد إكمال الدرس السابق</option>
+                                <option value="SpecificDate" selected="@(currentDripType == "SpecificDate")">في تاريخ محدد</option>
+                            </select>
+                        </div>
+                        <div id="dripDaysField" style="display: @(Model.AvailableAfterDays.HasValue ? "block" : "none");" class="mb-3">
+                            <label class="form-label">عدد الأيام بعد التسجيل</label>
+                            <input type="number" class="form-control" name="AvailableAfterDays" min="1" placeholder="مثال: 7"
+                                   value="@(Model.AvailableAfterDays?.ToString() ?? "")">
+                        </div>
+                        <div id="dripPrerequisiteField" style="display: none;" class="mb-3">
+                            <label class="form-label">الدرس المتطلب</label>
+                            <select class="form-select" name="PrerequisiteLessonId">
+                                <option value="">اختر الدرس السابق</option>
+                            </select>
+                            <div class="form-text">سيتم إتاحة هذا الدرس بعد إكمال الدرس المحدد</div>
+                        </div>
+                        <div id="dripDateField" style="display: @(Model.AvailableFrom.HasValue ? "block" : "none");" class="mb-3">
+                            <label class="form-label">تاريخ الإتاحة</label>
+                            <input type="datetime-local" class="form-control" name="AvailableFrom"
+                                   value="@(Model.AvailableFrom?.ToString("yyyy-MM-ddTHH:mm") ?? "")">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">معلومات</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <span class="fs-12 text-muted">تاريخ الإنشاء:</span>
+                            <p class="mb-0">@Model.CreatedAt.ToString("dd/MM/yyyy")</p>
+                        </div>
+                        <div>
+                            <span class="fs-12 text-muted">آخر تحديث:</span>
+                            <p class="mb-0">@(Model.UpdatedAt?.ToString("dd/MM/yyyy") ?? "-")</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between gap-3">
+                            <a href="@Url.Action("Index", new { moduleId = Model.ModuleId })" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="feather-save me-2"></i>
+                                    حفظ التعديلات
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+@section Scripts {
+    @await Html.PartialAsync("_TinyMCEScripts")
+    <script>
+        @if (Model.Type == LMS.Domain.Enums.LessonType.Text)
+        {
+            <text>
+            // Initialize TinyMCE for text content
+            initTinyMCE('#textContentEditor', { height: 500, plugins: 'lists link image code table' });
+            </text>
+        }
+
+        // Toggle video source between library and URL input
+        function toggleVideoSource() {
+            const sourceType = document.getElementById('videoSourceType').value;
+            const videoLibrary = document.getElementById('videoLibrary');
+            const videoUrl = document.getElementById('videoUrl');
+            const videoUrlHelp = document.getElementById('videoUrlHelp');
+            const videoUrlInput = document.getElementById('videoUrlInput');
+            const videoPickerInput = document.getElementById('videoUrlPicker');
+            
+            if (sourceType === 'library') {
+                if (videoLibrary) videoLibrary.style.display = 'block';
+                if (videoUrl) videoUrl.style.display = 'none';
+                if (videoUrlInput) videoUrlInput.value = '';
+            } else {
+                if (videoLibrary) videoLibrary.style.display = 'none';
+                if (videoUrl) videoUrl.style.display = 'block';
+                if (videoPickerInput) videoPickerInput.value = '';
+                
+                if (videoUrlInput && videoUrlHelp) {
+                    if (sourceType === 'youtube') {
+                        videoUrlInput.placeholder = 'https://youtube.com/watch?v=...';
+                        videoUrlHelp.textContent = 'مثال: https://youtube.com/watch?v=dQw4w9WgXcQ أو https://youtu.be/dQw4w9WgXcQ';
+                    } else if (sourceType === 'vimeo') {
+                        videoUrlInput.placeholder = 'https://vimeo.com/...';
+                        videoUrlHelp.textContent = 'مثال: https://vimeo.com/123456789';
+                    } else {
+                        videoUrlInput.placeholder = 'https://...';
+                        videoUrlHelp.textContent = 'أدخل رابط الفيديو المباشر (MP4)';
+                    }
+                }
+            }
+            
+            syncVideoUrl();
+        }
+        
+        function syncVideoUrl() {
+            const sourceType = document.getElementById('videoSourceType').value;
+            const videoPickerInput = document.getElementById('videoUrlPicker');
+            const videoUrlInput = document.getElementById('videoUrlInput');
+            const finalVideoUrl = document.getElementById('finalVideoUrl');
+            
+            if (finalVideoUrl) {
+                if (sourceType === 'library') {
+                    finalVideoUrl.value = videoPickerInput ? videoPickerInput.value : '';
+                } else {
+                    finalVideoUrl.value = videoUrlInput ? videoUrlInput.value : '';
+                }
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            toggleVideoSource();
+            toggleDripFields(); // Initialize drip field visibility based on current value
+            
+            const videoUrlInput = document.getElementById('videoUrlInput');
+            const videoPickerInput = document.getElementById('videoUrlPicker');
+            
+            if (videoUrlInput) {
+                videoUrlInput.addEventListener('input', syncVideoUrl);
+                videoUrlInput.addEventListener('change', syncVideoUrl);
+            }
+            
+            if (videoPickerInput) {
+                const observer = new MutationObserver(syncVideoUrl);
+                observer.observe(videoPickerInput, { attributes: true, attributeFilter: ['value'] });
+                videoPickerInput.addEventListener('change', syncVideoUrl);
+            }
+            
+            const form = document.querySelector('form[asp-action="Edit"]') || document.querySelector('form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    syncVideoUrl();
+                });
+            }
+        });
+
+        // Resources management
+        let resourceIndex = 0;
+        
+        function addResource() {
+            const container = document.getElementById('resourcesContainer');
+            const uniqueId = 'resource_' + resourceIndex + '_' + Date.now();
+            
+            const html = `
+                <div class="resource-item card bg-light mb-3" data-index="${resourceIndex}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <h6 class="mb-0">
+                                <i class="feather-file me-2"></i>
+                                مورد جديد #${resourceIndex + 1}
+                            </h6>
+                            <button class="btn btn-sm btn-outline-danger" type="button" onclick="removeResource(this)">
+                                <i class="feather-trash-2"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">عنوان المورد</label>
+                                <input type="text" class="form-control" name="NewResources[${resourceIndex}].Title" 
+                                       placeholder="مثال: ملف PDF للدرس" id="${uniqueId}_title">
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label">نوع الملف</label>
+                                <select class="form-select" id="${uniqueId}_type" onchange="toggleResourceSource('${uniqueId}')">
+                                    <option value="library">اختيار من مكتبة الوسائط</option>
+                                    <option value="upload">رفع ملف جديد</option>
+                                    <option value="url">رابط خارجي</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Library Selection -->
+                            <div class="col-12" id="${uniqueId}_library">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="${uniqueId}_libraryDisplay" 
+                                           placeholder="اضغط لاختيار ملف من المكتبة" readonly>
+                                    <input type="hidden" name="NewResources[${resourceIndex}].FileUrl" id="${uniqueId}_fileUrl">
+                                    <button type="button" class="btn btn-outline-primary" onclick="openResourceMediaPicker('${uniqueId}', ${resourceIndex})">
+                                        <i class="feather-folder me-1"></i>
+                                        اختيار
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="clearResourceMedia('${uniqueId}')" 
+                                            id="${uniqueId}_clearBtn" style="display: none;">
+                                        <i class="feather-x"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- File Upload -->
+                            <div class="col-12" id="${uniqueId}_upload" style="display: none;">
+                                <input type="file" class="form-control" name="NewResources[${resourceIndex}].File" 
+                                       accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.rar,.txt,.mp3,.mp4">
+                                <div class="form-text">الحد الأقصى: 50MB</div>
+                            </div>
+                            
+                            <!-- External URL -->
+                            <div class="col-12" id="${uniqueId}_url" style="display: none;">
+                                <input type="url" class="form-control" name="NewResources[${resourceIndex}].ExternalUrl" 
+                                       placeholder="https://example.com/file.pdf">
+                                <div class="form-text">رابط مباشر للملف (Google Drive, Dropbox, إلخ)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', html);
+            resourceIndex++;
+        }
+
+        function removeResource(btn) {
+            btn.closest('.resource-item').remove();
+            updateResourceNumbers();
+        }
+        
+        function updateResourceNumbers() {
+            const items = document.querySelectorAll('.resource-item');
+            items.forEach((item, index) => {
+                item.querySelector('h6').innerHTML = `<i class="feather-file me-2"></i>مورد جديد #${index + 1}`;
+            });
+        }
+        
+        function toggleResourceSource(uniqueId) {
+            const type = document.getElementById(uniqueId + '_type').value;
+            const library = document.getElementById(uniqueId + '_library');
+            const upload = document.getElementById(uniqueId + '_upload');
+            const url = document.getElementById(uniqueId + '_url');
+            
+            library.style.display = type === 'library' ? 'block' : 'none';
+            upload.style.display = type === 'upload' ? 'block' : 'none';
+            url.style.display = type === 'url' ? 'block' : 'none';
+        }
+        
+        // Store current resource picker context
+        let currentResourcePickerId = null;
+        let currentResourceIndex = null;
+        
+        function openResourceMediaPicker(uniqueId, index) {
+            currentResourcePickerId = uniqueId;
+            currentResourceIndex = index;
+            
+            // Create a temporary picker element for MediaPicker integration
+            const tempPickerId = 'resourcePicker_' + uniqueId;
+            let tempPicker = document.getElementById('mediaPicker_' + tempPickerId);
+            
+            if (!tempPicker) {
+                tempPicker = document.createElement('div');
+                tempPicker.id = 'mediaPicker_' + tempPickerId;
+                tempPicker.className = 'media-picker-wrapper d-none';
+                tempPicker.setAttribute('data-field-id', uniqueId + '_fileUrl');
+                tempPicker.setAttribute('data-media-type', 'All');
+                document.body.appendChild(tempPicker);
+            }
+            
+            // Store original select handler
+            const originalConfirmSelection = MediaPicker.confirmSelection;
+            
+            // Override selection to handle resource picker
+            MediaPicker.confirmSelection = function() {
+                if (currentResourcePickerId && window.MediaPicker) {
+                    // Get selected media from MediaPicker's internal state
+                    const selectedUrl = document.querySelector('.media-item.selected')?.dataset?.url;
+                    const selectedTitle = document.querySelector('.media-item.selected .card-title')?.textContent;
+                    
+                    if (selectedUrl) {
+                        document.getElementById(currentResourcePickerId + '_libraryDisplay').value = selectedTitle || selectedUrl;
+                        document.getElementById(currentResourcePickerId + '_fileUrl').value = selectedUrl;
+                        document.getElementById(currentResourcePickerId + '_clearBtn').style.display = 'inline-block';
+                        
+                        const titleInput = document.getElementById(currentResourcePickerId + '_title');
+                        if (titleInput && !titleInput.value) {
+                            titleInput.value = selectedTitle || '';
+                        }
+                    }
+                    
+                    currentResourcePickerId = null;
+                    currentResourceIndex = null;
+                }
+                
+                // Call original handler
+                originalConfirmSelection.call(MediaPicker);
+                
+                // Restore original handler
+                MediaPicker.confirmSelection = originalConfirmSelection;
+                
+                // Sync video URL after selection
+                setTimeout(syncVideoUrl, 100);
+            };
+            
+            // Use MediaPicker's singleton modal
+            MediaPicker.openLibrary(tempPickerId);
+        }
+        
+        function clearResourceMedia(uniqueId) {
+            document.getElementById(uniqueId + '_libraryDisplay').value = '';
+            document.getElementById(uniqueId + '_fileUrl').value = '';
+            document.getElementById(uniqueId + '_clearBtn').style.display = 'none';
+        }
+        
+        // Hook into MediaPicker for video sync
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof MediaPicker !== 'undefined') {
+                const originalSelect = MediaPicker.select;
+                MediaPicker.select = function(uniqueId, media) {
+                    if (originalSelect) originalSelect.call(this, uniqueId, media);
+                    setTimeout(syncVideoUrl, 100);
+                };
+            }
+        });
+
+        // Content Drip toggle
+        function toggleDripFields() {
+            const dripType = document.getElementById('contentDripType').value;
+            const dripDaysField = document.getElementById('dripDaysField');
+            const dripPrerequisiteField = document.getElementById('dripPrerequisiteField');
+            const dripDateField = document.getElementById('dripDateField');
+
+            dripDaysField.style.display = 'none';
+            dripPrerequisiteField.style.display = 'none';
+            dripDateField.style.display = 'none';
+
+            switch (dripType) {
+                case 'DaysAfterEnrollment':
+                    dripDaysField.style.display = 'block';
+                    break;
+                case 'AfterPreviousCompletion':
+                    dripPrerequisiteField.style.display = 'block';
+                    break;
+                case 'SpecificDate':
+                    dripDateField.style.display = 'block';
+                    break;
+            }
+        }
+
+        function deleteResource(resourceId) {
+            if (confirm('هل أنت متأكد من حذف هذا المورد؟')) {
+                fetch('@Url.Action("DeleteResource")', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': $('input[name="__RequestVerificationToken"]').val()
+                    },
+                    body: JSON.stringify({ resourceId: resourceId })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        location.reload();
+                    }
+                });
+            }
+        }
+    </script>
+
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
+

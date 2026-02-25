@@ -1,0 +1,299 @@
+@model List<LMS.Domain.Entities.Assessments.QuizAttempt>
+@{
+    ViewData["Title"] = Html.T("سجل المحاولات", "Attempt History") + " - " + ViewBag.QuizTitle;
+}
+
+@section Styles {
+<style>
+    .attempt-card {
+        transition: all 0.3s ease;
+        border-left: 4px solid transparent;
+    }
+    .attempt-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .attempt-card.passed {
+        border-left-color: #22c55e;
+    }
+    .attempt-card.failed {
+        border-left-color: #ef4444;
+    }
+    .score-circle {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        border: 3px solid;
+    }
+    .score-circle.passed {
+        background: rgba(34, 197, 94, 0.1);
+        border-color: #22c55e;
+        color: #22c55e;
+    }
+    .score-circle.failed {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: #ef4444;
+        color: #ef4444;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <a asp-action="Index" class="btn btn-sm btn-light-brand me-3">
+            <i class="feather-arrow-right me-2"></i>
+            @Html.T("العودة للاختبارات", "Back to quizzes")
+        </a>
+        <div class="page-header-title">
+            <h4 class="fw-bold mb-0">@ViewData["Title"]</h4>
+            <p class="fs-11 text-muted mb-0">@Html.T("تاريخ محاولاتك في هذا الاختبار", "Your attempt history for this quiz")</p>
+        </div>
+    </div>
+</div>
+
+@if (Model != null && Model.Any())
+{
+    <!-- Statistics Summary -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card stretch stretch-full border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-text avatar-lg bg-primary text-white me-3">
+                            <i class="feather-repeat"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-muted mb-1">@Html.T("إجمالي المحاولات", "Total attempts")</h6>
+                            <h3 class="fw-bold mb-0">@Model.Count</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-text avatar-lg bg-success text-white me-3">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-muted mb-1">@Html.T("نجحت", "Passed")</h6>
+                            <h3 class="fw-bold mb-0 text-success">@Model.Count(a => a.IsPassed)</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-text avatar-lg bg-warning text-white me-3">
+                            <i class="feather-trending-up"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-muted mb-1">@Html.T("أفضل نتيجة", "Best score")</h6>
+                            <h3 class="fw-bold mb-0 text-warning">@Model.Max(a => a.PercentageScore).ToString("F0")%</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-text avatar-lg bg-info text-white me-3">
+                            <i class="feather-bar-chart-2"></i>
+                        </div>
+                        <div>
+                            <h6 class="text-muted mb-1">@Html.T("المتوسط", "Average")</h6>
+                            <h3 class="fw-bold mb-0 text-info">@Model.Average(a => a.PercentageScore).ToString("F0")%</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attempts List -->
+    <div class="card stretch stretch-full">
+        <div class="card-header">
+            <h5 class="fw-bold mb-0">
+                <i class="feather-list me-2"></i>
+                @Html.T("المحاولات", "Attempts")
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="text-center" style="width: 80px;">@Html.T("المحاولة", "Attempt")</th>
+                            <th>@Html.T("التاريخ والوقت", "Date & time")</th>
+                            <th class="text-center">@Html.T("النتيجة", "Score")</th>
+                            <th class="text-center">@Html.T("النسبة المئوية", "Percentage")</th>
+                            <th class="text-center">@Html.T("المدة", "Duration")</th>
+                            <th class="text-center">@Html.T("الحالة", "Status")</th>
+                            <th class="text-center">@Html.T("إجراءات", "Actions")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var attempt in Model)
+                        {
+                            var duration = attempt.CompletedAt.HasValue 
+                                ? (attempt.CompletedAt.Value - attempt.StartedAt).TotalMinutes 
+                                : 0;
+                            
+                            <tr class="attempt-row">
+                                <td class="text-center">
+                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                        #@attempt.AttemptNumber
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column">
+                                        <span class="fw-semibold">@attempt.StartedAt.ToString("dd/MM/yyyy")</span>
+                                        <small class="text-muted">@attempt.StartedAt.ToString("hh:mm tt")</small>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="fw-bold">@attempt.Score / @attempt.MaxScore</span>
+                                </td>
+                                <td class="text-center">
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar @(attempt.IsPassed ? "bg-success" : "bg-warning")" 
+                                             role="progressbar" 
+                                             style="width: @attempt.PercentageScore%">
+                                        </div>
+                                    </div>
+                                    <small class="fw-semibold mt-1 d-block">@attempt.PercentageScore.ToString("F0")%</small>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-soft-secondary text-secondary">
+                                        <i class="feather-clock me-1"></i>
+                                        @duration.ToString("F0") @Html.T("دقيقة", "min")
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    @if (attempt.IsPassed)
+                                    {
+                                        <span class="badge bg-success">
+                                            <i class="feather-check-circle me-1"></i>
+                                            @Html.T("ناجح", "Passed")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger">
+                                            <i class="feather-x-circle me-1"></i>
+                                            @Html.T("راسب", "Failed")
+                                        </span>
+                                    }
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group btn-group-sm">
+                                        <a asp-area="Student" asp-action="AttemptResults" asp-route-attemptId="@attempt.Id" 
+                                           class="btn btn-sm btn-primary"
+                                           data-bs-toggle="tooltip" 
+                                           title="@Html.T("عرض النتائج", "View Results")">
+                                            <i class="feather-eye"></i>
+                                        </a>
+                                        <a asp-area="Student" asp-action="AttemptAnalysis" asp-route-attemptId="@attempt.Id" 
+                                           class="btn btn-sm btn-info"
+                                           data-bs-toggle="tooltip" 
+                                           title="@Html.T("التحليل التفصيلي", "Detailed Analysis")">
+                                            <i class="feather-bar-chart-2"></i>
+                                        </a>
+                                        @if (attempt.Quiz?.ShowCorrectAnswers == true)
+                                        {
+                                            <a asp-action="ReviewAnswers" asp-route-attemptId="@attempt.Id" 
+                                               class="btn btn-sm btn-success"
+                                               data-bs-toggle="tooltip" 
+                                               title="@Html.T("مراجعة الإجابات", "Review Answers")">
+                                                <i class="feather-check-square"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="row g-3 mt-4">
+        <div class="col-md-6">
+            <div class="card stretch stretch-full bg-soft-primary">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">
+                        <i class="feather-bar-chart-2 me-2"></i>
+                        @Html.T("قارن محاولاتك", "Compare your attempts")
+                    </h6>
+                    <p class="text-muted mb-3">@Html.T("شاهد التحسن في أدائك عبر المحاولات المختلفة", "See how your performance improved across attempts")</p>
+                    <a asp-area="Student" asp-controller="Quizzes" asp-action="CompareAttempts" asp-route-quizId="@ViewBag.QuizId" 
+                       class="btn btn-primary btn-sm">
+                        <i class="feather-trending-up me-2"></i>
+                        @Html.T("مقارنة المحاولات", "Compare attempts")
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card stretch stretch-full bg-soft-success">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">
+                        <i class="feather-repeat me-2"></i>
+                        @Html.T("محاولة جديدة", "New attempt")
+                    </h6>
+                    <p class="text-muted mb-3">@Html.T("هل أنت مستعد لتحسين نتيجتك؟", "Ready to improve your score?")</p>
+                    <a asp-area="Student" asp-action="Start" asp-route-quizId="@ViewBag.QuizId" 
+                       class="btn btn-success btn-sm">
+                        <i class="feather-play-circle me-2"></i>
+                        @Html.T("ابدأ محاولة جديدة", "Start new attempt")
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <!-- Empty State -->
+    <div class="card stretch stretch-full">
+        <div class="card-body text-center py-5">
+            <div class="avatar-text avatar-xxl bg-soft-secondary text-secondary mx-auto mb-4">
+                <i class="feather-inbox fs-1"></i>
+            </div>
+            <h4 class="fw-bold mb-3">@Html.T("لا توجد محاولات سابقة", "No previous attempts")</h4>
+            <p class="text-muted mb-4">@Html.T("لم تقم بمحاولة هذا الاختبار بعد", "You haven't attempted this quiz yet")</p>
+            <a asp-action="Index" class="btn btn-primary">
+                <i class="feather-arrow-right me-2"></i>
+                @Html.T("العودة للاختبارات", "Back to quizzes")
+            </a>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+</script>
+}
+

@@ -1,0 +1,410 @@
+@model LMS.Areas.Admin.ViewModels.SendNotificationViewModel
+
+@{
+    ViewData["Title"] = Html.T("إرسال إشعار", "Send notification");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإشعارات", "Notifications"), null),
+        (Html.T("إرسال إشعار", "Send notification"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/select2.min.css" />
+    <link rel="stylesheet" href="~/assets/vendors/css/select2-bootstrap-5-theme.min.css" />
+    <style>
+        .notification-preview {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        .notification-preview-icon {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 1.5rem;
+        }
+        .recipient-option {
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .recipient-option:hover {
+            border-color: #3454d1;
+            background: #f8f9fa;
+        }
+        .recipient-option input[type="radio"]:checked ~ label {
+            color: #3454d1;
+            font-weight: 600;
+        }
+        .notification-type-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .notification-type-badge:hover {
+            transform: scale(1.05);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <form asp-action="Send" method="post" id="sendNotificationForm">
+        @Html.AntiForgeryToken()
+        <div class="row">
+            <!-- Form Section -->
+            <div class="col-lg-8">
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("تفاصيل الإشعار", "Notification details")</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Title -->
+                        <div class="mb-4">
+                            <label class="form-label" for="title">@Html.T("عنوان الإشعار", "Notification title") <span class="text-danger">*</span></label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="title" 
+                                   asp-for="Title" 
+                                   placeholder="@Html.T("أدخل عنوان الإشعار", "Enter notification title")"
+                                   required>
+                            <span asp-validation-for="Title" class="text-danger"></span>
+                        </div>
+
+                        <!-- Message -->
+                        <div class="mb-4">
+                            <label class="form-label" for="message">@Html.T("الرسالة", "Message") <span class="text-danger">*</span></label>
+                            <textarea class="form-control" 
+                                      id="message" 
+                                      asp-for="Message" 
+                                      rows="5" 
+                                      placeholder="@Html.T("اكتب محتوى الإشعار هنا...", "Write the notification content here...")"
+                                      required></textarea>
+                            <span asp-validation-for="Message" class="text-danger"></span>
+                            <small class="text-muted">@Html.T("يمكنك استخدام نص تفصيلي لشرح الإشعار", "You can use detailed text to explain the notification")</small>
+                        </div>
+
+                        <!-- Notification Type -->
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("نوع الإشعار", "Notification type") <span class="text-danger">*</span></label>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <div>
+                                    <input type="radio" class="btn-check" name="Type" id="typeInfo" value="Info" asp-for="Type" checked>
+                                    <label class="btn btn-outline-info notification-type-badge" for="typeInfo">
+                                        <i class="feather-info me-2"></i>@Html.T("معلومات", "Info")
+                                    </label>
+                                </div>
+                                <div>
+                                    <input type="radio" class="btn-check" name="Type" id="typeSuccess" value="Success" asp-for="Type">
+                                    <label class="btn btn-outline-success notification-type-badge" for="typeSuccess">
+                                        <i class="feather-check-circle me-2"></i>@Html.T("نجاح", "Success")
+                                    </label>
+                                </div>
+                                <div>
+                                    <input type="radio" class="btn-check" name="Type" id="typeWarning" value="Warning" asp-for="Type">
+                                    <label class="btn btn-outline-warning notification-type-badge" for="typeWarning">
+                                        <i class="feather-alert-triangle me-2"></i>@Html.T("تحذير", "Warning")
+                                    </label>
+                                </div>
+                                <div>
+                                    <input type="radio" class="btn-check" name="Type" id="typeError" value="Error" asp-for="Type">
+                                    <label class="btn btn-outline-danger notification-type-badge" for="typeError">
+                                        <i class="feather-alert-circle me-2"></i>@Html.T("خطأ", "Error")
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action URL (Optional) -->
+                        <div class="row">
+                            <div class="col-md-8 mb-4">
+                                <label class="form-label" for="actionUrl">@Html.T("رابط الإجراء (اختياري)", "Action URL (optional)")</label>
+                                <input type="url" 
+                                       class="form-control" 
+                                       id="actionUrl" 
+                                       asp-for="ActionUrl" 
+                                       placeholder="https://example.com/action">
+                                <small class="text-muted">@Html.T("رابط يتم فتحه عند النقر على الإشعار", "Link opened when the notification is clicked")</small>
+                            </div>
+                            <div class="col-md-4 mb-4">
+                                <label class="form-label" for="actionText">@Html.T("نص الإجراء", "Action text")</label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="actionText" 
+                                       asp-for="ActionText" 
+                                       placeholder="@Html.T("عرض التفاصيل", "View details")">
+                            </div>
+                        </div>
+
+                        <!-- Recipients -->
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("المستقبلون", "Recipients") <span class="text-danger">*</span></label>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="recipient-option">
+                                        <input type="radio" class="btn-check" name="Recipients" id="recipientsAll" value="All" asp-for="Recipients" checked>
+                                        <label class="d-flex align-items-center gap-3" for="recipientsAll">
+                                            <div class="avatar-text bg-soft-primary text-primary">
+                                                <i class="feather-users"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-0">@Html.T("جميع المستخدمين", "All users")</h6>
+                                                <small class="text-muted">@Html.T("إرسال لكل المستخدمين في المنصة", "Send to all users on the platform")</small>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="recipient-option">
+                                        <input type="radio" class="btn-check" name="Recipients" id="recipientsStudents" value="Students" asp-for="Recipients">
+                                        <label class="d-flex align-items-center gap-3" for="recipientsStudents">
+                                            <div class="avatar-text bg-soft-success text-success">
+                                                <i class="feather-user-check"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-0">@Html.T("الطلاب فقط", "Students only")</h6>
+                                                <small class="text-muted">@Html.T("الطلاب المسجلين في الدورات", "Students enrolled in courses")</small>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="recipient-option">
+                                        <input type="radio" class="btn-check" name="Recipients" id="recipientsInstructors" value="Instructors" asp-for="Recipients">
+                                        <label class="d-flex align-items-center gap-3" for="recipientsInstructors">
+                                            <div class="avatar-text bg-soft-warning text-warning">
+                                                <i class="feather-award"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-0">@Html.T("المدرسين فقط", "Instructors only")</h6>
+                                                <small class="text-muted">@Html.T("جميع المدرسين المعتمدين", "All approved instructors")</small>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="recipient-option">
+                                        <input type="radio" class="btn-check" name="Recipients" id="recipientsSpecific" value="Specific" asp-for="Recipients">
+                                        <label class="d-flex align-items-center gap-3" for="recipientsSpecific">
+                                            <div class="avatar-text bg-soft-danger text-danger">
+                                                <i class="feather-user"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-0">@Html.T("مستخدمين محددين", "Specific users")</h6>
+                                                <small class="text-muted">@Html.T("اختر مستخدمين بعينهم", "Choose specific users")</small>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Specific Users (Hidden by default) -->
+                        <div id="specificUsersSection" class="mb-4" style="display: none;">
+                            <label class="form-label" for="specificUsers">@Html.T("اختر المستخدمين", "Select users")</label>
+                            <select class="form-control" 
+                                    id="specificUsers" 
+                                    asp-for="SpecificUserIds" 
+                                    multiple>
+                                <!-- Will be populated via AJAX -->
+                            </select>
+                            <small class="text-muted">@Html.T("يمكنك اختيار أكثر من مستخدم", "You can select multiple users")</small>
+                        </div>
+                    </div>
+                    <div class="card-footer text-end">
+                        <button type="button" class="btn btn-light me-2" onclick="window.history.back()">
+                            <i class="feather-x me-2"></i>@Html.T("إلغاء", "Cancel")
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="feather-send me-2"></i>@Html.T("إرسال الإشعار", "Send notification")
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview Section -->
+            <div class="col-lg-4">
+                <div class="card stretch stretch-full sticky-top" style="top: 100px;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("معاينة الإشعار", "Notification preview")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="notification-preview">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="notification-preview-icon bg-soft-info text-info" id="previewIcon">
+                                    <i class="feather-info"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="fw-bold mb-2" id="previewTitle">@Html.T("عنوان الإشعار", "Notification title")</h6>
+                                    <p class="text-muted mb-3" id="previewMessage">@Html.T("محتوى الإشعار سيظهر هنا...", "Notification content will appear here...")</p>
+                                    <div id="previewAction" style="display: none;">
+                                        <a href="#" class="btn btn-sm btn-light" id="previewActionBtn">@Html.T("عرض التفاصيل", "View details")</a>
+                                    </div>
+                                    <small class="text-muted d-block mt-3">
+                                        <i class="feather-clock me-1"></i>
+                                        @Html.T("الآن", "Now")
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recipient Count Info -->
+                        <div class="mt-4">
+                            <div class="alert alert-info">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="feather-info fs-5"></i>
+                                    <div>
+                                        <strong>@Html.T("المستقبلون:", "Recipients:")</strong>
+                                        <p class="mb-0" id="recipientInfo">@Html.T("سيتم إرسال الإشعار لجميع المستخدمين", "Notification will be sent to all users")</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Tips -->
+                        <div class="mt-4">
+                            <h6 class="fw-bold mb-3">@Html.T("نصائح سريعة:", "Quick tips:")</h6>
+                            <ul class="list-unstyled">
+                                <li class="mb-2">
+                                    <i class="feather-check text-success me-2"></i>
+                                    <small>@Html.T("استخدم عنوان واضح وموجز", "Use a clear and concise title")</small>
+                                </li>
+                                <li class="mb-2">
+                                    <i class="feather-check text-success me-2"></i>
+                                    <small>@Html.T("اختر النوع المناسب للإشعار", "Choose the appropriate notification type")</small>
+                                </li>
+                                <li class="mb-2">
+                                    <i class="feather-check text-success me-2"></i>
+                                    <small>@Html.T("أضف رابط إجراء عند الحاجة", "Add an action link when needed")</small>
+                                </li>
+                                <li class="mb-0">
+                                    <i class="feather-check text-success me-2"></i>
+                                    <small>@Html.T("حدد المستقبلين بدقة", "Specify recipients accurately")</small>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Initialize Select2
+            $('#specificUsers').select2({
+                theme: 'bootstrap-5',
+                placeholder: 'ابحث عن المستخدمين...',
+                ajax: {
+                    url: '/Admin/Users/SearchUsers',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return {
+                            search: params.term,
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function (data) {
+                        return {
+                            results: data.items,
+                            pagination: {
+                                more: data.hasMore
+                            }
+                        };
+                    }
+                }
+            });
+
+            // Show/Hide specific users section
+            $('input[name="Recipients"]').on('change', function() {
+                if ($(this).val() === 'Specific') {
+                    $('#specificUsersSection').slideDown();
+                    updateRecipientInfo('مستخدمين محددين');
+                } else {
+                    $('#specificUsersSection').slideUp();
+                    updateRecipientInfo($(this).next('label').find('h6').text());
+                }
+            });
+
+            // Live preview - Title
+            $('#title').on('input', function() {
+                const value = $(this).val() || 'عنوان الإشعار';
+                $('#previewTitle').text(value);
+            });
+
+            // Live preview - Message
+            $('#message').on('input', function() {
+                const value = $(this).val() || 'محتوى الإشعار سيظهر هنا...';
+                $('#previewMessage').text(value);
+            });
+
+            // Live preview - Type
+            $('input[name="Type"]').on('change', function() {
+                const type = $(this).val();
+                let iconClass = 'feather-info';
+                let colorClass = 'bg-soft-info text-info';
+
+                switch(type) {
+                    case 'Success':
+                        iconClass = 'feather-check-circle';
+                        colorClass = 'bg-soft-success text-success';
+                        break;
+                    case 'Warning':
+                        iconClass = 'feather-alert-triangle';
+                        colorClass = 'bg-soft-warning text-warning';
+                        break;
+                    case 'Error':
+                        iconClass = 'feather-alert-circle';
+                        colorClass = 'bg-soft-danger text-danger';
+                        break;
+                }
+
+                $('#previewIcon').removeClass().addClass('notification-preview-icon ' + colorClass);
+                $('#previewIcon i').removeClass().addClass(iconClass);
+            });
+
+            // Live preview - Action
+            $('#actionText, #actionUrl').on('input', function() {
+                const text = $('#actionText').val();
+                const url = $('#actionUrl').val();
+
+                if (text && url) {
+                    $('#previewAction').show();
+                    $('#previewActionBtn').text(text).attr('href', url);
+                } else {
+                    $('#previewAction').hide();
+                }
+            });
+
+            function updateRecipientInfo(text) {
+                $('#recipientInfo').text('سيتم إرسال الإشعار إلى: ' + text);
+            }
+
+            // Form validation
+            $('#sendNotificationForm').on('submit', function(e) {
+                const recipients = $('input[name="Recipients"]:checked').val();
+                if (recipients === 'Specific' && $('#specificUsers').val().length === 0) {
+                    e.preventDefault();
+                    alert('@Html.Raw(Html.T("يرجى اختيار مستخدم واحد على الأقل", "Please select at least one user").Replace("'", "\\'"))');
+                    return false;
+                }
+            });
+        });
+    </script>
+}
+

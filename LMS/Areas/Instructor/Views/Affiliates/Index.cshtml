@@ -1,0 +1,357 @@
+@model IEnumerable<LMS.Domain.Entities.Marketing.AffiliateLink>
+
+@{
+    ViewData["Title"] = Html.T("إدارة روابط الأفلييت", "Affiliate Links Management");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة جميع روابط الأفلييت الخاصة بك", "View and manage all your affiliate links");
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="fs-12 fw-medium text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+        <ul class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Dashboard")">@Html.T("الرئيسية", "Home")</a></li>
+            <li class="breadcrumb-item active">@Html.T("روابط الأفلييت", "Affiliate links")</li>
+        </ul>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex align-items-center gap-2">
+            <a href="@Url.Action("Create")" class="btn btn-primary">
+                <i class="feather-plus me-2"></i>
+                @Html.T("إنشاء رابط أفلييت جديد", "Create new affiliate link")
+            </a>
+            <a href="@Url.Action("Statistics")" class="btn btn-light">
+                <i class="feather-bar-chart-2 me-2"></i>
+                @Html.T("إحصائيات الأفلييت", "Affiliate statistics")
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الروابط", "Total Links") },
+                { "Value", Model?.Count() ?? 0 },
+                { "Icon", "link" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("الروابط النشطة", "Active Links") },
+                { "Value", Model?.Count(l => l.IsActive) ?? 0 },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي النقرات", "Total Clicks") },
+                { "Value", Model?.Sum(l => l.ClickCount) ?? 0 },
+                { "Icon", "mouse-pointer" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الأرباح", "Total Earnings") },
+                { "Value", (Model?.Sum(l => l.TotalEarnings) ?? 0).ToEGP() },
+                { "Icon", "dollar-sign" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Affiliate Links List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة روابط الأفلييت", "Affiliate links list")</h5>
+                    <div class="card-header-action">
+                        <div class="card-header-btn">
+                            <div data-bs-toggle="tooltip" title="@Html.T("تحديث", "Refresh")">
+                                <a href="@Url.Action("Index")" class="avatar-text avatar-xs bg-warning">
+                                    <i class="feather-refresh-cw"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    <!-- Filter Bar -->
+                    <div class="p-4 border-bottom">
+                        <form method="get" class="row g-3">
+                            <div class="col-md-4">
+                                <select class="form-select" name="courseId" onchange="this.form.submit()">
+                                    <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                    @if (ViewBag.Courses != null)
+                                    {
+                                        foreach (var course in ViewBag.Courses)
+                                        {
+                                            <option value="@course.Value" selected="@(ViewBag.CourseId?.ToString() == course.Value)">@course.Text</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" name="isActive" onchange="this.form.submit()">
+                                    <option value="">@Html.T("جميع الحالات", "All statuses")</option>
+                                    <option value="true" selected="@(ViewBag.IsActive == true)">@Html.T("نشط", "Active")</option>
+                                    <option value="false" selected="@(ViewBag.IsActive == false)">@Html.T("غير نشط", "Inactive")</option>
+                                </select>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="d-flex justify-content-end gap-2">
+                                    <a href="@Url.Action("Index")" class="btn btn-outline-secondary">
+                                        <i class="feather-x me-2"></i>
+                                        @Html.T("مسح الفلاتر", "Clear filters")
+                                    </a>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var link in Model)
+                            {
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <a href="@Url.Action("Details", new { id = link.Id })" class="fw-bold text-dark text-break d-block">@link.CampaignName</a>
+                                        @if (!string.IsNullOrEmpty(link.Description))
+                                        {
+                                            <p class="fs-12 text-muted mb-2">@link.Description</p>
+                                        }
+                                        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                                            @if (link.Course != null)
+                                            {
+                                                <span class="badge bg-soft-primary text-primary">@link.Course.Title</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-secondary text-secondary">@Html.T("جميع الدورات", "All Courses")</span>
+                                            }
+                                            <code class="text-primary fs-12">@link.AffiliateCode</code>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-2 text-muted fs-12">
+                                            <span>@Html.T("نقرات", "Clicks"): @link.ClickCount</span>
+                                            <span>@Html.T("تحويلات", "Conversions"): @link.ConversionCount</span>
+                                            <span class="fw-bold text-success">@link.TotalEarnings.ToEGP()</span>
+                                        </div>
+                                        <div class="hstack gap-2 mt-2">
+                                            <a href="@Url.Action("Details", new { id = link.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-eye"></i></a>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('@link.AffiliateCode')"><i class="feather-copy"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("الحملة", "Campaign")</th>
+                                            <th>@Html.T("الدورة", "Course")</th>
+                                            <th>@Html.T("الكود", "Code")</th>
+                                            <th>@Html.T("نوع العمولة", "Commission type")</th>
+                                            <th>@Html.T("النقرات", "Clicks")</th>
+                                            <th>@Html.T("التحويلات", "Conversions")</th>
+                                            <th>@Html.T("الأرباح", "Earnings")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var link in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div>
+                                                    <a href="@Url.Action("Details", new { id = link.Id })" class="fw-bold text-dark">@link.CampaignName</a>
+                                                    @if (!string.IsNullOrEmpty(link.Description))
+                                                    {
+                                                        <p class="fs-12 text-muted mb-0">@link.Description</p>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (link.Course != null)
+                                                {
+                                                    <span class="badge bg-soft-primary text-primary">@link.Course.Title</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">@Html.T("جميع الدورات", "All Courses")</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <code class="text-primary">@link.AffiliateCode</code>
+                                                    <button class="btn btn-sm btn-light" onclick="copyToClipboard('@link.AffiliateCode')" data-bs-toggle="tooltip" title="@Html.T("نسخ", "Copy")">
+                                                        <i class="feather-copy fs-12"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (link.CommissionType.ToString() == "Percentage")
+                                                {
+                                                    <span class="badge bg-soft-info text-info">@link.CommissionRate% @Html.T("نسبة مئوية", "Percentage")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-success text-success">@link.FixedCommission ر.س مبلغ ثابت</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="feather-mouse-pointer text-muted"></i>
+                                                    <span class="fw-medium">@link.ClickCount</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="feather-shopping-cart text-success"></i>
+                                                    <span class="fw-medium">@link.ConversionCount</span>
+                                                    @if (link.ClickCount > 0)
+                                                    {
+                                                        <span class="fs-11 text-muted">(@((link.ConversionCount * 100m / link.ClickCount).ToString("F1"))%)</span>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <div class="fw-bold text-success">@link.TotalEarnings.ToEGP()</div>
+                                                    @if (link.PendingEarnings > 0)
+                                                    {
+                                                        <span class="fs-11 text-muted">معلق: @link.PendingEarnings.ToEGP()</span>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (link.IsActive)
+                                                {
+                                                    @if (link.ValidFrom <= DateTime.UtcNow && link.ValidTo >= DateTime.UtcNow)
+                                                    {
+                                                        <span class="badge bg-soft-success text-success">نشط</span>
+                                                    }
+                                                    else if (link.ValidFrom > DateTime.UtcNow)
+                                                    {
+                                                        <span class="badge bg-soft-warning text-warning">قريباً</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-soft-secondary text-secondary">منتهي</span>
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger">معطل</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { id = link.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض", "View")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    <a href="@Url.Action("Edit", new { id = link.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                        <i class="feather-edit"></i>
+                                                    </a>
+                                                    <div class="dropdown">
+                                                        <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown" data-bs-offset="0,21">
+                                                            <i class="feather-more-horizontal"></i>
+                                                        </a>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li>
+                                                                <form asp-action="ToggleStatus" asp-route-id="@link.Id" method="post" style="display:inline">
+                                                                    @Html.AntiForgeryToken()
+                                                                    <button type="submit" class="dropdown-item">
+                                                                        <i class="feather-@(link.IsActive ? "eye-off" : "eye") me-3"></i>
+                                                                        <span>@(link.IsActive ? "تعطيل" : "تفعيل")</span>
+                                                                    </button>
+                                                                </form>
+                                                            </li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@Url.Action("Delete", new { id = link.Id })', '@Html.Raw((Html.T("هل أنت متأكد من حذف رابط الأفلييت: ", "Are you sure you want to delete the affiliate link: ") + (link.CampaignName ?? "").Replace("'", "\\'") + "؟").Replace("'", "\\'"))')">
+                                                                    <i class="feather-trash-2 me-3"></i>
+                                                                    <span>@Html.T("حذف", "Delete")</span>
+                                                                </a>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-link"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد روابط أفلييت بعد", "No affiliate links yet")</h5>
+                            <p class="text-muted mb-4">ابدأ بإنشاء رابط أفلييت لتسويق دوراتك وزيادة أرباحك</p>
+                            <a href="@Url.Action("Create")" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إنشاء رابط أفلييت جديد", "Create new affiliate link")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DeleteModal")
+
+@section Scripts {
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                // Show success message
+                const toast = `
+                    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+                        <div class="toast show" role="alert">
+                            <div class="toast-body bg-success text-white">
+                                <i class="feather-check me-2"></i>
+                                تم نسخ الكود بنجاح
+                            </div>
+                        </div>
+                    </div>
+                `;
+                $('body').append(toast);
+                setTimeout(() => $('.toast').remove(), 2000);
+            });
+        }
+
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+
+

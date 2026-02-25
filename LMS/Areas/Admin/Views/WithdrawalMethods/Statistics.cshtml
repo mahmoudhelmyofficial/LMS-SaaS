@@ -1,0 +1,459 @@
+@model IEnumerable<LMS.Areas.Admin.ViewModels.WithdrawalMethodStatsViewModel>
+
+@{
+    ViewData["Title"] = Html.T("إحصائيات طرق السحب", "Withdrawal methods statistics");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإدارة المالية", "Financial"), null),
+        (Html.T("طرق السحب", "Withdrawal methods"), Url.Action("Index", "WithdrawalMethods")),
+        (Html.T("الإحصائيات", "Statistics"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("طلبات السحب", "Withdrawal requests"), "feather-list", Url.Action("Requests", "WithdrawalMethods"), "btn-outline-primary"),
+        (Html.T("طرق السحب", "Withdrawal methods"), "feather-credit-card", Url.Action("Index", "WithdrawalMethods"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+    ViewData["ShowStats"] = true;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+    <style>
+        .stat-progress {
+            height: 8px;
+            border-radius: 4px;
+            background-color: #e9ecef;
+        }
+        .stat-progress .progress-bar {
+            border-radius: 4px;
+        }
+        .stats-chart {
+            height: 300px;
+        }
+        .method-card {
+            transition: all 0.3s ease;
+        }
+        .method-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@{
+    var totalRequests = Model.Sum(m => m.TotalRequests);
+    var totalApproved = Model.Sum(m => m.ApprovedRequests);
+    var totalPending = Model.Sum(m => m.PendingRequests);
+    var totalRejected = Model.Sum(m => m.RejectedRequests);
+    var totalAmount = Model.Sum(m => m.TotalAmount);
+    var totalFees = Model.Sum(m => m.TotalFees);
+}
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-bar-chart-2"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">إجمالي الطلبات</span>
+                            <h3 class="fw-bolder d-block">@totalRequests.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">موافق عليها</span>
+                            <h3 class="fw-bolder d-block">@totalApproved.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-dollar-sign"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">إجمالي المسحوب</span>
+                            <h3 class="fw-bolder d-block">@totalAmount.ToEGP()</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-percent"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">إجمالي الرسوم</span>
+                            <h3 class="fw-bolder d-block">@totalFees.ToEGP()</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <!-- Charts Row -->
+        <div class="col-lg-8 mb-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع الطلبات حسب الطريقة", "Request distribution by method")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="requestsChart" class="stats-chart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("حالات الطلبات", "Request statuses")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="statusChart" class="stats-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Statistics Table -->
+        <div class="col-lg-12 mb-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">تفاصيل الإحصائيات حسب الطريقة</h5>
+                    <div class="d-flex gap-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                                <i class="feather-download me-1"></i>
+                                تصدير
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/withdrawals?format=csv">
+                                        <i class="feather-file-text me-2 text-success"></i>تصدير CSV
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/withdrawals?format=excel">
+                                        <i class="feather-file me-2 text-primary"></i>تصدير Excel
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/withdrawals?format=pdf">
+                                        <i class="feather-file-text me-2 text-danger"></i>تصدير PDF
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="statsTable">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("طريقة السحب", "Withdrawal method")</th>
+                                    <th class="text-center">@Html.T("إجمالي الطلبات", "Total requests")</th>
+                                    <th class="text-center">@Html.T("معلقة", "Pending")</th>
+                                    <th class="text-center">@Html.T("موافق عليها", "Approved")</th>
+                                    <th class="text-center">@Html.T("مرفوضة", "Rejected")</th>
+                                    <th class="text-end">@Html.T("المبلغ المسحوب", "Amount withdrawn")</th>
+                                    <th class="text-end">@Html.T("الرسوم المحصلة", "Fees collected")</th>
+                                    <th>@Html.T("نسبة النجاح", "Success rate")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var method in Model.OrderByDescending(m => m.TotalRequests))
+                                {
+                                    var successRate = method.TotalRequests > 0
+                                        ? (method.ApprovedRequests * 100.0 / method.TotalRequests)
+                                        : 0;
+                                    var progressClass = successRate >= 80 ? "bg-success" :
+                                        successRate >= 50 ? "bg-warning" : "bg-danger";
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                    <i class="feather-credit-card"></i>
+                                                </div>
+                                                <a href="@Url.Action("Details", "WithdrawalMethods", new { id = method.MethodId })" class="fw-semibold text-dark">
+                                                    @method.MethodName
+                                                </a>
+                                            </div>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge bg-soft-primary text-primary fs-13 px-3">@method.TotalRequests</span>
+                                        </td>
+                                        <td class="text-center">
+                                            @if (method.PendingRequests > 0)
+                                            {
+                                                <span class="badge bg-soft-warning text-warning">@method.PendingRequests</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (method.ApprovedRequests > 0)
+                                            {
+                                                <span class="badge bg-soft-success text-success">@method.ApprovedRequests</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-center">
+                                            @if (method.RejectedRequests > 0)
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">@method.RejectedRequests</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">0</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <span class="fw-bold text-success">@method.TotalAmount.ToEGP()</span>
+                                        </td>
+                                        <td class="text-end">
+                                            <span class="fw-semibold text-info">@method.TotalFees.ToEGP()</span>
+                                        </td>
+                                        <td style="min-width: 150px;">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="progress stat-progress flex-grow-1">
+                                                    <div class="progress-bar @progressClass" role="progressbar" style="width: @successRate%"></div>
+                                                </div>
+                                                <span class="fs-12 fw-semibold" style="min-width: 45px;">@successRate.ToString("F1")%</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr class="fw-bold">
+                                    <td>الإجمالي</td>
+                                    <td class="text-center">@totalRequests</td>
+                                    <td class="text-center">@totalPending</td>
+                                    <td class="text-center">@totalApproved</td>
+                                    <td class="text-center">@totalRejected</td>
+                                    <td class="text-end text-success">@totalAmount.ToEGP()</td>
+                                    <td class="text-end text-info">@totalFees.ToEGP()</td>
+                                    <td>
+                                        @{
+                                            var overallSuccessRate = totalRequests > 0
+                                                ? (totalApproved * 100.0 / totalRequests)
+                                                : 0;
+                                        }
+                                        @overallSuccessRate.ToString("F1")%
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Method Cards -->
+        <div class="col-lg-12">
+            <h5 class="mb-3">أداء كل طريقة</h5>
+            <div class="row">
+                @foreach (var method in Model.OrderByDescending(m => m.TotalAmount).Take(6))
+                {
+                    var successRate = method.TotalRequests > 0
+                        ? (method.ApprovedRequests * 100.0 / method.TotalRequests)
+                        : 0;
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="card stretch stretch-full method-card">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-text avatar-lg rounded bg-soft-primary text-primary">
+                                            <i class="feather-credit-card"></i>
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0">@method.MethodName</h6>
+                                            <small class="text-muted">@method.TotalRequests طلب</small>
+                                        </div>
+                                    </div>
+                                    <a href="@Url.Action("Details", "WithdrawalMethods", new { id = method.MethodId })" class="btn btn-sm btn-light">
+                                        <i class="feather-external-link"></i>
+                                    </a>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <div class="p-2 bg-soft-success rounded text-center">
+                                            <small class="text-muted d-block">المبلغ المسحوب</small>
+                                            <span class="fw-bold text-success">@method.TotalAmount.ToEGP()</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="p-2 bg-soft-info rounded text-center">
+                                            <small class="text-muted d-block">الرسوم المحصلة</small>
+                                            <span class="fw-bold text-info">@method.TotalFees.ToEGP()</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <small>نسبة النجاح</small>
+                                        <small class="fw-bold">@successRate.ToString("F1")%</small>
+                                    </div>
+                                    <div class="progress stat-progress">
+                                        <div class="progress-bar bg-@(successRate >= 80 ? "success" : successRate >= 50 ? "warning" : "danger")" 
+                                             role="progressbar" 
+                                             style="width: @successRate%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        $(document).ready(function() {
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            $('#statsTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[1, "desc"]],
+                "pageLength": 25,
+                "paging": false,
+                "searching": false,
+                "info": false
+            });
+
+            // Requests Chart - Bar Chart
+            var requestsCtx = document.getElementById('requestsChart').getContext('2d');
+            new Chart(requestsCtx, {
+                type: 'bar',
+                data: {
+                    labels: [@Html.Raw(string.Join(", ", Model.Select(m => $"\"{m.MethodName}\"")))],
+                    datasets: [{
+                        label: 'موافق عليها',
+                        data: [@string.Join(", ", Model.Select(m => m.ApprovedRequests))],
+                        backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 1
+                    }, {
+                        label: 'معلقة',
+                        data: [@string.Join(", ", Model.Select(m => m.PendingRequests))],
+                        backgroundColor: 'rgba(255, 193, 7, 0.8)',
+                        borderColor: 'rgba(255, 193, 7, 1)',
+                        borderWidth: 1
+                    }, {
+                        label: 'مرفوضة',
+                        data: [@string.Join(", ", Model.Select(m => m.RejectedRequests))],
+                        backgroundColor: 'rgba(220, 53, 69, 0.8)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Status Chart - Doughnut Chart
+            var statusCtx = document.getElementById('statusChart').getContext('2d');
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['موافق عليها', 'معلقة', 'مرفوضة'],
+                    datasets: [{
+                        data: [@totalApproved, @totalPending, @totalRejected],
+                        backgroundColor: [
+                            'rgba(40, 167, 69, 0.8)',
+                            'rgba(255, 193, 7, 0.8)',
+                            'rgba(220, 53, 69, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(40, 167, 69, 1)',
+                            'rgba(255, 193, 7, 1)',
+                            'rgba(220, 53, 69, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        }
+                    }
+                }
+            });
+        });
+
+        function exportToExcel() {
+            var table = document.getElementById('statsTable');
+            var html = table.outerHTML;
+            var url = 'data:application/vnd.ms-excel,' + encodeURIComponent(html);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = 'withdrawal_methods_statistics.xls';
+            link.click();
+        }
+    </script>
+}
+

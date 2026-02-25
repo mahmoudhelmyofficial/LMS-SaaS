@@ -1,0 +1,283 @@
+@model LMS.Services.UserGiftsInfo
+@{
+    ViewData["Title"] = Html.T("هداياي", "My Gifts");
+    ViewData["ActiveMenu"] = "Gifts";
+}
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-1">
+                        <i class="fas fa-gift text-primary me-2"></i>
+                        @Html.T("هداياي", "My Gifts")
+                    </h1>
+                    <p class="text-muted mb-0">@Html.T("الهدايا المرسلة والمستلمة", "Sent and received gifts")</p>
+                </div>
+                <a asp-action="Redeem" class="btn btn-primary">
+                    <i class="fas fa-ticket-alt me-1"></i> @Html.T("استرداد هدية", "Redeem gift")
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-paper-plane fa-2x text-primary mb-2"></i>
+                    <h3 class="mb-1">@Model.SentGifts.Count</h3>
+                    <p class="text-muted mb-0">@Html.T("هدايا مرسلة", "Sent gifts")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-inbox fa-2x text-success mb-2"></i>
+                    <h3 class="mb-1">@Model.ReceivedGifts.Count</h3>
+                    <p class="text-muted mb-0">@Html.T("هدايا مستلمة", "Received gifts")</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-check-circle fa-2x text-info mb-2"></i>
+                    <h3 class="mb-1">@Model.SentGifts.Count(g => g.Status == "Redeemed")</h3>
+                    <p class="text-muted mb-0">@Html.T("تم استردادها", "Redeemed")</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-pills mb-4" id="giftsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="sent-tab" data-bs-toggle="pill" 
+                    data-bs-target="#sent" type="button" role="tab">
+                <i class="fas fa-paper-plane me-1"></i> @Html.T("الهدايا المرسلة", "Sent gifts")
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="received-tab" data-bs-toggle="pill" 
+                    data-bs-target="#received" type="button" role="tab">
+                <i class="fas fa-inbox me-1"></i> @Html.T("الهدايا المستلمة", "Received gifts")
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="giftsTabContent">
+        <!-- Sent Gifts -->
+        <div class="tab-pane fade show active" id="sent" role="tabpanel">
+            @if (Model.SentGifts.Any())
+            {
+                <!-- Mobile: card list -->
+                <div class="d-md-none">
+                    @foreach (var gift in Model.SentGifts)
+                    {
+                        var (badgeClass, statusText) = gift.Status switch
+                        {
+                            "Pending" => ("bg-secondary", Html.T("في الانتظار", "Pending").ToString()),
+                            "Paid" => ("bg-info", Html.T("تم الدفع", "Paid").ToString()),
+                            "Delivered" => ("bg-primary", Html.T("تم الإرسال", "Delivered").ToString()),
+                            "Redeemed" => ("bg-success", Html.T("تم الاسترداد", "Redeemed").ToString()),
+                            "Expired" => ("bg-danger", Html.T("منتهية", "Expired").ToString()),
+                            "Cancelled" => ("bg-dark", Html.T("ملغاة", "Cancelled").ToString()),
+                            _ => ("bg-secondary", gift.Status)
+                        };
+                        <div class="card border-0 shadow-sm mb-3">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <strong class="text-break">@gift.ProductTitle</strong>
+                                    <span class="badge @badgeClass flex-shrink-0 ms-2">@statusText</span>
+                                </div>
+                                <p class="text-muted small mb-1">@gift.RecipientName</p>
+                                <p class="text-muted small mb-2">@gift.RecipientEmail</p>
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                    <span>@gift.Amount.ToEGP(0)</span>
+                                    <small class="text-muted">@gift.CreatedAt.ToString("dd/MM/yyyy")</small>
+                                    @if (gift.Status == "Paid" || gift.Status == "Delivered")
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                                data-bs-toggle="modal" data-bs-target="#codeModal"
+                                                data-code="@gift.GiftCode">
+                                            <i class="fas fa-copy"></i> @Html.T("الرمز", "Code")
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <!-- Desktop: table -->
+                <div class="d-none d-md-block">
+                    <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>@Html.T("المنتج", "Product")</th>
+                                    <th>@Html.T("المستلم", "Recipient")</th>
+                                    <th>@Html.T("القيمة", "Value")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th>@Html.T("التاريخ", "Date")</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var gift in Model.SentGifts)
+                                {
+                                    var (tBadgeClass, tStatusText) = gift.Status switch
+                                    {
+                                        "Pending" => ("bg-secondary", Html.T("في الانتظار", "Pending").ToString()),
+                                        "Paid" => ("bg-info", Html.T("تم الدفع", "Paid").ToString()),
+                                        "Delivered" => ("bg-primary", Html.T("تم الإرسال", "Delivered").ToString()),
+                                        "Redeemed" => ("bg-success", Html.T("تم الاسترداد", "Redeemed").ToString()),
+                                        "Expired" => ("bg-danger", Html.T("منتهية", "Expired").ToString()),
+                                        "Cancelled" => ("bg-dark", Html.T("ملغاة", "Cancelled").ToString()),
+                                        _ => ("bg-secondary", gift.Status)
+                                    };
+                                    <tr>
+                                        <td>
+                                            <strong>@gift.ProductTitle</strong>
+                                        </td>
+                                        <td>
+                                            <div>@gift.RecipientName</div>
+                                            <small class="text-muted">@gift.RecipientEmail</small>
+                                        </td>
+                                        <td>@gift.Amount.ToEGP(0)</td>
+                                        <td>
+                                            <span class="badge @tBadgeClass">@tStatusText</span>
+                                        </td>
+                                        <td>
+                                            <div>@gift.CreatedAt.ToString("dd/MM/yyyy")</div>
+                                            @if (gift.RedeemedAt.HasValue)
+                                            {
+                                                <small class="text-success">
+                                                    @Html.T("استُردت:", "Redeemed:") @gift.RedeemedAt.Value.ToString("dd/MM/yyyy")
+                                                </small>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (gift.Status == "Paid" || gift.Status == "Delivered")
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-primary"
+                                                        data-bs-toggle="modal" data-bs-target="#codeModal"
+                                                        data-code="@gift.GiftCode">
+                                                    <i class="fas fa-copy"></i> @Html.T("الرمز", "Code")
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="fas fa-gift fa-4x text-muted mb-3"></i>
+                    <h5>@Html.T("لم ترسل أي هدايا بعد", "You haven't sent any gifts yet")</h5>
+                    <p class="text-muted">@Html.T("أهدِ دورة أو كتاب لأحبائك!", "Gift a course or book to your loved ones!")</p>
+                    <a asp-area="Student" asp-controller="Courses" asp-action="Index" class="btn btn-primary">
+                        <i class="fas fa-search me-1"></i> @Html.T("تصفح الدورات", "Browse courses")
+                    </a>
+                </div>
+            }
+        </div>
+
+        <!-- Received Gifts -->
+        <div class="tab-pane fade" id="received" role="tabpanel">
+            @if (Model.ReceivedGifts.Any())
+            {
+                <div class="row g-4">
+                    @foreach (var gift in Model.ReceivedGifts)
+                    {
+                        <div class="col-md-6 col-lg-4">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-body text-center">
+                                    <div class="mb-3">
+                                        <i class="fas fa-gift fa-3x text-primary"></i>
+                                    </div>
+                                    <h5>@gift.ProductTitle</h5>
+                                    @if (!string.IsNullOrEmpty(gift.PersonalMessage))
+                                    {
+                                        <p class="text-muted fst-italic small mb-3">
+                                            "@gift.PersonalMessage"
+                                        </p>
+                                    }
+                                    @{
+                                        var (rBadgeClass, rStatusText) = gift.Status switch
+                                        {
+                                            "Delivered" => ("bg-primary", Html.T("جاهزة للاسترداد", "Ready to redeem").ToString()),
+                                            "Redeemed" => ("bg-success", Html.T("تم الاسترداد", "Redeemed").ToString()),
+                                            _ => ("bg-secondary", gift.Status)
+                                        };
+                                    }
+                                    <span class="badge @rBadgeClass">@rStatusText</span>
+                                    <div class="mt-3 small text-muted">
+                                        @gift.CreatedAt.ToString("dd/MM/yyyy")
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="fas fa-inbox fa-4x text-muted mb-3"></i>
+                    <h5>@Html.T("لم تستلم أي هدايا بعد", "You haven't received any gifts yet")</h5>
+                    <p class="text-muted">@Html.T("إذا كان لديك رمز هدية، يمكنك استرداده", "If you have a gift code, you can redeem it")</p>
+                    <a asp-action="Redeem" class="btn btn-primary">
+                        <i class="fas fa-ticket-alt me-1"></i> @Html.T("استرداد هدية", "Redeem gift")
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Gift Code Modal -->
+<div class="modal fade" id="codeModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Html.T("رمز الهدية", "Gift code")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <p class="text-muted mb-3">@Html.T("شارك هذا الرمز مع المستلم:", "Share this code with the recipient:")</p>
+                <div class="bg-light rounded p-3 mb-3">
+                    <h3 class="mb-0 gift-code" style="letter-spacing: 3px;"></h3>
+                </div>
+                <button type="button" class="btn btn-outline-primary btn-copy">
+                    <i class="fas fa-copy me-1"></i> @Html.T("نسخ الرمز", "Copy code")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    document.getElementById('codeModal').addEventListener('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        var code = button.getAttribute('data-code');
+        this.querySelector('.gift-code').textContent = code;
+        this.querySelector('.btn-copy').onclick = function() {
+            navigator.clipboard.writeText(code);
+            this.innerHTML = '<i class="fas fa-check me-1"></i> ' + (window.__T && window.__T.CopySuccess || 'Copied!');
+            setTimeout(() => {
+                this.innerHTML = '<i class="fas fa-copy me-1"></i> ' + (window.__T && window.__T.CopyCode || 'Copy code');
+            }, 2000);
+        };
+    });
+</script>
+}
+

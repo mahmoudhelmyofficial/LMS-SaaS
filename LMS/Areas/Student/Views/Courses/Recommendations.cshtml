@@ -1,0 +1,366 @@
+@model List<LMS.Services.Interfaces.CourseRecommendation>
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("توصيات الدورات", "Course Recommendations");
+    var trending = ViewBag.Trending as List<LMS.Services.Interfaces.CourseRecommendation>;
+    var learningPaths = ViewBag.LearningPaths as List<LMS.Services.Interfaces.LearningPathRecommendation>;
+    var wishlistCourseIds = ViewBag.WishlistCourseIds as List<int> ?? new List<int>();
+    
+    // UI settings
+    var recommendationsGridLimit = await PlatformSettings.GetIntSettingAsync("UI.Recommendations.GridLimit", 9);
+    var learningPathsLimit = await PlatformSettings.GetIntSettingAsync("UI.LearningPaths.Limit", 4);
+    var trendingLimit = await PlatformSettings.GetIntSettingAsync("UI.Trending.Limit", 4);
+    var skillsPreviewLimit = await PlatformSettings.GetIntSettingAsync("UI.SkillsPreview.Limit", 5);
+}
+
+@section Styles {
+<style>
+    .recommendation-card {
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    .recommendation-card:hover {
+        border-color: #667eea;
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
+    }
+    .match-score {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .course-thumbnail {
+        height: 180px;
+        background-size: cover;
+        background-position: center;
+        background-color: #f3f4f6;
+    }
+    /* Trending (Most Popular) section – mobile responsive */
+    .trending-course-card {
+        transition: all 0.3s ease;
+        min-height: 140px;
+    }
+    .trending-course-card:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.1); }
+    @@media (max-width: 575px) {
+        .trending-course-card {
+            min-height: 120px;
+            padding: 1rem !important;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            text-align: left;
+        }
+        .trending-course-card .trending-thumb-wrap {
+            width: 80px; height: 80px; flex-shrink: 0; border-radius: 8px; overflow: hidden;
+        }
+        .trending-course-card .trending-thumb-wrap img,
+        .trending-course-card .trending-thumb-wrap div { width: 100%; height: 100%; object-fit: cover; }
+        .trending-course-card h6 { font-size: 0.95rem; -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+    }
+</style>
+}
+
+<!-- CSRF Token for AJAX -->
+<form id="csrf-form" style="display:none;">
+    @Html.AntiForgeryToken()
+</form>
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Page Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div>
+            <h3 class="fw-bold mb-2">
+                <i class="feather-compass text-primary me-2"></i>
+                @Html.T("توصيات الدورات المخصصة لك", "Personalized Course Recommendations")
+            </h3>
+            <p class="text-muted mb-0">@Html.T("دورات مختارة بعناية بناءً على اهتماماتك وتقدمك", "Carefully selected courses based on your interests and progress")</p>
+        </div>
+    </div>
+</div>
+
+<!-- Why These Recommendations -->
+<div class="alert alert-info border-0 bg-soft-info mb-4">
+    <div class="d-flex">
+        <i class="feather-info fs-4 text-info me-3"></i>
+        <div>
+            <h6 class="fw-bold mb-2">@Html.T("لماذا هذه التوصيات؟", "Why these recommendations?")</h6>
+            <p class="mb-0">@Html.T("اخترنا هذه الدورات بناءً على:", "We selected these courses based on:")</p>
+            <ul class="mb-0 ps-3">
+                <li>@Html.T("دوراتك الحالية والمكتملة", "Your current and completed courses")</li>
+                <li>@Html.T("مجالات اهتمامك", "Your areas of interest")</li>
+                <li>@Html.T("مستوى خبرتك", "Your experience level")</li>
+                <li>@Html.T("أهدافك التعليمية", "Your learning goals")</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Recommendations Grid -->
+<div class="row g-4">
+    @if (Model != null && Model.Any())
+    {
+        @foreach (var course in Model.Take(recommendationsGridLimit))
+        {
+            var matchPercent = (int)(course.MatchScore * 100);
+            if (matchPercent > 100) matchPercent = 100;
+            if (matchPercent < 1) matchPercent = (int)(course.RecommendationScore);
+            var isInWishlist = wishlistCourseIds.Contains(course.CourseId);
+            
+            <div class="col-lg-4 col-md-6" data-course-id="@course.CourseId">
+                <div class="recommendation-card">
+                    <div class="position-relative">
+                        @if (!string.IsNullOrEmpty(course.ThumbnailUrl))
+                        {
+                            <div class="course-thumbnail" style="background-image: url('@course.ThumbnailUrl');"></div>
+                        }
+                        else
+                        {
+                            <div class="course-thumbnail d-flex align-items-center justify-content-center">
+                                <i class="feather-book-open fs-1 text-muted"></i>
+                            </div>
+                        }
+                        <div class="match-score">
+                            <i class="feather-zap me-1"></i>
+                            @matchPercent% @Html.T("مطابقة", "match")
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <div class="mb-2">
+                            <span class="badge bg-soft-primary text-primary">@course.CategoryName</span>
+                            <span class="badge bg-soft-warning text-warning ms-2">@course.Level</span>
+                        </div>
+                        <h5 class="fw-bold mb-2">@course.Title</h5>
+                        <p class="text-muted small mb-3">
+                            <i class="feather-user me-1"></i>
+                            @course.InstructorName
+                        </p>
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="feather-star text-warning"></i>
+                                <strong>@course.AverageRating.ToString("F1")</strong>
+                                <small class="text-muted">(@course.TotalReviews)</small>
+                            </div>
+                            <div>
+                                <i class="feather-users text-muted me-1"></i>
+                                <small>@course.TotalStudents @Html.T("طالب", "students")</small>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(course.Reason))
+                        {
+                            <div class="alert alert-success border-0 bg-soft-success p-2 mb-3">
+                                <small class="d-block mb-1"><strong>@Html.T("لماذا نوصي بها:", "Why we recommend it:")</strong></small>
+                                <small>@course.Reason</small>
+                            </div>
+                        }
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            @{
+                                var recFinalPrice = course.DiscountPrice ?? course.Price;
+                                var recIsFree = recFinalPrice == 0;
+                            }
+                            @if (recIsFree)
+                            {
+                                <span class="fw-bold text-success">@Html.T("مجاني", "Free")</span>
+                            }
+                            else if (course.DiscountPrice.HasValue && course.DiscountPrice < course.Price)
+                            {
+                                <div>
+                                    <span class="text-decoration-line-through text-muted me-2">@course.Price.ToEGP()</span>
+                                    <span class="fw-bold text-success">@course.DiscountPrice.Value.ToEGP()</span>
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="fw-bold">@course.Price.ToEGP()</span>
+                            }
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a asp-controller="Courses" asp-action="Preview" asp-route-id="@course.CourseId" class="btn btn-outline-primary @(recIsFree ? "" : "flex-grow-1")">
+                                <i class="feather-eye me-1"></i>
+                                @Html.T("عرض التفاصيل", "View Details")
+                            </a>
+                            @if (recIsFree)
+                            {
+                                <a asp-controller="Checkout" asp-action="FreeEnroll" asp-route-courseId="@course.CourseId" class="btn btn-success flex-grow-1">
+                                    <i class="feather-play-circle me-1"></i>
+                                    @Html.T("سجل الآن", "Enroll Now")
+                                </a>
+                            }
+                            <button type="button" class="btn wishlist-btn @(isInWishlist ? "btn-danger" : "btn-outline-danger")" 
+                                    data-course-id="@course.CourseId" 
+                                    data-in-wishlist="@(isInWishlist ? "true" : "false")"
+                                    onclick="toggleWishlist(@course.CourseId, this)"
+                                    title="@(isInWishlist ? Html.T("إزالة من المفضلة", "Remove from Wishlist") : Html.T("إضافة إلى المفضلة", "Add to Wishlist"))">
+                                <i class="feather-@(isInWishlist ? "heart" : "heart")"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="col-12">
+            <div class="text-center py-5">
+                <i class="feather-compass fs-1 text-muted mb-3 d-block"></i>
+                <h5 class="text-muted">@Html.T("لا توجد توصيات حالياً", "No recommendations available")</h5>
+                <p class="text-muted">@Html.T("أكمل بعض الدورات أو أضف اهتماماتك لنتمكن من تقديم توصيات مخصصة لك", "Complete some courses or add your interests so we can provide personalized recommendations")</p>
+                <a asp-action="Browse" class="btn btn-primary">
+                    <i class="feather-search me-2"></i>
+                    @Html.T("تصفح الدورات", "Browse Courses")
+                </a>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Learning Paths -->
+@if (learningPaths != null && learningPaths.Any())
+{
+    <div class="card stretch stretch-full mt-4">
+        <div class="card-header">
+            <h5 class="fw-bold mb-0">
+                <i class="feather-map text-info me-2"></i>
+                @Html.T("مسارات تعليمية مقترحة", "Suggested Learning Paths")
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-4">
+                @foreach (var path in learningPaths.Take(learningPathsLimit))
+                {
+                    <div class="col-md-6">
+                        <div class="border rounded p-3">
+                            <h6 class="fw-bold mb-2">@path.Title</h6>
+                            <p class="text-muted small mb-3">@path.CoursesCount @Html.T("دورات", "courses") • @path.TotalHours @Html.T("ساعة", "hours")</p>
+                            @if (path.Skills != null && path.Skills.Any())
+                            {
+                                <div class="d-flex gap-2 flex-wrap mb-3">
+                                    @foreach (var skill in path.Skills.Take(skillsPreviewLimit))
+                                    {
+                                        <span class="badge bg-soft-primary text-primary">@skill</span>
+                                    }
+                                </div>
+                            }
+                            <a asp-controller="LearningPaths" asp-action="Details" asp-route-id="@path.LearningPathId" class="btn btn-sm btn-outline-primary w-100">
+                                @Html.T("استكشف المسار", "Explore Path")
+                            </a>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Trending Courses -->
+@if (trending != null && trending.Any())
+{
+    <div class="card stretch stretch-full mt-4">
+        <div class="card-header">
+            <h5 class="fw-bold mb-0">
+                <i class="feather-trending-up text-danger me-2"></i>
+                @Html.T("الدورات الأكثر رواجاً", "Trending Courses")
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-4">
+                @foreach (var course in trending.Take(trendingLimit))
+                {
+                    var trendFinalPrice = course.DiscountPrice ?? course.Price;
+                    var trendIsFree = trendFinalPrice == 0;
+                    <div class="col-md-3 col-sm-6 col-12">
+                        <div class="text-center p-3 border rounded trending-course-card">
+                            <a asp-controller="Courses" asp-action="Preview" asp-route-id="@course.CourseId" class="text-decoration-none d-block">
+                                <div class="trending-thumb-wrap d-inline-block mb-2 mb-sm-0 mx-auto" style="height: 100px; width: 100%; max-width: 100%;">
+                                    @if (!string.IsNullOrEmpty(course.ThumbnailUrl))
+                                    {
+                                        <img src="@course.ThumbnailUrl" alt="@course.Title" class="img-fluid rounded" style="height: 100px; object-fit: cover; width: 100%;" />
+                                    }
+                                    else
+                                    {
+                                        <div class="bg-soft-primary rounded d-flex align-items-center justify-content-center" style="height: 100px;">
+                                            <i class="feather-book-open fs-2 text-primary"></i>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="trending-course-body min-w-0">
+                                    <h6 class="fw-bold mb-1 text-truncate">@course.Title</h6>
+                                    <small class="text-muted">@course.TotalStudents @Html.T("طالب", "students")</small>
+                                </div>
+                            </a>
+                            @if (trendIsFree)
+                            {
+                                <a asp-controller="Checkout" asp-action="FreeEnroll" asp-route-courseId="@course.CourseId" class="btn btn-sm btn-success mt-2 w-100">
+                                    <i class="feather-play-circle me-1"></i>@Html.T("سجل الآن", "Enroll Now")
+                                </a>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    function getCsrfToken() {
+        return document.querySelector('#csrf-form input[name="__RequestVerificationToken"]')?.value || 
+               document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+    }
+    
+    function toggleWishlist(courseId, btn) {
+        var token = getCsrfToken();
+        if (!token) {
+            (typeof toastr !== 'undefined' ? toastr.error : alert)('@Html.T("جلسة غير صالحة. يرجى تحديث الصفحة والمحاولة مرة أخرى.", "Invalid session. Please refresh the page and try again.")');
+            return;
+        }
+        var isInWishlist = btn.getAttribute('data-in-wishlist') === 'true';
+        var url = isInWishlist 
+            ? '@Url.Action("RemoveFromWishlist", "Courses")' 
+            : '@Url.Action("AddToWishlist", "Courses")';
+        
+        btn.disabled = true;
+        
+        $.ajax({
+            url: url,
+            type: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': token
+            },
+            data: { 
+                courseId: courseId,
+                __RequestVerificationToken: token
+            },
+            success: function(response) {
+                if (response && response.success) {
+                    btn.setAttribute('data-in-wishlist', isInWishlist ? 'false' : 'true');
+                    btn.classList.toggle('btn-danger', !isInWishlist);
+                    btn.classList.toggle('btn-outline-danger', isInWishlist);
+                    btn.title = isInWishlist ? '@Html.T("إضافة إلى المفضلة", "Add to Wishlist")' : '@Html.T("إزالة من المفضلة", "Remove from Wishlist")';
+                    (typeof toastr !== 'undefined' ? toastr.success : alert)(response.message || (isInWishlist ? '@Html.T("تمت الإزالة من المفضلة", "Removed from wishlist")' : '@Html.T("تمت إضافة الدورة للمفضلة", "Course added to wishlist")'));
+                } else {
+                    (typeof toastr !== 'undefined' ? toastr.info : alert)((response && response.message) || '');
+                }
+                btn.disabled = false;
+            },
+            error: function() {
+                (typeof toastr !== 'undefined' ? toastr.error : alert)('@Html.T("حدث خطأ. يرجى المحاولة مرة أخرى.", "An error occurred. Please try again.")');
+                btn.disabled = false;
+            }
+        });
+    }
+</script>
+}

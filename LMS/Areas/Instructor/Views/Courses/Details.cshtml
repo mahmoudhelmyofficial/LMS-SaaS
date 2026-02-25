@@ -1,0 +1,482 @@
+@model LMS.Domain.Entities.Courses.Course
+
+@{
+    ViewData["Title"] = Model.Title;
+    ViewData["Subtitle"] = Html.T("تفاصيل الدورة", "Course details");
+    var editUrl = Url.Action("CreateWizard", new { id = Model.Id, step = 1 });
+    var modulesUrl = Url.Action("Index", "Modules", new { courseId = Model.Id });
+    var studentsUrl = Url.Action("Index", "Students", new { courseId = Model.Id });
+    var analyticsUrl = Url.Action("CourseDetails", "Analytics", new { courseId = Model.Id });
+    var reviewsUrl = Url.Action("Index", "Reviews", new { courseId = Model.Id });
+    var duplicateUrl = Url.Action("Duplicate", new { id = Model.Id });
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + editUrl + "' class='btn btn-primary'><i class='feather-edit me-2'></i>" + Html.T("تعديل الدورة", "Edit course") + "</a><a href='" + modulesUrl + "' class='btn btn-light'><i class='feather-layers me-2'></i>" + Html.T("إدارة المحتوى", "Manage content") + "</a><div class='dropdown'><button class='btn btn-light dropdown-toggle' type='button' data-bs-toggle='dropdown'><i class='feather-more-vertical'></i></button><ul class='dropdown-menu dropdown-menu-end'><li><a class='dropdown-item' href='" + studentsUrl + "'><i class='feather-users me-2'></i> " + Html.T("الطلاب", "Students") + "</a></li><li><a class='dropdown-item' href='" + analyticsUrl + "'><i class='feather-bar-chart-2 me-2'></i> " + Html.T("التحليلات", "Analytics") + "</a></li><li><a class='dropdown-item' href='" + reviewsUrl + "'><i class='feather-star me-2'></i> " + Html.T("المراجعات", "Reviews") + "</a></li><li><hr class='dropdown-divider'></li><li><a class='dropdown-item' href='" + duplicateUrl + "'><i class='feather-copy me-2'></i> " + Html.T("نسخ الدورة", "Duplicate course") + "</a></li></ul></div>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Quick Stats -->
+    @{
+        var enrollmentsThisMonth = ViewBag.EnrollmentsThisMonth as int? ?? 0;
+        var revenueGrowth = ViewBag.RevenueGrowth as decimal? ?? 0;
+        var revenueChangePrefix = revenueGrowth >= 0 ? "+" : "";
+    }
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("الطلاب المسجلين", "Enrolled Students") },
+                { "Value", ViewBag.EnrollmentCount ?? 0 },
+                { "Icon", "users" },
+                { "Color", "primary" },
+                { "Change", enrollmentsThisMonth > 0 ? $"+{enrollmentsThisMonth}" : "" },
+                { "ChangeText", enrollmentsThisMonth > 0 ? Html.T("هذا الشهر", "this month") : "" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("التقييم", "Rating") },
+                { "Value", Model.AverageRating.ToString("F1") },
+                { "Icon", "star" },
+                { "Color", "warning" },
+                { "ChangeText", Html.T("من", "from") + " " + Model.TotalReviews + " " + Html.T("تقييم", "reviews") }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("معدل الإكمال", "Completion Rate") },
+                { "Value", $"{ViewBag.CompletionRate ?? 0}%" },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الإيرادات", "Total Revenue") },
+                { "Value", ((decimal)(ViewBag.TotalRevenue ?? 0)).ToEGP() },
+                { "Icon", "dollar-sign" },
+                { "Color", "info" },
+                { "Change", revenueGrowth != 0 ? $"{revenueChangePrefix}{revenueGrowth:F1}%" : "" },
+                { "ChangeText", revenueGrowth != 0 ? Html.T("هذا الشهر", "this month") : "" }
+            })
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Column -->
+        <div class="col-xxl-8 col-xl-7">
+            <!-- Course Preview -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-body p-0">
+                    @if (!string.IsNullOrEmpty(Model.ThumbnailUrl))
+                    {
+                        <img src="@Model.ThumbnailUrl" alt="@Model.Title" class="img-fluid w-100" style="max-height: 400px; object-fit: cover;">
+                    }
+                    else
+                    {
+                        <div class="bg-soft-primary d-flex align-items-center justify-content-center" style="height: 300px;">
+                            <i class="feather-book" style="font-size: 80px; opacity: 0.3;"></i>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header p-0">
+                    <ul class="nav nav-tabs flex-wrap w-100 text-center customers-nav-tabs" id="myTab" role="tablist">
+                        <li class="nav-item flex-fill border-top" role="presentation">
+                            <a class="nav-link active" data-bs-toggle="tab" href="#overviewTab" role="tab">
+                                <i class="feather-info me-2"></i>
+                                @Html.T("نظرة عامة", "Overview")
+                            </a>
+                        </li>
+                        <li class="nav-item flex-fill border-top" role="presentation">
+                            <a class="nav-link" data-bs-toggle="tab" href="#contentTab" role="tab">
+                                <i class="feather-book-open me-2"></i>
+                                @Html.T("المحتوى", "Content")
+                            </a>
+                        </li>
+                        <li class="nav-item flex-fill border-top" role="presentation">
+                            <a class="nav-link" data-bs-toggle="tab" href="#studentsTab" role="tab">
+                                <i class="feather-users me-2"></i>
+                                @Html.T("الطلاب", "Students")
+                            </a>
+                        </li>
+                        <li class="nav-item flex-fill border-top" role="presentation">
+                            <a class="nav-link" data-bs-toggle="tab" href="#reviewsTab" role="tab">
+                                <i class="feather-star me-2"></i>
+                                @Html.T("المراجعات", "Reviews")
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="tab-content p-4">
+                    <!-- Overview Tab -->
+                    <div class="tab-pane fade show active" id="overviewTab" role="tabpanel">
+                        <h5 class="fw-bold mb-3">@Html.T("وصف الدورة", "Course Description")</h5>
+                        <div class="fs-14 mb-4">
+                            @Html.Raw(Model.Description)
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(Model.LearningObjectives))
+                        {
+                            <h5 class="fw-bold mb-3 mt-4">@Html.T("ما ستتعلمه", "What you'll learn")</h5>
+                            <div class="row g-3">
+                                @foreach (var objective in Model.LearningObjectives.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                                {
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-start gap-2">
+                                            <i class="feather-check-circle text-success mt-1"></i>
+                                            <span>@objective</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(Model.Prerequisites))
+                        {
+                            <h5 class="fw-bold mb-3 mt-4">@Html.T("المتطلبات الأساسية", "Prerequisites")</h5>
+                            <div class="row g-3">
+                                @foreach (var req in Model.Prerequisites.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                                {
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-start gap-2">
+                                            <i class="feather-arrow-left text-muted mt-1"></i>
+                                            <span>@req</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Content Tab -->
+                    <div class="tab-pane fade" id="contentTab" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h5 class="fw-bold mb-0">@Html.T("محتوى الدورة", "Course Content")</h5>
+                            <a href="@Url.Action("Index", "Modules", new { courseId = Model.Id })" class="btn btn-sm btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إضافة محتوى", "Add content")
+                            </a>
+                        </div>
+
+                        @if (ViewBag.Modules != null && ViewBag.Modules.Count > 0)
+                        {
+                            <div class="accordion" id="courseContent">
+                                @foreach (var module in ViewBag.Modules)
+                                {
+                                    <div class="accordion-item border mb-3">
+                                        <h2 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#module-@module.Id">
+                                                <div class="d-flex align-items-center justify-content-between w-100 me-3">
+                                                    <span class="fw-bold">@module.Title</span>
+                                                    <span class="badge bg-soft-primary text-primary">@module.Lessons?.Count @Html.T("دروس", "lessons")</span>
+                                                </div>
+                                            </button>
+                                        </h2>
+                                        <div id="module-@module.Id" class="accordion-collapse collapse" data-bs-parent="#courseContent">
+                                            <div class="accordion-body">
+                                                @if (module.Lessons != null && module.Lessons.Count > 0)
+                                                {
+                                                    <div class="list-group list-group-flush">
+                                                        @foreach (var lesson in module.Lessons)
+                                                        {
+                                                            <div class="list-group-item d-flex align-items-center justify-content-between">
+                                                                <div class="d-flex align-items-center gap-3">
+                                                                    <i class="feather-@(lesson.Type == LMS.Domain.Enums.LessonType.Video ? "video" : "file-text") text-muted"></i>
+                                                                    <div>
+                                                                        <div class="fw-medium">@lesson.Title</div>
+                                                                        <div class="fs-11 text-muted">@lesson.DurationMinutes @Html.T("دقيقة", "min")</div>
+                                                                    </div>
+                                                                </div>
+                                                                <a href="@Url.Action("Edit", "Lessons", new { id = lesson.Id })" class="btn btn-sm btn-light">
+                                                                    <i class="feather-edit"></i>
+                                                                </a>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <p class="text-muted mb-0">@Html.T("لا توجد دروس في هذا القسم", "No lessons in this section")</p>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-3 mx-auto">
+                                    <i class="feather-book-open"></i>
+                                </div>
+                                <h6 class="fw-bold mb-2">@Html.T("لا يوجد محتوى بعد", "No content yet")</h6>
+                                <p class="text-muted mb-4">@Html.T("ابدأ بإضافة أقسام ودروس لدورتك", "Start by adding sections and lessons to your course")</p>
+                                <a href="@Url.Action("Create", "Modules", new { courseId = Model.Id })" class="btn btn-primary">
+                                    <i class="feather-plus me-2"></i>
+                                    @Html.T("إضافة قسم جديد", "Add new section")
+                                </a>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Students Tab -->
+                    <div class="tab-pane fade" id="studentsTab" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h5 class="fw-bold mb-0">@Html.T("الطلاب المسجلين", "Enrolled students")</h5>
+                            <a href="@Url.Action("Index", "Students", new { courseId = Model.Id })" class="btn btn-sm btn-light">
+                                @Html.T("عرض الكل", "View all")
+                            </a>
+                        </div>
+
+                        @if (ViewBag.RecentStudents != null && ViewBag.RecentStudents.Count > 0)
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var enrollment in ViewBag.RecentStudents)
+                                {
+                                    <div class="list-group-item d-flex align-items-center justify-content-between">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                                @(enrollment.Student?.FullName?.Length > 0 ? enrollment.Student.FullName.Substring(0, 1) : "?")
+                                            </div>
+                                            <div>
+                                                <div class="fw-medium">@(enrollment.Student?.FullName ?? "—")</div>
+                                                <div class="fs-11 text-muted">@Html.T("انضم في", "Joined on") @enrollment.EnrolledAt.ToString("dd/MM/yyyy")</div>
+                                            </div>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="progress" style="width: 100px; height: 6px;">
+                                                <div class="progress-bar bg-success" style="width: @enrollment.ProgressPercentage%"></div>
+                                            </div>
+                                            <div class="fs-11 text-muted mt-1">@enrollment.ProgressPercentage% @Html.T("مكتمل", "complete")</div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-3 mx-auto">
+                                    <i class="feather-users"></i>
+                                </div>
+                                <h6 class="fw-bold mb-2">@Html.T("لا يوجد طلاب بعد", "No students yet")</h6>
+                                <p class="text-muted mb-0">@Html.T("لم يسجل أي طالب في هذه الدورة حتى الآن", "No student has enrolled in this course yet")</p>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Reviews Tab -->
+                    <div class="tab-pane fade" id="reviewsTab" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h5 class="fw-bold mb-0">@Html.T("التقييمات والمراجعات", "Ratings and reviews")</h5>
+                            <a href="@Url.Action("Index", "Reviews", new { courseId = Model.Id })" class="btn btn-sm btn-light">
+                                @Html.T("عرض الكل", "View all")
+                            </a>
+                        </div>
+
+                        @if (ViewBag.RecentReviews != null && ViewBag.RecentReviews.Count > 0)
+                        {
+                            @foreach (var review in ViewBag.RecentReviews)
+                            {
+                                <div class="card mb-3">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-start justify-content-between mb-3">
+                                            <div class="d-flex align-items-center gap-3">
+                                                <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                                    @(review.Student?.FullName?.Length > 0 ? review.Student.FullName.Substring(0, 1) : "?")
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold">@(review.Student?.FullName ?? "—")</div>
+                                                    <div class="fs-11 text-muted">@review.CreatedAt.ToString("dd/MM/yyyy")</div>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-1">
+                                                @for (int i = 1; i <= 5; i++)
+                                                {
+                                                    <i class="feather-star @(i <= review.Rating ? "text-warning fill-warning" : "text-muted")"></i>
+                                                }
+                                            </div>
+                                        </div>
+                                        <p class="mb-0">@review.Comment</p>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <div class="avatar-text avatar-xl bg-soft-warning text-warning mb-3 mx-auto">
+                                    <i class="feather-star"></i>
+                                </div>
+                                <h6 class="fw-bold mb-2">@Html.T("لا توجد تقييمات بعد", "No reviews yet")</h6>
+                                <p class="text-muted mb-0">@Html.T("لم يقم أي طالب بتقييم هذه الدورة حتى الآن", "No student has reviewed this course yet")</p>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="col-xxl-4 col-xl-5">
+            <!-- Course Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات الدورة", "Course info")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        @switch (Model.Status)
+                        {
+                            case LMS.Domain.Enums.CourseStatus.Published:
+                                <span class="badge bg-soft-success text-success fs-13">منشورة</span>
+                                break;
+                            case LMS.Domain.Enums.CourseStatus.Draft:
+                                <span class="badge bg-soft-warning text-warning fs-13">مسودة</span>
+                                break;
+                            case LMS.Domain.Enums.CourseStatus.PendingReview:
+                                <span class="badge bg-soft-info text-info fs-13">قيد المراجعة</span>
+                                break;
+                            default:
+                                <span class="badge bg-soft-secondary text-secondary fs-13">@Model.Status</span>
+                                break;
+                        }
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">التصنيف</span>
+                        <span class="fw-medium">@Model.Category?.Name</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">المستوى</span>
+                        <span class="fw-medium">@Model.Level</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">اللغة</span>
+                        <span class="fw-medium">@Model.Language</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">المدة</span>
+                        <span class="fw-medium">@Model.DurationHours ساعة</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">السعر</span>
+                        <span class="fw-bold text-success">@Model.Price.ToEGP()</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">تاريخ الإنشاء</span>
+                        <span class="fw-medium">@Model.CreatedAt.ToString("dd/MM/yyyy")</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-muted">آخر تحديث</span>
+                        <span class="fw-medium">@(Model.UpdatedAt?.ToString("dd/MM/yyyy") ?? "-")</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إجراءات سريعة", "Quick actions")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="@Url.Action("Index", "Modules", new { courseId = Model.Id })" class="btn btn-light-brand">
+                            <i class="feather-layers me-2"></i>
+                            @Html.T("إدارة الوحدات والدروس", "Manage modules and lessons")
+                        </a>
+                        <a href="@Url.Action("Create", "Modules", new { courseId = Model.Id })" class="btn btn-light-brand">
+                            <i class="feather-plus me-2"></i>
+                            إضافة وحدة جديدة
+                        </a>
+                        <a href="@Url.Action("Create", "Announcements", new { courseId = Model.Id })" class="btn btn-light-brand">
+                            <i class="feather-megaphone me-2"></i>
+                            نشر إعلان
+                        </a>
+                        <a href="@Url.Action("Index", "Students", new { courseId = Model.Id })" class="btn btn-light-brand">
+                            <i class="feather-users me-2"></i>
+                            عرض الطلاب
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Chart -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أداء الدورة", "Course performance")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="coursePerformanceChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Generate last 6 months labels dynamically
+        function getLast6MonthsLabels() {
+            const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+            const labels = [];
+            const currentMonth = new Date().getMonth();
+            for (let i = 5; i >= 0; i--) {
+                let monthIndex = (currentMonth - i + 12) % 12;
+                labels.push(months[monthIndex]);
+            }
+            return labels;
+        }
+        
+        // Course Performance Chart
+        const ctx = document.getElementById('coursePerformanceChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: @(ViewBag.ChartLabels != null ? Html.Raw((string)ViewBag.ChartLabels) : Html.Raw("getLast6MonthsLabels()")),
+                datasets: [{
+                    label: 'التسجيلات',
+                    data: @Html.Raw((string)(ViewBag.EnrollmentData ?? "[]")),
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+}
+

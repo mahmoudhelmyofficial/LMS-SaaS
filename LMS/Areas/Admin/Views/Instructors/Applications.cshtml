@@ -1,0 +1,377 @@
+@using LMS.Services.Interfaces
+@model IEnumerable<LMS.Domain.Entities.Users.InstructorApplication>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("طلبات المدرسين", "Instructor Applications");
+    
+    // Load commission settings
+    var commissionDefault = await PlatformSettings.GetIntSettingAsync("Instructor.Commission.DefaultRate", 70);
+    var commissionMin = await PlatformSettings.GetIntSettingAsync("Instructor.Commission.MinRate", 50);
+    var commissionMax = await PlatformSettings.GetIntSettingAsync("Instructor.Commission.MaxRate", 95);
+    var commissionPresetsStr = await PlatformSettings.GetSettingAsync("Instructor.Commission.Presets", "60,70,75,80");
+    var commissionPresets = commissionPresetsStr.Split(',').Select(p => int.TryParse(p.Trim(), out var v) ? v : 0).Where(v => v > 0).ToList();
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("إدارة المستخدمين", "User Management"), null),
+        (Html.T("طلبات المدرسين", "Instructor Applications"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-clock"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("طلبات معلقة", "Pending")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(a => a.Status == LMS.Domain.Enums.InstructorApplicationStatus.Pending).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("طلبات مقبولة", "Approved")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(a => a.Status == LMS.Domain.Enums.InstructorApplicationStatus.Approved).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                            <i class="feather-x-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("طلبات مرفوضة", "Rejected")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(a => a.Status == LMS.Domain.Enums.InstructorApplicationStatus.Rejected).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-inbox"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي الطلبات", "Total Applications")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section FilterDropdown {
+    <a href="javascript:void(0);" class="dropdown-item filter-all">
+        <i class="feather-eye me-3"></i>
+        <span>@Html.T("الكل", "All")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-pending">
+        <i class="feather-clock me-3"></i>
+        <span>@Html.T("معلقة", "Pending")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-approved">
+        <i class="feather-check-circle me-3"></i>
+        <span>@Html.T("مقبولة", "Approved")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-rejected">
+        <i class="feather-x-circle me-3"></i>
+        <span>@Html.T("مرفوضة", "Rejected")</span>
+    </a>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="applicationsTable">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("المتقدم", "Applicant")</th>
+                                    <th>@Html.T("البريد", "Email")</th>
+                                    <th>@Html.T("الخبرة", "Experience")</th>
+                                    <th>@Html.T("التخصص", "Specialization")</th>
+                                    <th>@Html.T("تاريخ التقديم", "Applied On")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var application in Model)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-3">
+                                                <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                                    @application.FirstName?.Substring(0, 1)@application.LastName?.Substring(0, 1)
+                                                </div>
+                                                <div>
+                                                    <span class="d-block fw-bold">@application.FirstName @application.LastName</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>@application.Email</td>
+                                        <td>@application.YearsOfExperience @Html.T("سنة", "yr")</td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(application.Specialization))
+                                            {
+                                                <span class="badge bg-soft-info text-info">@application.Specialization</span>
+                                            }
+                                        </td>
+                                        <td>@application.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                        <td>
+                                            @switch (application.Status)
+                                            {
+                                                case LMS.Domain.Enums.InstructorApplicationStatus.Pending:
+                                                    <span class="badge bg-soft-warning text-warning">@Html.T("معلق", "Pending")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.InstructorApplicationStatus.Approved:
+                                                    <span class="badge bg-soft-success text-success">@Html.T("مقبول", "Approved")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.InstructorApplicationStatus.Rejected:
+                                                    <span class="badge bg-soft-danger text-danger">@Html.T("مرفوض", "Rejected")</span>
+                                                    break;
+                                                case LMS.Domain.Enums.InstructorApplicationStatus.Cancelled:
+                                                    <span class="badge bg-soft-secondary text-secondary">@Html.T("ملغي", "Cancelled")</span>
+                                                    break;
+                                                default:
+                                                    <span class="badge bg-soft-secondary">@application.Status</span>
+                                                    break;
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="@Url.Action("ApplicationDetails", "Instructors", new { id = application.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@(Html.T("عرض التفاصيل", "View Details"))">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                @if (application.Status == LMS.Domain.Enums.InstructorApplicationStatus.Pending)
+                                                {
+                                                    <button type="button" class="avatar-text avatar-md text-success border-0 bg-transparent p-0" data-bs-toggle="tooltip" title="@(Html.T("قبول", "Approve"))" onclick="showApproveModal(@application.Id, '@application.FirstName @application.LastName')">
+                                                        <i class="feather-check-circle"></i>
+                                                    </button>
+                                                    <button type="button" class="avatar-text avatar-md text-danger border-0 bg-transparent p-0" data-bs-toggle="tooltip" title="@(Html.T("رفض", "Reject"))" onclick="showRejectModal(@application.Id)">
+                                                        <i class="feather-x-circle"></i>
+                                                    </button>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Approve Modal -->
+<div class="modal fade" id="approveModal" tabindex="-1" data-bs-backdrop="false" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-soft-success">
+                <h5 class="modal-title text-success">
+                    <i class="feather-check-circle me-2"></i>
+                    @Html.T("قبول طلب الانضمام", "Approve Application")
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@(Html.T("إغلاق", "Close"))"></button>
+            </div>
+            <form asp-action="ApproveApplication" asp-controller="Instructors" method="post" id="approveForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" id="approveApplicationId" />
+                <div class="modal-body">
+                    <div class="text-center mb-4">
+                        <div class="avatar-text avatar-xl rounded-circle bg-soft-success text-success mx-auto mb-3">
+                            <i class="feather-user-check fs-3"></i>
+                        </div>
+                        <h6 class="mb-1">@Html.T("قبول المدرس", "Approve Instructor")</h6>
+                        <p class="text-muted mb-0" id="approveApplicantName"></p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">@Html.T("نسبة العمولة للمدرس", "Instructor Commission Rate") <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="number" name="customCommissionRate" id="commissionRateInput" class="form-control" 
+                                   value="@commissionDefault" min="@commissionMin" max="@commissionMax" step="0.01" required />
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <small class="text-muted">
+                            @Html.T("النسبة الافتراضية هي", "Default rate is") @commissionDefault%. @Html.T("يمكنك تعديلها حسب الاتفاق مع المدرس (من", "You can change it per agreement (from") @commissionMin% @Html.T("إلى", "to") @commissionMax%).
+                        </small>
+                    </div>
+                    
+                    <div class="row g-3 mb-3">
+                        @foreach (var preset in commissionPresets)
+                        {
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-secondary w-100 commission-preset" data-value="@preset">@preset%</button>
+                            </div>
+                        }
+                    </div>
+                    
+                    <div class="alert alert-info mb-0">
+                        <i class="feather-info me-2"></i>
+                        <strong>@Html.T("ملاحظة:", "Note:")</strong> @Html.T("نسبة العمولة تمثل حصة المدرس من أرباح الدورات. المنصة تحصل على النسبة المتبقية.", "Commission rate is the instructor's share of course revenue. The platform gets the remainder.")
+                        <br/>
+                        <small>@Html.T("مثال: إذا كانت نسبة المدرس 70%، فالمنصة تحصل على 30% من كل عملية بيع.", "Example: If instructor rate is 70%, platform gets 30% of each sale.")</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="feather-check me-1"></i>
+                        @Html.T("قبول الطلب", "Approve Application")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" data-bs-backdrop="false" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Html.T("رفض طلب الانضمام", "Reject Application")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@(Html.T("إغلاق", "Close"))"></button>
+            </div>
+            <form asp-action="RejectApplication" asp-controller="Instructors" method="post" id="rejectForm">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" id="rejectApplicationId" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("سبب الرفض", "Rejection Reason") <span class="text-danger">*</span></label>
+                        <textarea name="reason" class="form-control" rows="4" required placeholder="@(Html.T("أدخل سبب رفض الطلب...", "Enter rejection reason..."))"></textarea>
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="feather-alert-triangle me-2"></i>
+                        @Html.T("سيتم إرسال إشعار بالرفض للمتقدم عبر البريد الإلكتروني.", "The applicant will receive a rejection notification by email.")
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-danger">@Html.T("رفض الطلب", "Reject Application")</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            var table = $('#applicationsTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[4, "desc"]],
+                "pageLength": 25
+            });
+
+            $('.filter-all').on('click', function() {
+                table.column(5).search('').draw();
+            });
+
+            $('.filter-pending').on('click', function() {
+                table.column(5).search('@(Html.T("معلق", "Pending"))').draw();
+            });
+
+            $('.filter-approved').on('click', function() {
+                table.column(5).search('@(Html.T("مقبول", "Approved"))').draw();
+            });
+
+            $('.filter-rejected').on('click', function() {
+                table.column(5).search('@(Html.T("مرفوض", "Rejected"))').draw();
+            });
+
+            $('[data-bs-toggle="tooltip"]').tooltip();
+            
+            // Commission preset buttons
+            $('.commission-preset').on('click', function() {
+                var value = $(this).data('value');
+                $('#commissionRateInput').val(value);
+                // Highlight selected preset
+                $('.commission-preset').removeClass('btn-primary').addClass('btn-outline-secondary');
+                $(this).removeClass('btn-outline-secondary').addClass('btn-primary');
+            });
+            
+            // Reset preset highlights when input changes manually
+            $('#commissionRateInput').on('input', function() {
+                var currentValue = parseFloat($(this).val());
+                $('.commission-preset').each(function() {
+                    var presetValue = parseFloat($(this).data('value'));
+                    if (currentValue === presetValue) {
+                        $(this).removeClass('btn-outline-secondary').addClass('btn-primary');
+                    } else {
+                        $(this).removeClass('btn-primary').addClass('btn-outline-secondary');
+                    }
+                });
+            });
+            
+            // Highlight default preset
+            $('.commission-preset[data-value="@commissionDefault"]').removeClass('btn-outline-secondary').addClass('btn-primary');
+        });
+
+        function showApproveModal(applicationId, applicantName) {
+            document.getElementById('approveApplicationId').value = applicationId;
+            document.getElementById('approveApplicantName').textContent = applicantName;
+            // Reset to default commission rate
+            document.getElementById('commissionRateInput').value = @commissionDefault;
+            // Reset preset button highlights
+            $('.commission-preset').removeClass('btn-primary').addClass('btn-outline-secondary');
+            $('.commission-preset[data-value="@commissionDefault"]').removeClass('btn-outline-secondary').addClass('btn-primary');
+            
+            var modal = new bootstrap.Modal(document.getElementById('approveModal'));
+            modal.show();
+        }
+
+        function showRejectModal(applicationId) {
+            document.getElementById('rejectApplicationId').value = applicationId;
+            var modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+            modal.show();
+        }
+    </script>
+}
+

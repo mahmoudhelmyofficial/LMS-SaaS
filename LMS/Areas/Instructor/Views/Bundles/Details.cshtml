@@ -1,0 +1,374 @@
+@model LMS.Domain.Entities.Marketing.CourseBundle
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Model.Name;
+    ViewData["Subtitle"] = Html.T("تفاصيل الباقة", "Bundle details");
+    
+    // Load platform settings
+    var thresholdSalesWarning = await PlatformSettings.GetIntSettingAsync("Threshold.Sales.Warning", 80);
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="fs-12 fw-medium text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+        <ul class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Dashboard")">@Html.T("الرئيسية", "Home")</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index")">@Html.T("الباقات", "Bundles")</a></li>
+            <li class="breadcrumb-item active">@Html.T("التفاصيل", "Details")</li>
+        </ul>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex align-items-center gap-2">
+            <a href="@Url.Action("Edit", new { id = Model.Id })" class="btn btn-primary">
+                <i class="feather-edit me-2"></i>
+                @Html.T("تعديل الباقة", "Edit bundle")
+            </a>
+            <a href="@Url.Action("Statistics", new { id = Model.Id })" class="btn btn-light">
+                <i class="feather-bar-chart-2 me-2"></i>
+                @Html.T("الإحصائيات", "Statistics")
+            </a>
+            <div class="dropdown">
+                <button class="btn btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="feather-more-vertical"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="javascript:void(0)" onclick="duplicateBundle(@Model.Id)"><i class="feather-copy me-2"></i> @Html.T("نسخ الباقة", "Duplicate bundle")</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@Url.Action("Delete", new { id = Model.Id })', '@Html.Raw((Html.T("هل أنت متأكد من حذف الباقة: ", "Are you sure you want to delete the bundle: ") + (Model.Name ?? "").Replace("'", "\\'") + "؟").Replace("'", "\\'"))')"><i class="feather-trash-2 me-2"></i> @Html.T("حذف", "Delete")</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("عدد الدورات", "Courses count") },
+                { "Value", Model.CoursesCount },
+                { "Icon", "book" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("المبيعات", "Sales") },
+                { "Value", Model.SalesCount },
+                { "Icon", "shopping-cart" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("التوفير", "Savings") },
+                { "Value", $"{Model.SavingsPercentage:F0}%" },
+                { "Icon", "arrow-down" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الإيرادات", "Total revenue") },
+                { "Value", (Model.Price * Model.SalesCount).ToEGP() },
+                { "Icon", "dollar-sign" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Column -->
+        <div class="col-xxl-8 col-xl-7">
+            <!-- Bundle Preview -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-body p-0">
+                    @if (!string.IsNullOrEmpty(Model.ThumbnailUrl))
+                    {
+                        <img src="@Model.ThumbnailUrl" alt="@Model.Name" class="img-fluid w-100" style="max-height: 400px; object-fit: cover;">
+                    }
+                    else
+                    {
+                        <div class="bg-soft-primary d-flex align-items-center justify-content-center" style="height: 300px;">
+                            <i class="feather-package" style="font-size: 80px; opacity: 0.3;"></i>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Bundle Information -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات الباقة", "Bundle information")</h5>
+                </div>
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">@Model.Name</h5>
+                    
+                    @if (!string.IsNullOrEmpty(Model.ShortDescription))
+                    {
+                        <p class="text-muted mb-4">@Model.ShortDescription</p>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Model.Description))
+                    {
+                        <h6 class="fw-bold mb-3">@Html.T("الوصف التفصيلي", "Detailed description")</h6>
+                        <div class="fs-14 mb-4">
+                            @Html.Raw(Model.Description)
+                        </div>
+                    }
+
+                    <div class="row g-3 mt-4">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-3 p-3 bg-soft-success rounded">
+                                <div class="avatar-text avatar-lg bg-success text-white">
+                                    @{ ViewBag.CurrencyIconClass = ""; }
+                                    @await Html.PartialAsync("_CurrencyIcon")
+                                </div>
+                                <div>
+                                    <div class="text-muted fs-12">@Html.T("السعر بعد الخصم", "Price after discount")</div>
+                                    <div class="fw-bold fs-4 text-success">@Model.Price.ToEGP()</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center gap-3 p-3 bg-soft-secondary rounded">
+                                <div class="avatar-text avatar-lg bg-secondary text-white">
+                                    <i class="feather-tag"></i>
+                                </div>
+                                <div>
+                                    <div class="text-muted fs-12">@Html.T("السعر الأصلي", "Original price")</div>
+                                    <div class="fw-bold fs-4 text-decoration-line-through">@Model.OriginalPrice.ToEGP()</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Courses in Bundle -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الدورات المتضمنة", "Included courses") (@Model.BundleCourses?.Count ?? 0)</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.BundleCourses != null && Model.BundleCourses.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var bundleCourse in Model.BundleCourses.OrderBy(bc => bc.DisplayOrder))
+                            {
+                                <div class="list-group-item d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-image avatar-lg">
+                                            <img src="@(bundleCourse.Course?.ThumbnailUrl ?? "/assets/images/general/placeholder.png")" alt="@bundleCourse.Course?.Title" class="img-fluid">
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">@bundleCourse.Course?.Title</div>
+                                            <div class="fs-11 text-muted">
+                                                <i class="feather-users me-1"></i>
+                                                @(bundleCourse.Course?.TotalStudents ?? 0) @Html.T("طالب", "students")
+                                                <i class="feather-star text-warning me-1 ms-3"></i>
+                                                @((bundleCourse.Course?.AverageRating ?? 0).ToString("F1"))
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="fw-bold text-success">@((bundleCourse.Course?.DiscountPrice ?? bundleCourse.Course?.Price ?? 0)) @Html.T("ر.س", "SAR")</div>
+                                        <a href="@Url.Action("Details", "Courses", new { id = bundleCourse.CourseId })" class="btn btn-sm btn-light mt-2">
+                                            <i class="feather-eye"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-4">
+                            <p class="text-muted mb-0">@Html.T("لا توجد دورات في هذه الباقة", "No courses in this bundle")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="col-xxl-4 col-xl-5">
+            <!-- Bundle Status -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("حالة الباقة", "Bundle status")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        @if (Model.IsActive)
+                        {
+                            <span class="badge bg-soft-success text-success fs-13">
+                                <i class="feather-check-circle me-1"></i>
+                                @Html.T("نشطة", "Active")
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-soft-secondary text-secondary fs-13">
+                                <i class="feather-x-circle me-1"></i>
+                                @Html.T("غير نشطة", "Inactive")
+                            </span>
+                        }
+                        @if (Model.IsFeatured)
+                        {
+                            <span class="badge bg-soft-warning text-warning fs-13 ms-2">
+                                <i class="feather-star me-1"></i>
+                                @Html.T("مميزة", "Featured")
+                            </span>
+                        }
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("ترتيب العرض", "Display order")</span>
+                        <span class="fw-medium">@Model.DisplayOrder</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("العملة", "Currency")</span>
+                        <span class="fw-medium">@Model.Currency</span>
+                    </div>
+
+                    @if (Model.ValidFrom.HasValue)
+                    {
+                        <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="text-muted">@Html.T("تاريخ البدء", "Start date")</span>
+                            <span class="fw-medium">@Model.ValidFrom.Value.ToString("dd/MM/yyyy")</span>
+                        </div>
+                    }
+
+                    @if (Model.ValidTo.HasValue)
+                    {
+                        <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="text-muted">@Html.T("تاريخ الانتهاء", "End date")</span>
+                            <span class="fw-medium">@Model.ValidTo.Value.ToString("dd/MM/yyyy")</span>
+                        </div>
+                    }
+
+                    @if (Model.MaxSales.HasValue)
+                    {
+                        <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="text-muted">@Html.T("الحد الأقصى للمبيعات", "Max sales")</span>
+                            <span class="fw-medium">@Model.MaxSales</span>
+                        </div>
+                    }
+
+                    <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("تاريخ الإنشاء", "Created date")</span>
+                        <span class="fw-medium">@Model.CreatedAt.ToString("dd/MM/yyyy")</span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-muted">@Html.T("آخر تحديث", "Last updated")</span>
+                        <span class="fw-medium">@(Model.UpdatedAt?.ToString("dd/MM/yyyy") ?? "-")</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sales Progress -->
+            @if (Model.MaxSales.HasValue && Model.MaxSales.Value > 0)
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("تقدم المبيعات", "Sales progress")</h5>
+                    </div>
+                    <div class="card-body">
+                        @{
+                            var salesPercentage = (decimal)Model.SalesCount / Model.MaxSales.Value * 100;
+                        }
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">@Model.SalesCount @Html.T("من", "of") @Model.MaxSales</span>
+                            <span class="fw-bold">@salesPercentage.ToString("F0")%</span>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar bg-success" style="width: @salesPercentage%"></div>
+                        </div>
+                        @if (salesPercentage >= thresholdSalesWarning)
+                        {
+                            <div class="alert alert-warning mt-3 mb-0">
+                                <i class="feather-alert-triangle me-2"></i>
+                                @Html.T("اقتربت الباقة من الحد الأقصى للمبيعات", "Bundle is approaching max sales limit")
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إجراءات سريعة", "Quick actions")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        @if (Model.IsActive)
+                        {
+                            <form asp-action="ToggleStatus" asp-route-id="@Model.Id" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-light-brand w-100">
+                                    <i class="feather-eye-off me-2"></i>
+                                    @Html.T("تعطيل الباقة", "Disable bundle")
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form asp-action="ToggleStatus" asp-route-id="@Model.Id" method="post">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-light-brand w-100">
+                                    <i class="feather-eye me-2"></i>
+                                    @Html.T("تفعيل الباقة", "Enable bundle")
+                                </button>
+                            </form>
+                        }
+                        <a href="@Url.Action("Statistics", new { id = Model.Id })" class="btn btn-light-brand">
+                            <i class="feather-bar-chart-2 me-2"></i>
+                            @Html.T("عرض الإحصائيات التفصيلية", "View detailed statistics")
+                        </a>
+                        <button type="button" class="btn btn-light-brand" onclick="copyBundleLink()">
+                            <i class="feather-link me-2"></i>
+                            @Html.T("نسخ رابط الباقة", "Copy bundle link")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DeleteModal")
+
+@section Scripts {
+    <script>
+        function duplicateBundle(id) {
+            if (confirm('@Html.Raw(Html.T("هل تريد إنشاء نسخة من هذه الباقة؟", "Do you want to create a copy of this bundle?").Replace("'", "\\'"))')) {
+                window.location.href = '@Url.Action("Duplicate")/' + id;
+            }
+        }
+
+        function copyBundleLink() {
+            const bundleUrl = window.location.origin + '@Url.Action("Details", "Bundles", new { area = "", id = Model.Id })';
+            navigator.clipboard.writeText(bundleUrl).then(function() {
+                alert('@Html.Raw(Html.T("تم نسخ رابط الباقة بنجاح!", "Bundle link copied successfully!").Replace("'", "\\'"))');
+            }, function(err) {
+                console.error('@Html.Raw(Html.T("خطأ في نسخ الرابط:", "Error copying link:").Replace("'", "\\'")) ', err);
+            });
+        }
+    </script>
+}
+

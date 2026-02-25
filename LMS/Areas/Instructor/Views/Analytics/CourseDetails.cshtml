@@ -1,0 +1,527 @@
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("تحليلات الدورة التفصيلية", "Course Details Analytics");
+    var course = ViewBag.Course as LMS.Domain.Entities.Courses.Course;
+    var enrollments = ViewBag.Enrollments as List<LMS.Domain.Entities.Learning.Enrollment>;
+    var lessonProgress = ViewBag.LessonProgress as List<LMS.Domain.Entities.Learning.LessonProgress>;
+    
+    ViewData["Subtitle"] = course?.Title;
+    
+    var totalEnrollments = enrollments?.Count ?? 0;
+    var activeEnrollments = enrollments?.Count(e => e.Status == LMS.Domain.Enums.EnrollmentStatus.Active) ?? 0;
+    var completedEnrollments = enrollments?.Count(e => e.Status == LMS.Domain.Enums.EnrollmentStatus.Completed) ?? 0;
+    var avgProgress = enrollments?.Any() == true ? enrollments.Average(e => e.ProgressPercentage) : 0;
+    var totalRevenue = enrollments?.Sum(e => e.PaidAmount) ?? 0;
+    
+    var detailsUrl = Url.Action("Details", "Courses", new { id = course?.Id });
+    var indexUrl = Url.Action("Index");
+    
+    // Load platform settings
+    var topStudentsLimit = await PlatformSettings.GetIntSettingAsync("UI.TopItems.Limit", 10);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + detailsUrl + "' class='btn btn-light'><i class='feather-eye me-2'></i>" + Html.T("عرض الدورة", "View course") + "</a><a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة", "Back") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Course Info Banner -->
+    @if (course != null)
+    {
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <div class="d-flex align-items-center gap-3">
+                            @if (!string.IsNullOrEmpty(course.ThumbnailUrl))
+                            {
+                                <img src="@course.ThumbnailUrl" alt="@course.Title" class="rounded" style="width: 80px; height: 80px; object-fit: cover;">
+                            }
+                            else
+                            {
+                                <div class="avatar-text avatar-xxl bg-primary text-white">
+                                    <i class="feather-book"></i>
+                                </div>
+                            }
+                            <div>
+                                <h4 class="fw-bold mb-2">@course.Title</h4>
+                                <p class="text-muted mb-2">@course.ShortDescription</p>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span class="badge bg-soft-primary text-primary">
+                                        <i class="feather-folder me-1"></i>
+                                        @course.Category?.Name
+                                    </span>
+                                    <span class="badge bg-soft-info text-info">
+                                        <i class="feather-signal me-1"></i>
+                                        @course.Level
+                                    </span>
+                                    <span class="badge bg-soft-warning text-warning">
+                                        <i class="feather-star me-1"></i>
+                                        @course.AverageRating.ToString("F1")
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                        <h3 class="fw-bold text-success mb-1">@totalRevenue.ToEGP()</h3>
+                        <p class="text-muted mb-0">@Html.T("إجمالي الإيرادات", "Total revenue")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي المسجلين", "Total enrolled") },
+                { "Value", totalEnrollments },
+                { "Icon", "users" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("طلاب نشطون", "Active students") },
+                { "Value", activeEnrollments },
+                { "Icon", "activity" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("أكملوا الدورة", "Completed") },
+                { "Value", completedEnrollments },
+                { "Icon", "check-circle" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("متوسط التقدم", "Average progress") },
+                { "Value", avgProgress.ToString("F0") + "%" },
+                { "Icon", "trending-up" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Enrollment Trend -->
+        <div class="col-lg-8 mb-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("منحنى التسجيلات", "Enrollment trend")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="enrollmentTrendChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Distribution -->
+        <div class="col-lg-4 mb-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع التقدم", "Progress distribution")</h5>
+                </div>
+                <div class="card-body text-center">
+                    <canvas id="progressDistributionChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Module Analytics -->
+    @if (course?.Modules != null && course.Modules.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-lg-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("أداء الوحدات والدروس", "Module and lesson performance")</h5>
+                    </div>
+                    <div class="card-body">
+                        @foreach (var module in course.Modules.OrderBy(m => m.OrderIndex))
+                        {
+                            var moduleLessons = module.Lessons?.OrderBy(l => l.OrderIndex).ToList() ?? new List<LMS.Domain.Entities.Courses.Lesson>();
+                            
+                            <div class="mb-4">
+                                <h6 class="fw-bold mb-3">
+                                    <i class="feather-folder me-2 text-primary"></i>
+                                    @module.Title
+                                </h6>
+                                
+                                @if (moduleLessons.Any())
+                                {
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>@Html.T("الدرس", "Lesson")</th>
+                                                    <th>@Html.T("النوع", "Type")</th>
+                                                    <th>@Html.T("المدة", "Duration")</th>
+                                                    <th>@Html.T("عدد المشاهدات", "Views")</th>
+                                                    <th>@Html.T("متوسط المشاهدة", "Avg watch")</th>
+                                                    <th>@Html.T("معدل الإكمال", "Completion rate")</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var lesson in moduleLessons)
+                                                {
+                                                    var lessonViewers = lessonProgress?.Where(lp => lp.LessonId == lesson.Id).ToList() ?? new List<LMS.Domain.Entities.Learning.LessonProgress>();
+                                                    var viewersCount = lessonViewers.Count;
+                                                    var completionRate = totalEnrollments > 0 ? (lessonViewers.Count(lp => lp.IsCompleted) * 100.0 / totalEnrollments) : 0;
+                                                    var avgWatchTime = lessonViewers.Any() ? lessonViewers.Average(lp => lp.WatchedSeconds) / 60.0 : 0;
+                                                    
+                                                    <tr>
+                                                        <td>
+                                                            <h6 class="fw-bold mb-0">@lesson.Title</h6>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge bg-soft-primary text-primary">
+                                                                <i class="feather-@(lesson.Type == LMS.Domain.Enums.LessonType.Video ? "video" : lesson.Type == LMS.Domain.Enums.LessonType.Text ? "file-text" : "link")"></i>
+                                                                @lesson.Type
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            @if (lesson.DurationMinutes > 0)
+                                                            {
+                                                                <span class="badge bg-soft-secondary text-secondary">
+                                                                    @lesson.DurationMinutes @Html.T("دقيقة", "min")
+                                                                </span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="text-muted">-</span>
+                                                            }
+                                                        </td>
+                                                        <td>
+                                                            <span class="fw-bold">@viewersCount</span>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge bg-soft-info text-info">
+                                                                @avgWatchTime.ToString("F0") @Html.T("دقيقة", "min")
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <div class="d-flex align-items-center gap-2">
+                                                                <div class="progress" style="width: 100px; height: 20px;">
+                                                                    <div class="progress-bar @(completionRate >= 75 ? "bg-success" : completionRate >= 50 ? "bg-info" : completionRate >= 25 ? "bg-warning" : "bg-danger")" 
+                                                                         role="progressbar" 
+                                                                         style="width: @completionRate%" 
+                                                                         aria-valuenow="@completionRate" 
+                                                                         aria-valuemin="0" 
+                                                                         aria-valuemax="100">
+                                                                    </div>
+                                                                </div>
+                                                                <span class="fw-bold">@completionRate.ToString("F0")%</span>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p class="text-muted mb-0">@Html.T("لا توجد دروس في هذه الوحدة", "No lessons in this module")</p>
+                                }
+                            </div>
+                            
+                            @if (!module.Equals(course.Modules.OrderBy(m => m.OrderIndex).Last()))
+                            {
+                                <hr />
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Top Performing Students -->
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أفضل الطلاب أداءً", "Top performing students")</h5>
+                </div>
+                <div class="card-body">
+                    @if (enrollments != null && enrollments.Any())
+                    {
+                        var topStudents = enrollments
+                            .OrderByDescending(e => e.ProgressPercentage)
+                            .ThenByDescending(e => e.FinalGrade)
+                            .Take(topStudentsLimit)
+                            .ToList();
+
+                        <div class="list-group">
+                            @for (int i = 0; i < topStudents.Count; i++)
+                            {
+                                var enrollment = topStudents[i];
+                                <div class="list-group-item">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="badge @(i < 3 ? "bg-warning" : "bg-secondary")">
+                                            #@(i + 1)
+                                        </div>
+                                        <div class="avatar-text avatar-sm">
+                                            @enrollment.Student?.FirstName?.Substring(0, 1)
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="fw-bold mb-0">@enrollment.Student?.FullName</h6>
+                                            <p class="text-muted fs-12 mb-0">@enrollment.Student?.Email</p>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="badge bg-soft-success text-success">
+                                                @enrollment.ProgressPercentage.ToString("F0")%
+                                            </div>
+                                            @if (enrollment.FinalGrade.HasValue)
+                                            {
+                                                <div class="fs-12 text-muted mt-1">
+                                                    @Html.T("درجة", "Grade"): @enrollment.FinalGrade.Value.ToString("F1")
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <div class="avatar-text avatar-xl bg-soft-secondary text-secondary mb-3 mx-auto">
+                                <i class="feather-users"></i>
+                            </div>
+                            <h6 class="fw-bold mb-2">@Html.T("لا يوجد طلاب بعد", "No students yet")</h6>
+                            <p class="text-muted mb-0">@Html.T("سيظهر الطلاب عند التسجيل", "Students will appear when they enroll")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Revenue & Engagement Stats -->
+        <div class="col-lg-6 mb-4">
+            <!-- Revenue Card -->
+            <div class="card mb-3">
+                <div class="card-header bg-soft-success">
+                    <h5 class="card-title mb-0">
+                        @{ ViewBag.CurrencyIconClass = "me-2 text-success"; }
+                        @await Html.PartialAsync("_CurrencyIcon")
+                        <span>@Html.T("الإيرادات", "Revenue")</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-light rounded">
+                        <span class="text-muted">@Html.T("إجمالي الإيرادات", "Total revenue"):</span>
+                        <span class="fw-bold text-success fs-4">@totalRevenue.ToEGP()</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted">@Html.T("متوسط السعر للتسجيل", "Avg price per enrollment"):</span>
+                        <span class="fw-bold">@((totalEnrollments > 0 ? totalRevenue / totalEnrollments : 0).ToEGP())</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">@Html.T("السعر الحالي", "Current price"):</span>
+                        <span class="fw-bold">@(course?.IsFree == true ? Html.T("مجاني", "Free") : (course?.DiscountedPrice?.ToEGP() ?? course?.Price.ToEGP()))</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Success Rates Card -->
+            <div class="card mb-3">
+                <div class="card-header bg-soft-info">
+                    <h5 class="card-title mb-0">
+                        <i class="feather-trending-up me-2 text-info"></i>@Html.T("معدلات النجاح", "Success rates")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-muted">@Html.T("معدل الإكمال", "Completion rate"):</span>
+                        <span class="fw-bold text-success">@((totalEnrollments > 0 ? (completedEnrollments * 100.0 / totalEnrollments) : 0).ToString("F1"))%</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-muted">@Html.T("متوسط التقدم", "Average progress"):</span>
+                        <span class="fw-bold text-info">@avgProgress.ToString("F1")%</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">@Html.T("التقييم", "Rating"):</span>
+                        <div>
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                <i class="feather-star @(i <= course?.AverageRating ? "text-warning fill-warning" : "text-muted")" style="font-size: 16px;"></i>
+                            }
+                            <span class="fw-bold ms-2">@course?.AverageRating.ToString("F1")</span>
+                            <span class="text-muted">(@course?.TotalReviews)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Monthly Revenue Chart Card -->
+            <div class="card">
+                <div class="card-header bg-soft-primary">
+                    <h5 class="card-title mb-0">
+                        <i class="feather-bar-chart-2 me-2 text-primary"></i>@Html.T("الإيرادات الشهرية", "Monthly revenue")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="revenueMonthlyChart" height="120"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@{
+    // Generate dynamic monthly chart data
+    var enrollmentLabels = new List<string>();
+    var enrollmentData = new List<int>();
+    var revenueLabels = new List<string>();
+    var revenueData = new List<decimal>();
+    
+    for (int i = 11; i >= 0; i--)
+    {
+        var date = DateTime.UtcNow.AddMonths(-i);
+        var monthName = date.ToString("MMMM", new System.Globalization.CultureInfo("ar-SA"));
+        enrollmentLabels.Add(monthName);
+        
+        var monthEnrollments = enrollments?.Count(e => e.EnrolledAt.Year == date.Year && e.EnrolledAt.Month == date.Month) ?? 0;
+        enrollmentData.Add(monthEnrollments);
+    }
+    
+    for (int i = 5; i >= 0; i--)
+    {
+        var date = DateTime.UtcNow.AddMonths(-i);
+        var monthName = date.ToString("MMMM", new System.Globalization.CultureInfo("ar-SA"));
+        revenueLabels.Add(monthName);
+        
+        var monthRevenue = enrollments?.Where(e => e.EnrolledAt.Year == date.Year && e.EnrolledAt.Month == date.Month).Sum(e => e.PaidAmount) ?? 0;
+        revenueData.Add(monthRevenue);
+    }
+}
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <script>
+        $(document).ready(function () {
+            // Dynamic chart data from server
+            var enrollmentLabels = @Html.Raw(Json.Serialize(enrollmentLabels));
+            var enrollmentDataArr = @Html.Raw(Json.Serialize(enrollmentData));
+            var revenueLabels = @Html.Raw(Json.Serialize(revenueLabels));
+            var revenueDataArr = @Html.Raw(Json.Serialize(revenueData));
+            
+            // Enrollment Trend Chart
+            const enrollmentCtx = document.getElementById('enrollmentTrendChart').getContext('2d');
+            const enrollmentChart = new Chart(enrollmentCtx, {
+                type: 'line',
+                data: {
+                    labels: enrollmentLabels,
+                    datasets: [{
+                        label: '@Html.Raw(Html.T("التسجيلات الشهرية", "Monthly enrollments").Replace("'", "\\'"))',
+                        data: enrollmentDataArr,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            align: 'end'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+
+            // Progress Distribution Chart
+            const progressCtx = document.getElementById('progressDistributionChart').getContext('2d');
+            const progressChart = new Chart(progressCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['@Html.Raw(Html.T("مكتمل", "Completed").Replace("'", "\\'"))', '@Html.Raw(Html.T("نشط", "Active").Replace("'", "\\'"))', '@Html.Raw(Html.T("غير نشط", "Inactive").Replace("'", "\\'"))'],
+                    datasets: [{
+                        data: [@completedEnrollments, @activeEnrollments, @(totalEnrollments - completedEnrollments - activeEnrollments)],
+                        backgroundColor: [
+                            'rgba(75, 192, 192, 0.8)',
+                            'rgba(54, 162, 235, 0.8)',
+                            'rgba(201, 203, 207, 0.8)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // Monthly Revenue Chart
+            const revenueCtx = document.getElementById('revenueMonthlyChart').getContext('2d');
+            const revenueChart = new Chart(revenueCtx, {
+                type: 'bar',
+                data: {
+                    labels: revenueLabels,
+                    datasets: [{
+                        label: '@Html.Raw(Html.T("الإيرادات (ر.س)", "Revenue (SAR)").Replace("'", "\\'"))',
+                        data: revenueDataArr,
+                        backgroundColor: 'rgba(255, 159, 64, 0.6)',
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+
+    <style>
+        .fill-warning {
+            fill: currentColor;
+        }
+    </style>
+}
+

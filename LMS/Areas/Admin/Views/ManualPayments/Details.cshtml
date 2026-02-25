@@ -1,0 +1,374 @@
+@model LMS.Domain.Entities.Payments.PendingManualPayment
+@using LMS.Domain.Enums
+@using LMS.Areas.Admin.Controllers
+@{
+    ViewData["Title"] = Html.T("تفاصيل الدفعة", "Payment details") + $" - {Model.ReferenceNumber}";
+    ViewData["ActiveMenu"] = "ManualPayments";
+    ViewData["Breadcrumbs"] = new List<(string Name, string? Url)>
+    {
+        (Html.T("الدفعات اليدوية", "Manual payments"), Url.Action("Index")),
+        (Model.ReferenceNumber, null)
+    };
+    var cartItems = ViewBag.CartItems as List<CartItemSnapshot> ?? new List<CartItemSnapshot>();
+}
+
+<div class="container-fluid py-4">
+    <!-- Breadcrumb (in-page fallback) -->
+    <nav aria-label="@Html.T("مسار التنقل", "Breadcrumb")" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index", "Dashboard")">@Html.T("لوحة التحكم", "Dashboard")</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="@Url.Action("Index")">@Html.T("الدفعات اليدوية", "Manual payments")</a>
+            </li>
+            <li class="breadcrumb-item active">@Model.ReferenceNumber</li>
+        </ol>
+    </nav>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Payment Info Card -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-invoice me-2 text-primary"></i>
+                        @Html.T("معلومات الدفعة", "Payment information")
+                    </h5>
+                    @{
+                        var (statusClass, statusText) = Model.Status switch
+                        {
+                            ManualPaymentStatus.AwaitingProof => ("bg-info", Html.T("بانتظار الإثبات", "Awaiting proof")),
+                            ManualPaymentStatus.ProofSubmitted => ("bg-warning text-dark", Html.T("بانتظار المراجعة", "Awaiting review")),
+                            ManualPaymentStatus.UnderReview => ("bg-secondary", Html.T("قيد المراجعة", "Under review")),
+                            ManualPaymentStatus.Approved => ("bg-success", Html.T("معتمدة", "Approved")),
+                            ManualPaymentStatus.Rejected => ("bg-danger", Html.T("مرفوضة", "Rejected")),
+                            ManualPaymentStatus.Expired => ("bg-dark", Html.T("منتهية", "Expired")),
+                            _ => ("bg-secondary", Html.T("غير معروف", "Unknown"))
+                        };
+                    }
+                    <span class="badge @statusClass fs-6">@statusText</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">@Html.T("رقم المرجع", "Reference number")</label>
+                            <div class="fs-5 fw-bold text-primary">
+                                <code>@Model.ReferenceNumber</code>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">@Html.T("المبلغ", "Amount")</label>
+                            <div class="fs-4 fw-bold text-success">
+                                @Model.Amount.ToString("N2") @Model.Currency
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">@Html.T("تاريخ الطلب", "Request date")</label>
+                            <div>@Model.CreatedAt.ToString("yyyy/MM/dd HH:mm")</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">@Html.T("تاريخ الانتهاء", "Expiry date")</label>
+                            <div class="@(Model.ExpiresAt < DateTime.UtcNow ? "text-danger fw-bold" : "")">
+                                @Model.ExpiresAt.ToString("yyyy/MM/dd HH:mm")
+                                @if (Model.ExpiresAt < DateTime.UtcNow && Model.Status != ManualPaymentStatus.Approved)
+                                {
+                                    <span class="badge bg-danger ms-1">@Html.T("منتهي", "Expired")</span>
+                                }
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(Model.CouponCode))
+                        {
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">@Html.T("كود الخصم", "Coupon code")</label>
+                                <div>
+                                    <span class="badge bg-info">@Model.CouponCode</span>
+                                    <span class="text-success">- @Model.DiscountAmount.ToString("N2") @Model.Currency</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Student Info Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user me-2 text-primary"></i>
+                        @Html.T("معلومات الطالب", "Student information")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar avatar-lg me-3">
+                            <span class="avatar-initial rounded-circle bg-primary" style="width:50px;height:50px;display:inline-flex;align-items:center;justify-content:center;font-size:1.5rem;color:white;">
+                                @Model.Student?.FirstName?.Substring(0, 1)
+                            </span>
+                        </div>
+                        <div>
+                            <h5 class="mb-0">@Model.Student?.FullName</h5>
+                            <div class="text-muted">
+                                <i class="fas fa-envelope me-1"></i> @Model.Student?.Email
+                            </div>
+                            @if (!string.IsNullOrEmpty(Model.Student?.PhoneNumber))
+                            {
+                                <div class="text-muted">
+                                    <i class="fas fa-phone me-1"></i> @Model.Student?.PhoneNumber
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cart Items Card -->
+            @if (cartItems.Any())
+            {
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-shopping-cart me-2 text-primary"></i>
+                            @Html.T("العناصر المشتراة", "Purchased items")
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>@Html.T("المنتج", "Product")</th>
+                                    <th>@Html.T("النوع", "Type")</th>
+                                    <th>@Html.T("السعر الأصلي", "Original price")</th>
+                                    <th>@Html.T("الخصم", "Discount")</th>
+                                    <th>@Html.T("السعر النهائي", "Final price")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in cartItems)
+                                {
+                                    <tr>
+                                        <td>@item.Title</td>
+                                        <td>
+                                            @(item.ProductType == ProductType.Course ? Html.T("دورة", "Course") : Html.T("كتاب", "Book"))
+                                        </td>
+                                        <td>@item.OriginalPrice.ToString("N2") @Model.Currency</td>
+                                        <td class="text-danger">@item.DiscountAmount.ToString("N2") @Model.Currency</td>
+                                        <td class="fw-bold">@item.FinalPrice.ToString("N2") @Model.Currency</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <!-- Transfer Proof Card -->
+            @if (Model.Status != ManualPaymentStatus.AwaitingProof)
+            {
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-receipt me-2 text-primary"></i>
+                            @Html.T("إثبات التحويل", "Transfer proof")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            @if (!string.IsNullOrEmpty(Model.ProofImageUrl))
+                            {
+                                <div class="col-md-12 mb-3">
+                                    <label class="form-label text-muted">@Html.T("صورة الإيصال", "Receipt image")</label>
+                                    <div>
+                                        <a href="@Model.ProofImageUrl" target="_blank" class="btn btn-outline-primary">
+                                            <i class="fas fa-external-link-alt me-1"></i>
+                                            @Html.T("عرض الصورة", "View image")
+                                        </a>
+                                        <img src="@Model.ProofImageUrl" alt="@Html.T("إيصال التحويل", "Transfer receipt")" 
+                                             class="img-thumbnail mt-2 d-block" style="max-width: 300px;">
+                                    </div>
+                                </div>
+                            }
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">@Html.T("رقم مرجع التحويل", "Transfer reference")</label>
+                                <div>@(Model.TransferReference ?? "-")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">@Html.T("تاريخ التحويل", "Transfer date")</label>
+                                <div>@(Model.TransferDate?.ToString("yyyy/MM/dd") ?? "-")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">@Html.T("اسم المرسل", "Sender name")</label>
+                                <div>@(Model.SenderName ?? "-")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted">@Html.T("بنك المرسل", "Sender bank")</label>
+                                <div>@(Model.SenderBankName ?? "-")</div>
+                            </div>
+                            @if (!string.IsNullOrEmpty(Model.StudentNotes))
+                            {
+                                <div class="col-md-12">
+                                    <label class="form-label text-muted">@Html.T("ملاحظات الطالب", "Student notes")</label>
+                                    <div class="p-2 bg-light rounded">@Model.StudentNotes</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Sidebar Actions -->
+        <div class="col-lg-4">
+            <!-- Bank Details Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-university me-2 text-primary"></i>
+                        @Html.T("حساب الاستلام", "Receiving account")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <dl class="mb-0">
+                        <dt class="text-muted small">@Html.T("اسم البنك", "Bank name")</dt>
+                        <dd>@(Model.RecipientBankName ?? "-")</dd>
+                        
+                        <dt class="text-muted small">@Html.T("اسم الحساب", "Account name")</dt>
+                        <dd>@(Model.RecipientAccountName ?? "-")</dd>
+                        
+                        <dt class="text-muted small">@Html.T("رقم الحساب", "Account number")</dt>
+                        <dd><code>@(Model.RecipientAccountNumber ?? "-")</code></dd>
+                        
+                        @if (!string.IsNullOrEmpty(Model.RecipientIBAN))
+                        {
+                            <dt class="text-muted small">@Html.T("الآيبان", "IBAN")</dt>
+                            <dd><code>@Model.RecipientIBAN</code></dd>
+                        }
+                    </dl>
+                </div>
+            </div>
+
+            <!-- Actions Card -->
+            @if (Model.Status == ManualPaymentStatus.ProofSubmitted || 
+                 Model.Status == ManualPaymentStatus.UnderReview)
+            {
+                <div class="card mb-4 border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="fas fa-tasks me-2"></i>
+                            @Html.T("إجراءات المراجعة", "Review actions")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Approve -->
+                        <form asp-action="Approve" method="post" class="mb-3">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <div class="mb-2">
+                                <textarea name="notes" class="form-control" rows="2" 
+                                          placeholder="@Html.T("ملاحظات (اختياري)", "Notes (optional)")"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-success w-100"
+                                    onclick="return confirm('@(Html.T("هل أنت متأكد من اعتماد هذه الدفعة؟ سيتم تفعيل الاشتراكات فوراً.", "Are you sure you want to approve this payment? Subscriptions will be activated immediately."))');">
+                                <i class="fas fa-check me-1"></i>
+                                @Html.T("اعتماد الدفعة", "Approve payment")
+                            </button>
+                        </form>
+
+                        <hr />
+
+                        <!-- Reject -->
+                        <form asp-action="Reject" method="post" class="mb-3">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <div class="mb-2">
+                                <textarea name="reason" class="form-control" rows="2" required
+                                          placeholder="@Html.T("سبب الرفض (مطلوب)", "Rejection reason (required)")"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-danger w-100"
+                                    onclick="return confirm('@(Html.T("هل أنت متأكد من رفض هذه الدفعة؟", "Are you sure you want to reject this payment?"))');">
+                                <i class="fas fa-times me-1"></i>
+                                @Html.T("رفض الدفعة", "Reject payment")
+                            </button>
+                        </form>
+
+                        <hr />
+
+                        <!-- Request More Info -->
+                        <form asp-action="RequestMoreInfo" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <div class="mb-2">
+                                <textarea name="message" class="form-control" rows="2" required
+                                          placeholder="@Html.T("اكتب رسالتك للطالب...", "Write your message to the student...")"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-outline-info w-100">
+                                <i class="fas fa-question-circle me-1"></i>
+                                @Html.T("طلب معلومات إضافية", "Request more info")
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            }
+
+            <!-- Review Info -->
+            @if (Model.Status == ManualPaymentStatus.Approved || 
+                 Model.Status == ManualPaymentStatus.Rejected)
+            {
+                <div class="card mb-4">
+                    <div class="card-header @(Model.Status == ManualPaymentStatus.Approved ? "bg-success text-white" : "bg-danger text-white")">
+                        <h5 class="mb-0">
+                            <i class="fas fa-@(Model.Status == ManualPaymentStatus.Approved ? "check-circle" : "times-circle") me-2"></i>
+                            @Html.T("نتيجة المراجعة", "Review result")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="mb-0">
+                            <dt class="text-muted small">@Html.T("تمت المراجعة بواسطة", "Reviewed by")</dt>
+                            <dd>@(Model.ReviewedBy?.FullName ?? "-")</dd>
+                            
+                            <dt class="text-muted small">@Html.T("تاريخ المراجعة", "Review date")</dt>
+                            <dd>@(Model.ReviewedAt?.ToString("yyyy/MM/dd HH:mm") ?? "-")</dd>
+                            
+                            @if (Model.Status == ManualPaymentStatus.Rejected)
+                            {
+                                <dt class="text-muted small">@Html.T("سبب الرفض", "Rejection reason")</dt>
+                                <dd class="text-danger">@(Model.RejectionReason ?? "-")</dd>
+                            }
+                            
+                            @if (!string.IsNullOrEmpty(Model.AdminNotes))
+                            {
+                                <dt class="text-muted small">@Html.T("ملاحظات", "Notes")</dt>
+                                <dd>@Model.AdminNotes</dd>
+                            }
+                        </dl>
+                    </div>
+                </div>
+            }
+
+            <!-- Quick Actions -->
+            @if (Model.Status == ManualPaymentStatus.AwaitingProof && Model.ExpiresAt < DateTime.UtcNow.AddDays(1))
+            {
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <form asp-action="ExtendExpiry" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id" />
+                            <button type="submit" class="btn btn-outline-primary w-100">
+                                <i class="fas fa-clock me-1"></i>
+                                @Html.T("تمديد الصلاحية 3 أيام", "Extend expiry by 3 days")
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            }
+
+            <!-- Back Button -->
+            <a href="@Url.Action("Index")" class="btn btn-outline-secondary w-100">
+                <i class="fas fa-arrow-right me-1"></i>
+                @Html.T("العودة للقائمة", "Back to list")
+            </a>
+        </div>
+    </div>
+</div>
+

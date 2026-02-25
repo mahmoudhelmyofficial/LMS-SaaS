@@ -1,0 +1,479 @@
+@model LMS.Domain.Entities.Assessments.Assignment
+@{
+    ViewData["Title"] = Html.T("تفاصيل الواجب", "Assignment Details");
+    var enrollment = ViewBag.Enrollment as LMS.Domain.Entities.Learning.Enrollment;
+    var submission = ViewBag.Submission as LMS.Domain.Entities.Assessments.AssignmentSubmission;
+    var isOverdue = Model.DueDate.HasValue && Model.DueDate.Value < DateTime.UtcNow;
+    var canSubmit = submission == null || submission.Status == LMS.Domain.Enums.AssignmentStatus.Draft;
+}
+
+@section Styles {
+<style>
+    .assignment-header {
+        background: linear-gradient(135deg, @(isOverdue ? "#ef4444 0%, #dc2626" : "#667eea 0%, #764ba2") 100%);
+        border-radius: 12px;
+        padding: 40px;
+        color: white;
+        margin-bottom: 30px;
+        position: relative;
+        overflow: hidden;
+    }
+    .assignment-header::before {
+        content: '📝';
+        position: absolute;
+        left: -30px;
+        top: -30px;
+        font-size: 200px;
+        opacity: 0.1;
+    }
+    
+    .info-box {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        height: 100%;
+    }
+    
+    .submission-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+    }
+    
+    .file-upload-area {
+        border: 2px dashed #e5e7eb;
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    .file-upload-area:hover {
+        border-color: #667eea;
+        background: #f9fafb;
+    }
+    .file-upload-area.dragover {
+        border-color: #667eea;
+        background: #eff6ff;
+    }
+    
+    .deadline-badge {
+        font-size: 18px;
+        padding: 12px 24px;
+        border-radius: 8px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Page Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center">
+            <a href="@Url.Action("Index")" class="btn btn-sm btn-light me-3">
+                <i class="feather-arrow-right me-1"></i>
+                @Html.T("رجوع", "Back")
+            </a>
+            <div>
+                <h3 class="fw-bold mb-1">
+                    <i class="feather-file-text text-primary me-2"></i>
+                    @Html.T("تفاصيل الواجب", "Assignment Details")
+                </h3>
+                <p class="text-muted mb-0">@Model.Lesson.Module.Course.Title</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assignment Header -->
+<div class="assignment-header">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <div class="d-flex align-items-center mb-3">
+                <div class="avatar-text avatar-xl bg-white bg-opacity-25 text-white me-3">
+                    <i class="feather-file-text"></i>
+                </div>
+                <div>
+                    <h1 class="text-white fw-bold mb-2">@Model.Title</h1>
+                    <p class="text-white opacity-75 mb-0 fs-5">@Model.Lesson.Title</p>
+                </div>
+            </div>
+            
+            @if (Model.DueDate.HasValue)
+            {
+                <div class="deadline-badge @(isOverdue ? "bg-white text-danger" : "bg-white bg-opacity-25 text-white")">
+                    <i class="feather-clock me-2"></i>
+                    @if (isOverdue)
+                    {
+                        <text>@Html.T("متأخر! الموعد النهائي كان:", "Overdue! Deadline was:") @Model.DueDate.Value.ToString("dd/MM/yyyy")</text>
+                    }
+                    else
+                    {
+                        var daysLeft = (Model.DueDate.Value - DateTime.UtcNow).Days;
+                        <text>@Html.T("يستحق خلال", "Due in") @daysLeft @Html.T("يوم", "days") - @Model.DueDate.Value.ToString("dd/MM/yyyy")</text>
+                    }
+                </div>
+            }
+        </div>
+        <div class="col-lg-4 text-center">
+            @if (submission != null)
+            {
+                var statusColor = submission.Status switch
+                {
+                    LMS.Domain.Enums.AssignmentStatus.Graded => "success",
+                    LMS.Domain.Enums.AssignmentStatus.Submitted => "info",
+                    LMS.Domain.Enums.AssignmentStatus.Draft => "warning",
+                    _ => "secondary"
+                };
+                <div class="bg-white bg-opacity-25 rounded-circle p-4 d-inline-block mb-3">
+                    <i class="feather-check-circle text-white" style="font-size: 60px;"></i>
+                </div>
+                <h4 class="text-white mb-0">
+                    @(submission.Status switch
+                    {
+                        LMS.Domain.Enums.AssignmentStatus.Graded => Html.T("الدرجة:", "Grade:") + $" {submission.Grade}/{Model.MaxGrade}",
+                        LMS.Domain.Enums.AssignmentStatus.Submitted => Html.T("قيد التقييم", "Under review"),
+                        LMS.Domain.Enums.AssignmentStatus.Draft => Html.T("مسودة", "Draft"),
+                        _ => Html.T("غير مُسلّم", "Not submitted")
+                    })
+                </h4>
+            }
+            else
+            {
+                <div class="bg-white bg-opacity-25 rounded-circle p-4 d-inline-block mb-3">
+                    <i class="feather-alert-circle text-white" style="font-size: 60px;"></i>
+                </div>
+                <h4 class="text-white mb-0">@Html.T("لم يتم التسليم بعد", "Not submitted yet")</h4>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Assignment Description -->
+    <div class="col-lg-8">
+        <div class="info-box mb-4">
+            <h5 class="fw-bold mb-3">
+                <i class="feather-file-text text-primary me-2"></i>
+                @Html.T("وصف الواجب", "Assignment description")
+            </h5>
+            <div class="text-muted">
+                @Html.Raw(Model.Description)
+            </div>
+        </div>
+        
+        @if (!string.IsNullOrEmpty(Model.Instructions))
+        {
+            <div class="info-box mb-4">
+                <h5 class="fw-bold mb-3">
+                    <i class="feather-list text-info me-2"></i>
+                    @Html.T("التعليمات", "Instructions")
+                </h5>
+                <div class="alert alert-info">
+                    @Html.Raw(Model.Instructions)
+                </div>
+            </div>
+        }
+        
+        @if (!string.IsNullOrEmpty(Model.AttachmentUrl))
+        {
+            <div class="info-box">
+                <h5 class="fw-bold mb-3">
+                    <i class="feather-paperclip text-warning me-2"></i>
+                    @Html.T("المرفقات", "Attachments")
+                </h5>
+                <a href="@Model.AttachmentUrl" target="_blank" class="btn btn-outline-primary">
+                    <i class="feather-download me-2"></i>
+                    @Html.T("تحميل ملف الواجب", "Download assignment file")
+                </a>
+            </div>
+        }
+    </div>
+    
+    <!-- Info Sidebar -->
+    <div class="col-lg-4">
+        <div class="info-box mb-4">
+            <h5 class="fw-bold mb-4">@Html.T("معلومات الواجب", "Assignment info")</h5>
+            
+            <div class="d-flex align-items-start mb-3">
+                <div class="avatar-text avatar-md bg-soft-primary text-primary me-3">
+                    <i class="feather-book"></i>
+                </div>
+                <div>
+                    <label class="text-muted small d-block mb-1">@Html.T("الدورة", "Course")</label>
+                    <h6 class="fw-bold mb-0">@Model.Lesson.Module.Course.Title</h6>
+                </div>
+            </div>
+            
+            <div class="d-flex align-items-start mb-3">
+                <div class="avatar-text avatar-md bg-soft-success text-success me-3">
+                    <i class="feather-award"></i>
+                </div>
+                <div>
+                    <label class="text-muted small d-block mb-1">@Html.T("الدرجة القصوى", "Max grade")</label>
+                    <h6 class="fw-bold mb-0">@Model.MaxGrade @Html.T("نقطة", "points")</h6>
+                </div>
+            </div>
+            
+            @if (Model.PassingGrade.HasValue)
+            {
+                <div class="d-flex align-items-start mb-3">
+                    <div class="avatar-text avatar-md bg-soft-warning text-warning me-3">
+                        <i class="feather-check-circle"></i>
+                    </div>
+                    <div>
+                        <label class="text-muted small d-block mb-1">@Html.T("درجة النجاح", "Passing grade")</label>
+                        <h6 class="fw-bold mb-0">@Model.PassingGrade @Html.T("نقطة", "points")</h6>
+                    </div>
+                </div>
+            }
+            
+            @if (Model.DueDate.HasValue)
+            {
+                <div class="d-flex align-items-start">
+                    <div class="avatar-text avatar-md @(isOverdue ? "bg-soft-danger text-danger" : "bg-soft-info text-info") me-3">
+                        <i class="feather-clock"></i>
+                    </div>
+                    <div>
+                        <label class="text-muted small d-block mb-1">@Html.T("الموعد النهائي", "Deadline")</label>
+                        <h6 class="fw-bold mb-0 @(isOverdue ? "text-danger" : "")">
+                            @Model.DueDate.Value.ToString("dd/MM/yyyy HH:mm")
+                        </h6>
+                        @if (isOverdue)
+                        {
+                            <small class="text-danger">@Html.T("متأخر!", "Overdue!")</small>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+        
+        @if (submission != null)
+        {
+            <div class="info-box">
+                <h5 class="fw-bold mb-4">@Html.T("حالة التسليم", "Submission status")</h5>
+                
+                <div class="text-center mb-3">
+                    <div class="avatar-text avatar-xl bg-soft-@(submission.Status == LMS.Domain.Enums.AssignmentStatus.Graded ? "success" : "info") text-@(submission.Status == LMS.Domain.Enums.AssignmentStatus.Graded ? "success" : "info") mx-auto mb-3">
+                        <i class="feather-@(submission.Status == LMS.Domain.Enums.AssignmentStatus.Graded ? "check-circle" : "clock")"></i>
+                    </div>
+                    <h5 class="fw-bold mb-1">
+                        @(submission.Status switch
+                        {
+                            LMS.Domain.Enums.AssignmentStatus.Graded => Html.T("تم التقييم", "Graded"),
+                            LMS.Domain.Enums.AssignmentStatus.Submitted => Html.T("قيد التقييم", "Under review"),
+                            LMS.Domain.Enums.AssignmentStatus.Draft => Html.T("مسودة", "Draft"),
+                            _ => Html.T("غير معروف", "Unknown")
+                        })
+                    </h5>
+                    <small class="text-muted">
+                        @submission.SubmittedAt.ToString("dd/MM/yyyy HH:mm")
+                    </small>
+                </div>
+                
+                @if (submission.Status == LMS.Domain.Enums.AssignmentStatus.Graded)
+                {
+                    <div class="alert alert-success text-center">
+                        <h4 class="fw-bold mb-1">@submission.Grade / @Model.MaxGrade</h4>
+                        <small>@Html.T("درجتك في الواجب", "Your assignment grade")</small>
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(submission.Feedback))
+                    {
+                        <div class="alert alert-light">
+                            <strong class="d-block mb-2">@Html.T("ملاحظات المدرس:", "Instructor feedback:")</strong>
+                            <p class="mb-0 small">@submission.Feedback</p>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="alert alert-info text-center">
+                        <i class="feather-clock mb-2 d-block fs-3"></i>
+                        <small>@Html.T("في انتظار التقييم من المدرس", "Waiting for instructor review")</small>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Submission Section -->
+@if (canSubmit)
+{
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="submission-card">
+                <h4 class="fw-bold mb-4">
+                    <i class="feather-upload text-primary me-2"></i>
+                    @(submission != null ? Html.T("تحديث التسليم", "Update submission") : Html.T("تسليم الواجب", "Submit assignment"))
+                </h4>
+                
+                <form asp-action="Submit" method="post" enctype="multipart/form-data" id="submissionForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="assignmentId" value="@Model.Id">
+                    
+                    <!-- Content -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            @Html.T("محتوى الإجابة", "Answer content")
+                            <span class="text-danger">*</span>
+                        </label>
+                        <textarea name="content" 
+                                  class="form-control" 
+                                  rows="10" 
+                                  placeholder="@Html.T("اكتب إجابتك هنا... (10 أحرف على الأقل)", "Type your answer here... (at least 10 characters)")"
+                                  required>@submission?.Content</textarea>
+                        <div class="form-text">
+                            <i class="feather-info me-1"></i>
+                            @Html.T("اكتب إجابة واضحة ومفصلة للواجب", "Write a clear and detailed answer for the assignment")
+                        </div>
+                    </div>
+                    
+                    <!-- File Upload -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">@Html.T("رفع ملف (اختياري)", "Upload file (optional)")</label>
+                        <div class="file-upload-area" id="fileUploadArea">
+                            <i class="feather-upload text-primary fs-1 mb-3 d-block"></i>
+                            <h5 class="fw-bold mb-2">@Html.T("اسحب الملف هنا أو انقر للاختيار", "Drag file here or click to choose")</h5>
+                            <p class="text-muted mb-3">PDF, DOC, DOCX, ZIP (@Html.T("حتى 10MB", "up to 10MB"))</p>
+                            <input type="file" 
+                                   name="file" 
+                                   id="fileInput" 
+                                   class="d-none" 
+                                   accept=".pdf,.doc,.docx,.zip">
+                            <button type="button" class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                                <i class="feather-file me-2"></i>
+                                @Html.T("اختر ملف", "Choose file")
+                            </button>
+                        </div>
+                        <div id="fileInfo" class="mt-3 d-none">
+                            <div class="alert alert-success">
+                                <i class="feather-file me-2"></i>
+                                <span id="fileName"></span>
+                                <button type="button" class="btn btn-sm btn-link text-danger float-start" onclick="clearFile()">
+                                    <i class="feather-x"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Buttons -->
+                    <div class="d-flex gap-3">
+                        <button type="submit" name="isDraft" value="false" class="btn btn-primary btn-lg flex-grow-1">
+                            <i class="feather-send me-2"></i>
+                            @Html.T("تسليم الواجب", "Submit assignment")
+                        </button>
+                        <button type="submit" name="isDraft" value="true" class="btn btn-outline-secondary btn-lg">
+                            <i class="feather-save me-2"></i>
+                            @Html.T("حفظ كمسودة", "Save as draft")
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+else if (submission != null && submission.Status != LMS.Domain.Enums.AssignmentStatus.Draft)
+{
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="submission-card">
+                <h4 class="fw-bold mb-4">
+                    <i class="feather-file-text text-success me-2"></i>
+                    @Html.T("تسليمك", "Your submission")
+                </h4>
+                
+                <div class="alert alert-light border">
+                    <h6 class="fw-bold mb-2">@Html.T("المحتوى المُسلّم:", "Submitted content:")</h6>
+                    <p class="mb-0">@submission.Content</p>
+                </div>
+                
+                @if (!string.IsNullOrEmpty(submission.FileUrl))
+                {
+                    <div class="mt-3">
+                        <a href="@submission.FileUrl" target="_blank" class="btn btn-outline-primary">
+                            <i class="feather-download me-2"></i>
+                            @Html.T("تحميل الملف المُسلّم", "Download submitted file")
+                        </a>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+<script>
+    (function(){ window.__T = window.__T || {}; window.__T.AnswerMinLength = '@Html.Raw(Html.T("يجب أن تكون الإجابة 10 أحرف على الأقل", "Answer must be at least 10 characters").Replace("\\", "\\\\").Replace("'", "\\'"))'; })();
+    // File upload handling
+    const fileUploadArea = document.getElementById('fileUploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    
+    // Drag and drop
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        fileUploadArea?.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+        fileUploadArea?.addEventListener(eventName, () => {
+            fileUploadArea.classList.add('dragover');
+        }, false);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+        fileUploadArea?.addEventListener(eventName, () => {
+            fileUploadArea.classList.remove('dragover');
+        }, false);
+    });
+    
+    fileUploadArea?.addEventListener('drop', handleDrop, false);
+    
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        fileInput.files = files;
+        showFileInfo(files[0]);
+    }
+    
+    fileInput?.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            showFileInfo(this.files[0]);
+        }
+    });
+    
+    function showFileInfo(file) {
+        fileName.textContent = file.name;
+        fileInfo.classList.remove('d-none');
+    }
+    
+    function clearFile() {
+        fileInput.value = '';
+        fileInfo.classList.add('d-none');
+    }
+    
+    // Form validation
+    document.getElementById('submissionForm')?.addEventListener('submit', function(e) {
+        const content = document.querySelector('textarea[name="content"]').value.trim();
+        
+        if (content.length < 10) {
+            e.preventDefault();
+            alert((window.__T && window.__T.AnswerMinLength) || 'Answer must be at least 10 characters');
+            return false;
+        }
+        
+        return true;
+    });
+</script>
+}

@@ -1,0 +1,143 @@
+@model List<LMS.Domain.Entities.Learning.StudentNote>
+@{
+    ViewData["Title"] = Html.T("ملاحظاتي", "My Notes");
+    var lessonId = ViewBag.LessonId as int?;
+    var courseId = ViewBag.CourseId as int?;
+}
+
+@section Styles {
+<style>
+    .note-card {
+        transition: all 0.3s ease;
+    }
+    .note-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
+    .note-card.pinned {
+        border-color: #fbbf24;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-file-text text-primary me-2"></i>
+                    @Html.T("ملاحظاتي", "My Notes")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("جميع ملاحظاتك الدراسية", "All your study notes") (@(Model?.Count ?? 0) @Html.T("ملاحظة", "notes"))</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notes Grid -->
+<div class="row g-4">
+    @if (Model != null && Model.Any())
+    {
+        @foreach (var note in Model)
+        {
+            var courseName = note.Lesson?.Module?.Course?.Title ?? Html.T("غير محدد", "Not specified").ToString();
+            var lessonName = note.Lesson?.Title ?? Html.T("غير محدد", "Not specified").ToString();
+            
+            <div class="col-lg-4 col-md-6">
+                <div class="card note-card stretch stretch-full @(note.IsPinned ? "pinned" : "")">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <span class="badge bg-soft-primary text-primary">@courseName</span>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-icon" data-bs-toggle="dropdown">
+                                    <i class="feather-more-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <a class="dropdown-item" asp-action="Edit" asp-route-id="@note.Id">
+                                            <i class="feather-edit me-2"></i>@Html.T("تعديل", "Edit")
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <form asp-action="TogglePin" asp-route-id="@note.Id" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="dropdown-item"
+                                                    onclick="event.stopPropagation(); this.closest('form').submit(); return false;">
+                                                <i class="feather-@(note.IsPinned ? "pin-off" : "pin") me-2"></i>
+                                                @(note.IsPinned ? Html.T("إلغاء التثبيت", "Unpin") : Html.T("تثبيت", "Pin"))
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li>
+                                        <form asp-action="Delete" asp-route-id="@note.Id" method="post">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="dropdown-item text-danger" 
+                                                    onclick="event.stopPropagation(); if(!confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذه الملاحظة؟", "Are you sure you want to delete this note?").Replace("'", "\\'"))')) return false; this.closest('form').submit(); return false;">
+                                                <i class="feather-trash-2 me-2"></i>@Html.T("حذف", "Delete")
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        @if (note.IsPinned)
+                        {
+                            <span class="badge bg-warning mb-2">
+                                <i class="feather-pin me-1"></i>
+                                @Html.T("مثبتة", "Pinned")
+                            </span>
+                        }
+                        <h5 class="fw-bold mb-2">@(note.Title ?? Html.T("ملاحظة", "Note").ToString())</h5>
+                        <p class="text-muted fs-13 mb-3">
+                            @if (note.Content?.Length > 100)
+                            {
+                                <text>@note.Content.Substring(0, 100)...</text>
+                            }
+                            else
+                            {
+                                @note.Content
+                            }
+                        </p>
+                        <div class="d-flex align-items-center justify-content-between fs-12 text-muted">
+                            <span>
+                                <i class="feather-book-open me-1"></i>
+                                @lessonName
+                            </span>
+                            <span>
+                                <i class="feather-clock me-1"></i>
+                                @note.CreatedAt.ToRelativeTime()
+                            </span>
+                        </div>
+                        @if (note.TimestampSeconds.HasValue)
+                        {
+                            <div class="mt-2">
+                                <small class="text-primary">
+                                    <i class="feather-play-circle me-1"></i>
+                                    @Html.T("التوقيت:", "Timestamp:") @TimeSpan.FromSeconds(note.TimestampSeconds.Value).ToString(@"mm\:ss")
+                                </small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="col-12">
+            <div class="text-center py-5">
+                <i class="feather-file-text fs-1 text-muted mb-3 d-block"></i>
+                <h5 class="text-muted">@Html.T("لا توجد ملاحظات بعد", "No notes yet")</h5>
+                <p class="text-muted">@Html.T("أضف ملاحظاتك أثناء مشاهدة الدروس", "Add notes while watching lessons")</p>
+                <a asp-controller="Courses" asp-action="Index" class="btn btn-primary">
+                    <i class="feather-book-open me-2"></i>
+                    @Html.T("متابعة الدراسة", "Continue learning")
+                </a>
+            </div>
+        </div>
+    }
+</div>

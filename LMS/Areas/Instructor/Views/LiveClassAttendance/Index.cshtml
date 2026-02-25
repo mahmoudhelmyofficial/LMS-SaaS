@@ -1,0 +1,259 @@
+@model IEnumerable<LMS.Domain.Entities.LiveSessions.LiveClassAttendance>
+
+@{
+    ViewData["Title"] = Html.T("إدارة الحضور", "Attendance Management");
+    ViewData["Subtitle"] = Html.T("تسجيل وإدارة حضور الطلاب في الجلسة المباشرة", "Record and manage student attendance in the live session");
+    var liveClass = ViewBag.LiveClass as LMS.Domain.Entities.LiveSessions.LiveClass;
+}
+
+@using LMS.Views.Shared
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1">@ViewData["Title"]</h4>
+        <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+    </div>
+    <div class="d-flex gap-2">
+        @await Html.PartialAsync("_ExportDropdown", new ExportDropdownModel 
+        { 
+            ExportUrl = "/api/export/attendance",
+            EntityType = "attendance",
+            ButtonClass = "btn-success",
+            AdditionalParams = new Dictionary<string, string> { { "liveClassId", liveClass?.Id.ToString() ?? "0" } }
+        })
+        <button class="btn btn-primary" onclick="markAllPresent()">
+            <i class="feather-check-square me-2"></i>
+            @Html.T("تحديد الكل كحاضر", "Mark All as Present")
+        </button>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Live Class Info -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card" style="background: linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%);">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="fw-bold mb-2 text-primary">@liveClass?.Title</h5>
+                            <p class="text-muted mb-2">@liveClass?.Description</p>
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge bg-soft-info text-info">
+                                    <i class="feather-calendar me-1"></i>
+                                    @liveClass?.ScheduledAt.ToString("dd/MM/yyyy hh:mm tt")
+                                </span>
+                                <span class="badge bg-soft-warning text-warning">
+                                    <i class="feather-clock me-1"></i>
+                                    @liveClass?.Duration @Html.T("دقيقة", "min")
+                                </span>
+                                <span class="badge bg-soft-success text-success">
+                                    <i class='feather-users me-1'></i>
+                                    @Model.Count(a => a.IsPresent) @Html.T("حاضر", "present") / @Model.Count() @Html.T("طالب", "students")
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="display-4 fw-bold text-primary">
+                                @((Model.Count() > 0 ? (Model.Count(a => a.IsPresent) * 100.0 / Model.Count()) : 0).ToString("F0"))%
+                            </div>
+                            <p class="text-muted mb-0">@Html.T("نسبة الحضور", "Attendance Rate")</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attendance List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة الحضور", "Attendance List")</h5>
+                    <div class="card-header-action">
+                        <span class="badge bg-soft-primary text-primary">@Model.Count() @Html.T("طالب", "students")</span>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var attendance in Model)
+                            {
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="avatar-text avatar-md bg-@(attendance.IsPresent ? "success" : "secondary") text-white">
+                                                @(attendance.Student?.FirstName?.Substring(0, 1).ToUpper() ?? "S")
+                                            </div>
+                                            <div class="min-w-0 flex-grow-1">
+                                                <span class="fw-medium text-break d-block">@attendance.Student?.FullName</span>
+                                                <span class="fs-12 text-muted">@attendance.Student?.Email</span>
+                                                <div class="d-flex flex-wrap gap-2 mt-1">
+                                                    <span class="badge bg-soft-info text-info">@attendance.AttendanceDurationMinutes @Html.T("دقيقة", "min")</span>
+                                                    @if (attendance.IsPresent) { <span class="badge bg-soft-success text-success">@Html.T("حاضر", "Present")</span> }
+                                                    else { <span class="badge bg-soft-danger text-danger">@Html.T("غائب", "Absent")</span> }
+                                                </div>
+                                                <button type="button" class="btn btn-sm mt-2 btn-@(attendance.IsPresent ? "warning" : "success")" onclick="markAttendance('@attendance.LiveClassId', '@attendance.StudentId', @(attendance.IsPresent ? "false" : "true"))">
+                                                    <i class="feather-@(attendance.IsPresent ? "x" : "check")"></i>
+                                                    @(attendance.IsPresent ? Html.T("تحديد كغائب", "Mark Absent") : Html.T("تحديد كحاضر", "Mark Present"))
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("الطالب", "Student")</th>
+                                            <th>@Html.T("البريد الإلكتروني", "Email")</th>
+                                            <th>@Html.T("وقت الانضمام", "Join Time")</th>
+                                            <th>@Html.T("مدة الحضور", "Attendance Duration")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var attendance in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-3">
+                                                    <div class="avatar-text avatar-md bg-@(attendance.IsPresent ? "success" : "secondary") text-white">
+                                                        @(attendance.Student?.FirstName?.Substring(0, 1).ToUpper() ?? "S")
+                                                    </div>
+                                                    <div>
+                                                        <span class="fw-medium">@attendance.Student?.FullName</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="fs-13">@attendance.Student?.Email</span>
+                                            </td>
+                                            <td>
+                                                @if (attendance.JoinedAt.HasValue)
+                                                {
+                                                    <span class="fs-12">@attendance.JoinedAt.Value.ToString("hh:mm tt")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted fs-11">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-info text-info">@attendance.AttendanceDurationMinutes @Html.T("دقيقة", "min")</span>
+                                            </td>
+                                            <td>
+                                                @if (attendance.IsPresent)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-check"></i> @Html.T("حاضر", "Present")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-danger text-danger">
+                                                        <i class="feather-x"></i> @Html.T("غائب", "Absent")
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <button type="button" class="btn btn-sm btn-@(attendance.IsPresent ? "warning" : "success")" 
+                                                        onclick="markAttendance('@attendance.LiveClassId', '@attendance.StudentId', @(attendance.IsPresent ? "false" : "true"))">
+                                                    <i class="feather-@(attendance.IsPresent ? "x" : "check")"></i>
+                                                    @(attendance.IsPresent ? Html.T("تحديد كغائب", "Mark Absent") : Html.T("تحديد كحاضر", "Mark Present"))
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-users"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا يوجد طلاب", "No Students")</h5>
+                            <p class="text-muted mb-0">@Html.T("لم يتم تسجيل أي طلاب في هذه الجلسة بعد", "No students have been registered in this session yet")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function markAttendance(liveClassId, studentId, isPresent) {
+            $.ajax({
+                url: '@Url.Action("MarkAttendance")',
+                type: 'POST',
+                data: {
+                    liveClassId: liveClassId,
+                    studentId: studentId,
+                    isPresent: isPresent,
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        location.reload();
+                    } else {
+                        alert('@Html.T("حدث خطأ:", "Error:") ' + (response.message || '@Html.T("فشل تحديث الحضور", "Failed to update attendance")'));
+                    }
+                },
+                error: function() {
+                    alert('@Html.T("حدث خطأ أثناء تحديث الحضور", "An error occurred while updating attendance")');
+                }
+            });
+        }
+
+        function markAllPresent() {
+            if (confirm('@Html.T("هل أنت متأكد من تحديد جميع الطلاب كحاضرين؟", "Are you sure you want to mark all students as present?")')) {
+                var promises = [];
+                $('tbody tr').each(function() {
+                    var $row = $(this);
+                    var $badge = $row.find('.badge');
+                    if ($badge.hasClass('bg-soft-danger')) {
+                        var $btn = $row.find('button[onclick^="markAttendance"]');
+                        var onclick = $btn.attr('onclick');
+                        var matches = onclick.match(/markAttendance\('(.+?)', '(.+?)', (.+?)\)/);
+                        if (matches) {
+                            promises.push(
+                                $.ajax({
+                                    url: '@Url.Action("MarkAttendance")',
+                                    type: 'POST',
+                                    data: {
+                                        liveClassId: matches[1],
+                                        studentId: matches[2],
+                                        isPresent: true,
+                                        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                                    }
+                                })
+                            );
+                        }
+                    }
+                });
+
+                Promise.all(promises).then(function() {
+                    location.reload();
+                }).catch(function() {
+                    alert('@Html.T("حدث خطأ أثناء تحديث الحضور", "An error occurred while updating attendance")');
+                });
+            }
+        }
+    </script>
+
+    @Html.AntiForgeryToken()
+}

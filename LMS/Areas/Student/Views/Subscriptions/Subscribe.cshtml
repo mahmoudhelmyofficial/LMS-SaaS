@@ -1,0 +1,520 @@
+@model LMS.Areas.Student.ViewModels.SubscriptionCheckoutViewModel
+@{
+    ViewData["Title"] = Html.T("الاشتراك في", "Subscribe to") + " " + Model.PlanName;
+}
+
+@section Styles {
+<style>
+    .checkout-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .plan-summary-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .price-display {
+        font-size: 3rem;
+        font-weight: bold;
+        margin: 1rem 0;
+    }
+    
+    .payment-method-card {
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 1.5rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 1rem;
+    }
+    
+    .payment-method-card:hover {
+        border-color: #667eea;
+        background: #f9fafb;
+    }
+    
+    .payment-method-card.active {
+        border-color: #667eea;
+        background: #eff6ff;
+    }
+    
+    .payment-method-card input[type="radio"] {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .feature-check {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 0;
+    }
+    
+    .feature-check i {
+        color: #22c55e;
+        font-size: 1.25rem;
+    }
+    
+    .secure-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: #f0fdf4;
+        color: #22c55e;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    
+    .card-element {
+        padding: 1rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background: white;
+    }
+    
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .summary-row:last-child {
+        border-bottom: none;
+        padding-top: 1rem;
+        margin-top: 1rem;
+        border-top: 2px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .processing-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .processing-overlay.active {
+        display: flex;
+    }
+    
+    .spinner-border-custom {
+        width: 3rem;
+        height: 3rem;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+}
+
+<!-- Processing Overlay -->
+<div id="processingOverlay" class="processing-overlay">
+    <div class="text-center text-white">
+        <div class="spinner-border-custom mb-3"></div>
+        <h4>@Html.T("جاري معالجة الدفع...", "Processing payment...")</h4>
+        <p>@Html.T("يرجى عدم إغلاق الصفحة", "Please do not close this page")</p>
+    </div>
+</div>
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<div class="checkout-container">
+    <!-- Breadcrumb -->
+    <div class="d-flex align-items-center gap-2 mb-4">
+        <a asp-action="Plans" class="text-muted">
+            <i class="feather-arrow-right me-2"></i>
+            @Html.T("العودة للخطط", "Back to plans")
+        </a>
+    </div>
+
+    <!-- Plan Summary -->
+    <div class="plan-summary-card">
+        <div class="text-center">
+            <div class="avatar-text avatar-xl bg-white bg-opacity-25 text-white mx-auto mb-3">
+                <i class="feather-star"></i>
+            </div>
+            <h2 class="text-white fw-bold mb-2">@Model.PlanName</h2>
+            <div class="price-display">
+                @Model.Price.ToEGP(0)
+                <small class="fs-6 opacity-75">/@(Model.BillingCycle == "Monthly" ? Html.T("شهر", "month") : Html.T("سنة", "year"))</small>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            @if (Model.Features?.Any() == true)
+            {
+                foreach (var feature in Model.Features)
+                {
+                    <div class="feature-check text-white">
+                        <i class="feather-check-circle"></i>
+                        <span>@feature</span>
+                    </div>
+                }
+            }
+        </div>
+
+        <!-- Summary Details -->
+        <div class="mt-4 pt-4" style="border-top: 1px solid rgba(255,255,255,0.2);">
+            <div class="summary-row">
+                <span class="opacity-75">@Html.T("السعر الأساسي", "Base price")</span>
+                <span class="fw-bold">@Model.Price.ToEGP(0)</span>
+            </div>
+            <div class="summary-row">
+                <span class="opacity-75">@Html.T("الضرائب والرسوم", "Taxes and fees")</span>
+                <span class="fw-bold">@((Model.Price * 0.14m).ToEGP(0))</span>
+            </div>
+            <div class="summary-row">
+                <span class="fs-5 fw-bold">@Html.T("الإجمالي", "Total")</span>
+                <span class="fs-4 fw-bold">@((Model.Price * 1.14m).ToEGP(0))</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Form -->
+    <form id="subscriptionForm" asp-action="ProcessSubscription" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="PlanId" />
+
+        <!-- Billing Information -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-user text-primary me-2"></i>
+                    @Html.T("معلومات الفواتير", "Billing information")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">@Html.T("الاسم الكامل", "Full name") <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="billingName" name="BillingName" required 
+                               placeholder="@Html.T("أدخل اسمك الكامل", "Enter your full name")">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">@Html.T("البريد الإلكتروني", "Email") <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" id="billingEmail" name="BillingEmail" required 
+                               placeholder="@Html.T("example@domain.com", "example@domain.com")">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">@Html.T("رقم الهاتف", "Phone number")</label>
+                        <input type="tel" class="form-control" id="billingPhone" name="BillingPhone" 
+                               placeholder="@Html.T("+20 123 456 7890", "+20 123 456 7890")">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">@Html.T("البلد", "Country") <span class="text-danger">*</span></label>
+                        <select class="form-select" id="billingCountry" name="BillingCountry" required>
+                            <option value="">@Html.T("اختر البلد", "Select country")</option>
+                            <option value="EG" selected>@Html.T("مصر", "Egypt")</option>
+                            <option value="SA">@Html.T("المملكة العربية السعودية", "Saudi Arabia")</option>
+                            <option value="AE">@Html.T("الإمارات العربية المتحدة", "UAE")</option>
+                            <option value="JO">@Html.T("الأردن", "Jordan")</option>
+                            <option value="LB">@Html.T("لبنان", "Lebanon")</option>
+                            <option value="KW">@Html.T("الكويت", "Kuwait")</option>
+                            <option value="QA">@Html.T("قطر", "Qatar")</option>
+                            <option value="BH">@Html.T("البحرين", "Bahrain")</option>
+                            <option value="OM">@Html.T("عمان", "Oman")</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">@Html.T("العنوان", "Address")</label>
+                        <textarea class="form-control" id="billingAddress" name="BillingAddress" rows="2" 
+                                  placeholder="@Html.T("أدخل عنوانك الكامل", "Enter your full address")"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Method -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-credit-card text-success me-2"></i>
+                    @Html.T("طريقة الدفع", "Payment method")
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Saved Payment Methods -->
+                @if (Model.SavedPaymentMethods?.Any() == true)
+                {
+                    <h6 class="fw-bold mb-3">@Html.T("طرق الدفع المحفوظة", "Saved payment methods")</h6>
+                    foreach (var savedMethod in Model.SavedPaymentMethods)
+                    {
+                        <label class="payment-method-card">
+                            <div class="d-flex align-items-center gap-3">
+                                <input type="radio" name="PaymentMethodType" value="saved" 
+                                       data-payment-id="@savedMethod.Id">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <i class="feather-credit-card text-primary"></i>
+                                        <strong>•••• •••• •••• @savedMethod.Last4</strong>
+                                    </div>
+                                    <small class="text-muted">
+                                        @Html.T("ينتهي في", "Expires") @savedMethod.ExpiryMonth/@savedMethod.ExpiryYear
+                                    </small>
+                                </div>
+                                @if (savedMethod.IsDefault)
+                                {
+                                    <span class="badge bg-primary">@Html.T("الافتراضية", "Default")</span>
+                                }
+                            </div>
+                        </label>
+                    }
+                    <hr class="my-4" />
+                    <h6 class="fw-bold mb-3">@Html.T("أو أضف بطاقة جديدة", "Or add a new card")</h6>
+                }
+
+                <!-- New Card Payment -->
+                <label class="payment-method-card active">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <input type="radio" name="PaymentMethodType" value="new" checked>
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="feather-credit-card text-success"></i>
+                                <strong>@Html.T("بطاقة ائتمان / بطاقة خصم", "Credit / Debit card")</strong>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <img src="~/assets/images/cards/visa.png" alt="@Html.T("فيزا", "Visa")" height="24" />
+                            <img src="~/assets/images/cards/mastercard.png" alt="@Html.T("ماستركارد", "Mastercard")" height="24" />
+                            <img src="~/assets/images/cards/amex.png" alt="@Html.T("أمريكان إكسبريس", "Amex")" height="24" />
+                        </div>
+                    </div>
+                    
+                    <div id="newCardForm">
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("رقم البطاقة", "Card number") <span class="text-danger">*</span></label>
+                            <div id="card-number-element" class="card-element"></div>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("تاريخ الانتهاء", "Expiry date") <span class="text-danger">*</span></label>
+                                <div id="card-expiry-element" class="card-element"></div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">@Html.T("رمز الأمان (CVV)", "CVV") <span class="text-danger">*</span></label>
+                                <div id="card-cvc-element" class="card-element"></div>
+                            </div>
+                        </div>
+                        <div class="form-check mt-3">
+                            <input type="checkbox" class="form-check-input" id="saveCard" name="SaveCard">
+                            <label class="form-check-label" for="saveCard">
+                                @Html.T("حفظ هذه البطاقة للاستخدام المستقبلي", "Save this card for future use")
+                            </label>
+                        </div>
+                    </div>
+                </label>
+
+                <!-- Security Badge -->
+                <div class="mt-4 text-center">
+                    <div class="secure-badge d-inline-flex">
+                        <i class="feather-lock"></i>
+                        <span>@Html.T("دفع آمن ومشفر بتقنية SSL", "Secure SSL encrypted payment")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terms and Conditions -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body">
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="acceptTerms" required>
+                    <label class="form-check-label" for="acceptTerms">
+                        @Html.T("أوافق على", "I agree to")
+                        <a href="#" class="text-primary">@Html.T("شروط الخدمة", "Terms of Service")</a> @Html.T("و", "and")
+                        <a href="#" class="text-primary">@Html.T("سياسة الخصوصية", "Privacy Policy")</a> @Html.T("و", "and")
+                        <a href="#" class="text-primary">@Html.T("سياسة الاسترداد", "Refund Policy")</a>
+                        <span class="text-danger">*</span>
+                    </label>
+                </div>
+                
+                <div class="alert alert-info mt-3 mb-0">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="feather-info mt-1"></i>
+                        <div>
+                            <strong>@Html.T("ملاحظة:", "Note:")</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>@Html.T("سيتم تجديد اشتراكك تلقائياً في نهاية كل فترة فوترة", "Your subscription will renew automatically at the end of each billing period")</li>
+                                <li>@Html.T("يمكنك إلغاء الاشتراك في أي وقت من صفحة إدارة الاشتراكات", "You can cancel your subscription anytime from the subscriptions management page")</li>
+                                <li>@Html.T("في حالة الإلغاء، ستحتفظ بالوصول حتى نهاية الفترة المدفوعة", "If you cancel, you will keep access until the end of the paid period")</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button type="submit" id="submitBtn" class="btn btn-primary btn-lg">
+                        <i class="feather-check-circle me-2"></i>
+                        @Html.T("إتمام الاشتراك ودفع", "Complete subscription and pay") @((Model.Price * 1.14m).ToEGP(0))
+                    </button>
+                    <a asp-action="Plans" class="btn btn-outline-secondary">
+                        <i class="feather-arrow-right me-2"></i>
+                        @Html.T("العودة للخطط", "Back to plans")
+                    </a>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    window.__T = window.__T || {};
+    window.__T.Processing = '@Html.Raw(Html.T("جاري المعالجة...", "Processing...").ToString().Replace("'", "\\'"))';
+    window.__T.PaymentError = '@Html.Raw(Html.T("حدث خطأ أثناء معالجة الدفع", "An error occurred while processing payment").ToString().Replace("'", "\\'"))';
+    window.__T.ErrorLabel = '@Html.Raw(Html.T("خطأ:", "Error:").ToString().Replace("'", "\\'"))';
+    window.__T.CompleteSubscribePay = '@Html.Raw(Html.T("إتمام الاشتراك ودفع", "Complete subscription and pay").ToString().Replace("'", "\\'"))';
+    // Initialize Stripe
+    const stripe = Stripe('@ViewBag.StripePublishableKey');
+    const elements = stripe.elements();
+
+    // Create card elements
+    const cardNumberElement = elements.create('cardNumber', {
+        style: {
+            base: {
+                fontSize: '16px',
+                color: '#1f2937',
+                fontFamily: 'Cairo, sans-serif',
+                '::placeholder': {
+                    color: '#9ca3af'
+                }
+            }
+        },
+        placeholder: '1234 5678 9012 3456'
+    });
+
+    const cardExpiryElement = elements.create('cardExpiry', {
+        style: {
+            base: {
+                fontSize: '16px',
+                color: '#1f2937',
+                fontFamily: 'Cairo, sans-serif'
+            }
+        }
+    });
+
+    const cardCvcElement = elements.create('cardCvc', {
+        style: {
+            base: {
+                fontSize: '16px',
+                color: '#1f2937',
+                fontFamily: 'Cairo, sans-serif'
+            }
+        },
+        placeholder: '123'
+    });
+
+    // Mount elements
+    cardNumberElement.mount('#card-number-element');
+    cardExpiryElement.mount('#card-expiry-element');
+    cardCvcElement.mount('#card-cvc-element');
+
+    // Handle payment method selection
+    document.querySelectorAll('input[name="PaymentMethodType"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            document.querySelectorAll('.payment-method-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            this.closest('.payment-method-card').classList.add('active');
+        });
+    });
+
+    // Handle form submission
+    document.getElementById('subscriptionForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const submitBtn = document.getElementById('submitBtn');
+        const overlay = document.getElementById('processingOverlay');
+        
+        // Disable submit button
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + (window.__T && window.__T.Processing || 'Processing...');
+        overlay.classList.add('active');
+
+        try {
+            const paymentMethodType = document.querySelector('input[name="PaymentMethodType"]:checked').value;
+            
+            let paymentMethodId;
+            
+            if (paymentMethodType === 'new') {
+                // Create payment method with Stripe
+                const { paymentMethod, error } = await stripe.createPaymentMethod({
+                    type: 'card',
+                    card: cardNumberElement,
+                    billing_details: {
+                        name: document.getElementById('billingName').value,
+                        email: document.getElementById('billingEmail').value,
+                        phone: document.getElementById('billingPhone').value,
+                        address: {
+                            line1: document.getElementById('billingAddress').value,
+                            country: document.getElementById('billingCountry').value
+                        }
+                    }
+                });
+
+                if (error) {
+                    throw new Error(error.message);
+                }
+
+                paymentMethodId = paymentMethod.id;
+            } else {
+                // Use saved payment method
+                paymentMethodId = document.querySelector('input[name="PaymentMethodType"]:checked').dataset.paymentId;
+            }
+
+            // Submit to server
+            const formData = new FormData(this);
+            formData.append('PaymentMethodId', paymentMethodId);
+
+            const response = await fetch(this.action, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Redirect to success page
+                window.location.href = '@Url.Action("Details")?id=' + result.subscriptionId;
+            } else {
+                throw new Error(result.message || (window.__T && window.__T.PaymentError) || 'An error occurred while processing payment');
+            }
+        } catch (error) {
+            console.error('Payment error:', error);
+            alert((window.__T && window.__T.ErrorLabel || 'Error:') + ' ' + error.message);
+            
+            // Re-enable submit button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="feather-check-circle me-2"></i>' + (window.__T && window.__T.CompleteSubscribePay || 'Complete subscription and pay') + ' @((Model.Price * 1.14m).ToEGP(0))';
+            overlay.classList.remove('active');
+        }
+    });
+</script>
+}
+

@@ -1,0 +1,272 @@
+@model IEnumerable<LMS.Domain.Entities.Marketing.FlashSale>
+
+@{
+    ViewData["Title"] = Html.T("إدارة العروض السريعة", "Flash Sales Management");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة العروض السريعة لدوراتك", "View and manage your course flash sales");
+    var createUrl = Url.Action("Create");
+    var statisticsUrl = Url.Action("Statistics");
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + createUrl + "' class='btn btn-primary'><i class='feather-plus me-2'></i>" + Html.T("إنشاء عرض سريع", "Create flash sale") + "</a><a href='" + statisticsUrl + "' class='btn btn-light'><i class='feather-bar-chart-2 me-2'></i>" + Html.T("الإحصائيات", "Statistics") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي العروض", "Total offers") },
+                { "Value", Model.Count() },
+                { "Icon", "zap" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("العروض النشطة", "Active offers") },
+                { "Value", Model.Count(f => f.IsActive && f.StartDate <= DateTime.UtcNow && f.EndDate > DateTime.UtcNow) },
+                { "Icon", "trending-up" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي المبيعات", "Total sales") },
+                { "Value", Model.Sum(f => f.SoldQuantity) },
+                { "Icon", "shopping-cart" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الإيرادات", "Total revenue") },
+                { "Value", Model.Sum(f => f.SoldQuantity * f.DiscountPrice).ToEGP() },
+                { "Icon", "dollar-sign" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    <!-- Flash Sales List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة العروض السريعة", "Flash sales list")</h5>
+                    <div class="card-header-action">
+                        <div class="card-header-btn">
+                            <div data-bs-toggle="tooltip" title="@Html.T("تحديث", "Refresh")">
+                                <a href="@Url.Action("Index")" class="avatar-text avatar-xs bg-warning">
+                                    <i class="feather-refresh-cw"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    <!-- Filter Bar -->
+                    <div class="p-4 border-bottom">
+                        <form method="get" class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">@Html.T("الحالة", "Status")</label>
+                                <select name="isActive" class="form-select" onchange="this.form.submit()">
+                                    <option value="">@Html.T("جميع الحالات", "All statuses")</option>
+                                    <option value="true" selected="@(ViewBag.IsActive == true)">@Html.T("نشط", "Active")</option>
+                                    <option value="false" selected="@(ViewBag.IsActive == false)">@Html.T("معطل", "Inactive")</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var sale in Model)
+                            {
+                                var isActive = sale.IsActive && sale.StartDate <= DateTime.UtcNow && sale.EndDate > DateTime.UtcNow;
+                                var isUpcoming = sale.StartDate > DateTime.UtcNow;
+                                var isExpired = sale.EndDate <= DateTime.UtcNow;
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <a href="@Url.Action("Details", new { id = sale.Id })" class="fw-bold text-dark text-break d-block">@sale.Name</a>
+                                        <div class="text-muted fs-12">@sale.Course?.Title</div>
+                                        <div class="d-flex flex-wrap gap-2 mt-2 align-items-center">
+                                            <span class="badge bg-danger">-@sale.DiscountPercentage.ToString("F0")%</span>
+                                            <span class="fw-bold text-success">@sale.DiscountPrice.ToEGP()</span>
+                                            <span class="fs-12 text-muted">@sale.SoldQuantity @(sale.MaxQuantity.HasValue ? $"/ {sale.MaxQuantity}" : "")</span>
+                                        </div>
+                                        @if (isActive) { <span class="badge bg-soft-success text-success mt-1">@Html.T("نشط", "Active")</span> }
+                                        else if (isUpcoming) { <span class="badge bg-soft-info text-info mt-1">@Html.T("قادم", "Upcoming")</span> }
+                                        else if (isExpired) { <span class="badge bg-soft-secondary text-secondary mt-1">@Html.T("منتهي", "Expired")</span> }
+                                        else { <span class="badge bg-soft-warning text-warning mt-1">@Html.T("معطل", "Inactive")</span> }
+                                        <div class="hstack gap-2 mt-2">
+                                            <a href="@Url.Action("Details", new { id = sale.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-eye"></i></a>
+                                            <a href="@Url.Action("Edit", new { id = sale.Id })" class="btn btn-sm btn-outline-secondary"><i class="feather-edit"></i></a>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("العرض", "Offer")</th>
+                                            <th>@Html.T("الدورة", "Course")</th>
+                                            <th>@Html.T("السعر", "Price")</th>
+                                            <th>@Html.T("الخصم", "Discount")</th>
+                                            <th>@Html.T("المبيعات", "Sales")</th>
+                                            <th>@Html.T("المدة", "Duration")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var sale in Model)
+                                    {
+                                        var isActive = sale.IsActive && sale.StartDate <= DateTime.UtcNow && sale.EndDate > DateTime.UtcNow;
+                                        var isUpcoming = sale.StartDate > DateTime.UtcNow;
+                                        var isExpired = sale.EndDate <= DateTime.UtcNow;
+                                        
+                                        <tr>
+                                            <td>
+                                                <div>
+                                                    <a href="@Url.Action("Details", new { id = sale.Id })" class="fw-bold text-dark">@sale.Name</a>
+                                                    @if (sale.ShowTimer)
+                                                    {
+                                                        <span class="badge bg-soft-danger text-danger fs-10 ms-2">
+                                                            <i class="feather-clock"></i> @Html.T("مؤقت", "Timed")
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="fw-medium">@sale.Course?.Title</span>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <span class="text-muted text-decoration-line-through fs-12">@sale.OriginalPrice.ToEGP()</span>
+                                                    <span class="d-block fw-bold text-success">@sale.DiscountPrice.ToEGP()</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-danger">-@sale.DiscountPercentage.ToString("F0")%</span>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <div class="progress" style="height: 8px;">
+                                                        <div class="progress-bar bg-success" style="width: @((sale.MaxQuantity.HasValue && sale.MaxQuantity > 0 ? (sale.SoldQuantity * 100.0 / sale.MaxQuantity.Value) : 0))%"></div>
+                                                    </div>
+                                                    <span class="fs-11 text-muted mt-1">
+                                                        @sale.SoldQuantity @(sale.MaxQuantity.HasValue ? $"/ {sale.MaxQuantity}" : "")
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="fs-11">
+                                                    <div>@Html.T("من", "From"): @sale.StartDate.ToString("dd/MM/yyyy")</div>
+                                                    <div>@Html.T("إلى", "To"): @sale.EndDate.ToString("dd/MM/yyyy")</div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (isActive)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-check-circle"></i> @Html.T("نشط", "Active")
+                                                    </span>
+                                                }
+                                                else if (isUpcoming)
+                                                {
+                                                    <span class="badge bg-soft-info text-info">
+                                                        <i class="feather-clock"></i> @Html.T("قادم", "Upcoming")
+                                                    </span>
+                                                }
+                                                else if (isExpired)
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">
+                                                        <i class="feather-x-circle"></i> @Html.T("منتهي", "Expired")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning">
+                                                        <i class="feather-pause-circle"></i> @Html.T("معطل", "Inactive")
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { id = sale.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض", "View")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    <a href="@Url.Action("Edit", new { id = sale.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                        <i class="feather-edit"></i>
+                                                    </a>
+                                                    @if (!isExpired)
+                                                    {
+                                                        <form asp-action="ToggleStatus" asp-route-id="@sale.Id" method="post" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="avatar-text avatar-md border-0 bg-transparent" data-bs-toggle="tooltip" title="@(sale.IsActive ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))">
+                                                                <i class="feather-@(sale.IsActive ? "pause-circle" : "play-circle")"></i>
+                                                            </button>
+                                                        </form>
+                                                    }
+                                                    @if (sale.SoldQuantity == 0)
+                                                    {
+                                                        <form asp-action="Delete" asp-route-id="@sale.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف هذا العرض؟", "Are you sure you want to delete this sale?").Replace("'", "\\'"))')">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="avatar-text avatar-md border-0 bg-transparent text-danger" data-bs-toggle="tooltip" title="@Html.T("حذف", "Delete")">
+                                                                <i class="feather-trash-2"></i>
+                                                            </button>
+                                                        </form>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-zap"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد عروض سريعة بعد", "No flash sales yet")</h5>
+                            <p class="text-muted mb-4">@Html.T("قم بإنشاء عروض سريعة لزيادة مبيعاتك", "Create flash sales to boost your sales")</p>
+                            <a href="@Url.Action("Create")" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إنشاء عرض سريع", "Create flash sale")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

@@ -1,0 +1,623 @@
+@model List<LMS.Domain.Entities.Courses.Course>
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("تصفح الدورات", "Browse Courses");
+    var categories = ViewBag.Categories as List<LMS.Domain.Entities.Courses.Category> ?? new List<LMS.Domain.Entities.Courses.Category>();
+    var searchQuery = ViewBag.SearchQuery?.ToString() ?? "";
+    var selectedCategory = ViewBag.SelectedCategory as int?;
+    var selectedLevel = ViewBag.SelectedLevel?.ToString() ?? "";
+    var selectedSort = ViewBag.SelectedSort?.ToString() ?? "popular";
+    var pageSize = ViewBag.PageSize ?? await PlatformSettings.GetIntSettingAsync("UI.PageSize.Courses", 12);
+    var currentPage = ViewBag.Page ?? 1;
+    var totalCourses = ViewBag.TotalCount ?? 0;
+    var totalPages = (int)Math.Ceiling((double)totalCourses / (int)pageSize);
+    if (totalPages < 1) totalPages = 1;
+    var startPage = Math.Max(1, currentPage - 2);
+    var endPage = Math.Min(totalPages, currentPage + 2);
+    var filterFree = ViewBag.Free as bool?;
+    var filterPaid = ViewBag.Paid as bool?;
+    var filterDurationParts = (ViewBag.DurationParts as IEnumerable<string>) ?? Array.Empty<string>();
+    var filterDurationRaw = ViewBag.DurationRaw as string;
+    var filterRating = ViewBag.Rating as decimal?;
+}
+
+@section Styles {
+<style>
+    /* Modern Hero Section */
+    .discover-hero {
+        background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 50%, #3d7ab5 100%);
+        border-radius: 20px;
+        position: relative;
+        overflow: hidden;
+    }
+    .discover-hero::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -20%;
+        width: 60%;
+        height: 200%;
+        background: radial-gradient(ellipse, rgba(255,255,255,0.08) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .discover-hero .search-wrapper {
+        background: rgba(255,255,255,0.12);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 8px;
+        border: 1px solid rgba(255,255,255,0.15);
+    }
+    .discover-hero .search-input {
+        background: white;
+        border: none;
+        border-radius: 12px;
+        padding: 16px 20px;
+        font-size: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    .discover-hero .search-btn {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        border: none;
+        border-radius: 12px;
+        padding: 16px 32px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(245,158,11,0.3);
+    }
+    .discover-hero .search-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(245,158,11,0.4);
+    }
+
+    /* Course Cards */
+    .browse-course-card {
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        height: 100%;
+        border: none;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+    }
+    .browse-course-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.12);
+    }
+    .course-thumbnail {
+        height: 180px;
+        object-fit: cover;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        position: relative;
+    }
+    .course-thumbnail-overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 60%);
+    }
+    .filter-sidebar {
+        position: sticky;
+        top: 20px;
+    }
+    .price-badge {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 10;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 12px;
+    }
+    
+    /* Category Chips */
+    .category-chips-wrapper {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 8px 0;
+    }
+    .category-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 20px;
+        border-radius: 50px;
+        background: #f8fafc;
+        border: 2px solid transparent;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        color: #475569;
+        text-decoration: none;
+    }
+    .category-chip:hover {
+        background: #e0f2fe;
+        color: #0369a1;
+    }
+    .category-chip.active {
+        background: linear-gradient(135deg, #004aad 0%, #0066cc 100%);
+        color: white;
+        box-shadow: 0 4px 12px rgba(0,74,173,0.3);
+    }
+    
+    /* Filter Card */
+    .filter-card {
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+    .filter-card .card-header {
+        background: transparent;
+        border-bottom: 1px solid #f1f5f9;
+        padding: 20px;
+    }
+    
+    /* Course Meta Info */
+    .course-meta {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 0;
+        border-top: 1px solid #f1f5f9;
+        margin-top: 12px;
+    }
+    .course-meta-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: #64748b;
+    }
+    .course-meta-item i {
+        font-size: 14px;
+    }
+    
+    /* Rating Stars */
+    .rating-stars {
+        color: #fbbf24;
+        font-size: 14px;
+    }
+    
+    /* Price Display */
+    .course-price {
+        font-size: 22px;
+        font-weight: 700;
+        color: #1e40af;
+    }
+    .course-price-original {
+        text-decoration: line-through;
+        color: #94a3b8;
+        font-size: 14px;
+    }
+    
+    /* Action Buttons */
+    .btn-add-cart {
+        background: linear-gradient(135deg, #004aad 0%, #0066cc 100%);
+        border: none;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .btn-add-cart:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,74,173,0.3);
+    }
+    .btn-wishlist {
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #fecdd3;
+        color: #f43f5e;
+        background: #fff1f2;
+        transition: all 0.3s ease;
+    }
+    .btn-wishlist:hover {
+        background: #f43f5e;
+        color: white;
+        border-color: #f43f5e;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Modern Hero Section -->
+<div class="discover-hero mb-4">
+    <div class="p-4 p-lg-5">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <div class="mb-4">
+                    <span class="badge px-3 py-2 mb-3" style="backdrop-filter: blur(10px); background: rgba(255,255,255,0.95); color: #1e3a5f;">
+                        <i class="feather-zap me-1"></i> @Html.T("أكثر من", "More than") @totalCourses @Html.T("دورة متاحة", "courses available")
+                    </span>
+                    <h1 class="text-white fw-bold mb-3" style="font-size: 2.25rem; line-height: 1.3;">
+                        @Html.T("اكتشف دورات جديدة", "Discover New Courses")<br/>
+                        <span style="color: #fbbf24;">@Html.T("وابدأ رحلة التعلم", "and Start Your Learning Journey")</span>
+                    </h1>
+                    <p class="text-white mb-4" style="opacity: 0.85; font-size: 1.1rem;">
+                        @Html.T("ابحث عن الدورة المثالية واستثمر في مستقبلك مع أفضل المدربين", "Find the perfect course and invest in your future with the best instructors")
+                    </p>
+                </div>
+                
+                <!-- Search Bar -->
+                <form method="get" asp-action="Browse">
+                    <div class="search-wrapper">
+                        <div class="d-flex gap-2 flex-column flex-md-row">
+                            <div class="flex-grow-1">
+                                <input type="text" name="search" class="form-control search-input w-100" 
+                                       placeholder="@Html.T("ابحث عن دورة، مدرب، أو موضوع...", "Search for a course, instructor, or topic...")" value="@searchQuery" />
+                            </div>
+                            <button type="submit" class="btn btn-warning search-btn text-white">
+                                <i class="feather-search me-2"></i>
+                                @Html.T("بحث", "Search")
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                
+            </div>
+            <div class="col-lg-5 d-none d-lg-block text-center">
+                <div style="position: relative;">
+                    <div style="width: 280px; height: 280px; margin: 0 auto; background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+                        <i class="feather-book-open" style="font-size: 100px; color: rgba(255,255,255,0.9);"></i>
+                    </div>
+                    <div style="position: absolute; top: 20px; right: 20px; background: white; border-radius: 12px; padding: 12px 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-play-circle text-success"></i>
+                            <span class="fw-semibold text-dark">@Html.T("ابدأ التعلم الآن", "Start Learning Now")</span>
+                        </div>
+                    </div>
+                    <div style="position: absolute; bottom: 30px; left: 10px; background: white; border-radius: 12px; padding: 12px 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-award text-warning"></i>
+                            <span class="fw-semibold text-dark">@Html.T("شهادات معتمدة", "Certified Certificates")</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Category Chips -->
+@if (categories.Any())
+{
+    <div class="card border-0 shadow-sm mb-4" style="border-radius: 16px;">
+        <div class="card-body py-3">
+            <div class="category-chips-wrapper">
+                <a asp-action="Browse" class="category-chip @(!selectedCategory.HasValue ? "active" : "")">
+                    <i class="feather-grid me-2"></i>@Html.T("الكل", "All")
+                </a>
+                @foreach (var category in categories.Take(10))
+                {
+                    <a asp-action="Browse" asp-route-categoryId="@category.Id" class="category-chip @(selectedCategory == category.Id ? "active" : "")">
+                        @category.Name
+                    </a>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<div class="row g-4">
+    <!-- Filters Sidebar -->
+    <div class="col-lg-3">
+        <div class="filter-sidebar">
+            <div class="card filter-card mb-4">
+                <div class="card-header">
+                    <h6 class="fw-bold mb-0 d-flex align-items-center">
+                        <div class="bg-primary bg-opacity-10 rounded-circle p-2 me-2">
+                            <i class="feather-sliders text-primary"></i>
+                        </div>
+                        @Html.T("تصفية النتائج", "Filter Results")
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="get" asp-action="Browse" id="filterForm">
+                        <input type="hidden" name="search" value="@searchQuery" />
+                        @if (selectedCategory.HasValue)
+                        {
+                            <input type="hidden" name="categoryId" value="@selectedCategory.Value" />
+                        }
+                        @if (filterFree == true) { <input type="hidden" name="free" value="true" /> }
+                        @if (filterPaid == true) { <input type="hidden" name="paid" value="true" /> }
+                        @foreach (var d in filterDurationParts)
+                        {
+                            <input type="hidden" name="duration" value="@d" />
+                        }
+                        @if (filterRating.HasValue) { <input type="hidden" name="rating" value="@filterRating.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)" /> }
+
+                        <!-- Level Filter -->
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">@Html.T("المستوى", "Level")</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="level" value="" id="levelAll" @(string.IsNullOrEmpty(selectedLevel) ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="levelAll">@Html.T("الكل", "All")</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="level" value="Beginner" id="levelBeginner" @(selectedLevel == "Beginner" ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="levelBeginner">@Html.T("مبتدئ", "Beginner")</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="level" value="Intermediate" id="levelIntermediate" @(selectedLevel == "Intermediate" ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="levelIntermediate">@Html.T("متوسط", "Intermediate")</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="level" value="Advanced" id="levelAdvanced" @(selectedLevel == "Advanced" ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="levelAdvanced">@Html.T("متقدم", "Advanced")</label>
+                            </div>
+                        </div>
+
+                        <!-- Price Filter -->
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">@Html.T("السعر", "Price")</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="free" value="true" id="priceFree" @(filterFree == true ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="priceFree">@Html.T("مجاني", "Free")</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="paid" value="true" id="pricePaid" @(filterPaid == true ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="pricePaid">@Html.T("مدفوع", "Paid")</label>
+                            </div>
+                        </div>
+
+                        <!-- Duration Filter -->
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">@Html.T("المدة", "Duration")</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="duration" value="short" id="durationShort" @(filterDurationParts.Contains("short") ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="durationShort">@Html.T("أقل من 5 ساعات", "Less than 5 hours")</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="duration" value="medium" id="durationMedium" @(filterDurationParts.Contains("medium") ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="durationMedium">@Html.T("5-20 ساعة", "5-20 hours")</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="duration" value="long" id="durationLong" @(filterDurationParts.Contains("long") ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="durationLong">@Html.T("أكثر من 20 ساعة", "More than 20 hours")</label>
+                            </div>
+                        </div>
+
+                        <!-- Rating Filter -->
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold">@Html.T("التقييم", "Rating")</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="rating" value="4.5" id="rating45" @(filterRating == 4.5m ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="rating45">
+                                    <span class="text-warning">★★★★★</span> 4.5+
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="rating" value="4" id="rating4" @(filterRating == 4m ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="rating4">
+                                    <span class="text-warning">★★★★</span> 4.0+
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="rating" value="3.5" id="rating35" @(filterRating == 3.5m ? "checked" : "") onchange="document.getElementById('filterForm').submit()">
+                                <label class="form-check-label" for="rating35">
+                                    <span class="text-warning">★★★</span> 3.5+
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-filter me-2"></i>
+                            @Html.T("تطبيق التصفية", "Apply Filter")
+                        </button>
+                        <a asp-action="Browse" class="btn btn-outline-secondary w-100">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("إعادة تعيين", "Reset")
+                        </a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Courses Grid -->
+    <div class="col-lg-9">
+        <!-- Results Header -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                    <div>
+                        <h5 class="fw-bold mb-1">@Html.T("نتائج البحث", "Search Results")</h5>
+                        <p class="text-muted mb-0">@Html.T("تم العثور على", "Found") @Model.Count @Html.T("دورة", "course(s)")</p>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="mb-0 me-2 text-muted">@Html.T("ترتيب حسب:", "Sort by:")</label>
+                        @{
+                            var sortBaseUrl = Url.Action("Browse") + "?sort=";
+                            var sortParams = new List<string> { "search=" + Uri.EscapeDataString(searchQuery ?? ""), "categoryId=" + (selectedCategory?.ToString() ?? ""), "level=" + selectedLevel };
+                            if (filterFree == true) sortParams.Add("free=true");
+                            if (filterPaid == true) sortParams.Add("paid=true");
+                            foreach (var d in filterDurationParts) { sortParams.Add("duration=" + Uri.EscapeDataString(d ?? "")); }
+                            if (filterRating.HasValue) sortParams.Add("rating=" + filterRating.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            var sortQueryString = string.Join("&", sortParams.Where(p => p.Length > 0 && !p.EndsWith("=")));
+                        }
+                        <select class="form-select form-select-sm" name="sort" style="width: auto;" onchange="location.href='@(Url.Action("Browse"))?sort=' + this.value + '@(string.IsNullOrEmpty(sortQueryString) ? "" : "&" + sortQueryString)'">
+                            <option value="popular" selected="@(selectedSort == "popular")">@Html.T("الأكثر شعبية", "Most Popular")</option>
+                            <option value="newest" selected="@(selectedSort == "newest")">@Html.T("الأحدث", "Newest")</option>
+                            <option value="rating" selected="@(selectedSort == "rating")">@Html.T("الأعلى تقييماً", "Highest Rated")</option>
+                            <option value="price_low" selected="@(selectedSort == "price_low")">@Html.T("السعر: من الأقل للأعلى", "Price: Low to High")</option>
+                            <option value="price_high" selected="@(selectedSort == "price_high")">@Html.T("السعر: من الأعلى للأقل", "Price: High to Low")</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Courses Grid -->
+        @if (Model.Any())
+        {
+            <div class="row g-4">
+                @foreach (var course in Model)
+                {
+                    <div class="col-xl-6 col-lg-6 col-md-6">
+                        <div class="card browse-course-card">
+                            <div class="position-relative">
+                                @if (!string.IsNullOrEmpty(course.ThumbnailUrl))
+                                {
+                                    <img src="@course.ThumbnailUrl" alt="@course.Title" class="card-img-top course-thumbnail" />
+                                }
+                                else
+                                {
+                                    <div class="course-thumbnail d-flex align-items-center justify-content-center">
+                                        <i class="feather-book-open text-white" style="font-size: 64px;"></i>
+                                    </div>
+                                }
+                                @if (course.IsFree || course.FinalPrice == 0)
+                                {
+                                    <span class="price-badge badge bg-success">@Html.T("مجاني", "Free")</span>
+                                }
+                                else if (course.DiscountPercentage > 0)
+                                {
+                                    <span class="price-badge badge bg-danger">@Html.T("خصم", "Discount") @course.DiscountPercentage%</span>
+                                }
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-2">
+                                    <span class="badge bg-soft-primary text-primary">@course.Category?.Name</span>
+                                    <span class="badge bg-soft-secondary text-secondary">@course.Level</span>
+                                </div>
+                                <a asp-controller="Courses" asp-action="Preview" asp-route-id="@course.Id" class="text-dark text-decoration-none">
+                                    <h5 class="fw-bold mb-2 text-truncate-2-line">@course.Title</h5>
+                                </a>
+                                <p class="text-muted fs-12 mb-3 text-truncate-2-line">@course.ShortDescription</p>
+                                
+                                <div class="d-flex align-items-center mb-2">
+                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary me-2">
+                                        <i class="feather-user"></i>
+                                    </div>
+                                    <span class="fs-12 text-truncate">@course.Instructor.FullName</span>
+                                </div>
+
+                                <div class="course-meta">
+                                    <span class="course-meta-item">
+                                        <i class="feather-clock"></i>
+                                        @course.DurationHours.ToString("F1") @Html.T("ساعة", "hrs")
+                                    </span>
+                                    <span class="course-meta-item">
+                                        <i class="feather-users"></i>
+                                        @course.TotalEnrollments @Html.T("طالب", "students")
+                                    </span>
+                                    <span class="course-meta-item rating-stars">
+                                        ★ @course.AverageRating.ToString("F1")
+                                    </span>
+                                </div>
+
+                                <div class="d-flex align-items-center justify-content-between pt-2">
+                                    @if (course.IsFree || course.FinalPrice == 0)
+                                    {
+                                        <div>
+                                            <span class="course-price text-success">@Html.T("مجاني", "Free")</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div>
+                                            @if (course.DiscountPercentage > 0)
+                                            {
+                                                <span class="course-price-original me-2">@course.Price.ToEGP(0)</span>
+                                                <span class="course-price">@course.FinalPrice.ToEGP(0)</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="course-price">@course.Price.ToEGP(0)</span>
+                                            }
+                                        </div>
+                                    }
+                                    <div class="d-flex gap-2">
+                                        <a asp-controller="Wishlist" asp-action="Add" asp-route-courseId="@course.Id" class="btn-wishlist" title="@Html.T("إضافة للمفضلة", "Add to Wishlist")">
+                                            <i class="feather-heart"></i>
+                                        </a>
+                                        @if (course.IsFree || course.FinalPrice == 0)
+                                        {
+                                            <a asp-controller="Checkout" asp-action="FreeEnroll" asp-route-courseId="@course.Id" class="btn btn-sm btn-add-cart text-white">
+                                                <i class="feather-play-circle me-1"></i>
+                                                @Html.T("سجل الآن", "Enroll Now")
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <a asp-controller="Checkout" asp-action="AddToCart" asp-route-courseId="@course.Id" class="btn btn-sm btn-add-cart text-white">
+                                                <i class="feather-shopping-cart me-1"></i>
+                                                @Html.T("أضف للسلة", "Add to Cart")
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Pagination -->
+            @if (totalPages > 1)
+            {
+                <div class="card stretch stretch-full mt-4">
+                    <div class="card-body">
+                        <nav>
+                            <ul class="pagination pagination-sm justify-content-center mb-0">
+                                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                    <a class="page-link" asp-action="Browse" asp-route-page="@(currentPage - 1)" asp-route-search="@searchQuery" asp-route-categoryId="@selectedCategory" asp-route-level="@selectedLevel" asp-route-sort="@selectedSort" asp-route-free="@(filterFree == true)" asp-route-paid="@(filterPaid == true)" asp-route-duration="@filterDurationRaw" asp-route-rating="@filterRating">@Html.T("السابق", "Previous")</a>
+                                </li>
+                                @for (int i = startPage; i <= endPage; i++)
+                                {
+                                    <li class="page-item @(i == currentPage ? "active" : "")">
+                                        <a class="page-link" asp-action="Browse" asp-route-page="@i" asp-route-search="@searchQuery" asp-route-categoryId="@selectedCategory" asp-route-level="@selectedLevel" asp-route-sort="@selectedSort" asp-route-free="@(filterFree == true)" asp-route-paid="@(filterPaid == true)" asp-route-duration="@filterDurationRaw" asp-route-rating="@filterRating">@i</a>
+                                    </li>
+                                }
+                                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                    <a class="page-link" asp-action="Browse" asp-route-page="@(currentPage + 1)" asp-route-search="@searchQuery" asp-route-categoryId="@selectedCategory" asp-route-level="@selectedLevel" asp-route-sort="@selectedSort" asp-route-free="@(filterFree == true)" asp-route-paid="@(filterPaid == true)" asp-route-duration="@filterDurationRaw" asp-route-rating="@filterRating">@Html.T("التالي", "Next")</a>
+                                </li>
+                            </ul>
+                        </nav>
+                        <p class="text-muted text-center mt-2 mb-0 fs-12">
+                            @Html.T("عرض", "Showing") @((currentPage - 1) * pageSize + 1) - @Math.Min(currentPage * pageSize, totalCourses) @Html.T("من", "of") @totalCourses @Html.T("دورة", "course(s)")
+                        </p>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    @{
+                        ViewData["Icon"] = "search";
+                        ViewData["Title"] = Html.T("لم يتم العثور على نتائج", "No Results Found");
+                        ViewData["Message"] = Html.T("لم نجد أي دورات تطابق معايير البحث. جرب البحث بكلمات أخرى أو قم بتعديل الفلاتر.", "We couldn't find any courses matching your search criteria. Try different keywords or adjust the filters.");
+                        ViewData["ActionText"] = Html.T("إعادة تعيين البحث", "Reset Search");
+                        ViewData["ActionArea"] = "Student";
+                        ViewData["ActionController"] = "Courses";
+                        ViewData["ActionAction"] = "Browse";
+                    }
+                    @await Html.PartialAsync("_EmptyState")
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Add to cart with animation
+    $('.btn-add-to-cart').click(function(e) {
+        e.preventDefault();
+        var btn = $(this);
+        btn.html('<i class="feather-check"></i>');
+        setTimeout(function() {
+            btn.html('<i class="feather-shopping-cart"></i>');
+        }, 1500);
+    });
+</script>
+}
+

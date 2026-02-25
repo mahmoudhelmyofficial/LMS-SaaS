@@ -1,0 +1,577 @@
+@{
+    ViewData["Title"] = Html.T("إحصائيات المراجعات", "Review statistics");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("إدارة المراجعات", "Reviews"), Url.Action("Index", "Reviews")),
+        (Html.T("الإحصائيات", "Statistics"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("تصدير CSV", "Export CSV"), "feather-file-text", "/api/export/reviews?format=csv", "btn-outline-success"),
+        (Html.T("تصدير Excel", "Export Excel"), "feather-file", "/api/export/reviews?format=excel", "btn-outline-primary"),
+        (Html.T("تصدير PDF", "Export PDF"), "feather-file-text", "/api/export/reviews?format=pdf", "btn-outline-danger"),
+        (Html.T("طباعة", "Print"), "feather-printer", "javascript:window.print()", "btn-outline-secondary"),
+        (Html.T("تحديث", "Refresh"), "feather-refresh-cw", Url.Action("Statistics", "Reviews"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Date Range Filter -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form asp-action="Statistics" asp-controller="Reviews" method="get" class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                            <input type="date" name="fromDate" class="form-control" 
+                                   value="@(Model.FromDate?.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.AddMonths(-1).ToString("yyyy-MM-dd"))" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                            <input type="date" name="toDate" class="form-control" 
+                                   value="@(Model.ToDate?.ToString("yyyy-MM-dd") ?? DateTime.UtcNow.ToString("yyyy-MM-dd"))" />
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="feather-filter me-2"></i>
+                                تطبيق الفلتر
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Overview Statistics Cards -->
+    <div class="row">
+        <div class="col-xxl-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                            <i class="feather-message-square"></i>
+                        </div>
+                        <div class="text-end">
+                            <h2 class="fw-bold mb-1">@Model.TotalReviews</h2>
+                            <p class="text-muted mb-0">إجمالي المراجعات</p>
+                        </div>
+                    </div>
+                    <div class="pt-3 mt-3 border-top">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="text-muted">في الفترة المحددة</span>
+                            <span class="fw-bold text-primary">100%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xxl-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="avatar-text avatar-lg bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div class="text-end">
+                            <h2 class="fw-bold mb-1">@Model.ApprovedReviews</h2>
+                            <p class="text-muted mb-0">مراجعات موافق عليها</p>
+                        </div>
+                    </div>
+                    <div class="pt-3 mt-3 border-top">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="text-muted">معدل الموافقة</span>
+                            <span class="fw-bold text-success">
+                                @(Model.TotalReviews > 0 ? Math.Round((decimal)Model.ApprovedReviews / Model.TotalReviews * 100, 1) : 0)%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xxl-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="avatar-text avatar-lg bg-soft-warning text-warning">
+                            <i class="feather-clock"></i>
+                        </div>
+                        <div class="text-end">
+                            <h2 class="fw-bold mb-1">@Model.PendingReviews</h2>
+                            <p class="text-muted mb-0">قيد الانتظار</p>
+                        </div>
+                    </div>
+                    <div class="pt-3 mt-3 border-top">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="text-muted">نسبة الانتظار</span>
+                            <span class="fw-bold text-warning">
+                                @(Model.TotalReviews > 0 ? Math.Round((decimal)Model.PendingReviews / Model.TotalReviews * 100, 1) : 0)%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xxl-3 col-md-6">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="avatar-text avatar-lg bg-soft-danger text-danger">
+                            <i class="feather-x-circle"></i>
+                        </div>
+                        <div class="text-end">
+                            <h2 class="fw-bold mb-1">@Model.RejectedReviews</h2>
+                            <p class="text-muted mb-0">مرفوضة</p>
+                        </div>
+                    </div>
+                    <div class="pt-3 mt-3 border-top">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <span class="text-muted">معدل الرفض</span>
+                            <span class="fw-bold text-danger">
+                                @(Model.TotalReviews > 0 ? Math.Round((decimal)Model.RejectedReviews / Model.TotalReviews * 100, 1) : 0)%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rating Overview -->
+    <div class="row mt-4">
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("متوسط التقييم", "Average rating")</h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <h1 class="display-3 fw-bold text-primary mb-2">
+                            @Model.AverageRating.ToString("F1")
+                        </h1>
+                        <div class="rating-stars mb-2">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                if (i <= Math.Floor(Model.AverageRating))
+                                {
+                                    <i class="feather-star text-warning" style="fill: currentColor;"></i>
+                                }
+                                else if (i - 0.5 <= Model.AverageRating)
+                                {
+                                    <i class="feather-star text-warning" style="fill: currentColor; opacity: 0.5;"></i>
+                                }
+                                else
+                                {
+                                    <i class="feather-star text-muted"></i>
+                                }
+                            }
+                        </div>
+                        <p class="text-muted mb-0">من 5.0 نجوم</p>
+                    </div>
+
+                    <div class="border-top pt-3">
+                        <p class="text-muted mb-0">استناداً إلى @Model.ApprovedReviews مراجعة</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع التقييمات", "Rating distribution")</h5>
+                </div>
+                <div class="card-body">
+                    @foreach (var rating in Model.RatingDistribution.OrderByDescending((Func<dynamic, int>)(r => r.Rating)))
+                    {
+                        var percentage = Model.TotalReviews > 0 
+                            ? Math.Round((decimal)rating.Count / Model.TotalReviews * 100, 1) 
+                            : 0;
+                        
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="d-flex align-items-center">
+                                    <span class="fw-bold me-2">@rating.Rating</span>
+                                    <i class="feather-star text-warning" style="fill: currentColor;"></i>
+                                </div>
+                                <div class="d-flex align-items-center gap-3">
+                                    <span class="text-muted small">@rating.Count مراجعة</span>
+                                    <span class="fw-bold">@percentage%</span>
+                                </div>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar @(rating.Rating >= 4 ? "bg-success" : rating.Rating >= 3 ? "bg-primary" : rating.Rating >= 2 ? "bg-warning" : "bg-danger")" 
+                                     style="width: @percentage%"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row mt-4">
+        <!-- Reviews Trend -->
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("اتجاه المراجعات", "Reviews trend")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="reviewsTrendChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Distribution -->
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع الحالات", "Status distribution")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="statusChart"></canvas>
+                    
+                    <div class="mt-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-success me-2"></span>
+                                <span class="text-muted">موافق عليها</span>
+                            </div>
+                            <span class="fw-bold">@Model.ApprovedReviews</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-warning me-2"></span>
+                                <span class="text-muted">قيد الانتظار</span>
+                            </div>
+                            <span class="fw-bold">@Model.PendingReviews</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-danger me-2"></span>
+                                <span class="text-muted">مرفوضة</span>
+                            </div>
+                            <span class="fw-bold">@Model.RejectedReviews</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Reviewed Courses -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("أكثر الدورات حصولاً على المراجعات", "Top courses by reviews")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>@Html.T("الدورة", "Course")</th>
+                                    <th class="text-center">@Html.T("عدد المراجعات", "Reviews")</th>
+                                    <th class="text-center">@Html.T("متوسط التقييم", "Avg. rating")</th>
+                                    <th class="text-center">@Html.T("النسبة", "Share")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (Model.TopReviewedCourses != null && Model.TopReviewedCourses.Any())
+                                {
+                                    var rank = 1;
+                                    foreach (var course in Model.TopReviewedCourses)
+                                    {
+                                        var percentage = Model.TotalReviews > 0 
+                                            ? Math.Round((decimal)course.Count / Model.TotalReviews * 100, 1) 
+                                            : 0;
+                                        
+                                        <tr>
+                                            <td>
+                                                <div class="avatar-text avatar-sm @(rank == 1 ? "bg-warning text-white" : rank == 2 ? "bg-soft-warning text-warning" : "bg-soft-secondary text-secondary")">
+                                                    @rank
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Details", "Courses", new { id = course.CourseId })" class="fw-semibold">
+                                                    @course.Title
+                                                </a>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="fw-bold">@course.Count</span>
+                                            </td>
+                                            <td class="text-center">
+                                                <div class="d-flex align-items-center justify-content-center gap-1">
+                                                    <span class="fw-bold">@course.AverageRating.ToString("F1")</span>
+                                                    <i class="feather-star text-warning small" style="fill: currentColor;"></i>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <div class="progress" style="height: 8px; max-width: 100px; margin: 0 auto;">
+                                                    <div class="progress-bar bg-primary" style="width: @percentage%"></div>
+                                                </div>
+                                                <span class="small text-muted">@percentage%</span>
+                                            </td>
+                                        </tr>
+                                        rank++;
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted">
+                                            <i class="feather-info me-2"></i>
+                                            لا توجد بيانات في الفترة المحددة
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Activity -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("النشاط اليومي للمراجعات", "Daily review activity")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="dailyActivityChart" height="60"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="row mt-4">
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("ملخص الأداء", "Performance summary")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="border rounded p-3 text-center">
+                                <h5 class="fw-bold text-primary mb-1">@Model.TotalReviews</h5>
+                                <p class="text-muted small mb-0">إجمالي المراجعات</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-3 text-center">
+                                <h5 class="fw-bold text-success mb-1">@Model.ApprovedReviews</h5>
+                                <p class="text-muted small mb-0">موافق عليها</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-3 text-center">
+                                <h5 class="fw-bold text-warning mb-1">@Model.PendingReviews</h5>
+                                <p class="text-muted small mb-0">قيد الانتظار</p>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-3 text-center">
+                                <h5 class="fw-bold text-danger mb-1">@Model.RejectedReviews</h5>
+                                <p class="text-muted small mb-0">مرفوضة</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إحصائيات إضافية", "Additional statistics")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <tbody>
+                                <tr>
+                                    <td class="fw-semibold">متوسط التقييم العام</td>
+                                    <td class="text-end">
+                                        <span class="fw-bold text-primary">@Model.AverageRating.ToString("F1")</span>
+                                        <i class="feather-star text-warning small ms-1" style="fill: currentColor;"></i>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">معدل الموافقة</td>
+                                    <td class="text-end text-success">
+                                        @(Model.TotalReviews > 0 ? Math.Round((decimal)Model.ApprovedReviews / Model.TotalReviews * 100, 1) : 0)%
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">معدل الرفض</td>
+                                    <td class="text-end text-danger">
+                                        @(Model.TotalReviews > 0 ? Math.Round((decimal)Model.RejectedReviews / Model.TotalReviews * 100, 1) : 0)%
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">معدل النشاط اليومي</td>
+                                    <td class="text-end">
+                                        @if (Model.FromDate.HasValue && Model.ToDate.HasValue)
+                                        {
+                                            var days = (Model.ToDate.Value - Model.FromDate.Value).Days + 1;
+                                            var dailyAvg = days > 0 ? Math.Round((decimal)Model.TotalReviews / days, 1) : 0;
+                                            @dailyAvg
+                                            @: مراجعة/يوم
+                                        }
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">التقييمات الإيجابية (4-5 نجوم)</td>
+                                    <td class="text-end text-success">
+                                        @{
+                                            var positiveReviews = ((IEnumerable<dynamic>)Model.RatingDistribution)
+                                                .Where(r => r.Rating >= 4)
+                                                .Sum(r => r.Count);
+                                        }
+                                        @positiveReviews (@(Model.TotalReviews > 0 ? Math.Round((decimal)positiveReviews / Model.TotalReviews * 100, 1) : 0)%)
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">التقييمات السلبية (1-2 نجوم)</td>
+                                    <td class="text-end text-danger">
+                                        @{
+                                            var negativeReviews = ((IEnumerable<dynamic>)Model.RatingDistribution)
+                                                .Where(r => r.Rating <= 2)
+                                                .Sum(r => r.Count);
+                                        }
+                                        @negativeReviews (@(Model.TotalReviews > 0 ? Math.Round((decimal)negativeReviews / Model.TotalReviews * 100, 1) : 0)%)
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Reviews Trend Chart
+        var trendCtx = document.getElementById('reviewsTrendChart').getContext('2d');
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: [@Html.Raw(string.Join(",", ((IEnumerable<dynamic>)Model.ReviewsByDay).Select<dynamic, string>(d => $"'{d.Date.ToString("dd/MM")}'")))],
+                datasets: [{
+                    label: 'عدد المراجعات',
+                    data: [@Html.Raw(string.Join(",", ((IEnumerable<dynamic>)Model.ReviewsByDay).Select<dynamic, int>(d => d.Count)))],
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
+                    }
+                }
+            }
+        });
+
+        // Status Distribution Chart
+        var statusCtx = document.getElementById('statusChart').getContext('2d');
+        new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['موافق عليها', 'قيد الانتظار', 'مرفوضة'],
+                datasets: [{
+                    data: [@Model.ApprovedReviews, @Model.PendingReviews, @Model.RejectedReviews],
+                    backgroundColor: [
+                        'rgba(34, 197, 94, 0.8)',
+                        'rgba(251, 191, 36, 0.8)',
+                        'rgba(239, 68, 68, 0.8)'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+        // Daily Activity Chart
+        var dailyCtx = document.getElementById('dailyActivityChart').getContext('2d');
+        new Chart(dailyCtx, {
+            type: 'bar',
+            data: {
+                labels: [@Html.Raw(string.Join(",", ((IEnumerable<dynamic>)Model.ReviewsByDay).Select<dynamic, string>(d => $"'{d.Date.ToString("dd/MM")}'")))],
+                datasets: [{
+                    label: 'المراجعات',
+                    data: [@Html.Raw(string.Join(",", ((IEnumerable<dynamic>)Model.ReviewsByDay).Select<dynamic, int>(d => d.Count)))],
+                    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+}
+
+@section Styles {
+    <style>
+        .rating-stars i {
+            font-size: 1.5rem;
+        }
+    </style>
+}
+

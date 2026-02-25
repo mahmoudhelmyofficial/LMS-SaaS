@@ -1,0 +1,560 @@
+@model LMS.Areas.Instructor.ViewModels.BookEditViewModel
+@using LMS.Areas.Instructor.ViewModels
+@using LMS.Domain.Enums
+@using LMS.Helpers
+
+@{
+    ViewData["Title"] = Html.T("تعديل الكتاب", "Edit Book") + " - " + Model.Title;
+
+    var statusText = Model.Status switch
+    {
+        BookStatus.Draft => "مسودة",
+        BookStatus.PendingReview => "قيد المراجعة",
+        BookStatus.Published => "منشور",
+        BookStatus.Rejected => "مرفوض",
+        BookStatus.Suspended => "معلق",
+        _ => "غير معروف"
+    };
+    var statusClass = Model.Status switch
+    {
+        BookStatus.Draft => "bg-secondary",
+        BookStatus.PendingReview => "bg-warning",
+        BookStatus.Published => "bg-success",
+        BookStatus.Rejected => "bg-danger",
+        BookStatus.Suspended => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    ViewData["Subtitle"] = $"<span class='badge {statusClass}'>{statusText}</span>";
+
+    var chapters = ViewBag.Chapters as List<BookChapterViewModel> ?? new List<BookChapterViewModel>();
+
+    var editUrl = Url.Action("Edit", new { id = Model.Id });
+    var detailsUrl = Url.Action("Details", new { id = Model.Id });
+    var indexUrl = Url.Action("Index");
+}
+
+@await Html.PartialAsync("_PageHeader", ViewDataDictionaryHelper.CreateWith(
+    ViewData,
+    "ActionButtons",
+    Html.Raw(
+        "<a href='" + detailsUrl + "' class='btn btn-light'><i class='feather-eye me-2'></i>التفاصيل</a>" +
+        "<a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>العودة للقائمة</a>"
+    )
+))
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <!-- Left Column - Main Form -->
+        <div class="col-lg-9">
+            <form asp-action="Edit" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="Id">
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2"></i>
+                            المعلومات الأساسية
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label asp-for="Title" class="form-label">@Html.T("عنوان الكتاب", "Book title") <span class="text-danger">*</span></label>
+                                <input asp-for="Title" class="form-control">
+                                <span asp-validation-for="Title" class="text-danger small"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label asp-for="Author" class="form-label">@Html.T("اسم المؤلف", "Author")</label>
+                                <input asp-for="Author" class="form-control">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label asp-for="ISBN" class="form-label">@Html.T("رقم ISBN", "ISBN")</label>
+                                <input asp-for="ISBN" class="form-control">
+                            </div>
+
+                            <div class="col-12">
+                                <label asp-for="ShortDescription" class="form-label">@Html.T("وصف مختصر", "Short description")</label>
+                                <textarea asp-for="ShortDescription" class="form-control" rows="2"></textarea>
+                                <span asp-validation-for="ShortDescription" class="text-danger small"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label asp-for="Description" class="form-label">@Html.T("الوصف الكامل", "Full description")</label>
+                                <textarea asp-for="Description" class="form-control" rows="6" id="description"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category & Classification -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-folder me-2"></i>
+                            @Html.T("التصنيف والنوع", "Category & type")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label asp-for="CategoryId" class="form-label">@Html.T("التصنيف الرئيسي", "Category") <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <select asp-for="CategoryId" class="form-select" asp-items="ViewBag.Categories" id="categorySelect"></select>
+                                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal" title="@Html.T("إضافة تصنيف جديد", "Add new category")">
+                                        <i class="feather-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label asp-for="SubCategoryId" class="form-label">@Html.T("التصنيف الفرعي", "Subcategory")</label>
+                                <div class="input-group">
+                                    <select asp-for="SubCategoryId" class="form-select" id="subcategorySelect">
+                                        <option value="">-- @Html.T("بدون تصنيف فرعي", "No subcategory") --</option>
+                                    </select>
+                                    <button type="button" class="btn btn-outline-secondary" id="addSubcategoryBtn" data-bs-toggle="modal" data-bs-target="#addSubcategoryModal" title="@Html.T("إضافة تصنيف فرعي", "Add subcategory")" disabled>
+                                        <i class="feather-plus"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">@Html.T("اختر التصنيف الرئيسي أولاً", "Choose category first")</small>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label asp-for="BookType" class="form-label">@Html.T("نوع الكتاب", "Book type")</label>
+                                <select asp-for="BookType" class="form-select">
+                                    <option value="@BookType.EBook">@Html.T("كتاب إلكتروني", "E-book")</option>
+                                    <option value="@BookType.AudioBook">@Html.T("كتاب صوتي", "Audiobook")</option>
+                                    <option value="@BookType.Interactive">@Html.T("كتاب تفاعلي", "Interactive")</option>
+                                    <option value="@BookType.Workbook">@Html.T("كتاب تمارين", "Workbook")</option>
+                                    <option value="@BookType.Guide">@Html.T("دليل", "Guide")</option>
+                                    <option value="@BookType.Reference">@Html.T("مرجع", "Reference")</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label asp-for="Language" class="form-label">@Html.T("اللغة", "Language")</label>
+                                <select asp-for="Language" class="form-select">
+                                    <option value="ar">@Html.T("العربية", "Arabic")</option>
+                                    <option value="en">@Html.T("English", "English")</option>
+                                    <option value="fr">@Html.T("Français", "French")</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label asp-for="PageCount" class="form-label">@Html.T("عدد الصفحات", "Page count")</label>
+                                <input asp-for="PageCount" class="form-control" type="number" min="1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pricing -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-tag me-2"></i>
+                            التسعير
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input asp-for="IsFree" class="form-check-input" type="checkbox" id="isFreeCheck">
+                                    <label class="form-check-label" for="isFreeCheck">@Html.T("كتاب مجاني", "Free book")</label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6" id="priceGroup">
+                                <label asp-for="Price" class="form-label">@Html.T("السعر", "Price") (@(ViewBag.DefaultCurrencyCode ?? "EGP"))</label>
+                                <input asp-for="Price" class="form-control" type="number" step="0.01" min="0">
+                            </div>
+
+                            <div class="col-md-6" id="discountGroup">
+                                <label asp-for="DiscountPrice" class="form-label">@Html.T("سعر الخصم", "Discount price") (@(ViewBag.DefaultCurrencyCode ?? "EGP"))</label>
+                                <input asp-for="DiscountPrice" class="form-control" type="number" step="0.01" min="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Files -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-upload-cloud me-2"></i>
+                            ملفات الكتاب
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "CoverImageUrl" },
+                                    { "FieldId", "coverImageUrl" },
+                                    { "Label", "صورة الغلاف" },
+                                    { "MediaType", "Image" },
+                                    { "CurrentValue", Model.CoverImageUrl },
+                                    { "Required", false },
+                                    { "HelpText", "صورة غلاف الكتاب بأبعاد 2:3" },
+                                    { "AspectRatio", "2/3" }
+                                })
+                            </div>
+
+                            <div class="col-md-6">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "FullPdfUrl" },
+                                    { "FieldId", "fullPdfUrl" },
+                                    { "Label", "ملف PDF الكامل" },
+                                    { "MediaType", "Document" },
+                                    { "CurrentValue", Model.FullPdfUrl },
+                                    { "Required", false },
+                                    { "HelpText", "ملف الكتاب الكامل بصيغة PDF" },
+                                    { "AspectRatio", "1/1" }
+                                })
+                            </div>
+
+                            <div class="col-md-6">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "PreviewPdfUrl" },
+                                    { "FieldId", "previewPdfUrl" },
+                                    { "Label", "ملف المعاينة" },
+                                    { "MediaType", "Document" },
+                                    { "CurrentValue", Model.PreviewPdfUrl },
+                                    { "Required", false },
+                                    { "HelpText", "نسخة معاينة من الكتاب (اختياري)" },
+                                    { "AspectRatio", "1/1" }
+                                })
+                            </div>
+
+                            <div class="col-md-6">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "EpubUrl" },
+                                    { "FieldId", "epubUrl" },
+                                    { "Label", "ملف EPUB" },
+                                    { "MediaType", "Document" },
+                                    { "CurrentValue", Model.EpubUrl },
+                                    { "Required", false },
+                                    { "HelpText", "صيغة EPUB للقراء الإلكترونية" },
+                                    { "AspectRatio", "1/1" }
+                                })
+                            </div>
+
+                            <div class="col-md-6">
+                                @await Html.PartialAsync("_MediaPicker", new ViewDataDictionary(ViewData) {
+                                    { "FieldName", "MobiUrl" },
+                                    { "FieldId", "mobiUrl" },
+                                    { "Label", "ملف MOBI" },
+                                    { "MediaType", "Document" },
+                                    { "CurrentValue", Model.MobiUrl },
+                                    { "Required", false },
+                                    { "HelpText", "صيغة MOBI لأجهزة Kindle" },
+                                    { "AspectRatio", "1/1" }
+                                })
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Protection Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-shield me-2"></i>
+                            إعدادات الحماية
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input asp-for="EnableDRM" class="form-check-input" type="checkbox">
+                                    <label asp-for="EnableDRM" class="form-check-label">@Html.T("تفعيل حماية DRM", "Enable DRM protection")</label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input asp-for="EnableWatermark" class="form-check-input" type="checkbox">
+                                    <label asp-for="EnableWatermark" class="form-check-label">@Html.T("تفعيل العلامة المائية", "Enable watermark")</label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input asp-for="AllowPrinting" class="form-check-input" type="checkbox">
+                                    <label asp-for="AllowPrinting" class="form-check-label">@Html.T("السماح بالطباعة", "Allow printing")</label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label asp-for="MaxDownloads" class="form-label">@Html.T("الحد الأقصى للتحميلات", "Max downloads")</label>
+                                <input asp-for="MaxDownloads" class="form-control" type="number" min="1" max="100">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEO -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-search me-2"></i>
+                            تحسين محركات البحث (SEO)
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label asp-for="MetaTitle" class="form-label">@Html.T("عنوان SEO", "SEO title")</label>
+                                <input asp-for="MetaTitle" class="form-control">
+                            </div>
+
+                            <div class="col-12">
+                                <label asp-for="MetaDescription" class="form-label">@Html.T("وصف SEO", "SEO description")</label>
+                                <textarea asp-for="MetaDescription" class="form-control" rows="2"></textarea>
+                            </div>
+
+                            <div class="col-12">
+                                <label asp-for="MetaKeywords" class="form-label">@Html.T("كلمات SEO المفتاحية", "SEO keywords")</label>
+                                <input asp-for="MetaKeywords" class="form-control" placeholder="@Html.T("كلمة1, كلمة2, كلمة3", "keyword1, keyword2, keyword3")">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="@indexUrl" class="btn btn-light">إلغاء</a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-1"></i>
+                                حفظ التغييرات
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Right Column - Sidebar -->
+        <div class="col-lg-3">
+            <!-- Quick Stats -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إحصائيات سريعة", "Quick stats")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <h4 class="text-primary mb-0">@Model.TotalSales</h4>
+                        <small class="text-muted">المبيعات</small>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <p class="mb-0 fw-bold">
+                                <i class="feather-download me-1"></i>
+                                @Model.TotalDownloads
+                            </p>
+                            <small class="text-muted">التحميلات</small>
+                        </div>
+                        <div class="col-6">
+                            <p class="mb-0 fw-bold">
+                                <i class="feather-star text-warning me-1"></i>
+                                @Model.AverageRating.ToString("N1")
+                            </p>
+                            <small class="text-muted">(@Model.TotalReviews)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chapters Management -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">@Html.T("الفصول", "Chapters")</h5>
+                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addChapterModal">
+                        <i class="feather-plus"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    @if (chapters.Any())
+                    {
+                        <ul class="list-group list-group-flush" id="chaptersList">
+                            @foreach (var chapter in chapters)
+                            {
+                                <li class="list-group-item d-flex justify-content-between align-items-center" data-id="@chapter.Id">
+                                    <div>
+                                        <i class="feather-move text-muted me-2 drag-handle" style="cursor: grab;"></i>
+                                        <span class="small">@chapter.Title</span>
+                                    </div>
+                                    <form asp-action="DeleteChapter" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="bookId" value="@Model.Id">
+                                        <input type="hidden" name="chapterId" value="@chapter.Id">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger p-1"
+                                                onclick="return confirm('@Html.Raw(Html.T("حذف هذا الفصل؟", "Delete this chapter?").Replace("'", "\\'"))')">
+                                            <i class="feather-x small"></i>
+                                        </button>
+                                    </form>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <div class="text-center py-3">
+                            <small class="text-muted">@Html.T("لا توجد فصول", "No chapters")</small>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Publication Status -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("حالة النشر", "Publish status")</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-center mb-3">
+                        <span class="badge @statusClass fs-6">@statusText</span>
+                    </p>
+
+                    @if (Model.Status == BookStatus.Draft || Model.Status == BookStatus.Rejected)
+                    {
+                        <form asp-action="SubmitForReview" method="post" id="submitForReviewFormEdit">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@Model.Id">
+                            <button type="submit" class="btn btn-success w-100" id="submitForReviewBtnEdit">
+                                <span class="btn-text">
+                                    <i class="feather-send me-1"></i>
+                                    @Html.T("إرسال للمراجعة", "Submit for review")
+                                </span>
+                                <span class="btn-loading d-none">
+                                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                    @Html.T("جاري الإرسال...", "Submitting...")
+                                </span>
+                            </button>
+                        </form>
+                    }
+                    else if (Model.Status == BookStatus.Published)
+                    {
+                        <p class="text-success text-center small">
+                            <i class="feather-check-circle me-1"></i>
+                            @Html.T("الكتاب متاح للبيع", "Book is available for sale")
+                        </p>
+                    }
+                    else if (Model.Status == BookStatus.PendingReview)
+                    {
+                        <p class="text-warning text-center small">
+                            <i class="feather-clock me-1"></i>
+                            @Html.T("في انتظار موافقة الإدارة", "Pending admin approval")
+                        </p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Category Modals for On-the-Fly Creation *@
+@await Html.PartialAsync("_CategoryModals")
+
+<!-- Add Chapter Modal -->
+<div class="modal fade" id="addChapterModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Html.T("إضافة فصل جديد", "Add new chapter")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-action="AddChapter" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <input type="hidden" name="bookId" value="@Model.Id">
+
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("عنوان الفصل", "Chapter title") <span class="text-danger">*</span></label>
+                        <input type="text" name="Title" class="form-control" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("وصف الفصل", "Chapter description")</label>
+                        <textarea name="Description" class="form-control" rows="2"></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">@Html.T("رقم الصفحة", "Page number")</label>
+                            <input type="number" name="PageNumber" class="form-control" min="1">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">@Html.T("رقم الصفحة الأخيرة", "End page")</label>
+                            <input type="number" name="EndPageNumber" class="form-control" min="1">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("مدة القراءة (دقائق)", "Reading time (minutes)")</label>
+                        <input type="number" name="ReadingTimeMinutes" class="form-control" min="1">
+                    </div>
+
+                    <div class="form-check">
+                        <input type="checkbox" name="IsPreviewable" value="true" class="form-check-input" id="isPreviewable">
+                        <label class="form-check-label" for="isPreviewable">@Html.T("قابل للمعاينة المجانية", "Free preview")</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">إضافة الفصل</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/instructor-category-manager.js"></script>
+    <script src="~/js/instructor-book-forms.js" asp-append-version="true"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Category Manager for on-the-fly category creation
+            InstructorCategoryManager.init({
+                categorySelectId: 'categorySelect',
+                subcategorySelectId: 'subcategorySelect',
+                addSubcategoryBtnId: 'addSubcategoryBtn',
+                apiBaseUrl: '/Instructor/Books'
+            });
+
+            // Load subcategories for existing category
+            @if (Model.CategoryId > 0)
+            {
+                <text>
+                InstructorCategoryManager.loadAndSelectSubcategory(@Model.CategoryId, @(Model.SubCategoryId ?? 0));
+                </text>
+            }
+
+            // Toggle price fields based on free checkbox
+            const isFreeCheck = document.getElementById('isFreeCheck');
+            const priceGroup = document.getElementById('priceGroup');
+            const discountGroup = document.getElementById('discountGroup');
+
+            function togglePriceFields() {
+                priceGroup.style.display = isFreeCheck.checked ? 'none' : 'block';
+                discountGroup.style.display = isFreeCheck.checked ? 'none' : 'block';
+            }
+
+            isFreeCheck.addEventListener('change', togglePriceFields);
+            togglePriceFields();
+        });
+    </script>
+}

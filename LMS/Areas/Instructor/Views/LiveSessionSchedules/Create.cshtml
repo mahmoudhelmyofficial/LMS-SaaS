@@ -1,0 +1,356 @@
+@model LMS.Areas.Instructor.ViewModels.LiveSessionScheduleCreateViewModel
+
+@{
+    ViewData["Title"] = Html.T("إنشاء جدول حصص جديد", "Create New Session Schedule");
+    ViewData["Subtitle"] = Html.T("أنشئ جدول حصص لتنظيم جلساتك المباشرة", "Create a session schedule to organize your live sessions");
+    var indexUrl = Url.Action("Index");
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة للقائمة", "Back to List") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    @if (!ViewData.ModelState.IsValid)
+    {
+        <div class="alert alert-danger mb-4">
+            <h6 class="alert-heading mb-2">
+                <i class="feather-alert-circle me-2"></i>
+                @Html.T("يرجى تصحيح الأخطاء التالية:", "Please correct the following errors:")
+            </h6>
+            @Html.ValidationSummary(false, "", new { @class = "mb-0" })
+        </div>
+    }
+    @if (ViewBag.ErrorDetail != null)
+    {
+        <div class="alert alert-warning mb-4">
+            <strong>@Html.T("تفاصيل الخطأ (للمطور):", "Error detail (for developer):")</strong>
+            <pre class="mb-0 mt-2 small">@ViewBag.ErrorDetail</pre>
+        </div>
+    }
+
+    <form asp-action="Create" method="post" id="scheduleForm">
+        @Html.AntiForgeryToken()
+
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            @Html.T("المعلومات الأساسية", "Basic Information")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="Title">@Html.T("عنوان الجدول", "Schedule Title") <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" asp-for="Title" placeholder="@Html.T("مثال: جدول دروس الرياضيات - الترم الأول", "Example: Math Lessons Schedule - First Term")" required />
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="TitleAr">@Html.T("العنوان بالعربية", "Arabic Title")</label>
+                                <input type="text" class="form-control" asp-for="TitleAr" placeholder="@Html.T("العنوان بالعربية (اختياري)", "Arabic title (optional)")" />
+                                <span asp-validation-for="TitleAr" class="text-danger"></span>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Description">@Html.T("الوصف", "Description")</label>
+                                <textarea class="form-control" asp-for="Description" rows="4" placeholder="@Html.T("وصف شامل لجدول الحصص ومحتوياته", "Comprehensive description of the schedule and its contents")"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="CourseId">@Html.T("الدورة المرتبطة", "Associated Course")</label>
+                                <select asp-for="CourseId" class="form-select">
+                                    <option value="">-- @Html.T("بدون دورة", "No Course") --</option>
+                                    @if (ViewBag.Courses != null)
+                                    {
+                                        foreach (var course in ViewBag.Courses as Microsoft.AspNetCore.Mvc.Rendering.SelectList)
+                                        {
+                                            <option value="@course.Value">@course.Text</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="CourseId" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="MaxStudents">@Html.T("الحد الأقصى للطلاب", "Max Students")</label>
+                                <input type="number" class="form-control" asp-for="MaxStudents" min="1" placeholder="@Html.T("اتركه فارغاً لعدم وضع حد", "Leave empty for unlimited")" />
+                                <span asp-validation-for="MaxStudents" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule Period -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-calendar me-2 text-primary"></i>
+                            @Html.T("فترة الجدول", "Schedule Period")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="StartDate">@Html.T("تاريخ البداية", "Start Date") <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" asp-for="StartDate" required />
+                                <span asp-validation-for="StartDate" class="text-danger"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="EndDate">@Html.T("تاريخ النهاية", "End Date") <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" asp-for="EndDate" required />
+                                <span asp-validation-for="EndDate" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sessions -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="feather-video me-2 text-primary"></i>
+                            @Html.T("الجلسات", "Sessions")
+                        </h5>
+                        <button type="button" class="btn btn-sm btn-primary" id="addSessionBtn">
+                            <i class="feather-plus me-1"></i>
+                            @Html.T("إضافة جلسة", "Add Session")
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0" id="sessionsTable">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>@Html.T("العنوان", "Title")</th>
+                                        <th>@Html.T("الموضوع", "Subject")</th>
+                                        <th>@Html.T("تاريخ ووقت البدء", "Start Date & Time")</th>
+                                        <th>@Html.T("المدة (دقيقة)", "Duration (min)")</th>
+                                        <th>@Html.T("المنصة", "Platform")</th>
+                                        <th>@Html.T("رابط الاجتماع", "Meeting URL")</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sessionsBody">
+                                    @for (int i = 0; i < Model.Sessions.Count; i++)
+                                    {
+                                        <tr class="session-row" data-index="@i">
+                                            <td><span class="session-number">@(i + 1)</span></td>
+                                            <td>
+                                                <input type="text" name="Sessions[@i].Title" value="@Model.Sessions[i].Title" class="form-control form-control-sm" required placeholder="@Html.T("عنوان الجلسة", "Session title")" />
+                                                <input type="hidden" name="Sessions[@i].ScheduleOrder" value="@(i + 1)" class="schedule-order" />
+                                            </td>
+                                            <td><input type="text" name="Sessions[@i].Subject" value="@Model.Sessions[i].Subject" class="form-control form-control-sm" placeholder="@Html.T("الموضوع", "Subject")" /></td>
+                                            <td>
+                                                <input type="datetime-local" name="Sessions[@i].ScheduledStartTime" value="@Model.Sessions[i].ScheduledStartTime.ToString("yyyy-MM-ddTHH:mm")" class="form-control form-control-sm session-start" required />
+                                                <input type="hidden" name="Sessions[@i].ScheduledEndTime" class="session-end" />
+                                            </td>
+                                            <td><input type="number" name="Sessions[@i].DurationMinutes" value="@Model.Sessions[i].DurationMinutes" class="form-control form-control-sm session-duration" min="15" max="480" style="width: 80px;" /></td>
+                                            <td>
+                                                <select name="Sessions[@i].Platform" class="form-select form-select-sm">
+                                                    <option value="Zoom">Zoom</option>
+                                                    <option value="GoogleMeet">Google Meet</option>
+                                                    <option value="MicrosoftTeams">Teams</option>
+                                                    <option value="Other">@Html.T("أخرى", "Other")</option>
+                                                </select>
+                                            </td>
+                                            <td><input type="url" name="Sessions[@i].MeetingUrl" value="@Model.Sessions[i].MeetingUrl" class="form-control form-control-sm" placeholder="@Html.T("رابط الاجتماع", "Meeting URL")" /></td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-outline-danger remove-session" title="@Html.T("حذف", "Delete")">
+                                                    <i class="feather-trash-2"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Pricing -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-dollar-sign me-2 text-success"></i>
+                            @Html.T("التسعير", "Pricing")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label" asp-for="Price">@Html.T("سعر الاشتراك", "Subscription Price") (@Html.T("ج.م", "EGP")) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" asp-for="Price" step="0.01" min="0" placeholder="@Html.T("0 = مجاني", "0 = Free")" />
+                            <span asp-validation-for="Price" class="text-danger"></span>
+                            <div class="form-text">@Html.T("أدخل 0 لجعل الجدول مجاني", "Enter 0 to make the schedule free")</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" asp-for="OriginalPrice">@Html.T("السعر قبل الخصم", "Price Before Discount")</label>
+                            <input type="number" class="form-control" asp-for="OriginalPrice" step="0.01" min="0" placeholder="@Html.T("اتركه فارغاً إذا لم يكن هناك خصم", "Leave empty if no discount")" />
+                            <span asp-validation-for="OriginalPrice" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help Card -->
+                <div class="card bg-soft-info border-0 mb-4">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("إرشادات", "Guidelines")
+                        </h6>
+                        <ul class="list-unstyled fs-13 mb-0">
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("أضف كل الجلسات بتواريخها وأوقاتها", "Add all sessions with their dates and times")
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("حدد سعر الاشتراك الشامل لكل الجلسات", "Set the subscription price for all sessions")
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("يمكنك نشر الجدول لاحقاً بعد مراجعته", "You can publish the schedule later after reviewing")
+                            </li>
+                            <li class="mb-0">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("سيتم إنشاء الجدول كمسودة أولاً", "The schedule will be created as a draft first")
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <div class="card">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-save me-2"></i>
+                            @Html.T("إنشاء جدول الحصص", "Create Session Schedule")
+                        </button>
+                        <a href="@Url.Action("Index")" class="btn btn-light w-100">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("إلغاء", "Cancel")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        $(document).ready(function () {
+            var sessionIndex = @Model.Sessions.Count;
+            var sessionTitlePlaceholder = '@Html.T("عنوان الجلسة", "Session title")';
+            var subjectPlaceholder = '@Html.T("الموضوع", "Subject")';
+            var meetingUrlPlaceholder = '@Html.T("رابط الاجتماع", "Meeting URL")';
+            var otherLabel = '@Html.T("أخرى", "Other")';
+            var deleteTitle = '@Html.T("حذف", "Delete")';
+
+            // Add session row
+            $('#addSessionBtn').click(function () {
+                var newRow = `
+                <tr class="session-row" data-index="${sessionIndex}">
+                    <td><span class="session-number">${sessionIndex + 1}</span></td>
+                    <td>
+                        <input type="text" name="Sessions[${sessionIndex}].Title" class="form-control form-control-sm" required placeholder="${sessionTitlePlaceholder}" />
+                        <input type="hidden" name="Sessions[${sessionIndex}].ScheduleOrder" value="${sessionIndex + 1}" class="schedule-order" />
+                    </td>
+                    <td><input type="text" name="Sessions[${sessionIndex}].Subject" class="form-control form-control-sm" placeholder="${subjectPlaceholder}" /></td>
+                    <td>
+                        <input type="datetime-local" name="Sessions[${sessionIndex}].ScheduledStartTime" class="form-control form-control-sm session-start" required />
+                        <input type="hidden" name="Sessions[${sessionIndex}].ScheduledEndTime" class="session-end" />
+                    </td>
+                    <td><input type="number" name="Sessions[${sessionIndex}].DurationMinutes" value="60" class="form-control form-control-sm session-duration" min="15" max="480" style="width: 80px;" /></td>
+                    <td>
+                        <select name="Sessions[${sessionIndex}].Platform" class="form-select form-select-sm">
+                            <option value="Zoom">Zoom</option>
+                            <option value="GoogleMeet">Google Meet</option>
+                            <option value="MicrosoftTeams">Teams</option>
+                            <option value="Other">${otherLabel}</option>
+                        </select>
+                    </td>
+                    <td><input type="url" name="Sessions[${sessionIndex}].MeetingUrl" class="form-control form-control-sm" placeholder="${meetingUrlPlaceholder}" /></td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-session" title="${deleteTitle}">
+                            <i class="feather-trash-2"></i>
+                        </button>
+                    </td>
+                </tr>`;
+                $('#sessionsBody').append(newRow);
+                sessionIndex++;
+            });
+
+            // Remove session row and reindex all names for correct model binding
+            $(document).on('click', '.remove-session', function () {
+                if ($('.session-row').length > 1) {
+                    $(this).closest('tr').remove();
+                    reindexSessionRows();
+                } else {
+                    alert('@Html.T("يجب أن يحتوي الجدول على جلسة واحدة على الأقل", "The schedule must contain at least one session")');
+                }
+            });
+
+            // Reindex session row names so model binder receives contiguous Sessions[0], Sessions[1], ...
+            function reindexSessionRows() {
+                $('.session-row').each(function (idx) {
+                    $(this).attr('data-index', idx);
+                    $(this).find('.session-number').text(idx + 1);
+                    $(this).find('.schedule-order').val(idx + 1);
+                    $(this).find('input, select').each(function () {
+                        var name = $(this).attr('name');
+                        if (name && name.indexOf('Sessions[') === 0) {
+                            $(this).attr('name', name.replace(/Sessions\[\d+\]\./, 'Sessions[' + idx + '].'));
+                        }
+                    });
+                });
+                sessionIndex = $('.session-row').length;
+            }
+
+            // Auto-calculate end time
+            $(document).on('change', '.session-start, .session-duration', function () {
+                var row = $(this).closest('tr');
+                var startVal = row.find('.session-start').val();
+                var durationVal = parseInt(row.find('.session-duration').val()) || 60;
+                if (startVal) {
+                    var startDate = new Date(startVal);
+                    var endDate = new Date(startDate.getTime() + durationVal * 60000);
+                    var y = endDate.getFullYear();
+                    var m = String(endDate.getMonth() + 1).padStart(2, '0');
+                    var d = String(endDate.getDate()).padStart(2, '0');
+                    var h = String(endDate.getHours()).padStart(2, '0');
+                    var min = String(endDate.getMinutes()).padStart(2, '0');
+                    row.find('.session-end').val(y + '-' + m + '-' + d + 'T' + h + ':' + min);
+                }
+            });
+
+            // Set end times on form submit
+            $('#scheduleForm').on('submit', function () {
+                $('.session-row').each(function () {
+                    var startVal = $(this).find('.session-start').val();
+                    var durationVal = parseInt($(this).find('.session-duration').val()) || 60;
+                    if (startVal) {
+                        var startDate = new Date(startVal);
+                        var endDate = new Date(startDate.getTime() + durationVal * 60000);
+                        var y = endDate.getFullYear();
+                        var m = String(endDate.getMonth() + 1).padStart(2, '0');
+                        var d = String(endDate.getDate()).padStart(2, '0');
+                        var h = String(endDate.getHours()).padStart(2, '0');
+                        var min = String(endDate.getMinutes()).padStart(2, '0');
+                        $(this).find('.session-end').val(y + '-' + m + '-' + d + 'T' + h + ':' + min);
+                    }
+                });
+            });
+        });
+    </script>
+}

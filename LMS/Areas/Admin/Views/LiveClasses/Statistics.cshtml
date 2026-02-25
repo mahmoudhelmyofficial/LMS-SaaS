@@ -1,0 +1,206 @@
+@model LMS.Areas.Admin.ViewModels.LiveClassStatisticsViewModel
+
+@{
+    ViewData["Title"] = Html.T("إحصائيات الفصول المباشرة", "Live classes statistics");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الفصول المباشرة", "Live classes"), Url.Action("Index", "LiveClasses")),
+        (Html.T("الإحصائيات", "Statistics"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <style>
+        .stats-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.3s; }
+        .stats-card:hover { transform: translateY(-5px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .stats-icon { width: 60px; height: 60px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+        .chart-container { position: relative; height: 300px; }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card">
+                <div class="d-flex align-items-center">
+                    <div class="stats-icon bg-soft-primary text-primary">
+                        <i class="feather-video"></i>
+                    </div>
+                    <div class="ms-3 flex-grow-1">
+                        <h3 class="mb-1">@Model.TotalClasses</h3>
+                        <p class="text-muted mb-0">إجمالي الفصول</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card">
+                <div class="d-flex align-items-center">
+                    <div class="stats-icon bg-soft-success text-success">
+                        <i class="feather-check-circle"></i>
+                    </div>
+                    <div class="ms-3 flex-grow-1">
+                        <h3 class="mb-1">@Model.CompletedClasses</h3>
+                        <p class="text-muted mb-0">فصول مكتملة</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card">
+                <div class="d-flex align-items-center">
+                    <div class="stats-icon bg-soft-info text-info">
+                        <i class="feather-users"></i>
+                    </div>
+                    <div class="ms-3 flex-grow-1">
+                        <h3 class="mb-1">@Model.TotalAttendees</h3>
+                        <p class="text-muted mb-0">إجمالي الحضور</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card">
+                <div class="d-flex align-items-center">
+                    <div class="stats-icon bg-soft-warning text-warning">
+                        <i class="feather-percent"></i>
+                    </div>
+                    <div class="ms-3 flex-grow-1">
+                        <h3 class="mb-1">@Model.AverageAttendanceRate.ToString("F1")%</h3>
+                        <p class="text-muted mb-0">متوسط الحضور</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title"><i class="feather-bar-chart me-2"></i>@Html.T("الفصول المباشرة خلال الفترة", "Live classes in period")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="classesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title"><i class="feather-activity me-2"></i>@Html.T("معدل الحضور", "Attendance rate")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="attendanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title"><i class="feather-award me-2"></i>@Html.T("أكثر المدرسين نشاطاً", "Most active instructors")</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.TopInstructors != null && Model.TopInstructors.Any())
+                    {
+                        @foreach (var instructor in Model.TopInstructors)
+                        {
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar-text bg-soft-primary text-primary me-2">
+                                        @instructor.Name.Substring(0, 1)
+                                    </div>
+                                    <span>@instructor.Name</span>
+                                </div>
+                                <span class="badge bg-soft-primary text-primary">@instructor.ClassCount فصل</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title"><i class="feather-trending-up me-2"></i>@Html.T("أحدث الفصول", "Latest sessions")</h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.RecentClasses != null && Model.RecentClasses.Any())
+                    {
+                        @foreach (var liveClass in Model.RecentClasses)
+                        {
+                            <div class="border-bottom pb-2 mb-2">
+                                <h6 class="mb-1">@liveClass.Title</h6>
+                                <small class="text-muted">
+                                    <i class="feather-calendar me-1"></i>
+                                    @liveClass.StartTime.ToString("dd/MM/yyyy")
+                                </small>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Classes Chart
+            const classesCtx = document.getElementById('classesChart').getContext('2d');
+            const classesData = @Html.Raw(Json.Serialize(Model.ClassesTimeline));
+            new Chart(classesCtx, {
+                type: 'line',
+                data: {
+                    labels: classesData.map(d => d.date),
+                    datasets: [{
+                        label: 'عدد الفصول',
+                        data: classesData.map(d => d.count),
+                        borderColor: 'rgb(102, 126, 234)',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+
+            // Attendance Chart
+            const attendanceCtx = document.getElementById('attendanceChart').getContext('2d');
+            const attendanceData = @Html.Raw(Json.Serialize(Model.AttendanceData));
+            new Chart(attendanceCtx, {
+                type: 'bar',
+                data: {
+                    labels: attendanceData.map(d => d.date),
+                    datasets: [{
+                        label: 'معدل الحضور %',
+                        data: attendanceData.map(d => d.rate),
+                        backgroundColor: 'rgba(75, 192, 192, 0.6)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+}
+

@@ -1,0 +1,336 @@
+@model IEnumerable<LMS.Domain.Entities.Security.UserSession>
+
+@{
+    ViewData["Title"] = Html.T("جميع الجلسات", "All Sessions");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("لوحة التحكم", "Dashboard"), Url.Action("Index", "Dashboard")),
+        (Html.T("الأمان", "Security"), Url.Action("Dashboard", "Security")),
+        (Html.T("جلسات المستخدمين", "User Sessions"), Url.Action("Index", "UserSessions")),
+        (Html.T("جميع الجلسات", "All Sessions"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    
+    var userId = ViewBag.UserId as string;
+    var active = ViewBag.Active as bool?;
+    var page = ViewBag.Page ?? 1;
+}
+
+@section Styles {
+    <style>
+        .session-card {
+            transition: all 0.3s ease;
+            border-right: 3px solid transparent;
+        }
+        .session-card.active {
+            border-right-color: #0ab39c;
+            background-color: #f0fdf9;
+        }
+        .session-card.expired {
+            border-right-color: #f06548;
+            opacity: 0.7;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                        <i class="feather-monitor"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("إجمالي الجلسات", "Total Sessions")</span>
+                        <h3 class="fw-bold mb-0">@Model.Count()</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                        <i class="feather-activity"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("جلسات نشطة", "Active Sessions")</span>
+                        <h3 class="fw-bold mb-0">@Model.Count(s => s.IsActive && !s.IsExpired)</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-danger text-danger">
+                        <i class="feather-clock"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("جلسات منتهية", "Expired Sessions")</span>
+                        <h3 class="fw-bold mb-0">@Model.Count(s => s.IsExpired)</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                        <i class="feather-x-circle"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted d-block mb-1">@Html.T("جلسات معلقة", "Terminated Sessions")</span>
+                        <h3 class="fw-bold mb-0">@Model.Count(s => !s.IsActive && !s.IsExpired)</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label">@Html.T("المستخدم", "User")</label>
+                                <input type="text" name="userId" class="form-control" placeholder="@(Html.T("رقم المستخدم...", "User ID..."))" value="@userId" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">@Html.T("الحالة", "Status")</label>
+                                <select name="active" class="form-select">
+                                    <option value="">@Html.T("الكل", "All")</option>
+                                    @if (active == true)
+                                    {
+                                        <option value="true" selected>@Html.T("نشط", "Active")</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="true">@Html.T("نشط", "Active")</option>
+                                    }
+                                    @if (active == false)
+                                    {
+                                        <option value="false" selected>@Html.T("غير نشط", "Inactive")</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="false">@Html.T("غير نشط", "Inactive")</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">@Html.T("البحث", "Search")</label>
+                                <input type="text" class="form-control" id="searchSessions" placeholder="@(Html.T("بحث...", "Search..."))" />
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="feather-search me-2"></i>
+                                    @Html.T("بحث", "Search")
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sessions Table -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("جميع الجلسات", "All Sessions")</h5>
+                    <div class="card-header-action">
+                        <button class="btn btn-sm btn-danger" onclick="terminateAllInactive()">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("إنهاء الجلسات غير النشطة", "Terminate Inactive Sessions")
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0" id="sessionsTable">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th>@Html.T("المستخدم", "User")</th>
+                                    <th>@Html.T("رمز الجلسة", "Session Token")</th>
+                                    <th>@Html.T("بدأت في", "Started At")</th>
+                                    <th>@Html.T("آخر نشاط", "Last Activity")</th>
+                                    <th>@Html.T("تنتهي في", "Expires At")</th>
+                                    <th>@Html.T("عنوان IP", "IP Address")</th>
+                                    <th>@Html.T("المتصفح", "Browser")</th>
+                                    <th>@Html.T("الجهاز", "Device")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var session in Model)
+                                {
+                                    var sessionClass = session.IsActive && !session.IsExpired ? "active" : session.IsExpired ? "expired" : "";
+                                    
+                                    <tr class="session-card @sessionClass">
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                    @session.User?.FirstName?.Substring(0, 1)
+                                                </div>
+                                                <div>
+                                                    <span class="fw-semibold d-block">@session.User?.FirstName @session.User?.LastName</span>
+                                                    <small class="text-muted">@session.User?.Email</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <code class="text-muted">@session.SessionToken?.Substring(0, 16)...</code>
+                                        </td>
+                                        <td>
+                                            <div>
+                                                <span class="d-block">@session.StartedAt.ToString("dd/MM/yyyy")</span>
+                                                <small class="text-muted">@session.StartedAt.ToString("hh:mm tt")</small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @if (session.LastActivityAt > DateTime.MinValue)
+                                            {
+                                                var minutesAgo = (int)(DateTime.UtcNow - session.LastActivityAt).TotalMinutes;
+                                                <div>
+                                                    <span class="d-block">@session.LastActivityAt.ToString("dd/MM/yyyy")</span>
+                                                    <small class="@(minutesAgo < 15 ? "text-success" : "text-muted")">
+                                                        @(minutesAgo < 60 ? minutesAgo + " " + Html.T("دقيقة", "min") : minutesAgo < 1440 ? (minutesAgo / 60) + " " + Html.T("ساعة", "hr") : (minutesAgo / 1440) + " " + Html.T("يوم", "day"))
+                                                    </small>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div>
+                                                <span class="d-block">@session.ExpiresAt.ToString("dd/MM/yyyy")</span>
+                                                <small class="text-muted">@session.ExpiresAt.ToString("hh:mm tt")</small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <code class="text-primary">@session.IpAddress</code>
+                                        </td>
+                                        <td>@session.Browser</td>
+                                        <td>@session.Device</td>
+                                        <td>
+                                            @if (session.IsActive && !session.IsExpired)
+                                            {
+                                                <span class="badge bg-soft-success text-success">
+                                                    <span class="status-dot bg-success me-1"></span>
+                                                    @Html.T("نشط", "Active")
+                                                </span>
+                                            }
+                                            else if (session.IsExpired)
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">
+                                                    <span class="status-dot bg-danger me-1"></span>
+                                                    @Html.T("منتهي", "Expired")
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-warning text-warning">
+                                                    <span class="status-dot bg-warning me-1"></span>
+                                                    @Html.T("معلق", "Terminated")
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                @if (session.IsActive && !session.IsExpired)
+                                                {
+                                                    <form asp-controller="Security" asp-action="TerminateSession" asp-route-id="@session.Id" method="post" style="display: inline;">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="avatar-text avatar-md text-danger" 
+                                                                data-bs-toggle="tooltip" title="@(Html.T("إنهاء الجلسة", "Terminate Session"))"
+                                                                onclick="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إنهاء هذه الجلسة?", "Are you sure you want to terminate this session?").Replace("'", "\\'"))');">
+                                                            <i class="feather-x-circle"></i>
+                                                        </button>
+                                                    </form>
+                                                }
+                                                <a href="javascript:void(0);" class="avatar-text avatar-md" 
+                                                   data-bs-toggle="tooltip" title="@(Html.T("تفاصيل الجلسة", "Session Details"))"
+                                                   onclick="showSessionDetails(@session.Id)">
+                                                    <i class="feather-info"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                @if (!Model.Any())
+                {
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-info text-info mx-auto mb-3">
+                            <i class="feather-monitor"></i>
+                        </div>
+                        <h5>@Html.T("لا توجد جلسات", "No Sessions")</h5>
+                        <p class="text-muted">@Html.T("لم يتم العثور على أي جلسات", "No sessions found")</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function terminateAllInactive() {
+            if (confirm('@Html.Raw(Html.T("هل أنت متأكد من إنهاء جميع الجلسات غير النشطة?", "Are you sure you want to terminate all inactive sessions?").Replace("'", "\\'"))')) {
+                alert('@Html.Raw(Html.T("وظيفة قيد التطوير", "Feature in development").Replace("'", "\\'"))');
+            }
+        }
+
+        function showSessionDetails(id) {
+            alert('@Html.Raw(Html.T("تفاصيل الجلسة #", "Session details #").Replace("'", "\\'"))' + id);
+        }
+
+        $(document).ready(function() {
+            // Search functionality
+            $('#searchSessions').on('keyup', function() {
+                var value = $(this).val().toLowerCase();
+                $('#sessionsTable tbody tr').filter(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+                });
+            });
+
+            // Initialize tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+

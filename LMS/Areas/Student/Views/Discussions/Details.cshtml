@@ -1,0 +1,407 @@
+@model LMS.Areas.Student.ViewModels.DiscussionDisplayViewModel
+@{
+    ViewData["Title"] = Html.T("تفاصيل الموضوع", "Topic Details");
+    var replies = ViewBag.Replies as List<LMS.Areas.Student.ViewModels.ReplyDisplayViewModel> ?? new List<LMS.Areas.Student.ViewModels.ReplyDisplayViewModel>();
+    var replyModel = ViewBag.ReplyModel as LMS.Areas.Student.ViewModels.ReplyDiscussionViewModel;
+}
+
+@section Styles {
+<style>
+    .discussion-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 40px;
+    }
+    .reply-card {
+        border-right: 3px solid transparent;
+        transition: all 0.2s ease;
+    }
+    .reply-card:hover {
+        border-right-color: #667eea;
+        background: #f9fafb;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Discussion Header -->
+<div class="discussion-header mb-4">
+    <div class="d-flex align-items-start justify-content-between mb-3">
+        <span class="badge bg-white bg-opacity-25 text-white">@Model.CourseName</span>
+        <button class="btn btn-sm btn-light" onclick="shareDiscussion()">
+            <i class="feather-share-2 me-2"></i>
+            @Html.T("مشاركة", "Share")
+        </button>
+    </div>
+    <h2 class="text-white fw-bold mb-3">@Model.Title</h2>
+    <div class="d-flex align-items-center gap-3">
+        <div class="d-flex align-items-center text-white">
+            <div class="avatar-text avatar-md bg-white bg-opacity-25 text-white me-2">
+                @if (!string.IsNullOrEmpty(Model.AuthorImageUrl))
+                {
+                    <img src="@Model.AuthorImageUrl" alt="@Model.AuthorName" class="avatar-img" />
+                }
+                else
+                {
+                    <i class="feather-user"></i>
+                }
+            </div>
+            <div>
+                <strong class="d-block">@Model.AuthorName</strong>
+                <small class="opacity-75">@Model.CreatedAt.ToString("dd MMMM yyyy")</small>
+            </div>
+        </div>
+        <div class="text-white">
+            <i class="feather-message-circle me-1"></i>
+            @Model.RepliesCount @Html.T("رد", "replies")
+        </div>
+        <div class="text-white">
+            <i class="feather-eye me-1"></i>
+            @Model.ViewCount @Html.T("مشاهدة", "views")
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Main Content -->
+    <div class="col-lg-8">
+        <!-- Discussion Content -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-body">
+                <div class="mb-4">
+                    @Html.Raw(Model.Content)
+                </div>
+
+                @if (!string.IsNullOrEmpty(Model.LessonName))
+                {
+                    <div class="mb-3">
+                        <span class="badge bg-soft-info text-info">
+                            <i class="feather-book me-1"></i>
+                            @Html.T("الدرس:", "Lesson:") @Model.LessonName
+                        </span>
+                    </div>
+                }
+
+                <!-- Actions -->
+                <div class="d-flex gap-2">
+                    <button type="button" id="btn-save-discussion" class="btn @(Model.IsSaved ? "btn-primary" : "btn-outline-secondary")" onclick="toggleSaveDiscussion(event)" data-saved="@(Model.IsSaved ? "true" : "false")">
+                        <i class="feather-bookmark me-2"></i>
+                        <span class="btn-save-text">@(Model.IsSaved ? Html.T("تم الحفظ", "Saved") : Html.T("حفظ", "Save"))</span>
+                    </button>
+                    <button type="button" class="btn btn-outline-danger" onclick="reportDiscussion()">
+                        <i class="feather-flag me-2"></i>
+                        @Html.T("إبلاغ", "Report")
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Replies -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-message-circle me-2"></i>
+                    @Html.T("الردود", "Replies") (@replies.Count)
+                </h5>
+            </div>
+            <div class="card-body">
+                @if (replies.Any())
+                {
+                    @foreach (var reply in replies)
+                    {
+                        <div class="reply-card p-3 mb-3 rounded">
+                            <div class="d-flex align-items-start mb-3">
+                                <div class="avatar-text avatar-md bg-primary text-white me-3">
+                                    @if (!string.IsNullOrEmpty(reply.AuthorImageUrl))
+                                    {
+                                        <img src="@reply.AuthorImageUrl" alt="@reply.AuthorName" class="avatar-img" />
+                                    }
+                                    else
+                                    {
+                                        <i class="feather-user"></i>
+                                    }
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <strong class="d-block">@reply.AuthorName</strong>
+                                            <small class="text-muted">@reply.CreatedAt.ToString("dd MMMM yyyy, HH:mm")</small>
+                                            @if (reply.IsInstructorReply)
+                                            {
+                                                <span class="badge bg-info ms-2">@Html.T("مدرس", "Instructor")</span>
+                                            }
+                                        </div>
+                                        @if (reply.IsAcceptedAnswer)
+                                        {
+                                            <span class="badge bg-success">
+                                                <i class="feather-check-circle me-1"></i>
+                                                @Html.T("إجابة صحيحة", "Accepted answer")
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <p class="mb-3">@Html.Raw(reply.Content)</p>
+                            
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary like-reply-btn" onclick="likeReply(@reply.Id, event)">
+                                    <i class="feather-thumbs-up me-1"></i>
+                                    <span class="like-count">@reply.LikesCount</span>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="replyToComment(@reply.Id)">
+                                    <i class="feather-corner-up-right me-1"></i>
+                                    @Html.T("رد", "Reply")
+                                </button>
+                            </div>
+
+                            @* Display child replies *@
+                            @if (reply.ChildReplies.Any())
+                            {
+                                <div class="ms-5 mt-3">
+                                    @foreach (var childReply in reply.ChildReplies)
+                                    {
+                                        <div class="reply-card p-2 mb-2 border rounded">
+                                            <div class="d-flex align-items-start">
+                                                <div class="avatar-text avatar-sm bg-secondary text-white me-2">
+                                                    <i class="feather-user"></i>
+                                                </div>
+                                                <div>
+                                                    <strong class="d-block">@childReply.AuthorName</strong>
+                                                    <small class="text-muted">@childReply.CreatedAt.ToString("dd MMM")</small>
+                                                    <p class="mb-0 mt-1">@Html.Raw(childReply.Content)</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center text-muted py-4">
+                        <i class="feather-message-circle fs-1 mb-2 d-block"></i>
+                        <p class="mb-0">@Html.T("لا توجد ردود بعد. كن أول من يرد!", "No replies yet. Be the first to reply!")</p>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Reply Form -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-edit me-2"></i>
+                    @Html.T("أضف رداً", "Add Reply")
+                </h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="Reply" method="post" data-reply-placeholder="@Html.T("اكتب ردك على التعليق...", "Write your reply to the comment...")">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="DiscussionId" value="@Model.Id" />
+                    <div class="mb-3">
+                        <textarea class="form-control" name="Content" rows="5" placeholder="@Html.T("اكتب ردك هنا...", "Write your reply here...")" required></textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="feather-send me-2"></i>
+                            @Html.T("نشر الرد", "Post Reply")
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Discussion Info -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">@Html.T("معلومات المناقشة", "Discussion Info")</h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <small class="text-muted d-block">@Html.T("الدورة", "Course")</small>
+                    <strong>@Model.CourseName</strong>
+                </div>
+                @if (!string.IsNullOrEmpty(Model.LessonName))
+                {
+                    <div class="mb-3">
+                        <small class="text-muted d-block">@Html.T("الدرس", "Lesson")</small>
+                        <strong>@Model.LessonName</strong>
+                    </div>
+                }
+                <div class="mb-3">
+                    <small class="text-muted d-block">@Html.T("الكاتب", "Author")</small>
+                    <strong>@Model.AuthorName</strong>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted d-block">@Html.T("تاريخ الإنشاء", "Created")</small>
+                    <strong>@Model.CreatedAt.ToString("dd MMMM yyyy")</strong>
+                </div>
+                @if (Model.LastReplyAt.HasValue)
+                {
+                    <div class="mb-0">
+                        <small class="text-muted d-block">@Html.T("آخر رد", "Last reply")</small>
+                        <strong>@Model.LastReplyAt.Value.ToString("dd MMMM yyyy")</strong>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Related Discussions -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">
+                    <i class="feather-layers me-2"></i>
+                    @Html.T("مواضيع مشابهة", "Related topics")
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    <a href="#" class="list-group-item list-group-item-action border-0 px-0">
+                        <h6 class="fw-bold mb-1 text-truncate">@Html.T("كيف أحسن مهاراتي في البرمجة؟", "How do I improve my programming skills?")</h6>
+                        <small class="text-muted">15 @Html.T("رد", "replies")</small>
+                    </a>
+                    <a href="#" class="list-group-item list-group-item-action border-0 px-0">
+                        <h6 class="fw-bold mb-1 text-truncate">@Html.T("أفضل مصادر لتعلم React", "Best resources to learn React")</h6>
+                        <small class="text-muted">23 @Html.T("رد", "replies")</small>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    (function() {
+        var __T = window.__T || {};
+        __T.ReportReason = '@Html.Raw(Html.T("الرجاء ذكر سبب الإبلاغ:", "Please state the reason for reporting:").Replace("\\", "\\\\").Replace("'", "\\'"))';
+        __T.LinkCopied = '@Html.Raw(Html.T("تم نسخ الرابط", "Link copied").Replace("\\", "\\\\").Replace("'", "\\'"))';
+        __T.TopicSaved = '@Html.Raw(Html.T("تم حفظ الموضوع", "Topic saved").Replace("\\", "\\\\").Replace("'", "\\'"))';
+        __T.Saved = '@Html.Raw(Html.T("تم الحفظ", "Saved").Replace("\\", "\\\\").Replace("'", "\\'"))';
+        __T.Save = '@Html.Raw(Html.T("حفظ", "Save").Replace("\\", "\\\\").Replace("'", "\\'"))';
+        __T.ReportSuccess = '@Html.Raw(Html.T("تم الإبلاغ بنجاح", "Report submitted successfully").Replace("\\", "\\\\").Replace("'", "\\'"))';
+        __T.ErrorLiking = '@Html.Raw(Html.T("حدث خطأ أثناء الإعجاب", "Error while liking").Replace("\\", "\\\\").Replace("'", "\\'"))';
+        __T.ErrorReporting = '@Html.Raw(Html.T("حدث خطأ أثناء الإبلاغ", "Error while reporting").Replace("\\", "\\\\").Replace("'", "\\'"))';
+        Object.assign(window.__T, __T);
+    })();
+    function likeReply(replyId, evt) {
+        var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
+        if (!tokenEl || !tokenEl.value) { alert((window.__T && window.__T.ErrorLiking) || 'Error'); return; }
+        var token = tokenEl.value;
+        var btn = evt && evt.target ? evt.target.closest('button') : null;
+
+        fetch('@Url.Action("LikeReply", "Discussions")', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'RequestVerificationToken': token
+            },
+            body: 'replyId=' + replyId + '&__RequestVerificationToken=' + encodeURIComponent(token)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success && btn) {
+                var countEl = btn.querySelector('.like-count');
+                if (countEl) countEl.textContent = data.likesCount;
+                btn.classList.remove('btn-outline-primary');
+                btn.classList.add('btn-primary');
+            } else if (!data.success) {
+                alert(data.message || (window.__T && window.__T.Error) || 'Error');
+            }
+        })
+        .catch(function() { alert((window.__T && window.__T.ErrorLiking) || 'Error'); });
+    }
+
+    function shareDiscussion() {
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            alert((window.__T && window.__T.LinkCopied) || 'Link copied');
+        });
+    }
+
+    function toggleSaveDiscussion(evt) {
+        var btn = evt && evt.target ? evt.target.closest('button') : document.getElementById('btn-save-discussion');
+        if (!btn) return;
+        var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
+        if (!tokenEl || !tokenEl.value) { alert((window.__T && window.__T.Error) || 'Error'); return; }
+        var token = tokenEl.value;
+        fetch('@Url.Action("ToggleSave", "Discussions")', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'RequestVerificationToken': token
+            },
+            body: 'discussionId=@Model.Id&__RequestVerificationToken=' + encodeURIComponent(token)
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                var textEl = btn.querySelector('.btn-save-text');
+                if (data.saved) {
+                    btn.classList.remove('btn-outline-secondary');
+                    btn.classList.add('btn-primary');
+                    btn.setAttribute('data-saved', 'true');
+                    if (textEl) textEl.textContent = (window.__T && window.__T.Saved) || 'Saved';
+                } else {
+                    btn.classList.remove('btn-primary');
+                    btn.classList.add('btn-outline-secondary');
+                    btn.setAttribute('data-saved', 'false');
+                    if (textEl) textEl.textContent = (window.__T && window.__T.Save) || 'Save';
+                }
+            } else {
+                alert(data.message || (window.__T && window.__T.Error) || 'Error');
+            }
+        })
+        .catch(function() { alert((window.__T && window.__T.Error) || 'Error'); });
+    }
+
+    function reportDiscussion() {
+        var reason = prompt((window.__T && window.__T.ReportReason) || 'Please state the reason for reporting:');
+        if (reason === null) return;
+        var tokenEl = document.querySelector('input[name="__RequestVerificationToken"]');
+        if (!tokenEl || !tokenEl.value) { alert((window.__T && window.__T.ErrorReporting) || 'Error'); return; }
+        var token = tokenEl.value;
+        fetch('@Url.Action("Report", "Discussions")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'RequestVerificationToken': token
+                },
+                body: `discussionId=@Model.Id&reason=${encodeURIComponent(reason)}&__RequestVerificationToken=${encodeURIComponent(token)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                var msg = data.message || (data.success ? (window.__T && window.__T.ReportSuccess) : (window.__T && window.__T.Error));
+                alert(msg || 'Done');
+            })
+            .catch(() => alert((window.__T && window.__T.ErrorReporting) || 'Error'));
+        }
+    }
+
+    function replyToComment(replyId) {
+        var form = document.querySelector('form[action*="Reply"]');
+        if (!form) return;
+        var existing = form.querySelector('input[name="ParentReplyId"]');
+        if (existing) existing.remove();
+        var parentInput = document.createElement('input');
+        parentInput.type = 'hidden';
+        parentInput.name = 'ParentReplyId';
+        parentInput.value = replyId;
+        form.appendChild(parentInput);
+        var textarea = form.querySelector('textarea[name="Content"]');
+        if (textarea) {
+            textarea.placeholder = form.getAttribute('data-reply-placeholder') || textarea.placeholder;
+            textarea.focus();
+        }
+    }
+</script>
+}
+

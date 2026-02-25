@@ -1,0 +1,317 @@
+@model LMS.Areas.Instructor.ViewModels.ReviewResponseViewModel
+
+@{
+    ViewData["Title"] = string.IsNullOrEmpty(Model.ExistingResponse) ? "الرد على التقييم" : "تعديل الرد";
+    ViewData["Subtitle"] = Model.CourseTitle;
+}
+
+@{
+    var detailsUrl = Url.Action("Details", new { id = Model.ReviewId });
+    var actionButtonsHtml = "<a href='" + detailsUrl + "' class='btn btn-light'>" +
+        "<i class='feather-arrow-right me-2'></i>" +
+        "العودة" +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Review Display -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-message-square me-2 text-primary"></i>
+                        التقييم الأصلي
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                            @Model.StudentName?.Substring(0, 1)
+                        </div>
+                        <div class="flex-grow-1">
+                            <h6 class="fw-bold mb-1">@Model.StudentName</h6>
+                            
+                            <!-- Rating Stars -->
+                            <div class="d-flex align-items-center gap-1">
+                                @for (int i = 1; i <= 5; i++)
+                                {
+                                    <i class="feather-star @(i <= Model.Rating ? "text-warning fill-warning" : "text-muted")" style="font-size: 18px;"></i>
+                                }
+                                <span class="fw-bold text-dark ms-2">@Model.Rating.0 / 5.0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-soft-light p-3 rounded">
+                        <p class="mb-0" style="white-space: pre-wrap; line-height: 1.8;">@Model.ReviewComment</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Response Form -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-edit me-2 text-primary"></i>
+                        @(string.IsNullOrEmpty(Model.ExistingResponse) ? "اكتب ردك" : "تعديل ردك")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="Respond" asp-route-id="@Model.ReviewId" method="post" id="responseForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="ReviewId" />
+                        <input type="hidden" asp-for="StudentName" />
+                        <input type="hidden" asp-for="CourseTitle" />
+                        <input type="hidden" asp-for="Rating" />
+                        <input type="hidden" asp-for="ReviewComment" />
+                        <input type="hidden" asp-for="ExistingResponse" />
+
+                        <div class="mb-4">
+                            <label class="form-label">ردك <span class="text-danger">*</span></label>
+                            <textarea asp-for="Response" class="form-control" rows="8" placeholder="اكتب ردك هنا...
+
+مثال:
+شكراً لك على تقييمك! سعداء بأن الدورة نالت إعجابك. نتطلع دائماً لتقديم محتوى أفضل."></textarea>
+                            <span asp-validation-for="Response" class="text-danger"></span>
+                            <div class="form-text">
+                                <i class="feather-info me-1"></i>
+                                اكتب رداً واضحاً ومهنياً (50-500 حرف)
+                            </div>
+                            <div id="charCount" class="form-text text-end mt-1">0 / 500 حرف</div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(Model.ExistingResponse))
+                        {
+                            <div class="alert alert-warning">
+                                <i class="feather-alert-triangle me-2"></i>
+                                <strong>تنبيه:</strong> سيتم تحديث الرد الحالي. سيتم إرسال إشعار للطالب بالتحديث.
+                            </div>
+                        }
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-send me-2"></i>
+                                @(string.IsNullOrEmpty(Model.ExistingResponse) ? "إرسال الرد" : "تحديث الرد")
+                            </button>
+                            <a href="@Url.Action("Details", new { id = Model.ReviewId })" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                إلغاء
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Preview Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">
+                        <i class="feather-eye me-2"></i>
+                        معاينة الرد
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="bg-soft-primary p-3 rounded">
+                        <h6 class="fw-bold text-primary mb-2">
+                            <i class="feather-message-circle me-2"></i>
+                            رد المدرس:
+                        </h6>
+                        <p id="previewText" class="mb-0 fs-14" style="white-space: pre-wrap; min-height: 60px; line-height: 1.6;">
+                            <em class="text-muted">اكتب ردك لرؤية المعاينة هنا...</em>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Response Templates -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">
+                        <i class="feather-zap me-2"></i>
+                        قوالب سريعة
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted fs-13 mb-3">انقر على قالب لاستخدامه:</p>
+                    
+                    <div class="d-grid gap-2">
+                        @if (Model.Rating >= 4)
+                        {
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn" data-template="شكراً جزيلاً على تقييمك الإيجابي! سعداء جداً بأن الدورة نالت إعجابك. نتطلع دائماً لتقديم محتوى أفضل وأكثر فائدة.">
+                                <i class="feather-smile me-2 text-success"></i>
+                                شكر على التقييم الإيجابي
+                            </button>
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn" data-template="شكراً لك! يسعدني أن الدورة ساعدتك في تحقيق أهدافك التعليمية. لا تتردد في التواصل معي إذا كان لديك أي استفسار.">
+                                <i class="feather-heart me-2 text-danger"></i>
+                                شكر مع تشجيع
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn" data-template="شكراً على تقييمك وملاحظاتك. نأخذ جميع التعليقات بعين الاعتبار ونعمل باستمرار على تحسين الدورة. نتمنى أن تكون استفدت من المحتوى.">
+                                <i class="feather-message-square me-2 text-info"></i>
+                                رد على تقييم متوسط
+                            </button>
+                            <button type="button" class="btn btn-sm btn-light text-start template-btn" data-template="أعتذر إذا لم تكن الدورة بمستوى توقعاتك. يهمني معرفة المزيد عن تجربتك لتحسين المحتوى. يمكنك مراسلتي مباشرة لمناقشة أي مشاكل واجهتها.">
+                                <i class="feather-alert-circle me-2 text-warning"></i>
+                                رد على تقييم سلبي
+                            </button>
+                        }
+                        
+                        <button type="button" class="btn btn-sm btn-light text-start template-btn" data-template="شكراً على وقتك في كتابة هذا التقييم. ملاحظاتك قيمة جداً وتساعدني في تطوير الدورة. بالتوفيق في رحلتك التعليمية!">
+                            <i class="feather-thumbs-up me-2 text-primary"></i>
+                            رد عام
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tips Card -->
+            <div class="card stretch stretch-full bg-soft-success">
+                <div class="card-body">
+                    <h6 class="fw-bold text-success mb-3">
+                        <i class="feather-help-circle me-2"></i>
+                        نصائح للرد الفعال
+                    </h6>
+                    <ul class="list-unstyled mb-0 fs-13">
+                        <li class="mb-2">
+                            <i class="feather-check me-2 text-success"></i>
+                            ابدأ بالشكر دائماً
+                        </li>
+                        <li class="mb-2">
+                            <i class="feather-check me-2 text-success"></i>
+                            كن صادقاً ومحترفاً
+                        </li>
+                        <li class="mb-2">
+                            <i class="feather-check me-2 text-success"></i>
+                            عالج النقاط السلبية بإيجابية
+                        </li>
+                        <li class="mb-2">
+                            <i class="feather-check me-2 text-success"></i>
+                            قدم حلولاً أو تحسينات
+                        </li>
+                        <li class="mb-0">
+                            <i class="feather-check me-2 text-success"></i>
+                            اختم بدعوة للتواصل
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            @if (Model.Rating <= 2)
+            {
+                <!-- Alert for Low Ratings -->
+                <div class="alert alert-warning">
+                    <i class="feather-alert-triangle me-2"></i>
+                    <strong>تقييم منخفض:</strong> تعامل مع هذا الرد بعناية خاصة. حاول فهم المشكلة وتقديم حل.
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
+    <script>
+        $(document).ready(function () {
+            const responseTextarea = $('#Response');
+            const previewText = $('#previewText');
+            const charCount = $('#charCount');
+
+            // Update preview and character count
+            function updatePreview() {
+                const text = responseTextarea.val();
+                const length = text.length;
+
+                // Update preview
+                if (text.trim()) {
+                    previewText.html(text.replace(/\n/g, '<br>'));
+                    previewText.removeClass('text-muted');
+                } else {
+                    previewText.html('<em class="text-muted">اكتب ردك لرؤية المعاينة هنا...</em>');
+                }
+
+                // Update character count
+                charCount.text(length + ' / 500 حرف');
+                
+                if (length > 500) {
+                    charCount.addClass('text-danger').removeClass('text-muted');
+                } else if (length < 50) {
+                    charCount.addClass('text-warning').removeClass('text-muted text-danger');
+                } else {
+                    charCount.addClass('text-success').removeClass('text-muted text-warning text-danger');
+                }
+            }
+
+            // Initial update
+            updatePreview();
+
+            // Update on input
+            responseTextarea.on('input', updatePreview);
+
+            // Quick templates
+            $('.template-btn').on('click', function() {
+                const template = $(this).data('template');
+                responseTextarea.val(template);
+                updatePreview();
+                
+                // Scroll to textarea
+                $('html, body').animate({
+                    scrollTop: responseTextarea.offset().top - 100
+                }, 500);
+            });
+
+            // Form validation
+            $('#responseForm').on('submit', function(e) {
+                const response = responseTextarea.val().trim();
+
+                if (!response) {
+                    e.preventDefault();
+                    alert('يرجى كتابة رد قبل الإرسال');
+                    responseTextarea.focus();
+                    return false;
+                }
+
+                if (response.length < 50) {
+                    e.preventDefault();
+                    alert('الرد يجب أن يكون 50 حرفاً على الأقل');
+                    responseTextarea.focus();
+                    return false;
+                }
+
+                if (response.length > 500) {
+                    e.preventDefault();
+                    alert('الرد يجب ألا يتجاوز 500 حرف');
+                    responseTextarea.focus();
+                    return false;
+                }
+
+                return true;
+            });
+        });
+    </script>
+
+    <style>
+        .fill-warning {
+            fill: currentColor;
+        }
+        .template-btn {
+            text-align: right !important;
+            white-space: normal;
+            line-height: 1.4;
+        }
+    </style>
+}
+

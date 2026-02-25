@@ -1,0 +1,330 @@
+@model LMS.Domain.Entities.LiveSessions.LiveClass
+@{
+    ViewData["Title"] = Html.T("تفاصيل الجلسة", "Session Details");
+    var attendance = ViewBag.Attendance as LMS.Domain.Entities.LiveSessions.LiveClassAttendance;
+    var canAccess = (bool)(ViewBag.CanAccess ?? false);
+    var isPurchased = (bool)(ViewBag.IsPurchased ?? false);
+    var isScheduleEnrolled = (bool)(ViewBag.IsScheduleEnrolled ?? false);
+    var isEnrolledInCourse = (bool)(ViewBag.IsEnrolledInCourse ?? false);
+    var isSubscriptionAccess = (bool)(ViewBag.IsSubscriptionAccess ?? false);
+    var isFree = Model.IsFreeForAll || Model.PricingType == LMS.Domain.Enums.LiveSessionPricingType.Free;
+}
+
+@section Styles {
+<style>
+    .live-class-header {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 40px;
+    }
+    .price-highlight {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 30px;
+        text-align: center;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Live Class Header -->
+<div class="live-class-header mb-4">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <div class="mb-3">
+                @{
+                    var statusText = Model.Status switch
+                    {
+                        LMS.Domain.Enums.LiveClassStatus.Live => Html.T("مباشر الآن", "Live Now"),
+                        LMS.Domain.Enums.LiveClassStatus.Scheduled => Html.T("مجدولة", "Scheduled"),
+                        LMS.Domain.Enums.LiveClassStatus.Completed => Html.T("مكتملة", "Completed"),
+                        _ => Model.Status.ToString()
+                    };
+                }
+                <span class="badge bg-white bg-opacity-25 text-white">
+                    <i class="feather-circle me-1" style="font-size: 8px;"></i>
+                    @statusText
+                </span>
+                @if (Model.Course != null)
+                {
+                    <span class="badge bg-white bg-opacity-25 text-white">@Model.Course.Title</span>
+                }
+                @if (isFree)
+                {
+                    <span class="badge bg-success">@Html.T("مجاني", "Free")</span>
+                }
+                else if (Model.Price > 0)
+                {
+                    <span class="badge bg-warning text-dark">@Model.Price.ToEGP(0)</span>
+                }
+            </div>
+            <h2 class="text-white fw-bold mb-2">@Model.Title</h2>
+            @if (!string.IsNullOrEmpty(Model.Subject))
+            {
+                <p class="text-white opacity-75 mb-2">@Model.Subject</p>
+            }
+            <p class="text-white opacity-75 mb-3">@Model.Description</p>
+
+            <div class="d-flex align-items-center gap-4 flex-wrap">
+                <div class="text-white">
+                    <i class="feather-calendar me-2"></i>
+                    @Model.ScheduledStartTime.ToString("dd MMMM yyyy")
+                </div>
+                <div class="text-white">
+                    <i class="feather-clock me-2"></i>
+                    @Model.ScheduledStartTime.ToString("HH:mm") - @Model.ScheduledEndTime.ToString("HH:mm")
+                </div>
+                @if (Model.Instructor != null)
+                {
+                    <div class="text-white">
+                        <i class="feather-user me-2"></i>
+                        @(Model.Instructor.FullName ?? Model.Instructor.UserName ?? Html.T("مدرب", "Instructor"))
+                    </div>
+                }
+                <div class="text-white">
+                    <i class="feather-users me-2"></i>
+                    @Model.RegisteredCount @Html.T("طالب مسجل", "enrolled student(s)")
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 text-center mt-3 mt-lg-0">
+            @if (Model.Status == LMS.Domain.Enums.LiveClassStatus.Live && canAccess)
+            {
+                <a asp-area="Student" asp-controller="LiveClasses" asp-action="Join" asp-route-id="@Model.Id" class="btn btn-light btn-lg w-100">
+                    <i class="feather-video me-2"></i>
+                    @Html.T("انضم الآن", "Join Now")
+                </a>
+            }
+            else if (!canAccess && Model.Price > 0 && !isFree)
+            {
+                <div class="price-highlight">
+                    <h3 class="text-white mb-2">@Model.Price.ToEGP(0)</h3>
+                    <a asp-area="Student" asp-controller="SessionCheckout" asp-action="Checkout" asp-route-id="@Model.Id" class="btn btn-light btn-lg w-100">
+                        <i class="feather-shopping-cart me-2"></i>
+                        @Html.T("اشتري الآن", "Buy Now")
+                    </a>
+                </div>
+            }
+            else if (canAccess && Model.Status == LMS.Domain.Enums.LiveClassStatus.Scheduled)
+            {
+                <div class="alert alert-light mb-0">
+                    <i class="feather-check-circle me-2 text-success"></i>
+                    @Html.T("لديك صلاحية الوصول", "You have access")
+                    <p class="mb-0 mt-2 small">@Html.T("الجلسة ستبدأ في", "Session starts at") @Model.ScheduledStartTime.ToString("dd/MM/yyyy HH:mm")</p>
+                </div>
+            }
+            else if (!canAccess && isFree)
+            {
+                <form asp-area="Student" asp-controller="LiveClasses" asp-action="Enroll" asp-route-id="@Model.Id" method="post">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-light btn-lg w-100">
+                        <i class="feather-user-plus me-2"></i>
+                        @Html.T("سجّل مجاناً", "Enroll for Free")
+                    </button>
+                </form>
+            }
+            else if (canAccess)
+            {
+                <div class="alert alert-light mb-0">
+                    <i class="feather-check-circle me-2 text-success"></i>
+                    @Html.T("أنت مسجل في هذه الجلسة", "You are enrolled in this session")
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Main Content -->
+    <div class="col-lg-8">
+        <!-- About -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-info me-2"></i>
+                    @Html.T("عن الجلسة", "About the Session")
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>@Html.Raw(Model.Description ?? Html.T("لا يوجد وصف متاح", "No description available"))</p>
+            </div>
+        </div>
+
+        <!-- Schedule Info -->
+        @if (Model.Schedule != null)
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">
+                        <i class="feather-layers me-2"></i>
+                        @Html.T("جزء من جدول حصص", "Part of a Session Schedule")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6 class="fw-bold">@(Model.Schedule.TitleAr ?? Model.Schedule.Title)</h6>
+                    <p class="text-muted">@(Model.Schedule.Description ?? Html.T("لا يوجد وصف", "No description"))</p>
+                    <a asp-area="Student" asp-controller="LiveSessionSchedules" asp-action="Details" asp-route-id="@Model.Schedule.Id" class="btn btn-outline-primary btn-sm">
+                        <i class="feather-eye me-2"></i>
+                        @Html.T("عرض الجدول كاملاً", "View Full Schedule")
+                    </a>
+                </div>
+            </div>
+        }
+
+        <!-- Recordings -->
+        @if (Model.Recordings != null && Model.Recordings.Any())
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">
+                        <i class="feather-play-circle me-2"></i>
+                        @Html.T("التسجيلات", "Recordings")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        @foreach (var recording in Model.Recordings.Where(r => r.IsPublished))
+                        {
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="feather-film text-primary me-2"></i>
+                                    @recording.Title
+                                    <small class="text-muted d-block">@recording.DurationMinutes @Html.T("دقيقة", "minute(s)")</small>
+                                </div>
+                                @if (canAccess)
+                                {
+                                    <a asp-area="Student" asp-controller="LiveClasses" asp-action="WatchRecording" asp-route-id="@recording.Id" class="btn btn-sm btn-success">
+                                        <i class="feather-play me-1"></i>
+                                        @Html.T("مشاهدة", "Watch")
+                                    </a>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Instructor -->
+        @if (Model.Instructor != null)
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="fw-bold mb-0">@Html.T("المدرب", "Instructor")</h6>
+                </div>
+                <div class="card-body text-center">
+                    <div class="avatar-text avatar-xl bg-primary text-white mx-auto mb-3">
+                        <i class="feather-user fs-3"></i>
+                    </div>
+                    <h5 class="fw-bold mb-1">@(Model.Instructor.FullName ?? Model.Instructor.UserName ?? Html.T("مدرب", "Instructor"))</h5>
+                    <a asp-area="Student" asp-controller="Messages" asp-action="Compose" asp-route-recipientId="@Model.InstructorId" class="btn btn-primary btn-sm w-100 mt-2">
+                        <i class="feather-message-circle me-2"></i>
+                        @Html.T("راسل المدرب", "Message Instructor")
+                    </a>
+                </div>
+            </div>
+        }
+
+        <!-- Quick Info -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">@Html.T("معلومات سريعة", "Quick Info")</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <i class="feather-calendar text-primary me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("التاريخ", "Date")</small>
+                        <strong>@Model.ScheduledStartTime.ToString("dd MMMM yyyy")</strong>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center mb-3">
+                    <i class="feather-clock text-warning me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("الوقت", "Time")</small>
+                        <strong>@Model.ScheduledStartTime.ToString("HH:mm") - @Model.ScheduledEndTime.ToString("HH:mm")</strong>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center mb-3">
+                    <i class="feather-monitor text-info me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("المنصة", "Platform")</small>
+                        <strong>@(Model.Platform ?? Html.T("—", "—"))</strong>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center mb-3">
+                    <i class="feather-tag text-success me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("السعر", "Price")</small>
+                        <strong>
+                            @if (isFree)
+                            {
+                                <span class="text-success">@Html.T("مجاني", "Free")</span>
+                            }
+                            else
+                            {
+                                <span>@Model.Price.ToEGP(0)</span>
+                            }
+                        </strong>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center">
+                    <i class="feather-users text-info me-3"></i>
+                    <div>
+                        <small class="text-muted d-block">@Html.T("المسجلون", "Enrolled")</small>
+                        <strong>@Model.RegisteredCount</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Access Status -->
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">@Html.T("حالة الوصول", "Access Status")</h6>
+            </div>
+            <div class="card-body">
+                @if (canAccess)
+                {
+                    <div class="alert alert-success mb-0">
+                        <i class="feather-check-circle me-2"></i>
+                        @if (isPurchased)
+                        {
+                            <span>@Html.T("تم شراء الجلسة", "Session purchased")</span>
+                        }
+                        else if (isScheduleEnrolled)
+                        {
+                            <span>@Html.T("مشترك في جدول الحصص", "Enrolled in session schedule")</span>
+                        }
+                        else if (isEnrolledInCourse)
+                        {
+                            <span>@Html.T("مسجل في الدورة", "Enrolled in course")</span>
+                        }
+                        else if (isSubscriptionAccess)
+                        {
+                            <span>@Html.T("الوصول عبر الاشتراك", "Access via subscription")</span>
+                        }
+                        else
+                        {
+                            <span>@Html.T("جلسة مجانية", "Free session")</span>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning mb-0">
+                        <i class="feather-lock me-2"></i>
+                        @Html.T("يجب شراء الجلسة أو الاشتراك في الجدول للوصول", "You need to purchase the session or subscribe to the schedule to access")
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

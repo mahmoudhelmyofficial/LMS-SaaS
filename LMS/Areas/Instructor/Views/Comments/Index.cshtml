@@ -1,0 +1,298 @@
+@model IEnumerable<LMS.Domain.Entities.Social.Comment>
+@using LMS.Helpers
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إدارة التعليقات", "Comments Management");
+    ViewData["Subtitle"] = Html.T("عرض والرد على تعليقات الطلاب", "View and reply to student comments");
+    var statisticsUrl = Url.Action("Statistics");
+    var indexUrl = Url.Action("Index");
+    var noReplyUrl = Url.Action("Index", new { replied = false });
+    var repliedUrl = Url.Action("Index", new { replied = true });
+    var pinnedUrl = Url.Action("Index", new { pinned = true });
+    
+    // Load platform settings
+    var defaultPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Default", 20);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + statisticsUrl + "' class='btn btn-light'><i class='feather-bar-chart-2 me-2'></i>" + Html.T("الإحصائيات", "Statistics") + "</a><div class='dropdown'><button class='btn btn-light dropdown-toggle' type='button' data-bs-toggle='dropdown'><i class='feather-filter me-2'></i>" + Html.T("تصفية", "Filter") + "</button><ul class='dropdown-menu dropdown-menu-end'><li><a class='dropdown-item' href='" + indexUrl + "'>" + Html.T("جميع التعليقات", "All comments") + "</a></li><li><a class='dropdown-item' href='" + noReplyUrl + "'>" + Html.T("بدون رد", "No reply") + "</a></li><li><a class='dropdown-item' href='" + repliedUrl + "'>" + Html.T("تم الرد عليها", "Replied") + "</a></li><li><a class='dropdown-item' href='" + pinnedUrl + "'>" + Html.T("المثبتة", "Pinned") + "</a></li></ul></div>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي التعليقات", "Total comments") },
+                { "Value", ViewBag.TotalComments ?? 0 },
+                { "Icon", "message-circle" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "بانتظار الرد" },
+                { "Value", ViewBag.PendingComments ?? 0 },
+                { "Icon", "clock" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "تم الرد عليها" },
+                { "Value", ViewBag.RepliedComments ?? 0 },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "معدل الرد" },
+                { "Value", $"{ViewBag.ReplyRate ?? 0:F0}%" },
+                { "Icon", "trending-up" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    <!-- Comments List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة التعليقات", "Comments list")</h5>
+                    <div class="card-header-action">
+                        <div class="card-header-btn">
+                            <div data-bs-toggle="tooltip" title="@Html.T("تحديث", "Refresh")">
+                                <a href="@Url.Action("Index")" class="avatar-text avatar-xs bg-warning">
+                                    <i class="feather-refresh-cw"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    <!-- Filter Bar -->
+                    <div class="p-4 border-bottom">
+                        <form method="get" class="row g-3">
+                            <div class="col-md-4">
+                                <div class="input-group">
+                                    <input type="text" class="form-control" name="search" placeholder="@Html.T("البحث في التعليقات...", "Search comments...")" value="@(ViewBag.SearchTerm ?? "")">
+                                    <button class="btn btn-primary" type="submit">
+                                        <i class="feather-search"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" name="courseId" onchange="this.form.submit()">
+                                    <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                    @if (ViewBag.Courses != null)
+                                    {
+                                        foreach (var course in ViewBag.Courses)
+                                        {
+                                            <option value="@course.Id" selected="@(ViewBag.CourseId == course.Id)">@course.Title</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" name="status" onchange="this.form.submit()">
+                                    <option value="">جميع الحالات</option>
+                                    <option value="pending" selected="@(ViewBag.Status == "pending")">بانتظار الرد</option>
+                                    <option value="replied" selected="@(ViewBag.Status == "replied")">تم الرد</option>
+                                    <option value="pinned" selected="@(ViewBag.Status == "pinned")">مثبتة</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select class="form-select" name="sortBy" onchange="this.form.submit()">
+                                    <option value="newest" selected="@(ViewBag.SortBy == "newest" || ViewBag.SortBy == null)">الأحدث</option>
+                                    <option value="oldest" selected="@(ViewBag.SortBy == "oldest")">الأقدم</option>
+                                    <option value="mostlikes" selected="@(ViewBag.SortBy == "mostlikes")">الأكثر إعجاباً</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="p-4">
+                            @foreach (var comment in Model)
+                            {
+                                <div class="card mb-3 @(comment.IsPinned ? "border-warning" : "")">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-start justify-content-between mb-3">
+                                            <div class="d-flex align-items-start gap-3 flex-grow-1">
+                                                <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                                                    @(comment.User?.FullName?.Substring(0, 1) ?? "؟")
+                                                </div>
+                                                <div class="flex-grow-1">
+                                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                                        <h6 class="fw-bold mb-0">@comment.User?.FullName</h6>
+                                                        @if (comment.IsPinned)
+                                                        {
+                                                            <span class="badge bg-soft-warning text-warning">
+                                                                <i class="feather-pin"></i>
+                                                                مثبت
+                                                            </span>
+                                                        }
+                                                    </div>
+                                                    <div class="fs-12 text-muted mb-2">
+                                                        <i class="feather-book me-1"></i>
+                                                        @comment.Lesson?.Title
+                                                        <span class="mx-2">•</span>
+                                                        <i class="feather-clock me-1"></i>
+                                                        @comment.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                                                    </div>
+                                                    <p class="mb-0">@comment.Content</p>
+                                                    
+                                                    <!-- Instructor Reply -->
+                                                    @if (!string.IsNullOrEmpty(comment.InstructorReply))
+                                                    {
+                                                        <div class="alert alert-light mt-3 mb-0">
+                                                            <div class="d-flex align-items-start gap-2">
+                                                                <i class="feather-corner-down-left text-primary mt-1"></i>
+                                                                <div class="flex-grow-1">
+                                                                    <div class="fw-bold text-primary mb-1">@Html.T("ردك:", "Your reply:")</div>
+                                                                    <p class="mb-1">@comment.InstructorReply</p>
+                                                                    <div class="fs-11 text-muted">
+                                                                        @comment.InstructorReplyAt?.ToString("dd/MM/yyyy HH:mm")
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="text-center">
+                                                    <i class="feather-thumbs-up text-muted"></i>
+                                                    <div class="fs-11 fw-medium">@comment.LikesCount</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Actions -->
+                                        <div class="d-flex align-items-center gap-2 pt-3 border-top">
+                                            <a href="@Url.Action("Details", new { id = comment.Id })" class="btn btn-sm btn-light">
+                                                <i class="feather-eye me-1"></i>
+                                                عرض
+                                            </a>
+                                            @if (string.IsNullOrEmpty(comment.InstructorReply))
+                                            {
+                                                <button type="button" class="btn btn-sm btn-primary" onclick="showReplyModal(@comment.Id)">
+                                                    <i class="feather-message-circle me-1"></i>
+                                                    رد
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn btn-sm btn-light" onclick="showEditReplyModal(@comment.Id, '@Html.Raw(comment.InstructorReply)')">
+                                                    <i class="feather-edit me-1"></i>
+                                                    @Html.T("تعديل الرد", "Edit reply")
+                                                </button>
+                                            }
+                                            <form asp-action="TogglePin" asp-route-id="@comment.Id" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="btn btn-sm btn-light">
+                                                    <i class="feather-pin me-1"></i>
+                                                    @(comment.IsPinned ? Html.T("إلغاء التثبيت", "Unpin") : Html.T("تثبيت", "Pin"))
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Pagination -->
+                        @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                            ViewData,
+                            ("CurrentPage", ViewBag.Page ?? 1),
+                            ("TotalPages", ViewBag.TotalPages ?? 1),
+                            ("TotalItems", ViewBag.TotalItems ?? 0),
+                            ("PageSize", defaultPageSize),
+                            ("Action", "Index"),
+                            ("Controller", "Comments")
+                        ))
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-message-circle"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد تعليقات بعد", "No comments yet")</h5>
+                            <p class="text-muted mb-0">@Html.T("لم يقم الطلاب بإضافة أي تعليقات على دوراتك حتى الآن", "Students have not added any comments to your courses yet")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reply Modal -->
+<div class="modal fade" id="replyModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="replyForm" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" id="commentId" name="id" />
+                <div class="modal-header">
+                    <h5 class="modal-title">@Html.T("الرد على التعليق", "Reply to comment")</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("ردك", "Your reply") <span class="text-danger">*</span></label>
+                        <textarea name="replyText" class="form-control" rows="4" placeholder="@Html.T("اكتب ردك هنا...", "Write your reply here...")" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="feather-send me-2"></i>
+                        @Html.T("إرسال الرد", "Send reply")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function showReplyModal(commentId) {
+            document.getElementById('commentId').value = commentId;
+            document.getElementById('replyForm').action = '@Url.Action("Reply")';
+            document.querySelector('#replyForm textarea').value = '';
+            document.querySelector('.modal-title').textContent = '@Html.T("الرد على التعليق", "Reply to comment")';
+            new bootstrap.Modal(document.getElementById('replyModal')).show();
+        }
+
+        function showEditReplyModal(commentId, currentReply) {
+            document.getElementById('commentId').value = commentId;
+            document.getElementById('replyForm').action = '@Url.Action("EditReply")';
+            document.querySelector('#replyForm textarea').value = currentReply;
+            document.querySelector('.modal-title').textContent = '@Html.T("تعديل الرد", "Edit reply")';
+            new bootstrap.Modal(document.getElementById('replyModal')).show();
+        }
+
+        // Initialize tooltips
+        $(document).ready(function () {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}
+

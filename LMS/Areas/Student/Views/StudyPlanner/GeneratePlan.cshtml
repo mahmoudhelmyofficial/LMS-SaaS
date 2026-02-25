@@ -1,0 +1,281 @@
+@model LMS.Areas.Student.Controllers.GeneratePlanViewModel
+@{
+    ViewData["Title"] = Html.T("إنشاء خطة دراسية", "Generate Study Plan");
+    var enrollments = ViewBag.Enrollments as List<LMS.Domain.Entities.Learning.Enrollment>;
+}
+
+@section Styles {
+<style>
+    .wizard-step {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+    .wizard-step.active {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .wizard-step.completed {
+        opacity: 0.7;
+    }
+    .course-select-card {
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .course-select-card:hover {
+        border-color: #667eea;
+    }
+    .course-select-card.selected {
+        border-color: #667eea;
+        background: rgba(102, 126, 234, 0.05);
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Page Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center">
+            <a asp-action="Index" class="btn btn-light me-3">
+                <i class="feather-arrow-right"></i>
+            </a>
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-calendar text-primary me-2"></i>
+                    @Html.T("إنشاء خطة دراسية ذكية", "Create a smart study plan")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("دعنا ننشئ خطة دراسية مخصصة لك", "Let's create a personalized study plan for you")</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Wizard Steps -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between">
+            <div class="text-center flex-grow-1 wizard-step active" data-step="1">
+                <div class="avatar-text avatar-md bg-primary text-white mx-auto mb-2">1</div>
+                <small class="fw-semibold">@Html.T("اختر الدورة", "Choose course")</small>
+            </div>
+            <div class="text-center flex-grow-1 wizard-step" data-step="2">
+                <div class="avatar-text avatar-md bg-secondary text-white mx-auto mb-2">2</div>
+                <small class="fw-semibold">@Html.T("حدد الأهداف", "Set goals")</small>
+            </div>
+            <div class="text-center flex-grow-1 wizard-step" data-step="3">
+                <div class="avatar-text avatar-md bg-secondary text-white mx-auto mb-2">3</div>
+                <small class="fw-semibold">@Html.T("جدولة الوقت", "Schedule time")</small>
+            </div>
+            <div class="text-center flex-grow-1 wizard-step" data-step="4">
+                <div class="avatar-text avatar-md bg-secondary text-white mx-auto mb-2">4</div>
+                <small class="fw-semibold">@Html.T("مراجعة وحفظ", "Review & save")</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form asp-action="GeneratePlan" method="post" id="generatePlanForm">
+    @Html.AntiForgeryToken()
+    
+    <!-- Step 1: Select Course -->
+    <div class="step-content" id="step1">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">@Html.T("الخطوة 1: اختر الدورة للتخطيط", "Step 1: Choose course to plan")</h5>
+            </div>
+            <div class="card-body">
+                @if (enrollments != null && enrollments.Any())
+                {
+                    <div class="row g-3">
+                        @foreach (var enrollment in enrollments)
+                        {
+                            var totalLessons = enrollment.Course?.Modules?.Sum(m => m.Lessons?.Count ?? 0) ?? 0;
+                            var completedLessons = enrollment.LessonProgress?.Count(lp => lp.IsCompleted) ?? 0;
+                            var progressPercent = totalLessons > 0 ? (completedLessons * 100 / totalLessons) : 0;
+                            var remainingHours = enrollment.Course?.DurationHours ?? 0;
+                            
+                            <div class="col-md-6">
+                                <div class="course-select-card" data-enrollment-id="@enrollment.Id">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="EnrollmentId" value="@enrollment.Id" id="enrollment_@enrollment.Id" />
+                                        <label class="form-check-label w-100" for="enrollment_@enrollment.Id">
+                                            <h6 class="fw-bold mb-1">@enrollment.Course?.Title</h6>
+                                            <p class="text-muted small mb-2">@Html.T("التقدم:", "Progress:") @progressPercent% • @remainingHours @Html.T("ساعة", "hr")</p>
+                                            <div class="progress" style="height: 4px;">
+                                                <div class="progress-bar bg-primary" style="width: @progressPercent%"></div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-5">
+                        <i class="feather-book-open fs-1 text-muted mb-3 d-block"></i>
+                        <h5 class="text-muted">@Html.T("لا توجد دورات نشطة", "No active courses")</h5>
+                        <p class="text-muted">@Html.T("سجل في دورة أولاً لتتمكن من إنشاء خطة دراسية", "Enroll in a course first to create a study plan")</p>
+                        <a asp-controller="Courses" asp-action="Browse" class="btn btn-primary">
+                            <i class="feather-search me-2"></i>
+                            @Html.T("تصفح الدورات", "Browse courses")
+                        </a>
+                    </div>
+                }
+                @if (enrollments != null && enrollments.Any())
+                {
+                    <div class="text-end mt-4">
+                        <button type="button" class="btn btn-primary" onclick="nextStep(2)">
+                            @Html.T("التالي", "Next")
+                            <i class="feather-arrow-left ms-2"></i>
+                        </button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 2: Set Goals -->
+    <div class="step-content" id="step2" style="display: none;">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">@Html.T("الخطوة 2: حدد أهدافك", "Step 2: Set your goals")</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-4">
+                    <label class="form-label fw-bold">@Html.T("متى تريد إنهاء هذه الدورة؟", "When do you want to finish this course?")</label>
+                    <input type="date" class="form-control" name="TargetCompletionDate" value="@DateTime.UtcNow.AddMonths(1).ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="mb-4">
+                    <label class="form-label fw-bold">@Html.T("كم درساً تفضل دراسته في كل جلسة؟", "How many lessons per session?")</label>
+                    <select class="form-select" name="LessonsPerSession">
+                        <option value="1">1 @Html.T("درس", "lesson")</option>
+                        <option value="2" selected>2 @Html.T("درس", "lesson")</option>
+                        <option value="3">3 @Html.T("دروس", "lessons")</option>
+                        <option value="4">4 @Html.T("دروس", "lessons")</option>
+                        <option value="5">5 @Html.T("دروس", "lessons")</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label fw-bold">@Html.T("كم دقيقة لكل جلسة دراسية؟", "How many minutes per study session?")</label>
+                    <select class="form-select" name="SessionDurationMinutes">
+                        <option value="30">30 @Html.T("دقيقة", "min")</option>
+                        <option value="45">45 @Html.T("دقيقة", "min")</option>
+                        <option value="60" selected>60 @Html.T("دقيقة", "min")</option>
+                        <option value="90">90 @Html.T("دقيقة", "min")</option>
+                        <option value="120">120 @Html.T("دقيقة", "min")</option>
+                    </select>
+                </div>
+                <div class="d-flex gap-3 justify-content-between mt-4">
+                    <button type="button" class="btn btn-secondary" onclick="prevStep(1)">
+                        <i class="feather-arrow-right me-2"></i>
+                        @Html.T("السابق", "Previous")
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="nextStep(3)">
+                        @Html.T("التالي", "Next")
+                        <i class="feather-arrow-left ms-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: Schedule Time -->
+    <div class="step-content" id="step3" style="display: none;">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">@Html.T("الخطوة 3: وقت الدراسة المفضل", "Step 3: Preferred study time")</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">@Html.T("اختر الوقت المفضل للدراسة يومياً", "Choose your preferred daily study time")</p>
+                <div class="mb-4">
+                    <label class="form-label fw-bold">@Html.T("وقت الدراسة المفضل", "Preferred study time")</label>
+                    <input type="time" class="form-control" name="PreferredStudyTime" value="20:00" />
+                </div>
+                <div class="d-flex gap-3 justify-content-between mt-4">
+                    <button type="button" class="btn btn-secondary" onclick="prevStep(2)">
+                        <i class="feather-arrow-right me-2"></i>
+                        @Html.T("السابق", "Previous")
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="nextStep(4)">
+                        @Html.T("التالي", "Next")
+                        <i class="feather-arrow-left ms-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 4: Review & Save -->
+    <div class="step-content" id="step4" style="display: none;">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">@Html.T("الخطوة 4: مراجعة خطتك", "Step 4: Review your plan")</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-success">
+                    <h6 class="fw-bold mb-2">✓ @Html.T("خطتك جاهزة!", "Your plan is ready!")</h6>
+                    <p class="mb-0">@Html.T("سنرسل لك تذكيرات منتظمة لمساعدتك على البقاء على المسار الصحيح", "We'll send you regular reminders to help you stay on track")</p>
+                </div>
+                <div class="mb-3">
+                    <h6 class="fw-bold">@Html.T("ملخص الخطة:", "Plan summary:")</h6>
+                    <ul id="planSummary">
+                        <li>@Html.T("سيتم إنشاء جلسات دراسية بناءً على اختياراتك", "Study sessions will be created based on your choices")</li>
+                    </ul>
+                </div>
+                <div class="d-flex gap-3 justify-content-between mt-4">
+                    <button type="button" class="btn btn-secondary" onclick="prevStep(3)">
+                        <i class="feather-arrow-right me-2"></i>
+                        @Html.T("السابق", "Previous")
+                    </button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="feather-check me-2"></i>
+                        @Html.T("حفظ الخطة", "Save plan")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+<script>
+    function nextStep(step) {
+        // Validate current step
+        if (step === 2) {
+            var selectedCourse = $('input[name="EnrollmentId"]:checked').val();
+            if (!selectedCourse) {
+                alert('@Html.Raw(Html.T("يرجى اختيار دورة أولاً", "Please select a course first").ToString().Replace("'", "\\'"))');
+                return;
+            }
+        }
+        
+        $('.step-content').hide();
+        $('#step' + step).show();
+        $('.wizard-step').removeClass('active').addClass('completed');
+        $('.wizard-step[data-step="' + step + '"]').addClass('active').removeClass('completed');
+        $('.wizard-step[data-step="' + step + '"]').prevAll().addClass('completed');
+        $('.wizard-step[data-step="' + step + '"]').nextAll().removeClass('completed');
+        
+        $('.wizard-step .avatar-text').removeClass('bg-primary').addClass('bg-secondary');
+        $('.wizard-step.active .avatar-text').removeClass('bg-secondary').addClass('bg-primary');
+        $('.wizard-step.completed .avatar-text').removeClass('bg-secondary').addClass('bg-success');
+    }
+
+    function prevStep(step) {
+        nextStep(step);
+    }
+
+    $('.course-select-card').click(function() {
+        $('.course-select-card').removeClass('selected');
+        $(this).addClass('selected');
+        $(this).find('input[type="radio"]').prop('checked', true);
+    });
+</script>
+}

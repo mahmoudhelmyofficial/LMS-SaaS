@@ -1,0 +1,214 @@
+@model dynamic
+@{
+    ViewData["Title"] = Html.T("تحديث طريقة الدفع", "Update Payment Method");
+    var paymentMethods = ViewBag.PaymentMethods as IEnumerable<dynamic> ?? new List<dynamic>();
+    var currentPaymentMethodId = ViewBag.CurrentPaymentMethodId as int?;
+}
+
+@section Styles {
+<style>
+    .payment-method-card {
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 1.5rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: white;
+    }
+    
+    .payment-method-card:hover {
+        border-color: #667eea;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.15);
+    }
+    
+    .payment-method-card.selected {
+        border-color: #667eea;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    }
+    
+    .payment-method-card.current {
+        border-color: #10b981;
+    }
+    
+    .card-brand-icon {
+        width: 50px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f3f4f6;
+        border-radius: 6px;
+        font-weight: bold;
+        color: #374151;
+    }
+    
+    .card-number {
+        font-family: 'Courier New', monospace;
+        font-size: 1.1rem;
+        letter-spacing: 2px;
+    }
+    
+    .subscription-summary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Breadcrumb -->
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a asp-action="Details" asp-route-id="@Model.Id" class="text-muted">
+        <i class="feather-arrow-right me-2"></i>
+        @Html.T("العودة لتفاصيل الاشتراك", "Back to subscription details")
+    </a>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-credit-card text-primary me-2"></i>
+                    @Html.T("تحديث طريقة الدفع", "Update payment method")
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">
+                    @Html.T("اختر طريقة الدفع التي تريد استخدامها للتجديد التلقائي لاشتراكك", "Choose the payment method you want to use for your subscription auto-renewal")
+                </p>
+
+                <form asp-action="UpdatePaymentMethod" method="post">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    @Html.AntiForgeryToken()
+                    
+                    @if (paymentMethods.Any())
+                    {
+                        <div class="row g-3 mb-4">
+                            @foreach (var method in paymentMethods)
+                            {
+                                var isSelected = method.Id == currentPaymentMethodId;
+                                <div class="col-md-6">
+                                    <label class="payment-method-card d-block @(isSelected ? "selected current" : "")">
+                                        <input type="radio" name="paymentMethodId" value="@method.Id" 
+                                               class="d-none" @(isSelected ? "checked" : "") required />
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="card-brand-icon">
+                                                @if (method.CardBrand?.ToLower() == "visa")
+                                                {
+                                                    <span class="text-primary">@Html.T("فيزا", "VISA")</span>
+                                                }
+                                                else if (method.CardBrand?.ToLower() == "mastercard")
+                                                {
+                                                    <span class="text-danger">@Html.T("ماستركارد", "Mastercard")</span>
+                                                }
+                                                else
+                                                {
+                                                    <i class="feather-credit-card"></i>
+                                                }
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <div class="card-number mb-1">
+                                                    •••• •••• •••• @method.Last4
+                                                </div>
+                                                <small class="text-muted">
+                                                    @Html.T("تنتهي في", "Expires") @method.ExpiryMonth/@method.ExpiryYear
+                                                </small>
+                                            </div>
+                                            @if (isSelected)
+                                            {
+                                                <span class="badge bg-success">@Html.T("الحالية", "Current")</span>
+                                            }
+                                            @if (method.IsDefault)
+                                            {
+                                                <span class="badge bg-info">@Html.T("افتراضية", "Default")</span>
+                                            }
+                                        </div>
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                        
+                        <div class="d-flex gap-3">
+                            <button type="submit" class="btn btn-primary px-4">
+                                <i class="feather-check me-2"></i>
+                                @Html.T("حفظ التغييرات", "Save changes")
+                            </button>
+                            <a asp-action="Details" asp-route-id="@Model.Id" class="btn btn-outline-secondary">
+                                @Html.T("إلغاء", "Cancel")
+                            </a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <i class="feather-credit-card fs-1 text-muted mb-3 d-block"></i>
+                            <h5 class="text-muted mb-3">@Html.T("لا توجد طرق دفع محفوظة", "No saved payment methods")</h5>
+                            <p class="text-muted mb-4">
+                                @Html.T("يجب إضافة طريقة دفع أولاً قبل تحديث طريقة الدفع للاشتراك", "You must add a payment method first before updating the subscription payment method")
+                            </p>
+                            <a asp-action="Add" asp-controller="PaymentMethods" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إضافة طريقة دفع", "Add payment method")
+                            </a>
+                        </div>
+                    }
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <!-- Subscription Summary -->
+        <div class="subscription-summary mb-4">
+            <h6 class="text-white-50 mb-2">@Html.T("الاشتراك الحالي", "Current subscription")</h6>
+            <h4 class="text-white fw-bold mb-3">@Model.Plan.Name</h4>
+            <div class="d-flex justify-content-between text-white-50 mb-2">
+                <span>@Html.T("السعر", "Price")</span>
+                <span class="text-white fw-bold">@Model.Plan.Price.ToEGP(0)</span>
+            </div>
+            <div class="d-flex justify-content-between text-white-50 mb-2">
+                <span>@Html.T("دورة الفوترة", "Billing cycle")</span>
+                <span class="text-white">@(Model.BillingCycle == "Monthly" ? Html.T("شهري", "Monthly") : Html.T("سنوي", "Yearly"))</span>
+            </div>
+            <div class="d-flex justify-content-between text-white-50">
+                <span>@Html.T("التجديد القادم", "Next renewal")</span>
+                <span class="text-white">@Model.CurrentPeriodEnd.ToString("dd/MM/yyyy")</span>
+            </div>
+        </div>
+        
+        <!-- Help Card -->
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3">
+                    <i class="feather-help-circle text-info me-2"></i>
+                    @Html.T("هل تحتاج مساعدة؟", "Need help?")
+                </h6>
+                <p class="text-muted small mb-3">
+                    @Html.T("إذا كنت تواجه مشكلة في تحديث طريقة الدفع، يمكنك التواصل مع فريق الدعم", "If you're having trouble updating your payment method, you can contact the support team")
+                </p>
+                <a asp-action="Create" asp-controller="Support" class="btn btn-outline-primary btn-sm w-100">
+                    <i class="feather-message-circle me-2"></i>
+                    @Html.T("تواصل مع الدعم", "Contact support")
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Highlight selected payment method
+    document.querySelectorAll('.payment-method-card').forEach(card => {
+        card.addEventListener('click', function() {
+            document.querySelectorAll('.payment-method-card').forEach(c => c.classList.remove('selected'));
+            this.classList.add('selected');
+            this.querySelector('input[type="radio"]').checked = true;
+        });
+    });
+</script>
+}

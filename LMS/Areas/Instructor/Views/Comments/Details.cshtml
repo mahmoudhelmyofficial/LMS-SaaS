@@ -1,0 +1,319 @@
+@model LMS.Domain.Entities.Social.Comment
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل التعليق", "Comment Details");
+    ViewData["Subtitle"] = Html.T("عرض والرد على التعليق", "View and reply to comment");
+    var indexUrl = Url.Action("Index");
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة للقائمة", "Back to list") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-xxl-8 col-xl-7">
+            <!-- Comment Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-body">
+                    <div class="d-flex align-items-start gap-3 mb-4">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary">
+                            @(Model.User?.FullName?.Substring(0, 1) ?? "؟")
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div>
+                                    <h5 class="fw-bold mb-1">@Model.User?.FullName</h5>
+                                    <div class="fs-13 text-muted">
+                                        <i class="feather-mail me-1"></i>
+                                        @Model.User?.Email
+                                    </div>
+                                </div>
+                                @if (Model.IsPinned)
+                                {
+                                    <span class="badge bg-soft-warning text-warning">
+                                        <i class="feather-pin me-1"></i>
+                                        مثبت
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="d-flex align-items-center gap-3 mb-3 text-muted fs-13">
+                            <div>
+                                <i class="feather-book me-1"></i>
+                                <strong>@Html.T("الدورة:", "Course:")</strong> @Model.Lesson?.Module?.Course?.Title
+                            </div>
+                            <div>
+                                <i class="feather-play-circle me-1"></i>
+                                <strong>@Html.T("الدرس:", "Lesson:")</strong> @Model.Lesson?.Title
+                            </div>
+                        </div>
+                        <div class="text-muted fs-13 mb-3">
+                            <i class="feather-clock me-1"></i>
+                            <strong>@Html.T("التاريخ:", "Date:")</strong> @Model.CreatedAt.ToString("dd MMMM yyyy - HH:mm")
+                        </div>
+                    </div>
+
+                    <div class="bg-soft-light p-4 rounded mb-4">
+                        <h6 class="fw-bold mb-3">@Html.T("نص التعليق:", "Comment text:")</h6>
+                        <p class="mb-0 fs-15">@Model.Content</p>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-4 mb-4">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-thumbs-up text-primary"></i>
+                            <span class="fw-medium">@Model.LikesCount إعجاب</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-message-circle text-info"></i>
+                            <span class="fw-medium">@(Model.Replies?.Count ?? 0) رد</span>
+                        </div>
+                    </div>
+
+                    <!-- Instructor Reply Section -->
+                    @if (!string.IsNullOrEmpty(Model.InstructorReply))
+                    {
+                        <div class="border-top pt-4">
+                            <h6 class="fw-bold mb-3">
+                                <i class="feather-corner-down-left text-primary me-2"></i>
+                                ردك على التعليق
+                            </h6>
+                            <div class="alert alert-light">
+                                <p class="mb-2">@Model.InstructorReply</p>
+                                <div class="fs-12 text-muted">
+                                    <i class="feather-clock me-1"></i>
+                                    @Model.InstructorReplyAt?.ToString("dd/MM/yyyy HH:mm")
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-light" onclick="showEditReplyModal()">
+                                    <i class="feather-edit me-2"></i>
+                                    @Html.T("تعديل الرد", "Edit reply")
+                                </button>
+                                <form asp-action="DeleteReply" asp-route-id="@Model.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من حذف الرد؟", "Are you sure you want to delete the reply?").Replace("'", "\\'"))')">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-light text-danger">
+                                        <i class="feather-trash-2 me-2"></i>
+                                        @Html.T("حذف الرد", "Delete reply")
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="border-top pt-4">
+                            <h6 class="fw-bold mb-3">@Html.T("الرد على التعليق", "Reply to comment")</h6>
+                            <form asp-action="Reply" asp-route-id="@Model.Id" method="post">
+                                @Html.AntiForgeryToken()
+                                <div class="mb-3">
+                                    <textarea name="replyText" class="form-control" rows="4" placeholder="@Html.T("اكتب ردك هنا...", "Write your reply here...")" required></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="feather-send me-2"></i>
+                                    إرسال الرد
+                                </button>
+                            </form>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Related Comments -->
+            @if (ViewBag.RelatedComments != null && ViewBag.RelatedComments.Count > 0)
+            {
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("تعليقات أخرى من نفس الطالب", "Other comments from same student")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="list-group list-group-flush">
+                            @foreach (var relatedComment in ViewBag.RelatedComments)
+                            {
+                                <a href="@Url.Action("Details", new { id = relatedComment.Id })" class="list-group-item list-group-item-action">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <div class="fw-medium mb-1">@relatedComment.Lesson?.Title</div>
+                                            <p class="mb-1 text-muted fs-13">
+                                            @if (!string.IsNullOrEmpty(relatedComment.Content))
+                                            {
+                                                @(relatedComment.Content.Length > 100 ? relatedComment.Content.Substring(0, 100) + "..." : relatedComment.Content)
+                                            }
+                                        </p>
+                                            <div class="fs-11 text-muted">@relatedComment.CreatedAt.ToString("dd/MM/yyyy")</div>
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(relatedComment.InstructorReply))
+                                        {
+                                            <span class="badge bg-soft-success text-success">@Html.T("تم الرد", "Replied")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-soft-warning text-warning">@Html.T("بانتظار الرد", "Awaiting reply")</span>
+                                        }
+                                    </div>
+                                </a>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="col-xxl-4 col-xl-5">
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إجراءات سريعة", "Quick actions")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <form asp-action="TogglePin" asp-route-id="@Model.Id" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-light-brand w-100">
+                                <i class="feather-pin me-2"></i>
+                                @(Model.IsPinned ? Html.T("إلغاء تثبيت التعليق", "Unpin comment") : Html.T("تثبيت التعليق", "Pin comment"))
+                            </button>
+                        </form>
+                        <a href="@Url.Action("Details", "Lessons", new { id = Model.LessonId })" class="btn btn-light-brand">
+                            <i class="feather-play-circle me-2"></i>
+                            عرض الدرس
+                        </a>
+                        <a href="@Url.Action("Index", new { courseId = Model.Lesson?.Module?.CourseId })" class="btn btn-light-brand">
+                            <i class="feather-list me-2"></i>
+                            تعليقات الدورة
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Student Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات الطالب", "Student info")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-3 mx-auto">
+                            @(Model.User?.FullName?.Substring(0, 1) ?? "؟")
+                        </div>
+                        <h6 class="fw-bold mb-1">@Model.User?.FullName</h6>
+                        <p class="text-muted fs-13 mb-0">@Model.User?.Email</p>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("الدورات المسجلة", "Enrolled courses")</span>
+                        <span class="fw-bold">@(ViewBag.StudentEnrollments ?? 0)</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">@Html.T("التعليقات", "Comments")</span>
+                        <span class="fw-bold">@(ViewBag.StudentComments ?? 0)</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span class="text-muted">@Html.T("تاريخ الانضمام", "Join date")</span>
+                        <span class="fw-medium">@Model.User?.CreatedAt.ToString("dd/MM/yyyy")</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lesson Context -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("سياق الدرس", "Lesson context")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="fs-12 text-muted mb-1">@Html.T("الدورة", "Course")</div>
+                        <div class="fw-medium">@Model.Lesson?.Module?.Course?.Title</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="fs-12 text-muted mb-1">@Html.T("القسم", "Section")</div>
+                        <div class="fw-medium">@Model.Lesson?.Module?.Title</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="fs-12 text-muted mb-1">@Html.T("الدرس", "Lesson")</div>
+                        <div class="fw-medium">@Model.Lesson?.Title</div>
+                    </div>
+                    <div>
+                        <div class="fs-12 text-muted mb-1">@Html.T("نوع الدرس", "Lesson type")</div>
+                        <span class="badge bg-soft-info text-info">@Model.Lesson?.Type</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comment Stats -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إحصائيات التعليق", "Comment stats")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-thumbs-up text-primary"></i>
+                            <span>@Html.T("الإعجابات", "Likes")</span>
+                        </div>
+                        <span class="fw-bold">@Model.LikesCount</span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-message-circle text-info"></i>
+                            <span>@Html.T("الردود", "Replies")</span>
+                        </div>
+                        <span class="fw-bold">@(Model.Replies?.Count ?? 0)</span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-clock text-muted"></i>
+                            <span>@Html.T("منذ", "Since")</span>
+                        </div>
+                        <span class="fw-medium">@((DateTime.UtcNow - Model.CreatedAt).Days) يوم</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Reply Modal -->
+<div class="modal fade" id="editReplyModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="EditReply" asp-route-id="@Model.Id" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">@Html.T("تعديل الرد", "Edit reply")</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("الرد", "Reply") <span class="text-danger">*</span></label>
+                        <textarea name="replyText" class="form-control" rows="4" required>@Model.InstructorReply</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="feather-check me-2"></i>
+                        @Html.T("حفظ التعديلات", "Save changes")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function showEditReplyModal() {
+            new bootstrap.Modal(document.getElementById('editReplyModal')).show();
+        }
+    </script>
+}
+

@@ -1,0 +1,331 @@
+@model List<LMS.Areas.Instructor.ViewModels.BookListViewModel>
+@using LMS.Helpers
+@using LMS.Domain.Enums
+@using LMS.Areas.Instructor.ViewModels
+
+@{
+    ViewData["Title"] = Html.T("كتبي", "My Books");
+    ViewData["Subtitle"] = Html.T("إدارة الكتب الإلكترونية الخاصة بك", "Manage your e-books");
+
+    var stats = ViewBag.Stats as InstructorBookStats;
+    var status = ViewBag.Status as BookStatus?;
+    var search = ViewBag.Search as string;
+    var category = ViewBag.Category as int?;
+    var page = (int)(ViewBag.Page ?? 1);
+    var totalPages = (int)(ViewBag.TotalPages ?? 1);
+    var currencySymbol = ViewBag.DefaultCurrencySymbol as string ?? "ج.م";
+
+    var createUrl = Url.Action("Create");
+    var indexUrl = Url.Action("Index");
+}
+
+@await Html.PartialAsync("_PageHeader", ViewDataDictionaryHelper.CreateWith(
+    ViewData,
+    "ActionButtons",
+    Html.Raw("<a href='" + createUrl + "' class='btn btn-primary'><i class='feather-plus me-2'></i>" + Html.T("إضافة كتاب جديد", "Add new book") + "</a>")
+))
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    @if (stats != null)
+    {
+        <div class="row mb-4 g-3">
+            <div class="col-xxl-3 col-md-6">
+                @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                    ViewData,
+                    ("Label", Html.T("إجمالي الكتب", "Total books")),
+                    ("Value", stats.TotalBooks),
+                    ("Icon", "book"),
+                    ("Color", "primary")
+                ))
+            </div>
+            <div class="col-xxl-3 col-md-6">
+                @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                    ViewData,
+                    ("Label", Html.T("المنشورة", "Published")),
+                    ("Value", stats.PublishedBooks),
+                    ("Icon", "check-circle"),
+                    ("Color", "success")
+                ))
+            </div>
+            <div class="col-xxl-3 col-md-6">
+                @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                    ViewData,
+                    ("Label", Html.T("إجمالي المبيعات", "Total sales")),
+                    ("Value", stats.TotalSales),
+                    ("Icon", "shopping-bag"),
+                    ("Color", "info")
+                ))
+            </div>
+            <div class="col-xxl-3 col-md-6">
+                @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                    ViewData,
+                    ("Label", Html.T("الأرباح", "Earnings")),
+                    ("Value", $"{stats.TotalEarnings:N2} {currencySymbol}"),
+                    ("Icon", "dollar-sign"),
+                    ("Color", "warning")
+                ))
+            </div>
+        </div>
+    }
+
+    <!-- Filters -->
+    <div class="card stretch stretch-full mb-4">
+        <div class="card-body">
+            <form asp-action="Index" method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label fs-12 fw-medium text-muted">@Html.T("بحث", "Search")</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-0">
+                            <i class="feather-search text-muted"></i>
+                        </span>
+                        <input type="text" name="search" value="@search"
+                               class="form-control bg-light border-0"
+                               placeholder="@Html.T("ابحث في الكتب...", "Search books...")">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fs-12 fw-medium text-muted">@Html.T("الحالة", "Status")</label>
+                    <select name="status" class="form-select bg-light border-0">
+                        <option value="">@Html.T("جميع الحالات", "All statuses")</option>
+                        <option value="@BookStatus.Draft" selected="@(status == BookStatus.Draft)">@Html.T("مسودة", "Draft")</option>
+                        <option value="@BookStatus.PendingReview" selected="@(status == BookStatus.PendingReview)">@Html.T("قيد المراجعة", "Pending review")</option>
+                        <option value="@BookStatus.Published" selected="@(status == BookStatus.Published)">@Html.T("منشور", "Published")</option>
+                        <option value="@BookStatus.Rejected" selected="@(status == BookStatus.Rejected)">@Html.T("مرفوض", "Rejected")</option>
+                        <option value="@BookStatus.Suspended" selected="@(status == BookStatus.Suspended)">@Html.T("معلق", "Suspended")</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fs-12 fw-medium text-muted">@Html.T("التصنيف", "Category")</label>
+                    <select name="category" class="form-select bg-light border-0" asp-items="ViewBag.Categories">
+                        <option value="">@Html.T("جميع التصنيفات", "All categories")</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="feather-filter me-1"></i>
+                        @Html.T("تصفية", "Filter")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Books Table -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("قائمة الكتب", "Books list")</h5>
+                    <div class="card-header-action">
+                        <div class="card-header-btn">
+                            <div data-bs-toggle="tooltip" title="@Html.T("تحديث", "Refresh")">
+                                <a href="@indexUrl" class="avatar-text avatar-xs bg-warning">
+                                    <i class="feather-refresh-cw"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var book in Model)
+                            {
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-start gap-3">
+                                            @if (!string.IsNullOrEmpty(book.CoverImageUrl))
+                                            {
+                                                <div class="avatar-image avatar-lg flex-shrink-0">
+                                                    <img src="@book.CoverImageUrl" alt="@book.Title" class="img-fluid" style="width: 50px; height: 70px; object-fit: cover; border-radius: 8px;">
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="avatar-text avatar-lg bg-soft-primary text-primary flex-shrink-0" style="width: 50px; height: 70px; border-radius: 8px;">
+                                                    <i class="feather-book"></i>
+                                                </div>
+                                            }
+                                            <div class="min-w-0 flex-grow-1">
+                                                <a href="@Url.Action("Details", new { id = book.Id })" class="fw-bold text-dark text-break d-block">@book.Title</a>
+                                                <p class="fs-12 text-muted mb-1">@book.CategoryName</p>
+                                                @{
+                                                    var statusBadge = book.Status switch
+                                                    {
+                                                        BookStatus.Draft => ("bg-soft-secondary text-secondary", Html.T("مسودة", "Draft")),
+                                                        BookStatus.PendingReview => ("bg-soft-warning text-warning", Html.T("قيد المراجعة", "Pending review")),
+                                                        BookStatus.Published => ("bg-soft-success text-success", Html.T("منشور", "Published")),
+                                                        BookStatus.Rejected => ("bg-soft-danger text-danger", Html.T("مرفوض", "Rejected")),
+                                                        BookStatus.Suspended => ("bg-soft-dark text-dark", Html.T("معلق", "Suspended")),
+                                                        _ => ("bg-soft-secondary text-secondary", Html.T("غير معروف", "Unknown"))
+                                                    };
+                                                }
+                                                <span class="badge @statusBadge.Item1">@statusBadge.Item2</span>
+                                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                                    <span class="text-muted fs-12">@book.Price.ToString("N2") @currencySymbol</span>
+                                                    <span class="text-muted fs-12">@book.TotalSales @Html.T("مبيعات", "sales")</span>
+                                                    <span><i class="feather-star text-warning fs-12"></i> @book.AverageRating.ToString("N1")</span>
+                                                </div>
+                                                <div class="hstack gap-2 mt-2 flex-wrap">
+                                                    <a href="@Url.Action("Details", new { id = book.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-eye"></i></a>
+                                                    <a href="@Url.Action("Edit", new { id = book.Id })" class="btn btn-sm btn-outline-secondary"><i class="feather-edit"></i></a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("الكتاب", "Book")</th>
+                                            <th>@Html.T("السعر", "Price")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                            <th>@Html.T("المبيعات", "Sales")</th>
+                                            <th>@Html.T("التقييم", "Rating")</th>
+                                            <th>@Html.T("التاريخ", "Date")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var book in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-3">
+                                                    @if (!string.IsNullOrEmpty(book.CoverImageUrl))
+                                                    {
+                                                        <div class="avatar-image avatar-lg">
+                                                            <img src="@book.CoverImageUrl" alt="@book.Title" class="img-fluid" style="width: 50px; height: 70px; object-fit: cover; border-radius: 8px;">
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="avatar-text avatar-lg bg-soft-primary text-primary" style="width: 50px; height: 70px; border-radius: 8px;">
+                                                            <i class="feather-book"></i>
+                                                        </div>
+                                                    }
+                                                    <div>
+                                                        <a href="@Url.Action("Details", new { id = book.Id })" class="fw-bold text-dark">@book.Title</a>
+                                                        <p class="fs-12 text-muted mb-0">@book.CategoryName</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (book.DiscountPrice.HasValue)
+                                                {
+                                                    <span class="text-decoration-line-through text-muted fs-11">@book.Price.ToString("N2")</span>
+                                                    <br>
+                                                    <span class="fw-bold text-success">@book.DiscountPrice.Value.ToString("N2") @currencySymbol</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="fw-bold">@book.Price.ToString("N2") @currencySymbol</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @{
+                                                    var statusBadge = book.Status switch
+                                                    {
+                                                        BookStatus.Draft => ("bg-soft-secondary text-secondary", Html.T("مسودة", "Draft")),
+                                                        BookStatus.PendingReview => ("bg-soft-warning text-warning", Html.T("قيد المراجعة", "Pending review")),
+                                                        BookStatus.Published => ("bg-soft-success text-success", Html.T("منشور", "Published")),
+                                                        BookStatus.Rejected => ("bg-soft-danger text-danger", Html.T("مرفوض", "Rejected")),
+                                                        BookStatus.Suspended => ("bg-soft-dark text-dark", Html.T("معلق", "Suspended")),
+                                                        _ => ("bg-soft-secondary text-secondary", Html.T("غير معروف", "Unknown"))
+                                                    };
+                                                }
+                                                <span class="badge @statusBadge.Item1">@statusBadge.Item2</span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="feather-shopping-bag text-muted"></i>
+                                                    <span class="fw-medium">@book.TotalSales</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-1">
+                                                    <i class="feather-star text-warning"></i>
+                                                    <span class="fw-medium">@book.AverageRating.ToString("N1")</span>
+                                                    <small class="text-muted">(@book.TotalReviews)</small>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="fs-12 text-muted">@book.CreatedAt.ToString("dd/MM/yyyy")</span>
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { id = book.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    <a href="@Url.Action("Edit", new { id = book.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                        <i class="feather-edit"></i>
+                                                    </a>
+                                                    @if (book.Status == BookStatus.Draft)
+                                                    {
+                                                        <div class="dropdown">
+                                                            <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown">
+                                                                <i class="feather-more-horizontal"></i>
+                                                            </a>
+                                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                                <li>
+                                                                    <a class="dropdown-item text-danger" href="javascript:void(0)"
+                                                                       onclick="confirmDelete('@Url.Action("Delete", new { id = book.Id })', '@Html.Raw((Html.T("هل أنت متأكد من حذف الكتاب: ", "Are you sure you want to delete the book: ") + (book.Title ?? "").Replace("'", "\\'") + "؟").Replace("'", "\\'"))')">
+                                                                        <i class="feather-trash-2 me-3"></i>
+                                                                        <span>@Html.T("حذف", "Delete")</span>
+                                                                    </a>
+                                                                </li>
+                                                            </ul>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+
+                        <!-- Pagination -->
+                        @await Html.PartialAsync("_Pagination")
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-book-open"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد كتب", "No books")</h5>
+                            <p class="text-muted mb-4">@Html.T("ابدأ بإضافة أول كتاب إلكتروني لك", "Start by adding your first e-book")</p>
+                            <a href="@createUrl" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("إضافة كتاب جديد", "Add new book")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DeleteModal")
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}

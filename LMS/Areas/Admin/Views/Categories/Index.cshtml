@@ -1,0 +1,304 @@
+@model IEnumerable<LMS.Domain.Entities.Courses.Category>
+
+@{
+    ViewData["Title"] = Html.T("إدارة التصنيفات", "Category Management");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("إدارة الدورات", "Course Management"), null),
+        (Html.T("التصنيفات", "Categories"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إضافة تصنيف", "Add Category"), "feather-plus", Url.Action("Create", "Categories"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section FilterDropdown {
+    <a href="javascript:void(0);" class="dropdown-item filter-all">
+        <i class="feather-eye me-3"></i>
+        <span>@Html.T("الكل", "All")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-has-courses">
+        <i class="feather-check-circle me-3"></i>
+        <span>@Html.T("تحتوي على دورات", "With Courses")</span>
+    </a>
+    <a href="javascript:void(0);" class="dropdown-item filter-empty">
+        <i class="feather-x-circle me-3"></i>
+        <span>@Html.T("فارغة", "Empty")</span>
+    </a>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Export Row -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="mb-0 fw-bold">@Html.T("التصنيفات المتاحة", "Available Categories")</h5>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="view-toggle btn-group" role="group" style="border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                        <button type="button" class="btn btn-sm" id="tableViewBtn" onclick="switchAdminCategoriesView('table')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); transition: all 0.25s ease;">
+                            <i class="feather-list" style="font-size: 15px;"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm active" id="cardViewBtn" onclick="switchAdminCategoriesView('card')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); border-right: none; transition: all 0.25s ease;">
+                            <i class="feather-grid" style="font-size: 15px;"></i>
+                        </button>
+                    </div>
+                    <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="feather-download me-2"></i>@Html.T("تصدير", "Export")
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <a class="dropdown-item" href="/api/export/categories?format=csv">
+                                <i class="feather-file-text me-2 text-success"></i>@Html.T("تصدير CSV", "Export CSV")
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/api/export/categories?format=excel">
+                                <i class="feather-file me-2 text-primary"></i>@Html.T("تصدير Excel", "Export Excel")
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="/api/export/categories?format=pdf">
+                                <i class="feather-file-text me-2 text-danger"></i>@Html.T("تصدير PDF", "Export PDF")
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="javascript:void(0)" onclick="window.print()">
+                                <i class="feather-printer me-2 text-secondary"></i>@Html.T("طباعة", "Print")
+                            </a>
+                        </li>
+                    </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TABLE VIEW -->
+    <div id="tableView" class="courses-view-panel d-none">
+        <div class="card stretch stretch-full border-0" style="border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover courses-table-modern mb-0">
+                        <thead>
+                            <tr>
+                                <th>@Html.T("التصنيف", "Category")</th>
+                                <th>@Html.T("الوصف", "Description")</th>
+                                <th>@Html.T("الدورات", "Courses")</th>
+                                <th>@Html.T("الترتيب", "Order")</th>
+                                <th>@Html.T("الحالة", "Status")</th>
+                                <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var category in Model)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                                @if (!string.IsNullOrEmpty(category.IconClass)) { <i class="@category.IconClass"></i> } else { <i class="feather-folder"></i> }
+                                            </div>
+                                            <span class="fw-bold">@category.Name</span>
+                                        </div>
+                                    </td>
+                                    <td><span class="text-muted">@(category.Description ?? "-")</span></td>
+                                    <td><span class="badge bg-soft-primary text-primary">@category.CoursesCount</span></td>
+                                    <td>@category.DisplayOrder</td>
+                                    <td>
+                                        @if (category.IsActive) { <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span> }
+                                        else { <span class="badge bg-soft-secondary text-secondary">@Html.T("غير نشط", "Inactive")</span> }
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="hstack gap-2 justify-content-end">
+                                            <a href="@Url.Action("Edit", "Categories", new { id = category.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")"><i class="feather-edit"></i></a>
+                                            <a href="@Url.Action("Courses", "Categories", new { id = category.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("الدورات", "Courses")"><i class="feather-book"></i></a>
+                                            <div class="dropdown">
+                                                <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown"><i class="feather-more-horizontal"></i></a>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <li><a class="dropdown-item" href="@Url.Action("Edit", "Categories", new { id = category.Id })"><i class="feather-edit me-3"></i>@Html.T("تعديل", "Edit")</a></li>
+                                                    <li><a class="dropdown-item" href="@Url.Action("Courses", "Categories", new { id = category.Id })"><i class="feather-book me-3"></i>@Html.T("عرض الدورات", "View Courses")</a></li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <form asp-action="ToggleStatus" asp-route-id="@category.Id" method="post" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="dropdown-item" onclick="return confirm('@Html.T("هل تريد تغيير حالة التصنيف؟", "Do you want to change the category status?")');"><i class="feather-@(category.IsActive ? "x" : "check")-circle me-3"></i>@(category.IsActive ? Html.T("إلغاء التفعيل", "Deactivate") : Html.T("تفعيل", "Activate"))</button>
+                                                        </form>
+                                                    </li>
+                                                    <li>
+                                                        <form asp-action="Delete" asp-route-id="@category.Id" method="post" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="dropdown-item text-danger" onclick="return confirm('@Html.T("هل أنت متأكد من حذف هذا التصنيف؟", "Are you sure you want to delete this category?")');"><i class="feather-trash-2 me-3"></i>@Html.T("حذف", "Delete")</button>
+                                                        </form>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CARD VIEW (Grid - Default) -->
+    <div id="cardView" class="courses-view-panel courses-view-active">
+    <div class="row g-4" id="categoriesContainer">
+        @foreach (var category in Model)
+        {
+            <div class="col-12 col-sm-6 col-xl-4 col-xxl-3 category-card" data-has-courses="@(category.CoursesCount > 0 ? "true" : "false")">
+                <div class="card stretch stretch-full">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                                @if (!string.IsNullOrEmpty(category.IconClass))
+                                {
+                                    <i class="@category.IconClass"></i>
+                                }
+                                else
+                                {
+                                    <i class="feather-folder"></i>
+                                }
+                            </div>
+                            <div class="dropdown">
+                                <a href="javascript:void(0)" data-bs-toggle="dropdown">
+                                    <i class="feather-more-vertical"></i>
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <a class="dropdown-item" href="@Url.Action("Edit", "Categories", new { id = category.Id })">
+                                            <i class="feather-edit me-3"></i>
+                                            <span>@Html.T("تعديل", "Edit")</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="@Url.Action("Courses", "Categories", new { id = category.Id })">
+                                            <i class="feather-book me-3"></i>
+                                            <span>@Html.T("عرض الدورات", "View Courses")</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <form asp-action="ToggleStatus" asp-route-id="@category.Id" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="dropdown-item" onclick="return confirm('@(Html.T("هل تريد تغيير حالة التصنيف؟", "Do you want to change the category status?"))');">
+                                                <i class="feather-@(category.IsActive ? "x" : "check")-circle me-3"></i>
+                                                <span>@(category.IsActive ? Html.T("إلغاء التفعيل", "Deactivate") : Html.T("تفعيل", "Activate"))</span>
+                                            </button>
+                                        </form>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <form asp-action="Delete" asp-route-id="@category.Id" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="dropdown-item text-danger" onclick="return confirm('@(Html.T("هل أنت متأكد من حذف هذا التصنيف؟ ملاحظة: لا يمكن حذف التصنيف إذا كان يحتوي على دورات أو تصنيفات فرعية.", "Are you sure you want to delete this category? Note: Category cannot be deleted if it contains courses or subcategories."))');">
+                                                <i class="feather-trash-2 me-3"></i>
+                                                <span>@Html.T("حذف", "Delete")</span>
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <h5 class="fw-bold mb-2">@category.Name</h5>
+                        <p class="text-muted mb-4">@(category.Description ?? Html.T("لا يوجد وصف", "No description"))</p>
+                        
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex gap-2">
+                                <span class="badge bg-soft-primary text-primary">@category.CoursesCount @Html.T("دورة", "course(s)")</span>
+                                @if (category.SubCategories != null && category.SubCategories.Any())
+                                {
+                                    <span class="badge bg-soft-info text-info">@category.SubCategories.Count @Html.T("تصنيف فرعي", "subcategory(ies)")</span>
+                                }
+                            </div>
+                            <div>
+                                <span class="text-muted fs-12">@Html.T("ترتيب", "Order"): @category.DisplayOrder</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+
+            // Restore view preference (default is grid/card)
+            var savedView = localStorage.getItem('admin_categories_index_view');
+            if (savedView === 'table') { switchAdminCategoriesView('table'); } else { switchAdminCategoriesView('card'); }
+
+            // Filter: All categories
+            $('.filter-all').on('click', function() {
+                $('.category-card').show();
+                updateFilterActive($(this));
+            });
+
+            // Filter: Categories with courses
+            $('.filter-has-courses').on('click', function() {
+                $('.category-card').each(function() {
+                    if ($(this).data('has-courses') === true || $(this).data('has-courses') === 'true') {
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                });
+                updateFilterActive($(this));
+            });
+
+            // Filter: Empty categories (no courses)
+            $('.filter-empty').on('click', function() {
+                $('.category-card').each(function() {
+                    if ($(this).data('has-courses') === false || $(this).data('has-courses') === 'false') {
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                });
+                updateFilterActive($(this));
+            });
+
+            function updateFilterActive(activeItem) {
+                $('.dropdown-item').removeClass('active');
+                activeItem.addClass('active');
+            }
+        });
+
+        function switchAdminCategoriesView(mode) {
+            var tableView = document.getElementById('tableView');
+            var cardView = document.getElementById('cardView');
+            var tableBtn = document.getElementById('tableViewBtn');
+            var cardBtn = document.getElementById('cardViewBtn');
+            if (mode === 'card') {
+                if (tableView) { tableView.classList.add('d-none'); tableView.classList.remove('courses-view-active'); }
+                if (cardView) { cardView.classList.remove('d-none'); cardView.classList.add('courses-view-active'); }
+                if (cardBtn) cardBtn.classList.add('active');
+                if (tableBtn) tableBtn.classList.remove('active');
+            } else {
+                if (cardView) { cardView.classList.add('d-none'); cardView.classList.remove('courses-view-active'); }
+                if (tableView) { tableView.classList.remove('d-none'); tableView.classList.add('courses-view-active'); }
+                if (tableBtn) tableBtn.classList.add('active');
+                if (cardBtn) cardBtn.classList.remove('active');
+            }
+            localStorage.setItem('admin_categories_index_view', mode);
+            [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]')).forEach(function (el) { if (!bootstrap.Tooltip.getInstance(el)) new bootstrap.Tooltip(el); });
+        }
+    </script>
+}
+

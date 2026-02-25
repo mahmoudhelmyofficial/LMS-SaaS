@@ -1,0 +1,403 @@
+@model LMS.Domain.Entities.Financial.WithdrawalRequest
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل طلب السحب", "Withdrawal request details");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإدارة المالية", "Finance"), null),
+        (Html.T("طرق السحب", "Withdrawal Methods"), Url.Action("Index", "WithdrawalMethods")),
+        (Html.T("طلبات السحب", "Withdrawal Requests"), Url.Action("Requests", "WithdrawalMethods")),
+        (Html.T("تفاصيل الطلب", "Request Details"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <div class="row">
+        <!-- Main Details -->
+        <div class="col-lg-8">
+            <!-- Request Info Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-credit-card me-2"></i>
+                        معلومات طلب السحب #@Model.Id
+                    </h5>
+                    <div class="card-header-action">
+                        @switch (Model.Status)
+                        {
+                            case LMS.Domain.Enums.WithdrawalStatus.Pending:
+                                <span class="badge bg-soft-warning text-warning fs-6">قيد الانتظار</span>
+                                break;
+                            case LMS.Domain.Enums.WithdrawalStatus.Processing:
+                                <span class="badge bg-soft-info text-info fs-6">قيد المعالجة</span>
+                                break;
+                            case LMS.Domain.Enums.WithdrawalStatus.Approved:
+                                <span class="badge bg-soft-success text-success fs-6">تمت الموافقة</span>
+                                break;
+                            case LMS.Domain.Enums.WithdrawalStatus.Completed:
+                                <span class="badge bg-success text-white fs-6">مكتمل</span>
+                                break;
+                            case LMS.Domain.Enums.WithdrawalStatus.Rejected:
+                                <span class="badge bg-soft-danger text-danger fs-6">مرفوض</span>
+                                break;
+                            case LMS.Domain.Enums.WithdrawalStatus.Cancelled:
+                                <span class="badge bg-soft-secondary text-secondary fs-6">ملغي</span>
+                                break;
+                            default:
+                                <span class="badge bg-soft-secondary text-secondary fs-6">@Model.Status</span>
+                                break;
+                        }
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <div class="text-center p-3 border rounded bg-soft-primary">
+                                <small class="text-muted d-block mb-2">المبلغ المطلوب</small>
+                                <h3 class="text-primary mb-0">@Model.Amount.ToEGP()</h3>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center p-3 border rounded bg-soft-danger">
+                                <small class="text-muted d-block mb-2">الرسوم</small>
+                                <h3 class="text-danger mb-0">@Model.Fee.ToEGP()</h3>
+                                <small class="text-muted">(@Model.FeePercentage.ToString("F1")%)</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-center p-3 border rounded bg-soft-success">
+                                <small class="text-muted d-block mb-2">صافي المبلغ</small>
+                                <h3 class="text-success mb-0">@Model.NetAmount.ToEGP()</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Instructor Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-user me-2"></i>
+                        معلومات المدرس
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center gap-4">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary">
+                            <i class="feather-user"></i>
+                        </div>
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1">
+                                @Model.Instructor?.FirstName @Model.Instructor?.LastName
+                            </h5>
+                            <p class="text-muted mb-2">@Model.Instructor?.Email</p>
+                            <div class="d-flex gap-3">
+                                <span class="badge bg-soft-success text-success">
+                                    الرصيد المتاح: @((Model.Instructor?.InstructorProfile?.AvailableBalance ?? 0).ToEGP())
+                                </span>
+                                <span class="badge bg-soft-warning text-warning">
+                                    الرصيد المعلق: @((Model.Instructor?.InstructorProfile?.PendingBalance ?? 0).ToEGP())
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Withdrawal Method Details -->
+            @if (Model.WithdrawalMethod != null)
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-credit-card me-2"></i>
+                            طريقة السحب
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-lg bg-soft-info text-info">
+                                @if (!string.IsNullOrEmpty(Model.WithdrawalMethod.IconUrl))
+                                {
+                                    <img src="@Model.WithdrawalMethod.IconUrl" alt="@Model.WithdrawalMethod.DisplayName" class="img-fluid" style="max-width: 32px;" />
+                                }
+                                else
+                                {
+                                    <i class="feather-credit-card"></i>
+                                }
+                            </div>
+                            <div>
+                                <h6 class="mb-1">@Model.WithdrawalMethod.DisplayName</h6>
+                                <p class="text-muted mb-0">@Model.WithdrawalMethod.Description</p>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(Model.AccountDetails) && Model.AccountDetails != "{}")
+                        {
+                            <hr />
+                            <h6 class="mb-2">تفاصيل الحساب:</h6>
+                            <div class="p-3 bg-light rounded">
+                                <pre class="mb-0">@Model.AccountDetails</pre>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Instructor Notes -->
+            @if (!string.IsNullOrEmpty(Model.InstructorNotes))
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-message-square me-2"></i>
+                            ملاحظات المدرس
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-0">@Model.InstructorNotes</p>
+                    </div>
+                </div>
+            }
+
+            <!-- Admin Notes -->
+            @if (!string.IsNullOrEmpty(Model.AdminNotes))
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-file-text me-2"></i>
+                            ملاحظات الإدارة
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-0">@Model.AdminNotes</p>
+                    </div>
+                </div>
+            }
+
+            <!-- Rejection Reason -->
+            @if (Model.Status == LMS.Domain.Enums.WithdrawalStatus.Rejected && !string.IsNullOrEmpty(Model.RejectionReason))
+            {
+                <div class="card stretch stretch-full border-danger mb-4">
+                    <div class="card-header bg-soft-danger">
+                        <h5 class="card-title text-danger">
+                            <i class="feather-x-circle me-2"></i>
+                            سبب الرفض
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-0">@Model.RejectionReason</p>
+                    </div>
+                </div>
+            }
+
+            <!-- Transaction Reference -->
+            @if (Model.Status == LMS.Domain.Enums.WithdrawalStatus.Completed && !string.IsNullOrEmpty(Model.TransactionReference))
+            {
+                <div class="card stretch stretch-full border-success mb-4">
+                    <div class="card-header bg-soft-success">
+                        <h5 class="card-title text-success">
+                            <i class="feather-check-circle me-2"></i>
+                            مرجع التحويل
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <code class="fs-5">@Model.TransactionReference</code>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Timeline -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-clock me-2"></i>
+                        الجدول الزمني
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary"></div>
+                            <div class="timeline-content">
+                                <h6 class="mb-1">تم إنشاء الطلب</h6>
+                                <small class="text-muted">@Model.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")</small>
+                            </div>
+                        </div>
+                        @if (Model.ApprovedAt.HasValue)
+                        {
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-success"></div>
+                                <div class="timeline-content">
+                                    <h6 class="mb-1">تمت الموافقة</h6>
+                                    <small class="text-muted">@Model.ApprovedAt.Value.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                </div>
+                            </div>
+                        }
+                        @if (Model.RejectedAt.HasValue)
+                        {
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-danger"></div>
+                                <div class="timeline-content">
+                                    <h6 class="mb-1">تم الرفض</h6>
+                                    <small class="text-muted">@Model.RejectedAt.Value.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                </div>
+                            </div>
+                        }
+                        @if (Model.CompletedAt.HasValue)
+                        {
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-success"></div>
+                                <div class="timeline-content">
+                                    <h6 class="mb-1">تم الإكمال</h6>
+                                    <small class="text-muted">@Model.CompletedAt.Value.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-zap me-2"></i>
+                        الإجراءات
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        @if (Model.Status == LMS.Domain.Enums.WithdrawalStatus.Pending)
+                        {
+                            <form asp-action="ApproveRequest" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@Model.Id" />
+                                <button type="submit" class="btn btn-success w-100" onclick="return confirm(window.__WithdrawalRequestDetailsT.approveConfirm);">
+                                    <i class="feather-check me-2"></i>
+                                    @Html.T("الموافقة على الطلب", "Approve request")
+                                </button>
+                            </form>
+                            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal">
+                                <i class="feather-x me-2"></i>
+                                @Html.T("رفض الطلب", "Reject request")
+                            </button>
+                        }
+                        @if (Model.Status == LMS.Domain.Enums.WithdrawalStatus.Approved)
+                        {
+                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#completeModal">
+                                <i class="feather-check-circle me-2"></i>
+                                @Html.T("إتمام التحويل", "Complete transfer")
+                            </button>
+                        }
+                        <a asp-action="Requests" class="btn btn-light">
+                            <i class="feather-arrow-right me-2"></i>
+                            العودة للقائمة
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Rejection Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" data-bs-backdrop="false" aria-labelledby="rejectModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rejectModalLabel">@Html.T("رفض طلب السحب", "Reject withdrawal request")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@Html.T("إغلاق", "Close")"></button>
+            </div>
+            <form asp-action="RejectRequest" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="rejectReason" class="form-label">@Html.T("سبب الرفض", "Rejection reason") <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="rejectReason" name="reason" rows="3" required 
+                                  placeholder="@Html.T("يرجى إدخال سبب رفض طلب السحب...", "Please enter the reason for rejecting the withdrawal request...")"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-danger">@Html.T("تأكيد الرفض", "Confirm rejection")</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Complete Modal -->
+<div class="modal fade" id="completeModal" tabindex="-1" data-bs-backdrop="false" aria-labelledby="completeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="completeModalLabel">@Html.T("إتمام طلب السحب", "Complete withdrawal request")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="@Html.T("إغلاق", "Close")"></button>
+            </div>
+            <form asp-action="CompleteRequest" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.Id" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="transactionReference" class="form-label">@Html.T("رقم مرجع التحويل", "Transaction reference number")</label>
+                        <input type="text" class="form-control" id="transactionReference" name="transactionReference" 
+                               placeholder="@Html.T("أدخل رقم مرجع التحويل البنكي (اختياري)...", "Enter bank transfer reference (optional)...")" />
+                        <small class="text-muted">@Html.T("سيتم تسجيل هذا الرقم للرجوع إليه لاحقاً", "This number will be recorded for future reference")</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-primary">@Html.T("تأكيد الإتمام", "Confirm completion")</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+<style>
+    .timeline {
+        position: relative;
+        padding-right: 30px;
+    }
+    .timeline-item {
+        position: relative;
+        padding-bottom: 25px;
+    }
+    .timeline-marker {
+        position: absolute;
+        right: -36px;
+        top: 5px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+    .timeline-item:before {
+        content: '';
+        position: absolute;
+        right: -31px;
+        top: 17px;
+        width: 2px;
+        height: calc(100% - 5px);
+        background: #e5e7eb;
+    }
+    .timeline-item:last-child:before {
+        display: none;
+    }
+</style>
+}
+
+@section Scripts {
+<script>
+window.__WithdrawalRequestDetailsT = { approveConfirm: '@Html.Raw(Html.T("هل أنت متأكد من الموافقة على هذا الطلب؟", "Are you sure you want to approve this request?").Replace("'", "\\'"))' };
+</script>
+}

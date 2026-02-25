@@ -1,0 +1,461 @@
+@model LMS.Domain.Entities.Learning.Enrollment
+@{
+    ViewData["Title"] = Model.Course.Title;
+    var progressPercentage = Model.ProgressPercentage;
+    var completedLessons = Model.LessonProgress.Count(lp => lp.IsCompleted);
+}
+
+@section Styles {
+<style>
+    .course-details-header-card .course-meta-item { color: var(--bs-body-color); }
+    .module-card {
+        transition: all 0.3s ease;
+        border-right: 4px solid transparent;
+    }
+    .module-card:hover {
+        border-right-color: var(--bs-primary);
+        transform: translateX(-5px);
+    }
+    .lesson-item {
+        padding: 15px;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    .lesson-item:hover {
+        background-color: rgba(102, 126, 234, 0.05);
+    }
+    .lesson-item.completed {
+        background-color: rgba(34, 197, 94, 0.05);
+    }
+    .lesson-item.in-progress {
+        background-color: rgba(251, 191, 36, 0.05);
+        border-right: 3px solid #fbbf24;
+    }
+    .instructor-card {
+        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        border-radius: 12px;
+        padding: 20px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Course Header (modern card-based) -->
+<div class="card stretch stretch-full mb-4 course-details-header-card">
+    <div class="card-body">
+        <div class="row align-items-center g-4">
+            <div class="col-lg-8">
+                <div class="d-flex align-items-start flex-wrap flex-lg-nowrap gap-3">
+                    @if (!string.IsNullOrEmpty(Model.Course.ThumbnailUrl))
+                    {
+                        <img src="@Model.Course.ThumbnailUrl" alt="@Model.Course.Title" class="rounded flex-shrink-0" style="width: 100px; height: 100px; object-fit: cover;" />
+                    }
+                    <div class="min-w-0 flex-grow-1">
+                        <div class="mb-2">
+                            <span class="badge bg-soft-primary text-primary">@Model.Course.Category?.Name</span>
+                            <span class="badge bg-soft-secondary text-secondary ms-2">@Model.Course.Level</span>
+                        </div>
+                        <h3 class="fw-bold mb-2">@Model.Course.Title</h3>
+                        @if (!string.IsNullOrEmpty(Model.Course.ShortDescription))
+                        {
+                            <p class="text-muted mb-3 mb-lg-2">@Model.Course.ShortDescription</p>
+                        }
+                        <div class="d-flex align-items-center gap-3 flex-wrap course-meta-item">
+                            <span class="text-muted">
+                                <i class="feather-user me-1 text-primary"></i>
+                                @Model.Course.Instructor.FullName
+                            </span>
+                            <span class="text-muted">
+                                <i class="feather-book-open me-1 text-primary"></i>
+                                @Model.TotalLessons @Html.T("دروس", "lessons")
+                            </span>
+                            <span class="text-muted">
+                                <i class="feather-clock me-1 text-primary"></i>
+                                @Model.Course.DurationHours.ToString("F1") @Html.T("ساعة", "hours")
+                            </span>
+                            <span class="text-muted">
+                                <i class="feather-users me-1 text-primary"></i>
+                                @Model.Course.TotalEnrollments @Html.T("طالب", "students")
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card border bg-soft-primary bg-opacity-50">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">@Html.T("التقدم الإجمالي", "Overall Progress")</span>
+                            <span class="fw-bold fs-4 text-primary">@progressPercentage.ToString("F0")%</span>
+                        </div>
+                        <div class="progress ht-10 mb-3">
+                            <div class="progress-bar bg-success" style="width: @progressPercentage%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between text-muted fs-12 mb-3">
+                            <span>@completedLessons / @Model.TotalLessons @Html.T("دروس مكتملة", "lessons completed")</span>
+                        </div>
+                        @if (progressPercentage < 100)
+                        {
+                            <a asp-controller="Learning" asp-action="Lesson" asp-route-lessonId="@(Model.LastLessonId ?? Model.Course.Modules.FirstOrDefault()?.Lessons.FirstOrDefault()?.Id)" class="btn btn-primary w-100">
+                                <i class="feather-play-circle me-2"></i>
+                                @(progressPercentage > 0 ? Html.T("متابعة التعلم", "Continue Learning") : Html.T("ابدأ الدورة", "Start Course"))
+                            </a>
+                        }
+                        else
+                        {
+                            <a asp-controller="Certificates" asp-action="View" asp-route-enrollmentId="@Model.Id" class="btn btn-success w-100">
+                                <i class="feather-award me-2"></i>
+                                @Html.T("عرض الشهادة", "View Certificate")
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Main Content -->
+    <div class="col-lg-8">
+        <!-- Course Content / Modules -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-list me-2"></i>
+                    @Html.T("محتوى الدورة", "Course Content")
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="accordion" id="modulesAccordion">
+                    @foreach (var module in Model.Course.Modules.OrderBy(m => m.OrderIndex))
+                    {
+                        var moduleLessons = module.Lessons.OrderBy(l => l.OrderIndex).ToList();
+                        var moduleProgress = moduleLessons.Count > 0 
+                            ? (Model.LessonProgress.Count(lp => moduleLessons.Any(l => l.Id == lp.LessonId) && lp.IsCompleted) * 100.0 / moduleLessons.Count) 
+                            : 0;
+                        var isExpanded = module.OrderIndex == 0;
+                        
+                        <div class="accordion-item border-0 border-bottom">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button @(isExpanded ? "" : "collapsed")" type="button" data-bs-toggle="collapse" data-bs-target="#module-@module.Id">
+                                    <div class="d-flex align-items-center justify-content-between w-100 me-3">
+                                        <div>
+                                            <strong>@module.Title</strong>
+                                            <p class="text-muted mb-0 fs-12 mt-1">@moduleLessons.Count @Html.T("دروس", "lessons") • @module.DurationMinutes @Html.T("دقيقة", "min")</p>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="badge bg-soft-primary text-primary">@moduleProgress.ToString("F0")%</div>
+                                        </div>
+                                    </div>
+                                </button>
+                            </h2>
+                            <div id="module-@module.Id" class="accordion-collapse collapse @(isExpanded ? "show" : "")" data-bs-parent="#modulesAccordion">
+                                <div class="accordion-body p-0">
+                                    <div class="list-group list-group-flush">
+                                        @foreach (var lesson in moduleLessons)
+                                        {
+                                            var lessonProgress = Model.LessonProgress.FirstOrDefault(lp => lp.LessonId == lesson.Id);
+                                            var isCompleted = lessonProgress?.IsCompleted ?? false;
+                                            var isInProgress = lessonProgress != null && !isCompleted;
+                                            var isFreePreview = lesson.IsFreePreview || lesson.IsPreviewable;
+                                            var canAccess = isFreePreview || Model.Status != LMS.Domain.Enums.EnrollmentStatus.Suspended;
+                                            
+                                            <a asp-controller="Learning" asp-action="Lesson" asp-route-lessonId="@lesson.Id" 
+                                               class="lesson-item list-group-item list-group-item-action @(isCompleted ? "completed" : "") @(isInProgress ? "in-progress" : "") @(canAccess ? "" : "disabled")">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="avatar-text avatar-sm @(isCompleted ? "bg-soft-success text-success" : isInProgress ? "bg-soft-warning text-warning" : "bg-soft-secondary text-secondary") me-3">
+                                                        @if (isCompleted)
+                                                        {
+                                                            <i class="feather-check-circle"></i>
+                                                        }
+                                                        else if (isInProgress)
+                                                        {
+                                                            <i class="feather-play-circle"></i>
+                                                        }
+                                                        else
+                                                        {
+                                                            <i class="feather-@(lesson.Type == LMS.Domain.Enums.LessonType.Video ? "video" : lesson.Type == LMS.Domain.Enums.LessonType.Article ? "file-text" : "code")"></i>
+                                                        }
+                                                    </div>
+                                                    <div class="flex-grow-1">
+                                                        <div class="fw-medium mb-1">@lesson.Title</div>
+                                                        <div class="text-muted fs-11">
+                                                            <span>@lesson.Type</span>
+                                                            <span class="mx-2">•</span>
+                                                            <span>@lesson.DurationMinutes @Html.T("دقيقة", "min")</span>
+                                                            @if (isFreePreview)
+                                                            {
+                                                                <span class="mx-2">•</span>
+                                                                <span class="badge bg-soft-info text-info">@Html.T("معاينة مجانية", "Free Preview")</span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    @if (isCompleted)
+                                                    {
+                                                        <i class="feather-check-circle text-success fs-5"></i>
+                                                    }
+                                                    else if (isInProgress && lessonProgress != null)
+                                                    {
+                                                        <div class="text-muted fs-12">@((lessonProgress.WatchedSeconds / 60.0).ToString("F0")) @Html.T("دقيقة", "min")</div>
+                                                    }
+                                                </div>
+                                            </a>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- About Course -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-info me-2"></i>
+                    @Html.T("عن الدورة", "About the Course")
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="fs-14">@Html.Raw(Model.Course.Description)</div>
+            </div>
+        </div>
+
+        <!-- What You'll Learn -->
+        @if (Model.Course.WhatYouWillLearn != null && Model.Course.WhatYouWillLearn.Any())
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">
+                        <i class="feather-check-square me-2"></i>
+                        @Html.T("ماذا ستتعلم", "What You'll Learn")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var item in Model.Course.WhatYouWillLearn.OrderBy(x => x.OrderIndex))
+                        {
+                            <li class="mb-2"><i class="feather-check text-success me-2"></i>@item.Text</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        <!-- Requirements -->
+        @if (Model.Course.Requirements != null && Model.Course.Requirements.Any())
+        {
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="fw-bold mb-0">
+                        <i class="feather-alert-circle me-2"></i>
+                        @Html.T("المتطلبات", "Requirements")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var req in Model.Course.Requirements.OrderBy(x => x.OrderIndex))
+                        {
+                            <li class="mb-2"><i class="feather-check-circle text-primary me-2"></i>@req.Text</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Instructor Info -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">@Html.T("المدرب", "Instructor")</h6>
+            </div>
+            <div class="card-body">
+                <div class="instructor-card text-center">
+                    <div class="avatar-text avatar-xl bg-primary text-white mx-auto mb-3">
+                        <i class="feather-user fs-3"></i>
+                    </div>
+                    <h5 class="fw-bold mb-1">@Model.Course.Instructor.FullName</h5>
+                    <p class="text-muted mb-3">@Model.Course.Instructor.Title</p>
+                    @if (!string.IsNullOrEmpty(Model.Course.Instructor.Bio))
+                    {
+                        <p class="fs-12 text-muted mb-3">@Model.Course.Instructor.Bio</p>
+                    }
+                    <div class="d-flex justify-content-center gap-2 mb-3">
+                        <div class="text-center">
+                            <div class="fw-bold">@Model.Course.Instructor.TotalCourses</div>
+                            <div class="fs-11 text-muted">@Html.T("دورات", "Courses")</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="fw-bold">@Model.Course.Instructor.TotalStudents</div>
+                            <div class="fs-11 text-muted">@Html.T("طلاب", "Students")</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="fw-bold">@Model.Course.Instructor.AverageRating.ToString("F1")</div>
+                            <div class="fs-11 text-muted">@Html.T("تقييم", "Rating")</div>
+                        </div>
+                    </div>
+                    <a asp-controller="Messages" asp-action="Compose" asp-route-recipientId="@Model.Course.InstructorId" class="btn btn-primary btn-sm w-100">
+                        <i class="feather-message-circle me-2"></i>
+                        @Html.T("راسل المدرب", "Message Instructor")
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">@Html.T("إحصائياتك", "Your Stats")</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-text avatar-sm bg-soft-primary text-primary me-3">
+                            <i class="feather-clock"></i>
+                        </div>
+                        <div>
+                            <div class="fs-12 text-muted">@Html.T("وقت الدراسة", "Study Time")</div>
+                            <div class="fw-bold">@((Model.TotalWatchTimeMinutes / 60.0).ToString("F1")) @Html.T("ساعة", "hours")</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mb-3 pb-3 border-bottom">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-text avatar-sm bg-soft-success text-success me-3">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <div class="fs-12 text-muted">@Html.T("دروس مكتملة", "Completed Lessons")</div>
+                            <div class="fw-bold">@completedLessons / @Model.TotalLessons</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-text avatar-sm bg-soft-info text-info me-3">
+                            <i class="feather-calendar"></i>
+                        </div>
+                        <div>
+                            <div class="fs-12 text-muted">@Html.T("تاريخ التسجيل", "Enrollment Date")</div>
+                            <div class="fw-bold">@Model.EnrolledAt.ToString("dd/MM/yyyy")</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Course Actions -->
+        <div class="card stretch stretch-full mb-4">
+            <div class="card-header">
+                <h6 class="fw-bold mb-0">@Html.T("إجراءات", "Actions")</h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a asp-controller="Notes" asp-action="Course" asp-route-enrollmentId="@Model.Id" class="btn btn-outline-primary">
+                        <i class="feather-file-text me-2"></i>
+                        @Html.T("ملاحظاتي", "My Notes")
+                    </a>
+                    <a asp-controller="Bookmarks" asp-action="Index" asp-route-enrollmentId="@Model.Id" class="btn btn-outline-warning">
+                        <i class="feather-bookmark me-2"></i>
+                        @Html.T("المحفوظات", "Bookmarks")
+                    </a>
+                    <a asp-controller="Discussions" asp-action="Index" asp-route-courseId="@Model.CourseId" class="btn btn-outline-info">
+                        <i class="feather-message-square me-2"></i>
+                        @Html.T("المناقشات", "Discussions")
+                    </a>
+                    <a asp-area="Student" asp-controller="Reviews" asp-action="Create" asp-route-courseId="@Model.CourseId" class="btn btn-outline-success">
+                        <i class="feather-star me-2"></i>
+                        @Html.T("اكتب مراجعة", "Write a Review")
+                    </a>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#shareModal">
+                        <i class="feather-share-2 me-2"></i>
+                        @Html.T("مشاركة الدورة", "Share Course")
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Certificate Preview (if completed) -->
+        @if (progressPercentage >= 100 && Model.Status == LMS.Domain.Enums.EnrollmentStatus.Completed)
+        {
+            <div class="card stretch stretch-full bg-success text-white">
+                <div class="card-body text-center">
+                    <i class="feather-award fs-1 mb-3"></i>
+                    <h5 class="text-white fw-bold mb-2">@Html.T("تهانينا!", "Congratulations!")</h5>
+                    <p class="text-white opacity-75 mb-3">@Html.T("لقد أكملت هذه الدورة بنجاح", "You have successfully completed this course")</p>
+                    <a asp-controller="Certificates" asp-action="View" asp-route-enrollmentId="@Model.Id" class="btn btn-light w-100">
+                        <i class="feather-download me-2"></i>
+                        @Html.T("تحميل الشهادة", "Download Certificate")
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Share Modal -->
+<div class="modal fade" id="shareModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="feather-share-2 me-2"></i>
+                    @Html.T("مشاركة الدورة", "Share Course")
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">@Html.T("شارك هذه الدورة مع أصدقائك", "Share this course with your friends")</p>
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="shareLinkInput" value="@Url.Action("Details", "Courses", new { id = Model.CourseId }, Context.Request.Scheme)" readonly />
+                    <button class="btn btn-primary" type="button" onclick="copyShareLink()">
+                        <i class="feather-copy"></i>
+                        @Html.T("نسخ", "Copy")
+                    </button>
+                </div>
+                <div class="d-flex gap-2 justify-content-center">
+                    <a href="#" class="btn btn-outline-primary btn-icon">
+                        <i class="feather-facebook"></i>
+                    </a>
+                    <a href="#" class="btn btn-outline-info btn-icon">
+                        <i class="feather-twitter"></i>
+                    </a>
+                    <a href="#" class="btn btn-outline-success btn-icon">
+                        <i class="feather-message-circle"></i>
+                    </a>
+                    <a href="#" class="btn btn-outline-danger btn-icon">
+                        <i class="feather-mail"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function copyShareLink() {
+        var copyText = document.getElementById("shareLinkInput");
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+        document.execCommand("copy");
+        
+        // Show success message
+        var btn = event.target.closest('button');
+        var originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="feather-check"></i> @Html.T("تم النسخ", "Copied")';
+        setTimeout(function() {
+            btn.innerHTML = originalText;
+        }, 2000);
+    }
+</script>
+}
+

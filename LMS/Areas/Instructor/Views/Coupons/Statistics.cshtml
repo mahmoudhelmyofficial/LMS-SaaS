@@ -1,0 +1,585 @@
+@model LMS.Domain.Entities.Payments.Coupon
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إحصائيات الكوبون", "Coupon Statistics");
+    ViewData["Subtitle"] = $"تحليلات ومقاييس الكوبون: {Model.Code}";
+    
+    var totalDiscount = Model.Usages?.Sum(u => u.DiscountAmount) ?? 0;
+    var uniqueUsers = Model.Usages?.Select(u => u.UserId).Distinct().Count() ?? 0;
+    var usagePercent = Model.MaxUses.HasValue && Model.MaxUses > 0 
+        ? (double)Model.UsedCount / Model.MaxUses.Value * 100 
+        : 0;
+    
+    var detailsUrl = Url.Action("Details", new { id = Model.Id });
+    var editUrl = Url.Action("Edit", new { id = Model.Id });
+    var indexUrl = Url.Action("Index");
+    
+    // Load platform settings
+    var usageCritical = await PlatformSettings.GetIntSettingAsync("Threshold.Usage.Critical", 90);
+    var usageWarning = await PlatformSettings.GetIntSettingAsync("Threshold.Usage.Warning", 70);
+    var topUsersLimit = await PlatformSettings.GetIntSettingAsync("UI.TopItems.Limit", 10);
+    var recentUsagesLimit = await PlatformSettings.GetIntSettingAsync("UI.RecentItems.Limit", 20);
+    var chartDataLimit = await PlatformSettings.GetIntSettingAsync("UI.ChartData.Limit", 30);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw($@"
+        <a href='{detailsUrl}' class='btn btn-light'>
+            <i class='feather-eye me-2'></i>
+            عرض التفاصيل
+        </a>
+        <a href='{editUrl}' class='btn btn-light'>
+            <i class='feather-edit me-2'></i>
+            تعديل
+        </a>
+        <a href='{indexUrl}' class='btn btn-light'>
+            <i class='feather-arrow-right me-2'></i>
+            العودة للقائمة
+        </a>
+    ") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Coupon Header -->
+    <div class="card stretch stretch-full mb-4 bg-gradient-primary text-white">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl bg-white text-primary">
+                            <i class="feather-tag"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-white fw-bold mb-1">@Model.Code</h3>
+                            <p class="text-white-50 mb-0">@Model.Description</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                    <div class="d-inline-block text-center px-4">
+                        <h2 class="text-white fw-bold mb-1">
+                            @if (Model.DiscountType == LMS.Domain.Enums.DiscountType.Percentage)
+                            {
+                                @Model.DiscountValue.ToString("F0")<text>%</text>
+                            }
+                            else
+                            {
+                                @Model.DiscountValue.ToEGP()
+                            }
+                        </h2>
+                        <small class="text-white-50">قيمة الخصم</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "مرات الاستخدام" },
+                { "Value", Model.UsedCount },
+                { "Icon", "shopping-cart" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "إجمالي التوفير" },
+                { "Value", totalDiscount.ToEGP() },
+                { "Icon", "dollar-sign" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "عدد المستخدمين" },
+                { "Value", uniqueUsers },
+                { "Icon", "users" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "معدل التوفير" },
+                { "Value", (Model.UsedCount > 0 ? (totalDiscount / Model.UsedCount).ToEGP() : "0 ر.س") },
+                { "Icon", "trending-down" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Usage Trend Chart -->
+        <div class="col-lg-8">
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-trending-up me-2 text-primary"></i>
+                        اتجاه الاستخدام
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="usageTrendChart" height="100"></canvas>
+                </div>
+            </div>
+
+            <!-- Usage by Course -->
+            @if (Model.Usages != null && Model.Usages.Any())
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-book me-2 text-primary"></i>
+                            الاستخدام حسب الدورة
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الدورة", "Course")</th>
+                                        <th>@Html.T("عدد الاستخدامات", "Uses count")</th>
+                                        <th>@Html.T("إجمالي الخصم", "Total discount")</th>
+                                        <th>@Html.T("معدل الخصم", "Avg discount")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var courseGroup in Model.Usages.GroupBy(u => u.Course))
+                                    {
+                                        var count = courseGroup.Count();
+                                        var totalCourseDiscount = courseGroup.Sum(u => u.DiscountAmount);
+                                        var avgDiscount = totalCourseDiscount / count;
+                                        
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                        <i class="feather-book"></i>
+                                                    </div>
+                                                    <span class="fw-medium">@courseGroup.Key?.Title</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-primary text-primary">@count</span>
+                                            </td>
+                                            <td>
+                                                <span class="text-success fw-bold">@totalCourseDiscount.ToEGP()</span>
+                                            </td>
+                                            <td>
+                                                <span class="text-muted">@avgDiscount.ToEGP()</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Top Users -->
+            @if (Model.Usages != null && Model.Usages.Any())
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-star me-2 text-primary"></i>
+                            @Html.T("أكثر المستخدمين", "Top users")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الطالب", "Student")</th>
+                                        <th>@Html.T("عدد الاستخدامات", "Uses count")</th>
+                                        <th>@Html.T("إجمالي التوفير", "Total saved")</th>
+                                        <th>@Html.T("آخر استخدام", "Last used")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var userGroup in Model.Usages.GroupBy(u => u.User).OrderByDescending(g => g.Count()).Take(topUsersLimit))
+                                    {
+                                        var count = userGroup.Count();
+                                        var totalUserDiscount = userGroup.Sum(u => u.DiscountAmount);
+                                        var lastUsage = userGroup.Max(u => u.UsedAt);
+                                        
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-text avatar-sm bg-soft-info text-info">
+                                                        <i class="feather-user"></i>
+                                                    </div>
+                                                    <span>@userGroup.Key?.FullName</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-info text-info">@count</span>
+                                            </td>
+                                            <td>
+                                                <span class="text-success fw-bold">@totalUserDiscount.ToEGP()</span>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">@lastUsage.ToString("dd/MM/yyyy")</small>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Usage Progress -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تقدم الاستخدام", "Usage progress")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <canvas id="usageProgressChart" width="200" height="200"></canvas>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="text-muted">@Html.T("المستخدم", "Used")</span>
+                        <span class="fw-bold">@Model.UsedCount</span>
+                    </div>
+                    
+                    @if (Model.MaxUses.HasValue)
+                    {
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="text-muted">@Html.T("المتبقي", "Remaining")</span>
+                            <span class="fw-bold text-success">@(Model.MaxUses.Value - Model.UsedCount)</span>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="text-muted">@Html.T("الحد الأقصى", "Max uses")</span>
+                            <span class="fw-bold">@Model.MaxUses</span>
+                        </div>
+
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar @(usagePercent >= usageCritical ? "bg-danger" : usagePercent >= usageWarning ? "bg-warning" : "bg-success")" 
+                                 role="progressbar" style="width: @usagePercent.ToString("F0")%"></div>
+                        </div>
+                        <small class="text-muted d-block mt-2 text-center">@usagePercent.ToString("F1")% @Html.T("مستخدم", "used")</small>
+                    }
+                    else
+                    {
+                        <div class="alert alert-info">
+                            <i class="feather-infinity me-2"></i>
+                            @Html.T("غير محدود", "Unlimited")
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Validity Period -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("فترة الصلاحية", "Validity period")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="text-muted small mb-2">@Html.T("تاريخ البدء", "Start date")</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-calendar text-success"></i>
+                            <span>@Model.ValidFrom.ToString("dd/MM/yyyy hh:mm tt")</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="text-muted small mb-2">@Html.T("تاريخ الانتهاء", "End date")</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="feather-calendar text-danger"></i>
+                            <span>@Model.ValidTo.ToString("dd/MM/yyyy hh:mm tt")</span>
+                        </div>
+                    </div>
+
+                    @{
+                        var now = DateTime.UtcNow;
+                        var totalDays = (Model.ValidTo - Model.ValidFrom).TotalDays;
+                        var elapsedDays = (now - Model.ValidFrom).TotalDays;
+                        var remainingDays = (Model.ValidTo - now).TotalDays;
+                        var timeProgress = Math.Max(0, Math.Min(100, (elapsedDays / totalDays) * 100));
+                    }
+
+                    <div class="progress mb-2" style="height: 8px;">
+                        <div class="progress-bar @(remainingDays < 7 ? "bg-danger" : remainingDays < 30 ? "bg-warning" : "bg-info")" 
+                             role="progressbar" style="width: @timeProgress.ToString("F0")%"></div>
+                    </div>
+
+                    @if (remainingDays > 0)
+                    {
+                        <small class="text-muted">@Html.T("متبقي", "Remaining") @remainingDays.ToString("F0") @Html.T("يوم", "days")</small>
+                    }
+                    else if (remainingDays > -7)
+                    {
+                        <small class="text-danger">@Html.T("منتهي منذ", "Expired") @Math.Abs(remainingDays).ToString("F0") @Html.T("يوم", "days ago")</small>
+                    }
+                    else
+                    {
+                        <small class="text-danger">@Html.T("منتهي", "Expired")</small>
+                    }
+                </div>
+            </div>
+
+            <!-- Discount Distribution -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("توزيع الخصم", "Discount distribution")</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="discountDistributionChart" height="200"></canvas>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إجراءات سريعة", "Quick actions")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="@Url.Action("Edit", new { id = Model.Id })" class="btn btn-primary">
+                            <i class="feather-edit me-2"></i>
+                            @Html.T("تعديل الكوبون", "Edit coupon")
+                        </a>
+                        
+                        <div class="btn-group w-100">
+                            <button type="button" class="btn btn-info dropdown-toggle" data-bs-toggle="dropdown">
+                                <i class="feather-download me-2"></i>@Html.T("تصدير الإحصائيات", "Export statistics")
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end w-100">
+                                <li><a class="dropdown-item" href="/api/export/coupons?format=csv&couponId=@Model.Id">CSV</a></li>
+                                <li><a class="dropdown-item" href="/api/export/coupons?format=excel&couponId=@Model.Id">@Html.T("Excel", "Excel")</a></li>
+                                <li><a class="dropdown-item" href="/api/export/coupons?format=pdf&couponId=@Model.Id">PDF</a></li>
+                            </ul>
+                        </div>
+
+                        <button class="btn btn-secondary" onclick="shareCoupon()">
+                            <i class="feather-share-2 me-2"></i>
+                            @Html.T("مشاركة الكوبون", "Share coupon")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Usages -->
+    @if (Model.Usages != null && Model.Usages.Any())
+    {
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-clock me-2 text-primary"></i>
+                            @Html.T("الاستخدامات الأخيرة", "Recent usages")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("التاريخ", "Date")</th>
+                                        <th>@Html.T("الطالب", "Student")</th>
+                                        <th>@Html.T("الدورة", "Course")</th>
+                                        <th>@Html.T("قيمة الخصم", "Discount amount")</th>
+                                        <th>@Html.T("المبلغ النهائي", "Final amount")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var usage in Model.Usages.OrderByDescending(u => u.UsedAt).Take(recentUsagesLimit))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <small class="text-muted">@usage.UsedAt.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-text avatar-sm bg-soft-info text-info">
+                                                        <i class="feather-user"></i>
+                                                    </div>
+                                                    <span>@usage.User?.FullName</span>
+                                                </div>
+                                            </td>
+                                            <td>@usage.Course?.Title</td>
+                                            <td>
+                                                <span class="text-success fw-bold">@usage.DiscountAmount.ToEGP()</span>
+                                            </td>
+                                            <td>
+                                                <span class="fw-medium">@usage.FinalAmount.ToEGP()</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-text avatar-xl bg-soft-secondary text-secondary mb-4 mx-auto">
+                            <i class="feather-inbox"></i>
+                        </div>
+                        <h5 class="fw-bold mb-2">@Html.T("لا توجد استخدامات بعد", "No uses yet")</h5>
+                        <p class="text-muted mb-4">لم يتم استخدام هذا الكوبون حتى الآن</p>
+                        <button class="btn btn-primary" onclick="shareCoupon()">
+                            <i class="feather-share-2 me-2"></i>
+                            شارك الكوبون لزيادة الاستخدام
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        // Usage Trend Chart
+        const usageTrendCtx = document.getElementById('usageTrendChart').getContext('2d');
+        const usageTrendChart = new Chart(usageTrendCtx, {
+            type: 'line',
+            data: {
+                labels: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+                    Model.Usages?.GroupBy(u => u.UsedAt.Date).OrderBy(g => g.Key)
+                    .Select(g => g.Key.ToString("dd/MM")).Take(30) ?? new string[0])),
+                datasets: [{
+                    label: 'الاستخدامات',
+                    data: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+                        Model.Usages?.GroupBy(u => u.UsedAt.Date).OrderBy(g => g.Key)
+                        .Select(g => g.Count()).Take(chartDataLimit) ?? new int[0])),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+
+        // Usage Progress Chart (Doughnut)
+        const usageProgressCtx = document.getElementById('usageProgressChart').getContext('2d');
+        const usageProgressChart = new Chart(usageProgressCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['مستخدم', 'متبقي'],
+                datasets: [{
+                    data: [@Model.UsedCount, @(Model.MaxUses.HasValue ? Model.MaxUses.Value - Model.UsedCount : 0)],
+                    backgroundColor: ['#3b82f6', '#e5e7eb'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+
+        // Discount Distribution Chart
+        const discountDistCtx = document.getElementById('discountDistributionChart').getContext('2d');
+        const discountDistChart = new Chart(discountDistCtx, {
+            type: 'bar',
+            data: {
+                labels: ['< 50', '50-100', '100-200', '200-500', '> 500'],
+                datasets: [{
+                    label: 'عدد الاستخدامات',
+                    data: [
+                        @(Model.Usages?.Count(u => u.DiscountAmount < 50) ?? 0),
+                        @(Model.Usages?.Count(u => u.DiscountAmount >= 50 && u.DiscountAmount < 100) ?? 0),
+                        @(Model.Usages?.Count(u => u.DiscountAmount >= 100 && u.DiscountAmount < 200) ?? 0),
+                        @(Model.Usages?.Count(u => u.DiscountAmount >= 200 && u.DiscountAmount < 500) ?? 0),
+                        @(Model.Usages?.Count(u => u.DiscountAmount >= 500) ?? 0)
+                    ],
+                    backgroundColor: '#10b981'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+
+        function exportStatistics() {
+            alert('سيتم تصدير الإحصائيات قريباً');
+        }
+
+        function shareCoupon() {
+            const code = '@Model.Code';
+            const text = `استخدم كود الخصم: ${code} للحصول على خصم خاص!`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'كود خصم',
+                    text: text
+                });
+            } else {
+                navigator.clipboard.writeText(code);
+                alert('تم نسخ كود الكوبون: ' + code);
+            }
+        }
+    </script>
+}
+

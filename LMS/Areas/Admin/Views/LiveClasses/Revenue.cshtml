@@ -1,0 +1,243 @@
+@{
+    ViewData["Title"] = Html.T("إيرادات الجلسات المباشرة", "Live Session Revenue");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("البث المباشر", "Live Sessions"), Url.Action("Index", "LiveClasses")),
+        (Html.T("الإيرادات", "Revenue"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+
+    var fromDate = ViewBag.FromDate as DateTime? ?? DateTime.UtcNow.AddMonths(-3);
+    var toDate = ViewBag.ToDate as DateTime? ?? DateTime.UtcNow;
+    var totalRevenue = (decimal)(ViewBag.TotalRevenue ?? 0m);
+    var sessionRevenue = (decimal)(ViewBag.SessionRevenue ?? 0m);
+    var scheduleRevenue = (decimal)(ViewBag.ScheduleRevenue ?? 0m);
+    var sessionPurchaseCount = (int)(ViewBag.SessionPurchaseCount ?? 0);
+    var scheduleEnrollmentCount = (int)(ViewBag.ScheduleEnrollmentCount ?? 0);
+}
+
+@section Styles {
+<style>
+    .revenue-card {
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .revenue-card .card-body {
+        padding: 24px;
+    }
+</style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Date Filter -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <form method="get" asp-action="Revenue" class="row align-items-end g-3">
+            <div class="col-lg-4">
+                <label class="form-label fw-bold">@Html.T("من تاريخ", "From Date")</label>
+                <input type="date" name="from" value="@fromDate.ToString("yyyy-MM-dd")" class="form-control" />
+            </div>
+            <div class="col-lg-4">
+                <label class="form-label fw-bold">@Html.T("إلى تاريخ", "To Date")</label>
+                <input type="date" name="to" value="@toDate.ToString("yyyy-MM-dd")" class="form-control" />
+            </div>
+            <div class="col-lg-4">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="feather-filter me-2"></i>
+                    @Html.T("تصفية", "Filter")
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Revenue Summary Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-4">
+        <div class="card revenue-card border-primary">
+            <div class="card-body text-center">
+                <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                    <i class="feather-dollar-sign fs-3"></i>
+                </div>
+                <h2 class="fw-bolder text-primary mb-1">@totalRevenue.ToString("N0") @Html.T("ج.م", "EGP")</h2>
+                <p class="text-muted mb-0">@Html.T("إجمالي الإيرادات", "Total Revenue")</p>
+                <small class="text-muted">@(sessionPurchaseCount + scheduleEnrollmentCount) @Html.T("عملية شراء", "purchases")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card revenue-card border-success">
+            <div class="card-body text-center">
+                <div class="avatar-text avatar-xl bg-soft-success text-success mx-auto mb-3">
+                    <i class="feather-video fs-3"></i>
+                </div>
+                <h2 class="fw-bolder text-success mb-1">@sessionRevenue.ToString("N0") @Html.T("ج.م", "EGP")</h2>
+                <p class="text-muted mb-0">@Html.T("إيرادات الجلسات الفردية", "Individual Session Revenue")</p>
+                <small class="text-muted">@sessionPurchaseCount @Html.T("عملية شراء", "purchases")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card revenue-card border-info">
+            <div class="card-body text-center">
+                <div class="avatar-text avatar-xl bg-soft-info text-info mx-auto mb-3">
+                    <i class="feather-calendar fs-3"></i>
+                </div>
+                <h2 class="fw-bolder text-info mb-1">@scheduleRevenue.ToString("N0") @Html.T("ج.م", "EGP")</h2>
+                <p class="text-muted mb-0">@Html.T("إيرادات الاشتراكات", "Subscription Revenue")</p>
+                <small class="text-muted">@scheduleEnrollmentCount @Html.T("اشتراك", "subscriptions")</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Revenue Chart -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-header">
+        <h5 class="fw-bold mb-0">
+            <i class="feather-bar-chart-2 me-2"></i>
+            @Html.T("الإيرادات الشهرية", "Monthly Revenue")
+        </h5>
+    </div>
+    <div class="card-body">
+        <canvas id="revenueChart" height="300"></canvas>
+    </div>
+</div>
+
+<!-- Recent Transactions -->
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-video me-2"></i>
+                    @Html.T("آخر مشتريات الجلسات", "Recent Session Purchases")
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>@Html.T("الجلسة", "Session")</th>
+                                <th>@Html.T("المبلغ", "Amount")</th>
+                                <th>@Html.T("التاريخ", "Date")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var sessionPurchases = ViewBag.SessionPurchases as List<LMS.Domain.Entities.LiveSessions.LiveSessionPurchase> ?? new();
+                            }
+                            @foreach (var p in sessionPurchases.Take(10))
+                            {
+                                <tr>
+                                    <td>@(p.LiveClass?.Title ?? $"{Html.T("جلسة", "Session")} #{p.LiveClassId}")</td>
+                                    <td><strong>@p.PaidAmount.ToString("N0") @p.Currency</strong></td>
+                                    <td>@p.PurchasedAt.ToString("dd/MM/yyyy")</td>
+                                </tr>
+                            }
+                            @if (!sessionPurchases.Any())
+                            {
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-3">@Html.T("لا توجد مشتريات", "No purchases")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card stretch stretch-full">
+            <div class="card-header">
+                <h5 class="fw-bold mb-0">
+                    <i class="feather-calendar me-2"></i>
+                    @Html.T("آخر اشتراكات الجداول", "Recent Schedule Subscriptions")
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>@Html.T("الجدول", "Schedule")</th>
+                                <th>@Html.T("المبلغ", "Amount")</th>
+                                <th>@Html.T("التاريخ", "Date")</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var scheduleEnrollments = ViewBag.ScheduleEnrollments as List<LMS.Domain.Entities.LiveSessions.LiveSessionScheduleEnrollment> ?? new();
+                            }
+                            @foreach (var e in scheduleEnrollments.Take(10))
+                            {
+                                <tr>
+                                    <td>@(e.Schedule?.TitleAr ?? e.Schedule?.Title ?? $"{Html.T("جدول", "Schedule")} #{e.LiveSessionScheduleId}")</td>
+                                    <td><strong>@e.PaidAmount.ToString("N0") @e.Currency</strong></td>
+                                    <td>@e.EnrolledAt.ToString("dd/MM/yyyy")</td>
+                                </tr>
+                            }
+                            @if (!scheduleEnrollments.Any())
+                            {
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-3">@Html.T("لا توجد اشتراكات", "No subscriptions")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    var ctx = document.getElementById('revenueChart').getContext('2d');
+    var monthlySession = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.MonthlySessionData ?? new List<object>()));
+    var monthlySchedule = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(ViewBag.MonthlyScheduleData ?? new List<object>()));
+
+    var allMonths = [...new Set([...monthlySession.map(d => d.month), ...monthlySchedule.map(d => d.month)])].sort();
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: allMonths,
+            datasets: [{
+                label: '@Html.T("إيرادات الجلسات", "Session Revenue")',
+                data: allMonths.map(m => {
+                    var item = monthlySession.find(d => d.month === m);
+                    return item ? item.revenue : 0;
+                }),
+                backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                borderRadius: 6
+            }, {
+                label: '@Html.T("إيرادات الاشتراكات", "Subscription Revenue")',
+                data: allMonths.map(m => {
+                    var item = monthlySchedule.find(d => d.month === m);
+                    return item ? item.revenue : 0;
+                }),
+                backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) { return value + ' @Html.T("ج.م", "EGP")'; }
+                    }
+                }
+            }
+        }
+    });
+</script>
+}

@@ -1,0 +1,112 @@
+@* Sidebar Enhancement Scripts - Student Area *@
+<script>
+(function() {
+    'use strict';
+    
+    const STORAGE_KEY = 'student_sidebar_state';
+    const BADGE_UPDATE_INTERVAL = 30000;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeBadges();
+        setTimeout(initializeMenuState, 50);
+    });
+    
+    function initializeBadges() {
+        updateBadges();
+        setInterval(updateBadges, BADGE_UPDATE_INTERVAL);
+    }
+    
+    function updateBadges() {
+        fetchBadgeCount('/Student/Messages/GetUnreadCount', 'unread-messages-badge');
+        fetchBadgeCount('/Student/Notifications/GetUnreadCount', 'unread-notifications-badge');
+    }
+    
+    function fetchBadgeCount(url, badgeId) {
+        const badge = document.getElementById(badgeId);
+        if (!badge) return;
+        
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        })
+        .then(function(response) {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(function(data) {
+            const count = data.count || data.Count || 0;
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count.toString();
+                badge.style.display = 'inline-flex';
+            } else {
+                badge.textContent = '';
+                badge.style.display = 'none';
+            }
+        })
+        .catch(function() {
+            badge.style.display = 'none';
+        });
+    }
+    
+    function saveMenuState() {
+        const openMenus = [];
+        document.querySelectorAll('.nxl-hasmenu.nxl-trigger').forEach(function(menu) {
+            const link = menu.querySelector('.nxl-link .nxl-mtext');
+            if (link) {
+                openMenus.push(link.textContent.trim());
+            }
+        });
+        
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(openMenus));
+        } catch (e) {
+            // localStorage not available
+        }
+    }
+    
+    function initializeMenuState() {
+        document.querySelectorAll('.nxl-hasmenu.active, .nxl-hasmenu.open').forEach(function(menu) {
+            menu.classList.add('nxl-trigger');
+            const submenu = menu.querySelector('.nxl-submenu');
+            if (submenu) {
+                submenu.style.display = 'block';
+            }
+        });
+        
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const openMenus = JSON.parse(saved);
+                document.querySelectorAll('.nxl-hasmenu').forEach(function(menu) {
+                    if (menu.classList.contains('active') || menu.classList.contains('open')) {
+                        return;
+                    }
+                    
+                    const link = menu.querySelector('.nxl-link .nxl-mtext');
+                    if (link && openMenus.includes(link.textContent.trim())) {
+                        menu.classList.add('nxl-trigger');
+                        const submenu = menu.querySelector('.nxl-submenu');
+                        if (submenu) {
+                            submenu.style.display = 'block';
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            // localStorage not available or invalid data
+        }
+        
+        document.addEventListener('click', function(e) {
+            const menuLink = e.target.closest('.nxl-hasmenu > a.nxl-link');
+            if (menuLink) {
+                setTimeout(saveMenuState, 350);
+            }
+        }, true);
+    }
+})();
+</script>
+

@@ -1,0 +1,191 @@
+@model CalendarViewModel
+@{
+    ViewData["Title"] = Html.T("التقويم", "Calendar");
+}
+
+@section Styles {
+<style>
+    .calendar-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 1px;
+        background: #e5e7eb;
+        border: 1px solid #e5e7eb;
+        min-width: 280px;
+    }
+    .calendar-day {
+        background: white;
+        padding: 12px;
+        min-height: 100px;
+        position: relative;
+    }
+    .calendar-day.other-month {
+        background: #f9fafb;
+        color: #9ca3af;
+    }
+    .calendar-day.today {
+        background: #dbeafe;
+    }
+    .day-number {
+        font-weight: bold;
+        margin-bottom: 8px;
+    }
+    .event-item {
+        font-size: 11px;
+        padding: 4px 6px;
+        border-radius: 4px;
+        margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .event-assignment { background: #fecaca; color: #991b1b; }
+    .event-quiz { background: #fef3c7; color: #92400e; }
+    .event-liveclass { background: #dbeafe; color: #1e40af; }
+    .event-study { background: #d1fae5; color: #065f46; }
+    /* Mobile: compact calendar */
+    @@media (max-width: 767px) {
+        .calendar-day { padding: 6px 4px; min-height: 72px; }
+        .day-number { font-size: 0.9rem; margin-bottom: 4px; }
+        .event-item { font-size: 10px; padding: 2px 4px; margin-bottom: 2px; }
+        .calendar-grid .text-center.p-2 { padding: 6px 2px !important; font-size: 0.7rem; }
+    }
+    @@media (max-width: 575px) {
+        .calendar-day { padding: 4px 2px; min-height: 64px; }
+        .day-number { font-size: 0.85rem; }
+        .event-item { font-size: 9px; padding: 2px 3px; }
+        .calendar-grid .text-center.p-2 { font-size: 0.65rem; }
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-calendar text-primary me-2"></i>
+                    @Html.T("التقويم الدراسي", "Academic Calendar")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("جميع المواعيد والمهام المجدولة", "All scheduled appointments and tasks")</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a asp-action="Calendar" asp-route-year="@Model.Year" asp-route-month="@(Model.Month - 1)" class="btn btn-outline-secondary">
+                    <i class="feather-chevron-right"></i>
+                </a>
+                <a asp-action="Calendar" asp-route-year="@Model.Year" asp-route-month="@(Model.Month + 1)" class="btn btn-outline-secondary">
+                    <i class="feather-chevron-left"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Calendar -->
+<div class="card stretch stretch-full">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="fw-bold mb-0">
+                @(new DateTime(Model.Year, Model.Month, 1).ToString("MMMM yyyy"))
+            </h4>
+            <div class="d-flex gap-3">
+                <span class="badge bg-soft-danger text-danger">
+                    <i class="feather-file-text me-1"></i>
+                    @Html.T("تكليف", "Assignment")
+                </span>
+                <span class="badge bg-soft-info text-info">
+                    <i class="feather-video me-1"></i>
+                    @Html.T("بث مباشر", "Live Stream")
+                </span>
+                <span class="badge bg-soft-success text-success">
+                    <i class="feather-book-open me-1"></i>
+                    @Html.T("دراسة", "Study")
+                </span>
+            </div>
+        </div>
+
+        <!-- Day Headers -->
+        <div class="calendar-wrapper">
+        <div class="calendar-grid mb-0" style="border-bottom: none;">
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الأحد", "Sun")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الإثنين", "Mon")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الثلاثاء", "Tue")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الأربعاء", "Wed")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الخميس", "Thu")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الجمعة", "Fri")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("السبت", "Sat")</div>
+        </div>
+        </div>
+
+        <!-- Calendar Days -->
+        <div class="calendar-wrapper">
+        <div class="calendar-grid">
+            @{
+                var firstDay = new DateTime(Model.Year, Model.Month, 1);
+                var daysInMonth = DateTime.DaysInMonth(Model.Year, Model.Month);
+                var startDayOfWeek = (int)firstDay.DayOfWeek;
+                var today = DateTime.UtcNow.Date;
+
+                // Previous month days
+                var prevMonth = firstDay.AddMonths(-1);
+                var daysInPrevMonth = DateTime.DaysInMonth(prevMonth.Year, prevMonth.Month);
+                for (int i = daysInPrevMonth - startDayOfWeek + 1; i <= daysInPrevMonth; i++)
+                {
+                    <div class="calendar-day other-month">
+                        <div class="day-number">@i</div>
+                    </div>
+                }
+
+                // Current month days
+                for (int day = 1; day <= daysInMonth; day++)
+                {
+                    var currentDate = new DateTime(Model.Year, Model.Month, day);
+                    var isToday = currentDate == today;
+                    var dayDeadlines = Model.Deadlines.Where(d => d.DueDate.Date == currentDate).ToList();
+                    var dayStudySessions = Model.StudySessions.Where(s => s.Date.Date == currentDate).ToList();
+                    var dayLiveClasses = Model.LiveClasses.Where(lc => lc.Date.Date == currentDate).ToList();
+
+                    <div class="calendar-day @(isToday ? "today" : "")">
+                        <div class="day-number">@day</div>
+                        @foreach (var deadline in dayDeadlines)
+                        {
+                            <div class="event-item event-assignment" title="@deadline.Title">
+                                <i class="feather-file-text"></i> @deadline.Title
+                            </div>
+                        }
+                        @foreach (var session in dayStudySessions)
+                        {
+                            <div class="event-item event-study" title="@session.Title">
+                                <i class="feather-book-open"></i> @session.Title
+                            </div>
+                        }
+                        @foreach (var liveClass in dayLiveClasses)
+                        {
+                            <div class="event-item event-liveclass" title="@liveClass.Title">
+                                <i class="feather-video"></i> @liveClass.Title
+                            </div>
+                        }
+                    </div>
+                }
+
+                // Next month days
+                var totalCells = startDayOfWeek + daysInMonth;
+                var remainingCells = 35 - totalCells;
+                if (remainingCells < 7 && totalCells > 28) remainingCells += 7;
+                
+                for (int i = 1; i <= remainingCells; i++)
+                {
+                    <div class="calendar-day other-month">
+                        <div class="day-number">@i</div>
+                    </div>
+                }
+            }
+        </div>
+        </div>
+    </div>
+</div>

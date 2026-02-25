@@ -1,0 +1,452 @@
+@{
+    ViewData["Title"] = Html.T("التقييم الجماعي", "Bulk Grading");
+    ViewData["Subtitle"] = $"تقييم متعدد للتسليمات: {ViewBag.Assignment?.Title}";
+    
+    var assignment = ViewBag.Assignment as LMS.Domain.Entities.Assessments.Assignment;
+    var submissions = ViewBag.Submissions as List<LMS.Domain.Entities.Assessments.AssignmentSubmission>;
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="fs-12 fw-medium text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+        <ul class="breadcrumb">
+            <li class="breadcrumb-item"><a href="@Url.Action("Index", "Dashboard")">@Html.T("الرئيسية", "Home")</a></li>
+            <li class="breadcrumb-item"><a href="@Url.Action("Index")">@Html.T("التسليمات", "Submissions")</a></li>
+            <li class="breadcrumb-item active">@Html.T("التقييم الجماعي", "Bulk grade")</li>
+        </ul>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex align-items-center gap-2">
+            <a href="@Url.Action("Index")" class="btn btn-light">
+                <i class="feather-arrow-right me-2"></i>
+                @Html.T("العودة للقائمة", "Back to list")
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Assignment Info -->
+    <div class="card stretch stretch-full mb-4 bg-soft-primary">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl bg-primary text-white">
+                            <i class="feather-clipboard"></i>
+                        </div>
+                        <div>
+                            <h4 class="fw-bold mb-1">@assignment?.Title</h4>
+                            <p class="text-muted mb-0">
+                                <i class="feather-book me-2"></i>
+                                @assignment?.Lesson?.Module?.Course?.Title
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                    <div class="d-inline-block text-center px-4">
+                        <h3 class="fw-bold mb-1">@assignment?.MaxPoints</h3>
+                        <small class="text-muted">الدرجة القصوى</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "إجمالي التسليمات" },
+                { "Value", submissions?.Count ?? 0 },
+                { "Icon", "file-text" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "قيد الانتظار" },
+                { "Value", submissions?.Count(s => s.Status == LMS.Domain.Enums.AssignmentStatus.Submitted) ?? 0 },
+                { "Icon", "clock" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "مُقيّمة" },
+                { "Value", submissions?.Count(s => s.Status == LMS.Domain.Enums.AssignmentStatus.Graded) ?? 0 },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "معدل التقييم" },
+                { "Value", submissions?.Any() == true ? ((double)submissions.Count(s => s.Status == LMS.Domain.Enums.AssignmentStatus.Graded) / submissions.Count * 100).ToString("F0") + "%" : "0%" },
+                { "Icon", "trending-up" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    @if (submissions != null && submissions.Any())
+    {
+        <!-- Bulk Grading Form -->
+        <form id="bulkGradeForm" method="post">
+            @Html.AntiForgeryToken()
+            
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="card stretch stretch-full">
+                        <div class="card-header">
+                            <h5 class="card-title">@Html.T("جدول التقييم السريع", "Quick grading table")</h5>
+                            <div class="card-header-action">
+                                <button type="button" class="btn btn-sm btn-light" onclick="fillAllGrades()">
+                                    <i class="feather-edit me-2"></i>
+                                    ملء تلقائي
+                                </button>
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    <i class="feather-save me-2"></i>
+                                    حفظ جميع التقييمات
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="bg-light">
+                                        <tr>
+                                            <th style="width: 50px">#</th>
+                                            <th style="width: 250px">@Html.T("الطالب", "Student")</th>
+                                            <th>@Html.T("تاريخ التسليم", "Submitted")</th>
+                                            <th style="width: 150px">@Html.T("الدرجة", "Grade")</th>
+                                            <th style="width: 100px">@Html.T("النسبة", "Percentage")</th>
+                                            <th style="width: 150px">@Html.T("الحالة", "Status")</th>
+                                            <th style="width: 100px">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @{ var index = 1; }
+                                        @foreach (var submission in submissions.Where(s => s.Status == LMS.Domain.Enums.AssignmentStatus.Submitted).OrderBy(s => s.Enrollment.Student.FirstName))
+                                        {
+                                            var submissionIndex = index++;
+                                            
+                                            <tr id="row-@submission.Id" class="@(submission.IsLate ? "table-warning" : "")">
+                                                <td>
+                                                    <span class="fw-bold">@submissionIndex</span>
+                                                </td>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                            <i class="feather-user"></i>
+                                                        </div>
+                                                        <div>
+                                                            <span class="fw-medium d-block">@submission.Enrollment?.Student?.FullName</span>
+                                                            @if (submission.IsLate)
+                                                            {
+                                                                <small class="text-danger">
+                                                                    <i class="feather-alert-triangle"></i> متأخر
+                                                                </small>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <small>@submission.SubmittedAt.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                                </td>
+                                                <td>
+                                                    <div class="input-group input-group-sm">
+                                                        <input type="number" 
+                                                               name="grades[@submission.Id]" 
+                                                               class="form-control grade-input" 
+                                                               data-submission-id="@submission.Id"
+                                                               data-max="@assignment.MaxPoints"
+                                                               min="0" 
+                                                               max="@assignment.MaxPoints" 
+                                                               step="0.5"
+                                                               placeholder="0">
+                                                        <span class="input-group-text">/ @assignment.MaxPoints</span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-soft-secondary text-secondary" id="percent-@submission.Id">--%</span>
+                                                </td>
+                                                <td>
+                                                    <select name="statuses[@submission.Id]" class="form-select form-select-sm">
+                                                        <option value="@LMS.Domain.Enums.AssignmentStatus.Graded">مُقيّم</option>
+                                                        <option value="@LMS.Domain.Enums.AssignmentStatus.Resubmit">إعادة تسليم</option>
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    <div class="hstack gap-2">
+                                                        <a href="@Url.Action("Details", new { id = submission.Id })" 
+                                                           class="avatar-text avatar-sm" 
+                                                           data-bs-toggle="tooltip" 
+                                                           title="@Html.T("عرض التفاصيل", "View details")"
+                                                           target="_blank">
+                                                            <i class="feather-eye"></i>
+                                                        </a>
+                                                        <a href="@Url.Action("Grade", new { id = submission.Id })" 
+                                                           class="avatar-text avatar-sm" 
+                                                           data-bs-toggle="tooltip" 
+                                                           title="@Html.T("تقييم كامل", "Full grade")"
+                                                           target="_blank">
+                                                            <i class="feather-edit-3"></i>
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bulk Feedback -->
+            <div class="row mt-4">
+                <div class="col-lg-12">
+                    <div class="card stretch stretch-full">
+                        <div class="card-header">
+                            <h5 class="card-title">
+                                <i class="feather-message-square me-2"></i>
+                                ملاحظات عامة (اختياري)
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <textarea name="bulkFeedback" class="form-control" rows="4" 
+                                      placeholder="@Html.T("أضف ملاحظات عامة سيتم إضافتها لجميع التسليمات المُقيّمة...", "Add general notes to be added to all graded submissions...")"></textarea>
+                            <div class="form-text">
+                                <i class="feather-info me-1"></i>
+                                ستُضاف هذه الملاحظات لجميع الطلاب. يمكنك تخصيص ملاحظات فردية عبر التقييم الكامل.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="card stretch stretch-full">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between gap-3">
+                                <div>
+                                    <span class="text-muted">عدد التسليمات المختارة: </span>
+                                    <span class="fw-bold" id="selectedCount">0</span>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <a href="@Url.Action("Index")" class="btn btn-light">
+                                        <i class="feather-x me-2"></i>
+                                        @Html.T("إلغاء", "Cancel")
+                                    </a>
+                                    <button type="button" class="btn btn-secondary" onclick="previewGrades()">
+                                        <i class="feather-eye me-2"></i>
+                                        @Html.T("معاينة", "Preview")
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-lg">
+                                        <i class="feather-save me-2"></i>
+                                        @Html.T("حفظ جميع التقييمات", "Save all grades")
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    }
+    else
+    {
+        <div class="card stretch stretch-full">
+            <div class="card-body text-center py-5">
+                <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                    <i class="feather-inbox"></i>
+                </div>
+                <h5 class="fw-bold mb-2">@Html.T("لا توجد تسليمات قيد الانتظار", "No pending submissions")</h5>
+                <p class="text-muted mb-4">@Html.T("جميع التسليمات تم تقييمها أو لا توجد تسليمات جديدة", "All submissions have been graded or there are no new submissions")</p>
+                <a href="@Url.Action("Index")" class="btn btn-primary">
+                    <i class="feather-arrow-right me-2"></i>
+                    @Html.T("العودة للقائمة", "Back to list")
+                </a>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Html.T("معاينة التقييمات", "Preview grades")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="previewContent">
+                <!-- Preview content will be loaded here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إغلاق", "Close")</button>
+                <button type="button" class="btn btn-primary" onclick="submitForm()">@Html.T("حفظ", "Save")</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const maxPoints = @(assignment?.MaxPoints ?? 0);
+        const passingScore = @(assignment?.PassingScore ?? 60);
+        window.__bulkGradeI18n = {
+            noGradesToPreview: @Html.Raw(Json.Serialize(Html.T("لا توجد درجات للمعاينة", "No grades to preview").ToString())),
+            enterAtLeastOne: @Html.Raw(Json.Serialize(Html.T("يرجى إدخال درجة واحدة على الأقل", "Please enter at least one grade").ToString())),
+            confirmSave: @Html.Raw(Json.Serialize(Html.T("هل أنت متأكد من حفظ {0} تقييم؟", "Are you sure you want to save {0} grade(s)?").ToString())),
+            fillAllPrompt: @Html.Raw(Json.Serialize(Html.T("أدخل الدرجة التي تريد تطبيقها على جميع التسليمات:", "Enter the grade to apply to all submissions:").ToString())),
+            invalidGrade: @Html.Raw(Json.Serialize(Html.T("يرجى إدخال درجة صحيحة بين 0 و {0}", "Please enter a valid grade between 0 and {0}").ToString())),
+            thStudent: @Html.Raw(Json.Serialize(Html.T("الطالب", "Student").ToString())),
+            thGrade: @Html.Raw(Json.Serialize(Html.T("الدرجة", "Grade").ToString())),
+            thPercentage: @Html.Raw(Json.Serialize(Html.T("النسبة", "Percentage").ToString())),
+            thStatus: @Html.Raw(Json.Serialize(Html.T("الحالة", "Status").ToString())),
+            passLabel: @Html.Raw(Json.Serialize(Html.T("ناجح", "Pass").ToString())),
+            failLabel: @Html.Raw(Json.Serialize(Html.T("راسب", "Fail").ToString())),
+            totalLabel: @Html.Raw(Json.Serialize(Html.T("الإجمالي:", "Total:").ToString())),
+            gradeCount: @Html.Raw(Json.Serialize(Html.T("تقييم", "grade(s)").ToString()))
+        };
+
+        $(document).ready(function() {
+            // Grade input handler
+            $('.grade-input').on('input', function() {
+                updateGradeDisplay($(this));
+                updateSelectedCount();
+            });
+
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            // Form validation
+            $('#bulkGradeForm').on('submit', function(e) {
+                const filledGrades = $('.grade-input').filter(function() {
+                    return $(this).val() !== '';
+                }).length;
+
+                if (filledGrades === 0) {
+                    e.preventDefault();
+                    alert(window.__bulkGradeI18n.enterAtLeastOne);
+                    return false;
+                }
+
+                const msg = window.__bulkGradeI18n.confirmSave.replace('{0}', filledGrades);
+                return confirm(msg);
+            });
+        });
+
+        function updateGradeDisplay($input) {
+            const submissionId = $input.data('submission-id');
+            const grade = parseFloat($input.val()) || 0;
+            const percentage = (grade / maxPoints * 100).toFixed(1);
+            
+            const $percentBadge = $('#percent-' + submissionId);
+            $percentBadge.text(percentage + '%');
+            
+            // Update badge color based on passing score
+            if (grade > 0) {
+                if (percentage >= passingScore) {
+                    $percentBadge.removeClass('bg-soft-secondary text-secondary bg-soft-danger text-danger')
+                                 .addClass('bg-soft-success text-success');
+                } else {
+                    $percentBadge.removeClass('bg-soft-secondary text-secondary bg-soft-success text-success')
+                                 .addClass('bg-soft-danger text-danger');
+                }
+            } else {
+                $percentBadge.removeClass('bg-soft-success text-success bg-soft-danger text-danger')
+                             .addClass('bg-soft-secondary text-secondary');
+            }
+        }
+
+        function updateSelectedCount() {
+            const count = $('.grade-input').filter(function() {
+                return $(this).val() !== '';
+            }).length;
+            $('#selectedCount').text(count);
+        }
+
+        function fillAllGrades() {
+            const grade = prompt(window.__bulkGradeI18n.fillAllPrompt, maxPoints);
+            
+            if (grade !== null && grade !== '') {
+                const numGrade = parseFloat(grade);
+                if (isNaN(numGrade) || numGrade < 0 || numGrade > maxPoints) {
+                    alert(window.__bulkGradeI18n.invalidGrade.replace('{0}', maxPoints));
+                    return;
+                }
+                
+                $('.grade-input').each(function() {
+                    $(this).val(numGrade);
+                    updateGradeDisplay($(this));
+                });
+                
+                updateSelectedCount();
+            }
+        }
+
+        function previewGrades() {
+            const grades = [];
+            $('.grade-input').each(function() {
+                const $input = $(this);
+                const grade = $input.val();
+                if (grade !== '') {
+                    const submissionId = $input.data('submission-id');
+                    const $row = $('#row-' + submissionId);
+                    const studentName = $row.find('.fw-medium').text().trim();
+                    const percentage = (parseFloat(grade) / maxPoints * 100).toFixed(1);
+                    
+                    grades.push({
+                        student: studentName,
+                        grade: grade,
+                        maxPoints: maxPoints,
+                        percentage: percentage,
+                        isPassing: percentage >= passingScore
+                    });
+                }
+            });
+
+            if (grades.length === 0) {
+                alert(window.__bulkGradeI18n.noGradesToPreview);
+                return;
+            }
+
+            const i = window.__bulkGradeI18n;
+            let html = '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>' + i.thStudent + '</th><th>' + i.thGrade + '</th><th>' + i.thPercentage + '</th><th>' + i.thStatus + '</th></tr></thead><tbody>';
+            
+            grades.forEach(g => {
+                html += '<tr><td>' + g.student + '</td><td><strong>' + g.grade + ' / ' + g.maxPoints + '</strong></td><td><span class="badge bg-soft-' + (g.isPassing ? 'success' : 'danger') + ' text-' + (g.isPassing ? 'success' : 'danger') + '">' + g.percentage + '%</span></td><td><span class="badge bg-soft-' + (g.isPassing ? 'success' : 'danger') + ' text-' + (g.isPassing ? 'success' : 'danger') + '">' + (g.isPassing ? i.passLabel : i.failLabel) + '</span></td></tr>';
+            });
+            
+            html += '</tbody></table></div>';
+            html += '<div class="alert alert-info mt-3"><strong>' + i.totalLabel + '</strong> ' + grades.length + ' ' + i.gradeCount + '</div>';
+            
+            $('#previewContent').html(html);
+            new bootstrap.Modal(document.getElementById('previewModal')).show();
+        }
+
+        function submitForm() {
+            $('#bulkGradeForm').submit();
+        }
+    </script>
+}
+

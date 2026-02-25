@@ -1,0 +1,195 @@
+@model LMS.Domain.Entities.Social.Review
+@{
+    ViewData["Title"] = Html.T("الرد على التقييم", "Reply to review");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("التقييمات", "Reviews"), Url.Action("Index", "Reviews")),
+        (Html.T("تفاصيل التقييم", "Review details"), Url.Action("Details", "Reviews", new { id = Model?.Id ?? 0 })),
+        (Html.T("الرد", "Reply"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    
+    // Safe variable extraction
+    var studentFirstName = Model?.Student?.FirstName ?? "طالب";
+    var studentLastName = Model?.Student?.LastName ?? "";
+    var courseTitle = Model?.Course?.Title ?? "دورة";
+    var courseInstructorFirstName = Model?.Course?.Instructor?.FirstName ?? "";
+    var courseInstructorLastName = Model?.Course?.Instructor?.LastName ?? "";
+    var studentEmail = Model?.Student?.Email ?? "";
+    var courseAverageRating = Model?.Course?.AverageRating ?? 0;
+}
+
+@section Styles {
+    <style>
+        .reply-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .rating-stars {
+            color: #ffc107;
+        }
+        .original-review {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-right: 4px solid #667eea;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Reply Header -->
+    <div class="reply-header">
+        <div class="d-flex align-items-center gap-3">
+            <div class="avatar-text avatar-xl bg-white bg-opacity-25 text-white">
+                <i class="feather-message-circle fs-1"></i>
+            </div>
+            <div>
+                <h3 class="text-white mb-2">الرد على تقييم الطالب</h3>
+                <p class="text-white opacity-75 mb-0">@studentFirstName @studentLastName - @courseTitle</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Original Review -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-message-square me-2"></i>
+                        التقييم الأصلي
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between mb-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                @(studentFirstName.Length > 0 ? studentFirstName.Substring(0, 1) : "?")
+                            </div>
+                            <div>
+                                <h6 class="mb-0">@studentFirstName @studentLastName</h6>
+                                <small class="text-muted">@(Model?.CreatedAt.ToString("dd MMMM yyyy", new System.Globalization.CultureInfo("ar-SA")) ?? "")</small>
+                            </div>
+                        </div>
+                        <div class="rating-stars">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                if (i <= (Model?.Rating ?? 0))
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-star"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                }
+                                else
+                                {
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-star"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                                }
+                            }
+                        </div>
+                    </div>
+                    <div class="original-review">
+                        <p class="mb-0">@(Model?.Comment ?? "")</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reply Form -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-edit-3 me-2"></i>
+                        كتابة الرد
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(Model?.AdminReply))
+                    {
+                        <div class="alert alert-info mb-4">
+                            <div class="d-flex align-items-start gap-3">
+                                <i class="feather-info fs-4"></i>
+                                <div>
+                                    <h6 class="mb-2">رد سابق موجود</h6>
+                                    <p class="mb-1">@Model.AdminReply</p>
+                                    <small class="text-muted">تم الرد في: @Model.AdminReplyAt?.ToString("dd/MM/yyyy HH:mm")</small>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <form asp-action="Reply" asp-route-id="@(Model?.Id ?? 0)" method="post">
+                        @Html.AntiForgeryToken()
+                        <div class="form-group mb-4">
+                            <label class="form-label">@Html.T("محتوى الرد", "Reply content") <span class="text-danger">*</span></label>
+                            <textarea name="replyContent" class="form-control" rows="6" 
+                                      placeholder="@Html.T("اكتب ردك على تقييم الطالب هنا...", "Write your reply to the student review here...")" required>@(Model?.AdminReply ?? "")</textarea>
+                            <small class="text-muted">@Html.T("سيتم إرسال إشعار بالرد إلى الطالب عبر البريد الإلكتروني", "The student will be notified of the reply by email")</small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-send me-2"></i>
+                                @Html.T("إرسال الرد", "Send reply")
+                            </button>
+                            <a asp-action="Details" asp-route-id="@(Model?.Id ?? 0)" class="btn btn-light">
+                                <i class="feather-arrow-left me-2"></i>
+                                إلغاء
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Course Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-book me-2"></i>
+                        الدورة
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6 class="mb-3">@courseTitle</h6>
+                    <div class="vstack gap-2">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">المدرس:</span>
+                            <span class="fw-semibold">@courseInstructorFirstName @courseInstructorLastName</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">متوسط التقييم:</span>
+                            <span class="fw-semibold">@courseAverageRating.ToString("F1") / 5</span>
+                        </div>
+                        <a asp-controller="Courses" asp-action="Details" asp-route-id="@(Model?.CourseId ?? 0)" class="btn btn-light-brand btn-sm mt-2">
+                            <i class="feather-external-link me-2"></i>
+                            عرض الدورة
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Student Info -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-user me-2"></i>
+                        الطالب
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="avatar-text avatar-xl bg-soft-primary text-primary mx-auto mb-3">
+                        @(studentFirstName.Length > 0 ? studentFirstName.Substring(0, 1) : "")@(studentLastName.Length > 0 ? studentLastName.Substring(0, 1) : "")
+                    </div>
+                    <h6 class="mb-1">@studentFirstName @studentLastName</h6>
+                    <p class="text-muted fs-12 mb-0">@studentEmail</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+

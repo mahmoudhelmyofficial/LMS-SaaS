@@ -1,0 +1,342 @@
+@model IEnumerable<LMS.Domain.Entities.Financial.WithdrawalRequest>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("طلبات السحب", "Withdrawal Requests");
+    ViewData["Subtitle"] = Html.T("إدارة طلبات سحب الأرباح", "Manage withdrawal requests");
+    
+    // Load platform settings
+    var minimumWithdrawal = await PlatformSettings.GetIntSettingAsync("Withdrawal.MinimumAmount", 100);
+}
+
+@{
+    var createUrl = Url.Action("Create");
+    var actionButtonsHtml = "<a href='" + createUrl + "' class='btn btn-primary'>" +
+        "<i class='feather-plus me-2'></i>" +
+        "طلب سحب جديد" +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Balance Card -->
+    <div class="card mb-4 bg-gradient-primary text-white">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h4 class="text-white mb-2">@Html.T("الرصيد المتاح", "Available balance")</h4>
+                    <div class="fs-32 fw-bold">@((ViewBag.AvailableBalance ?? 0).ToString("N2")) @Html.T("جنيه", "EGP")</div>
+                    <p class="mb-0 opacity-75">@Html.T("الحد الأدنى للسحب:", "Minimum withdrawal:") @((ViewBag.MinimumWithdrawal ?? minimumWithdrawal).ToString("N0")) @Html.T("جنيه", "EGP")</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="@Url.Action("Create")" class="btn btn-light">
+                        <i class="feather-download me-2"></i>
+                        @Html.T("طلب سحب", "Request withdrawal")
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الطلبات", "Total requests") },
+                { "Value", Model.Count() },
+                { "Icon", "file-text" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("قيد المراجعة", "Pending") },
+                { "Value", Model.Count(w => w.Status == LMS.Domain.Enums.WithdrawalStatus.Pending) },
+                { "Icon", "clock" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("مكتملة", "Completed") },
+                { "Value", Model.Count(w => w.Status == LMS.Domain.Enums.WithdrawalStatus.Completed) },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي المسحوب", "Total withdrawn") },
+                { "Value", Model.Where(w => w.Status == LMS.Domain.Enums.WithdrawalStatus.Completed).Sum(w => w.NetAmount).ToString("N0") + " " + Html.T("جنيه", "EGP") },
+                { "Icon", "dollar-sign" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">@Html.T("الحالة", "Status")</label>
+                            <select name="status" class="form-select" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الحالات", "All statuses")</option>
+                                <option value="Pending" selected="@(ViewBag.Status?.ToString() == "Pending")">@Html.T("قيد المراجعة", "Pending")</option>
+                                <option value="Approved" selected="@(ViewBag.Status?.ToString() == "Approved")">@Html.T("موافق عليها", "Approved")</option>
+                                <option value="Processing" selected="@(ViewBag.Status?.ToString() == "Processing")">@Html.T("قيد المعالجة", "Processing")</option>
+                                <option value="Completed" selected="@(ViewBag.Status?.ToString() == "Completed")">@Html.T("مكتملة", "Completed")</option>
+                                <option value="Rejected" selected="@(ViewBag.Status?.ToString() == "Rejected")">@Html.T("مرفوضة", "Rejected")</option>
+                                <option value="Cancelled" selected="@(ViewBag.Status?.ToString() == "Cancelled")">@Html.T("ملغاة", "Cancelled")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="feather-filter me-2"></i>
+                                @Html.T("تصفية", "Filter")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Requests List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card stretch stretch-full border-0" style="border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);">
+                <div class="card-header d-flex align-items-center justify-content-between" style="border-bottom: 1px solid var(--border-color-light, #f1f5f9); padding: 1rem 1.5rem;">
+                    <h5 class="card-title mb-0 fw-bold">@Html.T("طلبات السحب", "Withdrawal requests")</h5>
+                    <div class="view-toggle btn-group" role="group" style="border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                        <button type="button" class="btn btn-sm" id="tableViewBtn" onclick="switchWithdrawalRequestsView('table')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0);"><i class="feather-list" style="font-size: 15px;"></i></button>
+                        <button type="button" class="btn btn-sm active" id="cardViewBtn" onclick="switchWithdrawalRequestsView('card')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); border-right: none;"><i class="feather-grid" style="font-size: 15px;"></i></button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <!-- Table View Panel -->
+                        <div id="tableView" class="courses-view-panel d-none">
+                            <div class="d-md-none p-3">
+                                @foreach (var request in Model)
+                                {
+                                    var statusClass = request.Status == LMS.Domain.Enums.WithdrawalStatus.Pending ? "warning" : request.Status == LMS.Domain.Enums.WithdrawalStatus.Completed ? "success" : request.Status == LMS.Domain.Enums.WithdrawalStatus.Rejected ? "danger" : "secondary";
+                                    <div class="card mb-3 border">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <strong>#@request.Id</strong>
+                                                <span class="badge bg-@statusClass">@request.Status</span>
+                                            </div>
+                                            <p class="mb-1">@request.CreatedAt.ToString("dd/MM/yyyy")</p>
+                                            <p class="mb-1"><strong>@request.Amount.ToString("N2") @request.Currency</strong> · @Html.T("الصافي", "Net") @request.NetAmount.ToString("N2")</p>
+                                            <div class="d-flex gap-2 mt-2">
+                                                <a href="@Url.Action("Details", new { id = request.Id })" class="btn btn-sm btn-primary"><i class="feather-eye"></i></a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="d-none d-md-block">
+                                <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                    <table class="table table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>@Html.T("رقم الطلب", "Request #")</th>
+                                                <th>@Html.T("التاريخ", "Date")</th>
+                                                <th>@Html.T("المبلغ", "Amount")</th>
+                                                <th>@Html.T("الرسوم", "Fees")</th>
+                                                <th>@Html.T("الصافي", "Net")</th>
+                                                <th>@Html.T("طريقة السحب", "Withdrawal method")</th>
+                                                <th>@Html.T("الحالة", "Status")</th>
+                                                <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var request in Model)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <span class="fw-bold">#@request.Id</span>
+                                            </td>
+                                            <td>@request.CreatedAt.ToString("dd/MM/yyyy")</td>
+                                            <td>
+                                                <span class="fw-medium">@request.Amount.ToString("N2") @request.Currency</span>
+                                            </td>
+                                            <td>
+                                                <span class="text-danger">@request.Fee.ToString("N2")</span>
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold text-success">@request.NetAmount.ToString("N2") @request.Currency</span>
+                                            </td>
+                                            <td>
+                                                @if (request.WithdrawalMethod != null)
+                                                {
+                                                    <span class="badge bg-soft-info text-info">@request.WithdrawalMethod.Name</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (request.Status)
+                                                {
+                                                    case LMS.Domain.Enums.WithdrawalStatus.Pending:
+                                                        <span class="badge bg-soft-warning text-warning">
+                                                            <i class="feather-clock me-1"></i>قيد المراجعة
+                                                        </span>
+                                                        break;
+                                                    case LMS.Domain.Enums.WithdrawalStatus.Approved:
+                                                        <span class="badge bg-soft-info text-info">
+                                                            <i class="feather-check me-1"></i>موافق عليها
+                                                        </span>
+                                                        break;
+                                                    case LMS.Domain.Enums.WithdrawalStatus.Processing:
+                                                        <span class="badge bg-soft-primary text-primary">
+                                                            <i class="feather-loader me-1"></i>قيد المعالجة
+                                                        </span>
+                                                        break;
+                                                    case LMS.Domain.Enums.WithdrawalStatus.Completed:
+                                                        <span class="badge bg-soft-success text-success">
+                                                            <i class="feather-check-circle me-1"></i>مكتملة
+                                                        </span>
+                                                        break;
+                                                    case LMS.Domain.Enums.WithdrawalStatus.Rejected:
+                                                        <span class="badge bg-soft-danger text-danger">
+                                                            <i class="feather-x-circle me-1"></i>مرفوضة
+                                                        </span>
+                                                        break;
+                                                    case LMS.Domain.Enums.WithdrawalStatus.Cancelled:
+                                                        <span class="badge bg-soft-secondary text-secondary">
+                                                            <i class="feather-slash me-1"></i>ملغاة
+                                                        </span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { id = request.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    @if (request.Status == LMS.Domain.Enums.WithdrawalStatus.Approved)
+                                                    {
+                                                        <form method="post" asp-action="ConfirmReceived" asp-route-id="@request.Id" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل استلمت المبلغ فعلاً؟", "Have you received the amount?").Replace("'", "\\'"))')">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="btn btn-sm btn-soft-success" data-bs-toggle="tooltip" title="@Html.T("تأكيد الاستلام", "Confirm receipt")">
+                                                                <i class="feather-check-circle me-1"></i>@Html.T("تأكيد الاستلام", "Confirm receipt")
+                                                            </button>
+                                                        </form>
+                                                    }
+                                                    @if (request.Status == LMS.Domain.Enums.WithdrawalStatus.Pending)
+                                                    {
+                                                        <form method="post" asp-action="Cancel" asp-route-id="@request.Id" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إلغاء هذا الطلب?", "Are you sure you want to cancel this request?").Replace("'", "\\'"))')">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="avatar-text avatar-md text-danger" data-bs-toggle="tooltip" title="@Html.T("إلغاء", "Cancel")">
+                                                                <i class="feather-x"></i>
+                                                            </button>
+                                                        </form>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                            </div>
+                        </div>
+
+                        <!-- Card View Panel -->
+                        <div id="cardView" class="courses-view-panel courses-view-active">
+                            <div class="p-4">
+                                <div class="row g-4">
+                                    @foreach (var request in Model)
+                                    {
+                                        var statusClass = request.Status == LMS.Domain.Enums.WithdrawalStatus.Pending ? "warning" : request.Status == LMS.Domain.Enums.WithdrawalStatus.Completed ? "success" : request.Status == LMS.Domain.Enums.WithdrawalStatus.Rejected ? "danger" : "secondary";
+                                        <div class="col-12 col-sm-6 col-xl-4 col-xxl-3">
+                                            <div class="card border h-100" style="border-radius: 12px;">
+                                                <div class="card-body">
+                                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                                        <strong>#@request.Id</strong>
+                                                        <span class="badge bg-@statusClass">@request.Status</span>
+                                                    </div>
+                                                    <p class="fs-12 text-muted mb-1">@request.CreatedAt.ToString("dd/MM/yyyy")</p>
+                                                    <p class="mb-2"><strong class="text-success">@request.NetAmount.ToString("N2") @request.Currency</strong></p>
+                                                    @if (request.WithdrawalMethod != null)
+                                                    { <span class="badge bg-soft-info text-info fs-10">@request.WithdrawalMethod.Name</span> }
+                                                    <div class="mt-2">
+                                                        <a href="@Url.Action("Details", new { id = request.Id })" class="btn btn-sm btn-primary w-100"><i class="feather-eye me-1"></i>@Html.T("التفاصيل", "Details")</a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-download"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد طلبات سحب", "No withdrawal requests yet")</h5>
+                            <p class="text-muted mb-4">@Html.T("لم تقم بأي طلبات سحب حتى الآن", "You have not made any withdrawal requests yet")</p>
+                            <a href="@Url.Action("Create")" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("طلب سحب جديد", "New withdrawal request")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+    <style>
+        .bg-gradient-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+}
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            var savedView = localStorage.getItem('instructor_withdrawalrequests_view');
+            if (savedView === 'table') { switchWithdrawalRequestsView('table'); } else { switchWithdrawalRequestsView('card'); }
+        });
+        function switchWithdrawalRequestsView(mode) {
+            var tableView = document.getElementById('tableView');
+            var cardView = document.getElementById('cardView');
+            var tableBtn = document.getElementById('tableViewBtn');
+            var cardBtn = document.getElementById('cardViewBtn');
+            if (mode === 'card') {
+                tableView.classList.add('d-none'); tableView.classList.remove('courses-view-active');
+                cardView.classList.remove('d-none'); cardView.classList.add('courses-view-active');
+                cardBtn.classList.add('active'); tableBtn.classList.remove('active');
+            } else {
+                cardView.classList.add('d-none'); cardView.classList.remove('courses-view-active');
+                tableView.classList.remove('d-none'); tableView.classList.add('courses-view-active');
+                tableBtn.classList.add('active'); cardBtn.classList.remove('active');
+            }
+            localStorage.setItem('instructor_withdrawalrequests_view', mode);
+        }
+    </script>
+}
+

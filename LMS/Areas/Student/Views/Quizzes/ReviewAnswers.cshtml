@@ -1,0 +1,274 @@
+@using LMS.Areas.Student.Controllers
+@model ReviewAnswersViewModel
+@{
+    ViewData["Title"] = Html.T("مراجعة الإجابات", "Review Answers");
+    var quiz = Model?.Attempt?.Quiz;
+    var reviewItems = Model?.ReviewItems ?? new List<ReviewAnswerItem>();
+    var totalQuestions = reviewItems.Count;
+    var correctCount = reviewItems.Count(r => r.IsCorrect);
+    var incorrectCount = totalQuestions - correctCount;
+    
+    // Calculate time spent
+    var timeSpent = Model?.Attempt?.CompletedAt != null && Model?.Attempt?.StartedAt != null 
+        ? (Model.Attempt.CompletedAt.Value - Model.Attempt.StartedAt) 
+        : TimeSpan.Zero;
+}
+
+@section Styles {
+<style>
+    .answer-card {
+        border-right: 4px solid transparent;
+    }
+    .answer-card.correct {
+        border-right-color: #22c55e;
+        background: #f0fdf4;
+    }
+    .answer-card.incorrect {
+        border-right-color: #ef4444;
+        background: #fef2f2;
+    }
+    .option-item {
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        background: white;
+    }
+    .option-item.correct {
+        background: #dcfce7;
+        border: 2px solid #22c55e;
+    }
+    .option-item.incorrect {
+        background: #fee2e2;
+        border: 2px solid #ef4444;
+    }
+    .option-item.your-answer {
+        background: #dbeafe;
+        border: 2px solid #3b82f6;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+@if (Model?.Attempt != null && quiz != null)
+{
+    <!-- Results Summary -->
+    <div class="card stretch stretch-full mb-4" style="background: linear-gradient(135deg, @(Model.Attempt.IsPassed ? "#22c55e" : "#f59e0b") 0%, @(Model.Attempt.IsPassed ? "#16a34a" : "#d97706") 100%); color: white;">
+        <div class="card-body py-4">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h3 class="text-white fw-bold mb-2">@quiz.Title</h3>
+                    <p class="text-white opacity-75 mb-0">@Html.T("مراجعة إجاباتك", "Review your answers")</p>
+                </div>
+                <div class="col-md-4 text-center">
+                    <h1 class="text-white fw-bold mb-0" style="font-size: 48px;">@Model.Attempt.PercentageScore.ToString("F0")%</h1>
+                    <p class="text-white opacity-75 mb-0">@correctCount @Html.T("من", "of") @totalQuestions @Html.T("صحيحة", "correct")</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-text avatar-lg bg-soft-success text-success me-3">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <h4 class="fw-bold mb-0">@correctCount</h4>
+                            <small class="text-muted">@Html.T("إجابات صحيحة", "Correct answers")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-text avatar-lg bg-soft-danger text-danger me-3">
+                            <i class="feather-x-circle"></i>
+                        </div>
+                        <div>
+                            <h4 class="fw-bold mb-0">@incorrectCount</h4>
+                            <small class="text-muted">@Html.T("إجابات خاطئة", "Incorrect answers")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-text avatar-lg bg-soft-warning text-warning me-3">
+                            <i class="feather-clock"></i>
+                        </div>
+                        <div>
+                            <h4 class="fw-bold mb-0">@timeSpent.ToString("mm\\:ss")</h4>
+                            <small class="text-muted">@Html.T("الوقت المستغرق", "Time spent")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stretch stretch-full">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-text avatar-lg bg-soft-primary text-primary me-3">
+                            <i class="feather-award"></i>
+                        </div>
+                        <div>
+                            <h4 class="fw-bold mb-0">@Model.Attempt.Score</h4>
+                            <small class="text-muted">@Html.T("من", "of") @Model.Attempt.MaxScore</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Questions Review -->
+    @for (int questionNumber = 0; questionNumber < reviewItems.Count; questionNumber++)
+    {
+        var item = reviewItems[questionNumber];
+        var questionNum = questionNumber + 1;
+        var question = item.Question;
+        if (question == null) continue;
+        
+        <div class="card answer-card @(item.IsCorrect ? "correct" : "incorrect") stretch stretch-full mb-4">
+            <div class="card-header">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div class="flex-grow-1">
+                        <h5 class="fw-bold mb-2">
+                            <span class="badge bg-soft-secondary text-secondary me-2">@Html.T("سؤال", "Question") @questionNum</span>
+                            @if (item.IsCorrect)
+                            {
+                                <span class="badge bg-success">
+                                    <i class="feather-check-circle me-1"></i>
+                                    @Html.T("صحيح", "Correct")
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger">
+                                    <i class="feather-x-circle me-1"></i>
+                                    @Html.T("خطأ", "Wrong")
+                                </span>
+                            }
+                        </h5>
+                    </div>
+                    <span class="badge bg-soft-primary text-primary">@question.Points @Html.T("نقطة", "pt")</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Question Text -->
+                <p class="fs-5 fw-semibold mb-4">@question.QuestionText</p>
+
+                <!-- Options (for multiple choice) -->
+                @if (question.Options != null && question.Options.Any())
+                {
+                    <div class="options-container mb-4">
+                        @foreach (var option in question.Options)
+                        {
+                            var isUserAnswer = item.SelectedOption?.Id == option.Id;
+                            var isCorrectOption = option.IsCorrect;
+                            
+                            var optionClass = "";
+                            if (isCorrectOption) optionClass += " correct";
+                            if (isUserAnswer && !isCorrectOption) optionClass += " incorrect";
+                            if (isUserAnswer) optionClass += " your-answer";
+                            
+                            <div class="option-item @optionClass">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center flex-grow-1">
+                                        @if (isCorrectOption)
+                                        {
+                                            <i class="feather-check-circle text-success fs-5 me-3"></i>
+                                        }
+                                        else if (isUserAnswer && !isCorrectOption)
+                                        {
+                                            <i class="feather-x-circle text-danger fs-5 me-3"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="feather-circle text-muted fs-5 me-3"></i>
+                                        }
+                                        <span class="@(isCorrectOption ? "fw-bold text-success" : isUserAnswer ? "fw-bold text-danger" : "")">
+                                            @option.OptionText
+                                        </span>
+                                    </div>
+                                    @if (isUserAnswer)
+                                    {
+                                        <span class="badge bg-primary me-2">@Html.T("إجابتك", "Your answer")</span>
+                                    }
+                                    @if (isCorrectOption)
+                                    {
+                                        <span class="badge bg-success">@Html.T("الإجابة الصحيحة", "Correct answer")</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Explanation -->
+                @if (!string.IsNullOrEmpty(question.Explanation))
+                {
+                    <div class="alert alert-light border">
+                        <h6 class="fw-bold mb-2">
+                            <i class="feather-info text-primary me-2"></i>
+                            @Html.T("الشرح:", "Explanation:")
+                        </h6>
+                        <p class="mb-0">@question.Explanation</p>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Actions -->
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            <div class="d-flex gap-3">
+                @if (!Model.Attempt.IsPassed)
+                {
+                    <a asp-action="Start" asp-route-quizId="@quiz.Id" class="btn btn-warning flex-grow-1">
+                        <i class="feather-repeat me-2"></i>
+                        @Html.T("إعادة المحاولة", "Retry")
+                    </a>
+                }
+                <a asp-action="Index" class="btn btn-primary flex-grow-1">
+                    <i class="feather-list me-2"></i>
+                    @Html.T("العودة للاختبارات", "Back to quizzes")
+                </a>
+                <button class="btn btn-outline-secondary" onclick="window.print()">
+                    <i class="feather-printer me-2"></i>
+                    @Html.T("طباعة", "Print")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card stretch stretch-full">
+        <div class="card-body text-center py-5">
+            <div class="avatar-text avatar-xxl bg-soft-warning text-warning mx-auto mb-4">
+                <i class="feather-alert-triangle fs-1"></i>
+            </div>
+            <h4 class="fw-bold mb-3">@Html.T("لم يتم العثور على البيانات", "Data not found")</h4>
+            <p class="text-muted mb-4">@Html.T("لا يمكن عرض مراجعة الإجابات لهذه المحاولة", "Cannot display answer review for this attempt")</p>
+            <a asp-action="Index" class="btn btn-primary">
+                <i class="feather-arrow-right me-2"></i>
+                @Html.T("العودة للاختبارات", "Back to quizzes")
+            </a>
+        </div>
+    </div>
+}
+

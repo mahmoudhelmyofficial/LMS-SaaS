@@ -1,0 +1,428 @@
+@model List<LMS.Services.Interfaces.StudyPlanItem>
+@{
+    ViewData["Title"] = Html.T("خطة الدراسة الذكية", "Smart Study Plan");
+}
+
+<style>
+    .study-plan-card {
+        background: white;
+        border-radius: 16px;
+        padding: 28px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        margin-bottom: 24px;
+        transition: all 0.3s ease;
+    }
+    
+    .study-plan-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+    }
+    
+    .priority-indicator {
+        width: 8px;
+        height: 100%;
+        position: absolute;
+        right: 0;
+        top: 0;
+        border-radius: 16px 0 0 16px;
+    }
+    
+    .priority-1 { background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%); }
+    .priority-2 { background: linear-gradient(180deg, #f97316 0%, #ea580c 100%); }
+    .priority-3 { background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%); }
+    .priority-4 { background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%); }
+    
+    .course-progress-ring {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        margin: 0 auto;
+    }
+    
+    .progress-ring-value {
+        position: absolute;
+        font-size: 24px;
+        font-weight: 700;
+        color: #667eea;
+    }
+    
+    .risk-badge {
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    
+    .risk-low { background: #dcfce7; color: #16a34a; }
+    .risk-medium { background: #fef3c7; color: #d97706; }
+    .risk-high { background: #fee2e2; color: #dc2626; }
+    
+    .daily-goal {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
+    }
+    
+    .calendar-day {
+        padding: 12px;
+        border-radius: 8px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    
+    .calendar-day:hover {
+        background: #f3f4f6;
+        transform: scale(1.05);
+    }
+    
+    .calendar-day.has-plan {
+        background: #dbeafe;
+        border-color: #3b82f6;
+    }
+    
+    .calendar-day.completed {
+        background: #dcfce7;
+        border-color: #22c55e;
+    }
+    
+    .study-session {
+        padding: 16px;
+        background: #f9fafb;
+        border-radius: 10px;
+        border-right: 4px solid #667eea;
+        margin-bottom: 12px;
+    }
+    
+    .engagement-meter {
+        height: 12px;
+        background: #e5e7eb;
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+    }
+    
+    .engagement-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        transition: width 0.5s ease;
+    }
+</style>
+
+<!-- Hero Section -->
+<div class="study-plan-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <h2 class="mb-3">
+                <i class="feather-calendar me-2"></i>
+                @Html.T("خطة الدراسة الذكية المخصصة", "Your personalized smart study plan")
+            </h2>
+            <p class="mb-4 opacity-90" style="font-size: 16px;">
+                @Html.T("خطة مُصممة خصيصاً لك بناءً على أدائك، وقتك المتاح، وأهدافك التعليمية", "A plan designed for you based on your performance, available time, and learning goals")
+            </p>
+            <div class="d-flex gap-3 flex-wrap">
+                <button class="btn btn-light" onclick="generateNewPlan()">
+                    <i class="feather-refresh-cw me-2"></i>
+                    @Html.T("إعادة توليد الخطة", "Regenerate plan")
+                </button>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-light dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="feather-download me-2"></i>@Html.T("تصدير الخطة", "Export plan")
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="/api/export/study-plan?format=csv">@Html.T("CSV", "CSV")</a></li>
+                        <li><a class="dropdown-item" href="/api/export/study-plan?format=excel">@Html.T("Excel", "Excel")</a></li>
+                        <li><a class="dropdown-item" href="/api/export/study-plan?format=pdf">@Html.T("PDF", "PDF")</a></li>
+                    </ul>
+                </div>
+                <button class="btn btn-outline-light" onclick="sharePlan()">
+                    <i class="feather-share-2 me-2"></i>
+                    @Html.T("مشاركة", "Share")
+                </button>
+            </div>
+        </div>
+        <div class="col-lg-4 text-center">
+            <div style="font-size: 120px; line-height: 1;">📅</div>
+        </div>
+    </div>
+</div>
+
+<!-- Weekly Overview -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="daily-goal">
+            <i class="feather-target mb-3" style="font-size: 36px;"></i>
+            <h3 class="mb-1">@Model.Sum(s => s.RecommendedDailyMinutes) @Html.T("دقيقة", "min")</h3>
+            <p class="mb-0 opacity-75">@Html.T("إجمالي الوقت المقترح يومياً", "Total suggested time daily")</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="study-plan-card text-center">
+            <i class="feather-book-open text-primary mb-2" style="font-size: 32px;"></i>
+            <h3 class="mb-1 text-primary">@Model.Count</h3>
+            <p class="text-muted small mb-0">@Html.T("دورة نشطة", "Active courses")</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="study-plan-card text-center">
+            <i class="feather-alert-triangle text-warning mb-2" style="font-size: 32px;"></i>
+            <h3 class="mb-1 text-warning">@Model.Count(s => s.Priority <= 2)</h3>
+            <p class="text-muted small mb-0">@Html.T("دورة تحتاج اهتمام", "Courses needing attention")</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="study-plan-card text-center">
+            <i class="feather-trending-up text-success mb-2" style="font-size: 32px;"></i>
+            <h3 class="mb-1 text-success">@Math.Round(Model.Average(s => s.ProgressPercentage), 0)%</h3>
+            <p class="text-muted small mb-0">@Html.T("متوسط التقدم", "Average progress")</p>
+        </div>
+    </div>
+</div>
+
+<!-- Priority Courses -->
+<div class="mb-4">
+    <h4 class="mb-3">
+        <i class="feather-star text-warning me-2"></i>
+        @Html.T("خطة الدراسة حسب الأولوية", "Study plan by priority")
+    </h4>
+    <p class="text-muted">@Html.T("الدورات مرتبة حسب الحاجة للاهتمام والمواعيد النهائية", "Courses ordered by need for attention and deadlines")</p>
+</div>
+
+@foreach (var course in Model.OrderBy(c => c.Priority))
+{
+    var riskClass = course.RiskLevel == "High" ? "risk-high" : 
+                   course.RiskLevel == "Medium" ? "risk-medium" : "risk-low";
+    var progressColor = course.ProgressPercentage >= 70 ? "#22c55e" : 
+                       course.ProgressPercentage >= 40 ? "#fbbf24" : "#ef4444";
+    
+    <div class="study-plan-card" style="position: relative; padding-right: 36px;">
+        <div class="priority-indicator priority-@course.Priority"></div>
+        
+        <div class="row align-items-center">
+            <div class="col-lg-2 text-center">
+                <div class="course-progress-ring" style="background: conic-gradient(@progressColor 0deg, @progressColor calc(@course.ProgressPercentage * 3.6deg), #f3f4f6 calc(@course.ProgressPercentage * 3.6deg));">
+                    <div style="position: absolute; width: 100px; height: 100px; background: white; border-radius: 50%;"></div>
+                    <div class="progress-ring-value">@Math.Round(course.ProgressPercentage, 0)%</div>
+                </div>
+            </div>
+            
+            <div class="col-lg-7">
+                <div class="d-flex align-items-start mb-2">
+                    <div class="flex-grow-1">
+                        <h5 class="mb-2">@course.CourseName</h5>
+                        <div class="d-flex gap-2 flex-wrap mb-3">
+                            <span class="risk-badge @riskClass">
+                                @(course.RiskLevel == "High" ? "⚠️ أولوية عالية" : 
+                                  course.RiskLevel == "Medium" ? "⏱️ أولوية متوسطة" : "✓ على المسار")
+                            </span>
+                            @if (course.EstimatedCompletionDate.HasValue)
+                            {
+                                <span class="badge bg-info">
+                                    <i class="feather-calendar me-1"></i>
+                                    إنجاز متوقع: @course.EstimatedCompletionDate.Value.ToString("dd MMM")
+                                </span>
+                            }
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="text-muted">@Html.T("مؤشر التفاعل", "Engagement indicator")</small>
+                        <strong style="color: @progressColor;">@Math.Round(course.EngagementScore * 100, 0)%</strong>
+                    </div>
+                    <div class="engagement-meter">
+                        <div class="engagement-fill" style="width: @(course.EngagementScore * 100)%"></div>
+                    </div>
+                </div>
+                
+                <div class="row g-2">
+                    <div class="col-6">
+                        <div class="d-flex align-items-center">
+                            <i class="feather-clock text-primary me-2"></i>
+                            <small class="text-muted">@Html.T("وقت موصى به:", "Recommended time:") <strong>@course.RecommendedDailyMinutes @Html.T("دقيقة/يوم", "min/day")</strong></small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="d-flex align-items-center">
+                            <i class="feather-activity text-success me-2"></i>
+                            <small class="text-muted">@Html.T("احتمال الإكمال:", "Completion probability:") <strong>@Math.Round(course.CompletionProbability * 100, 0)%</strong></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 text-end">
+                <div class="d-grid gap-2">
+                    <a href="@Url.Action("Details", "Courses", new { id = course.EnrollmentId })" class="btn btn-primary">
+                        <i class="feather-play me-2"></i>
+                        @Html.T("متابعة الدراسة", "Continue studying")
+                    </a>
+                    <a href="@Url.Action("CourseAnalytics", "AdaptiveLearning", new { enrollmentId = course.EnrollmentId })" class="btn btn-outline-primary">
+                        <i class="feather-bar-chart-2 me-2"></i>
+                        @Html.T("التحليلات", "Analytics")
+                    </a>
+                    <button class="btn btn-outline-secondary" onclick="scheduleStudyTime(@course.EnrollmentId)">
+                        <i class="feather-calendar me-2"></i>
+                        @Html.T("جدولة وقت", "Schedule time")
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Study Sessions -->
+        <div class="mt-3">
+            <h6 class="mb-2">
+                <i class="feather-clock me-2"></i>
+                @Html.T("جلسات الدراسة المقترحة هذا الأسبوع:", "Suggested study sessions this week:")
+            </h6>
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <div class="study-session">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong>@Html.T("الأحد", "Sunday")</strong>
+                            <span class="badge bg-primary">16:00 - 17:00</span>
+                        </div>
+                        <small class="text-muted">60 @Html.T("دقيقة - مراجعة ودراسة", "min - Review and study")</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="study-session">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong>@Html.T("الثلاثاء", "Tuesday")</strong>
+                            <span class="badge bg-primary">18:00 - 18:45</span>
+                        </div>
+                        <small class="text-muted">45 @Html.T("دقيقة", "min") - @Html.T("تطبيق عملي", "Hands-on practice")</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="study-session">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong>@Html.T("الخميس", "Thursday")</strong>
+                            <span class="badge bg-primary">20:00 - 20:30</span>
+                        </div>
+                        <small class="text-muted">30 @Html.T("دقيقة - مراجعة سريعة", "min - Quick review")</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Study Calendar -->
+<div class="row g-4 mt-4">
+    <div class="col-12">
+        <div class="study-plan-card">
+            <h4 class="mb-4">
+                <i class="feather-calendar text-primary me-2"></i>
+                @Html.T("تقويم الدراسة الأسبوعي", "Weekly study calendar")
+            </h4>
+            <div class="row g-2 mb-3">
+                @{
+                    var dayAr = new[] { "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت" };
+                }
+                @foreach (var day in dayAr)
+                {
+                    var hasClass = day == "الأحد" || day == "الثلاثاء" || day == "الخميس" ? "has-plan" : "";
+                    <div class="col">
+                        <div class="calendar-day @hasClass">
+                            <div class="fw-bold mb-2">@(day == "الأحد" ? Html.T("الأحد", "Sunday") : day == "الإثنين" ? Html.T("الإثنين", "Monday") : day == "الثلاثاء" ? Html.T("الثلاثاء", "Tuesday") : day == "الأربعاء" ? Html.T("الأربعاء", "Wednesday") : day == "الخميس" ? Html.T("الخميس", "Thursday") : day == "الجمعة" ? Html.T("الجمعة", "Friday") : Html.T("السبت", "Saturday"))</div>
+                            <div class="small text-muted">
+                                @if (hasClass == "has-plan")
+                                {
+                                    <span class="badge bg-primary">@Html.T("2 جلسات", "2 sessions")</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">@Html.T("راحة", "Rest")</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="alert alert-info" style="border-radius: 12px;">
+                <i class="feather-lightbulb me-2"></i>
+                <strong>@Html.T("نصيحة:", "Tip:")</strong> @Html.T("الأيام الملونة بالأزرق لديها جلسات دراسية مجدولة. انقر على أي يوم لإضافة جلسة جديدة.", "Blue-highlighted days have scheduled study sessions. Click any day to add a new session.")
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Smart Recommendations -->
+<div class="row g-4 mt-4">
+    <div class="col-lg-4">
+        <div class="study-plan-card text-center">
+            <i class="feather-zap text-warning mb-3" style="font-size: 48px;"></i>
+            <h5 class="mb-2">@Html.T("زيادة التركيز", "Increase focus")</h5>
+            <p class="text-muted small mb-3">@Html.T("تقنية البومودورو: 25 دقيقة دراسة + 5 دقائق راحة", "Pomodoro technique: 25 min study + 5 min break")</p>
+            <button class="btn btn-warning btn-sm">
+                <i class="feather-play me-2"></i>
+                ابدأ الآن
+            </button>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="study-plan-card text-center">
+            <i class="feather-bell text-primary mb-3" style="font-size: 48px;"></i>
+            <h5 class="mb-2">@Html.T("تفعيل التذكيرات", "Enable reminders")</h5>
+            <p class="text-muted small mb-3">@Html.T("احصل على إشعارات لأوقات الدراسة المجدولة", "Get notifications for scheduled study times")</p>
+            <button class="btn btn-primary btn-sm">
+                <i class="feather-settings me-2"></i>
+                إعداد التذكيرات
+            </button>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="study-plan-card text-center">
+            <i class="feather-users text-success mb-3" style="font-size: 48px;"></i>
+            <h5 class="mb-2">@Html.T("دراسة جماعية", "Group study")</h5>
+            <p class="text-muted small mb-3">@Html.T("انضم لمجموعات دراسية مع طلاب آخرين", "Join study groups with other students")</p>
+            <button class="btn btn-success btn-sm">
+                <i class="feather-search me-2"></i>
+                @Html.T("البحث عن مجموعة", "Find a group")
+            </button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function generateNewPlan() {
+        if (confirm('@Html.Raw(Html.T("هل تريد إنشاء خطة دراسية جديدة؟", "Do you want to create a new study plan?").Replace("'", "\\'"))')) {
+            location.reload();
+        }
+    }
+    
+    function exportPlan() {
+        window.print();
+    }
+    
+    function sharePlan() {
+        alert('@Html.Raw(Html.T("مشاركة خطة الدراسة", "Share study plan").Replace("'", "\\'"))');
+    }
+    
+    function scheduleStudyTime(enrollmentId) {
+        window.location.href = `/Student/StudyPlanner/AddSession?enrollmentId=${enrollmentId}`;
+    }
+    
+    // Calendar day click
+    document.querySelectorAll('.calendar-day').forEach(day => {
+        day.addEventListener('click', function() {
+            if (!this.classList.contains('completed')) {
+                this.classList.toggle('has-plan');
+            }
+        });
+    });
+</script>
+}

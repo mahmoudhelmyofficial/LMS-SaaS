@@ -1,0 +1,345 @@
+@model LMS.Areas.Instructor.ViewModels.LiveClassCreateViewModel
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("جدولة بث مباشر جديد", "Schedule New Live Session");
+    ViewData["Subtitle"] = Html.T("إنشاء جلسة بث مباشر جديدة لطلابك", "Create a new live session for your students");
+    var indexUrl = Url.Action("Index");
+    
+    // Load platform settings
+    var minDuration = await PlatformSettings.GetIntSettingAsync("LiveClass.DurationMinutes.Min", 15);
+    var maxDuration = await PlatformSettings.GetIntSettingAsync("LiveClass.DurationMinutes.Max", 480);
+    var startWindowMinutes = await PlatformSettings.GetIntSettingAsync("LiveClass.StartWindowMinutes", 15);
+    var reminderOptions = await PlatformSettings.GetSettingAsync("LiveClass.ReminderOptions", "5,10,15,30,60,120,1440");
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw("<a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة للقائمة", "Back to List") + "</a>") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Create" method="post">
+        @Html.AntiForgeryToken()
+        
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger mb-4">
+                <h6 class="alert-heading mb-2">
+                    <i class="feather-alert-circle me-2"></i>
+                    @Html.T("يرجى تصحيح الأخطاء التالية:", "Please correct the following errors:")
+                </h6>
+                @Html.ValidationSummary(false, "", new { @class = "mb-0" })
+            </div>
+        }
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Basic Information -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("المعلومات الأساسية", "Basic Information")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label class="form-label" asp-for="CourseId">@Html.T("الدورة", "Course") <span class="text-danger">*</span></label>
+                                <select asp-for="CourseId" class="form-select" required>
+                                    <option value="">-- @Html.T("اختر الدورة", "Select Course") --</option>
+                                    @if (ViewBag.Courses != null)
+                                    {
+                                        foreach (var course in ViewBag.Courses as Microsoft.AspNetCore.Mvc.Rendering.SelectList)
+                                        {
+                                            <option value="@course.Value">@course.Text</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="CourseId" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Title">@Html.T("عنوان الجلسة", "Session Title") <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" asp-for="Title" placeholder="@Html.T("مثال: شرح الوحدة الأولى - الجزء الأول", "Example: Module 1 Explanation - Part 1")" required />
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Description">@Html.T("الوصف", "Description")</label>
+                                <textarea class="form-control" asp-for="Description" rows="4" placeholder="@Html.T("وصف مختصر للجلسة وما سيتم شرحه", "Brief description of the session and what will be covered")"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Agenda">@Html.T("جدول الأعمال", "Agenda")</label>
+                                <textarea class="form-control" asp-for="Agenda" rows="5" placeholder="- @Html.T("النقطة الأولى", "First point")&#10;- @Html.T("النقطة الثانية", "Second point")&#10;- @Html.T("النقطة الثالثة", "Third point")"></textarea>
+                                <div class="form-text">@Html.T("يمكنك كتابة جدول الأعمال على شكل نقاط", "You can write the agenda as bullet points")</div>
+                                <span asp-validation-for="Agenda" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الجدولة", "Schedule")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="ScheduledStartTime">@Html.T("تاريخ ووقت البدء", "Start Date & Time") <span class="text-danger">*</span></label>
+                                <input type="datetime-local" class="form-control" asp-for="ScheduledStartTime" required />
+                                <span asp-validation-for="ScheduledStartTime" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="ScheduledEndTime">@Html.T("تاريخ ووقت الانتهاء", "End Date & Time") <span class="text-danger">*</span></label>
+                                <input type="datetime-local" class="form-control" asp-for="ScheduledEndTime" required />
+                                <span asp-validation-for="ScheduledEndTime" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="DurationMinutes">@Html.T("المدة (بالدقائق)", "Duration (minutes)") <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" asp-for="DurationMinutes" min="@minDuration" max="@maxDuration" required />
+                                <div class="form-text">@Html.T("من", "From") @minDuration @Html.T("دقيقة إلى", "minutes to") @maxDuration @Html.T("دقيقة", "minutes") (@(maxDuration/60) @Html.T("ساعات", "hours"))</div>
+                                <span asp-validation-for="DurationMinutes" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="MaxParticipants">@Html.T("الحد الأقصى للمشاركين", "Max Participants")</label>
+                                <input type="number" class="form-control" asp-for="MaxParticipants" min="1" placeholder="@Html.T("اتركه فارغاً لعدم وضع حد", "Leave empty for unlimited")" />
+                                <span asp-validation-for="MaxParticipants" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Meeting Details -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("معلومات الاجتماع", "Meeting Information")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Platform">@Html.T("المنصة", "Platform") <span class="text-danger">*</span></label>
+                                <select class="form-select" asp-for="Platform" required>
+                                    <option value="Zoom">Zoom</option>
+                                    <option value="GoogleMeet">Google Meet</option>
+                                    <option value="MicrosoftTeams">Microsoft Teams</option>
+                                    <option value="Webex">Webex</option>
+                                    <option value="Other">@Html.T("أخرى", "Other")</option>
+                                </select>
+                                <span asp-validation-for="Platform" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label" asp-for="MeetingUrl">@Html.T("رابط الاجتماع", "Meeting URL") <span class="text-danger">*</span></label>
+                                <input type="url" class="form-control" asp-for="MeetingUrl" placeholder="https://zoom.us/j/123456789" required />
+                                <div class="form-text">@Html.T("رابط الاجتماع من المنصة المختارة", "Meeting link from the selected platform")</div>
+                                <span asp-validation-for="MeetingUrl" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="MeetingId">@Html.T("معرف الاجتماع", "Meeting ID")</label>
+                                <input type="text" class="form-control" asp-for="MeetingId" placeholder="123 456 789" />
+                                <span asp-validation-for="MeetingId" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label" asp-for="Password">@Html.T("كلمة المرور", "Password")</label>
+                                <input type="text" class="form-control" asp-for="Password" placeholder="@Html.T("كلمة مرور الاجتماع", "Meeting password")" />
+                                <span asp-validation-for="Password" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Pricing -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-dollar-sign me-2 text-success"></i>
+                            @Html.T("التسعير", "Pricing")
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("نوع التسعير", "Pricing Type")</label>
+                            <select name="PricingType" id="PricingType" class="form-select">
+                                <option value="0">@Html.T("مجانية", "Free")</option>
+                                <option value="1">@Html.T("مدفوعة", "Paid")</option>
+                                <option value="2">@Html.T("اشتراك فقط", "Subscription Only")</option>
+                            </select>
+                        </div>
+                        <div id="pricingFields" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">@Html.T("السعر", "Price") (@Html.T("ج.م", "EGP"))</label>
+                                <input type="number" name="Price" id="SessionPrice" class="form-control" step="0.01" min="0" value="0" placeholder="0.00" />
+                            </div>
+                            <input type="hidden" name="PriceCurrency" value="EGP" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("الموضوع", "Subject")</label>
+                            <input type="text" name="Subject" class="form-control" placeholder="@Html.T("موضوع الجلسة (اختياري)", "Session subject (optional)")" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الإعدادات", "Settings")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" asp-for="AllowReplay" id="allowReplay" checked />
+                            <label class="form-check-label" for="allowReplay">
+                                @Html.T("السماح بإعادة المشاهدة", "Allow Replay")
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" asp-for="IsFreeForAll" id="isFreeForAll" />
+                            <label class="form-check-label" for="isFreeForAll">
+                                @Html.T("متاح للجميع (بدون تسجيل)", "Available for All (no registration)")
+                            </label>
+                        </div>
+
+                        <hr />
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" asp-for="SendReminder" id="sendReminder" checked />
+                            <label class="form-check-label" for="sendReminder">
+                                @Html.T("إرسال تذكير للطلاب", "Send Reminder to Students")
+                            </label>
+                        </div>
+
+                        <div class="reminder-settings">
+                            <label class="form-label" asp-for="ReminderMinutesBefore">@Html.T("التذكير قبل (دقائق)", "Remind Before (minutes)")</label>
+                            <select class="form-select" asp-for="ReminderMinutesBefore">
+                                @foreach (var option in reminderOptions.Split(','))
+                                {
+                                    var minutes = int.Parse(option.Trim());
+                                    var label = minutes < 60 ? $"{minutes} {Html.T("دقيقة", "minutes")}" : 
+                                               minutes == 60 ? Html.T("ساعة واحدة", "One hour") : 
+                                               minutes == 120 ? Html.T("ساعتين", "Two hours") : 
+                                               minutes >= 1440 ? Html.T("يوم واحد", "One day") : $"{minutes/60} {Html.T("ساعات", "hours")}";
+                                    <option value="@minutes" selected="@(minutes == 30)">@label</option>
+                                }
+                            </select>
+                            <span asp-validation-for="ReminderMinutesBefore" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help Card -->
+                <div class="card bg-soft-info border-0">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("إرشادات", "Guidelines")
+                        </h6>
+                        <ul class="list-unstyled fs-13 mb-0">
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("تأكد من إنشاء الاجتماع على المنصة أولاً", "Make sure to create the meeting on the platform first")
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("جدول البث قبل الموعد بوقت كافٍ", "Schedule the stream well in advance")
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("تأكد من صحة رابط الاجتماع", "Make sure the meeting link is correct")
+                            </li>
+                            <li class="mb-0">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("يمكنك بدء البث قبل الموعد بـ", "You can start the stream") @startWindowMinutes @Html.T("دقيقة", "minutes before the scheduled time")
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="card">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-check me-2"></i>
+                            @Html.T("جدولة البث المباشر", "Schedule Live Session")
+                        </button>
+                        <a href="@Url.Action("Index")" class="btn btn-light w-100">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("إلغاء", "Cancel")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    
+    <script>
+        $(document).ready(function() {
+            // Toggle pricing fields based on pricing type
+            function togglePricingFields() {
+                var pricingType = $('#PricingType').val();
+                if (pricingType === '1') { // Paid
+                    $('#pricingFields').slideDown();
+                } else {
+                    $('#pricingFields').slideUp();
+                    $('#SessionPrice').val('0');
+                }
+            }
+            $('#PricingType').on('change', togglePricingFields);
+            togglePricingFields();
+
+            // Toggle reminder settings visibility
+            $('#sendReminder').change(function() {
+                $('.reminder-settings').toggle(this.checked);
+            });
+
+            // Calculate end time when start time or duration changes
+            $('#ScheduledStartTime, #DurationMinutes').change(function() {
+                var startTime = new Date($('#ScheduledStartTime').val());
+                var duration = parseInt($('#DurationMinutes').val());
+                
+                if (startTime && duration) {
+                    var endTime = new Date(startTime.getTime() + duration * 60000);
+                    var endTimeStr = endTime.toISOString().slice(0, 16);
+                    $('#ScheduledEndTime').val(endTimeStr);
+                }
+            });
+
+            // Platform-specific help
+            $('#Platform').change(function() {
+                var platform = $(this).val();
+                var urlPlaceholder = '';
+                
+                switch(platform) {
+                    case 'Zoom':
+                        urlPlaceholder = 'https://zoom.us/j/123456789';
+                        break;
+                    case 'GoogleMeet':
+                        urlPlaceholder = 'https://meet.google.com/xxx-xxxx-xxx';
+                        break;
+                    case 'MicrosoftTeams':
+                        urlPlaceholder = 'https://teams.microsoft.com/l/meetup-join/...';
+                        break;
+                    default:
+                        urlPlaceholder = 'https://example.com/meeting';
+                }
+                
+                $('#MeetingUrl').attr('placeholder', urlPlaceholder);
+            });
+        });
+    </script>
+}

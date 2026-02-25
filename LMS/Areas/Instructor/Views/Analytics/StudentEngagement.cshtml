@@ -1,0 +1,239 @@
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("تحليلات تفاعل الطلاب", "Student Engagement Analytics");
+    ViewData["Subtitle"] = Html.T("تقارير تفصيلية عن نشاط وتفاعل الطلاب مع دوراتك", "Detailed reports on student activity and engagement");
+    
+    // Load platform settings
+    var thresholdGood = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Good", 70);
+    var thresholdWarning = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Warning", 50);
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Filter Section -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("الدورة", "Course")</label>
+                            <select class="form-select" name="courseId" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                @if (ViewBag.Courses != null)
+                                {
+                                    foreach (var course in ViewBag.Courses)
+                                    {
+                                        <option value="@course.Id" selected="@(ViewBag.CourseId == course.Id)">@course.Title</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                            <input type="date" class="form-control" name="fromDate" value="@(ViewBag.FromDate?.ToString("yyyy-MM-dd"))">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                            <input type="date" class="form-control" name="toDate" value="@(ViewBag.ToDate?.ToString("yyyy-MM-dd"))">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="feather-filter me-2"></i>@Html.T("تصفية", "Filter")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Engagement Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي ساعات المشاهدة", "Total watch hours") },
+                { "Value", ((double)(ViewBag.TotalWatchTime ?? 0)).ToString("F1") + "h" },
+                { "Icon", "clock" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("متوسط وقت المشاهدة", "Average watch time") },
+                { "Value", ((double)(ViewBag.AverageWatchTime ?? 0)).ToString("F1") + "m" },
+                { "Icon", "activity" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("الطلاب النشطون", "Active students") },
+                { "Value", ViewBag.UniqueActiveStudents ?? 0 },
+                { "Icon", "users" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("معدل الإكمال", "Completion rate") },
+                { "Value", ((double)(ViewBag.CompletionRate ?? 0)).ToString("F1") + "%" },
+                { "Icon", "check-circle" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Additional Engagement Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("مشاهدات الدروس", "Lesson views") },
+                { "Value", ViewBag.TotalLessonViews ?? 0 },
+                { "Icon", "eye" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("منشورات النقاش", "Discussion posts") },
+                { "Value", ViewBag.TotalDiscussionPosts ?? 0 },
+                { "Icon", "message-square" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("التعليقات", "Comments") },
+                { "Value", ViewBag.TotalComments ?? 0 },
+                { "Icon", "message-circle" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    <!-- Most Engaged Lessons -->
+    @if (ViewBag.MostEngagedLessons != null && ((IEnumerable<dynamic>)ViewBag.MostEngagedLessons).Any())
+    {
+        <div class="row mb-4">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الدروس الأكثر تفاعلاً", "Most engaged lessons")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الدرس", "Lesson")</th>
+                                        <th>@Html.T("ساعات المشاهدة", "Watch hours")</th>
+                                        <th>@Html.T("الطلاب", "Students")</th>
+                                        <th>@Html.T("معدل الإكمال", "Completion rate")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var lesson in ViewBag.MostEngagedLessons)
+                                    {
+                                        <tr>
+                                            <td>@lesson.LessonTitle</td>
+                                            <td>@(((double)lesson.TotalWatchTime).ToString("F1"))h</td>
+                                            <td><span class="badge bg-soft-primary">@lesson.UniqueStudents</span></td>
+                                            <td>
+                                                <span class="badge bg-soft-@(lesson.CompletionRate >= thresholdGood ? "success" : lesson.CompletionRate >= thresholdWarning ? "warning" : "danger")">
+                                                    @(((double)lesson.CompletionRate).ToString("F0"))%
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Most Active Students -->
+            @if (ViewBag.MostActiveStudents != null && ((IEnumerable<dynamic>)ViewBag.MostActiveStudents).Any())
+            {
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title">@Html.T("الطلاب الأكثر نشاطاً", "Most active students")</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("الطالب", "Student")</th>
+                                            <th>@Html.T("ساعات المشاهدة", "Watch hours")</th>
+                                            <th>@Html.T("دروس مكتملة", "Lessons completed")</th>
+                                            <th>@Html.T("آخر نشاط", "Last activity")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var student in ViewBag.MostActiveStudents)
+                                        {
+                                            <tr>
+                                                <td>@student.StudentName</td>
+                                                <td>@(((double)student.TotalWatchTime).ToString("F1"))h</td>
+                                                <td><span class="badge bg-soft-success">@student.LessonsCompleted</span></td>
+                                                <td>
+                                                    <span class="fs-11 text-muted">
+                                                        @(((DateTime)student.LastActivity).ToString("dd/MM/yyyy"))
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Engagement Tips -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card bg-soft-success">
+                <div class="card-body">
+                    <h5 class="card-title text-success">
+                        <i class="feather-zap me-2"></i>
+                        @Html.T("نصائح لزيادة التفاعل", "Tips to increase engagement")
+                    </h5>
+                    <ul class="mb-0">
+                        <li>@Html.T("قم بإنشاء مناقشات أسبوعية لتشجيع الطلاب على المشاركة", "Create weekly discussions to encourage student participation")</li>
+                        <li>@Html.T("أرسل رسائل تحفيزية للطلاب الذين لم يسجلوا دخول مؤخراً", "Send motivational messages to students who haven't logged in recently")</li>
+                        <li>@Html.T("أضف محتوى تفاعلي مثل الاختبارات القصيرة والتكليفات العملية", "Add interactive content like short quizzes and practical assignments")</li>
+                        <li>@Html.T("كافئ الطلاب الأكثر نشاطاً بشهادات أو نقاط إضافية", "Reward the most active students with certificates or extra points")</li>
+                        <li>@Html.T("راجع الدروس ذات معدل الإكمال المنخفض وحسّنها", "Review lessons with low completion rates and improve them")</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize any charts or interactive elements here
+        });
+    </script>
+}
+

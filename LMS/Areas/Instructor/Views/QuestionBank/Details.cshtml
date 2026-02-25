@@ -1,0 +1,148 @@
+@model LMS.Domain.Entities.Assessments.QuestionBank
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل بنك الأسئلة", "Question Bank Details");
+    ViewData["Subtitle"] = Model.Name;
+    var addQuestionUrl = Url.Action("AddQuestion", new { bankId = Model.Id });
+    var editUrl = Url.Action("Edit", new { id = Model.Id });
+    var indexUrl = Url.Action("Index");
+}
+
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="mb-1">@ViewData["Title"]</h4>
+        <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="@addQuestionUrl" class="btn btn-primary">
+            <i class="feather-plus me-2"></i>
+            إضافة سؤال
+        </a>
+        <a href="@editUrl" class="btn btn-light">
+            <i class="feather-edit me-2"></i>
+            تعديل
+        </a>
+        <a href="@indexUrl" class="btn btn-light">
+            <i class="feather-arrow-right me-2"></i>
+            العودة
+        </a>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("معلومات البنك", "Bank info")</h5>
+                </div>
+                <div class="card-body">
+                    <h4 class="fw-bold mb-3">@Model.Name</h4>
+                    <p class="text-muted mb-3">@Model.Description</p>
+                    <div class="d-flex gap-3">
+                        <span class="badge bg-soft-primary text-primary">@Model.Category?.Name</span>
+                        <span class="badge bg-soft-success text-success">@Model.TotalQuestions أسئلة</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الأسئلة", "Questions") (@Model.Questions?.Count ?? 0)</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (Model.Questions != null && Model.Questions.Any())
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var item in Model.Questions.OrderBy(q => q.Id))
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-fill">
+                                            <div class="fw-medium mb-2">@item.QuestionText</div>
+                                            <div class="d-flex gap-2 flex-wrap mb-2">
+                                                <span class="badge bg-soft-info text-info">@item.QuestionType</span>
+                                                <span class="badge bg-soft-warning text-warning">@item.Points نقطة</span>
+                                                <span class="badge bg-soft-secondary text-secondary">@item.DifficultyLevel</span>
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(item.Tags))
+                                            {
+                                                <div class="fs-12 text-muted">
+                                                    <i class="feather-tag me-1"></i>@item.Tags
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="dropdown">
+                                            <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown">
+                                                <i class="feather-more-horizontal"></i>
+                                            </a>
+                                            <ul class="dropdown-menu dropdown-menu-end">
+                                                <li>
+                                                    <a class="dropdown-item" href="@Url.Action("EditQuestion", new { id = item.Id, bankId = Model.Id })">
+                                                        <i class="feather-edit me-3"></i>تعديل
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="deleteQuestion(@item.Id, @Model.Id)">
+                                                        <i class="feather-trash-2 me-3"></i>حذف
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <i class="feather-help-circle text-muted" style="font-size: 3rem;"></i>
+                            <p class="text-muted mt-3">@Html.T("لا توجد أسئلة في هذا البنك", "No questions in this bank")</p>
+                            <a href="@Url.Action("AddQuestion", new { bankId = Model.Id })" class="btn btn-primary btn-sm">
+                                <i class="feather-plus me-2"></i>إضافة سؤال
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("معلومات إضافية", "Additional info")</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="py-2 border-bottom">
+                            <small class="text-muted">تاريخ الإنشاء</small>
+                            <div class="fw-medium">@Model.CreatedAt.ToString("dd/MM/yyyy")</div>
+                        </li>
+                        <li class="py-2">
+                            <small class="text-muted">إجمالي الأسئلة</small>
+                            <div class="fw-medium">@Model.TotalQuestions</div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="deleteForm" method="post" style="display:none;">@Html.AntiForgeryToken()</form>
+
+@section Scripts {
+    <script>
+        function deleteQuestion(id, bankId) {
+            if (confirm('هل أنت متأكد من حذف هذا السؤال?')) {
+                var form = document.getElementById('deleteForm');
+                form.action = '@Url.Action("DeleteQuestion")/' + id + '?bankId=' + bankId;
+                form.submit();
+            }
+        }
+    </script>
+}
+

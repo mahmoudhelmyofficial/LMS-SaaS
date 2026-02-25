@@ -1,0 +1,208 @@
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("تحليلات الأداء", "Performance Analytics");
+    ViewData["Subtitle"] = Html.T("تقارير شاملة عن أداء دوراتك والطلاب", "Comprehensive reports on course and student performance");
+    
+    // Load platform settings
+    var thresholdGood = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Good", 70);
+    var thresholdWarning = await PlatformSettings.GetIntSettingAsync("Threshold.Progress.Warning", 50);
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Filter Section -->
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("الدورة", "Course")</label>
+                            <select class="form-select" name="courseId" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                @if (ViewBag.Courses != null)
+                                {
+                                    foreach (var course in ViewBag.Courses)
+                                    {
+                                        <option value="@course.Id" selected="@(ViewBag.CourseId == course.Id)">@course.Title</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("من تاريخ", "From date")</label>
+                            <input type="date" class="form-control" name="fromDate" value="@(ViewBag.FromDate?.ToString("yyyy-MM-dd"))">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">@Html.T("إلى تاريخ", "To date")</label>
+                            <input type="date" class="form-control" name="toDate" value="@(ViewBag.ToDate?.ToString("yyyy-MM-dd"))">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="feather-filter me-2"></i>@Html.T("تصفية", "Filter")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الطلاب", "Total students") },
+                { "Value", ViewBag.TotalEnrollments ?? 0 },
+                { "Icon", "users" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("متوسط التقدم", "Average progress") },
+                { "Value", ((decimal)(ViewBag.AverageProgress ?? 0)).ToString("F1") + "%" },
+                { "Icon", "trending-up" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("معدل الإكمال", "Completion rate") },
+                { "Value", ((double)(ViewBag.CompletedEnrollments ?? 0) / Math.Max((double)(ViewBag.TotalEnrollments ?? 1), 1) * 100).ToString("F1") + "%" },
+                { "Icon", "check-circle" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-md-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("متوسط درجة الاختبارات", "Average quiz score") },
+                { "Value", ((double)(ViewBag.AverageQuizScore ?? 0)).ToString("F1") + "%" },
+                { "Icon", "star" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Additional Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("الطلاب النشطون", "Active students") },
+                { "Value", ViewBag.ActiveStudents ?? 0 },
+                { "Icon", "activity" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("محاولات الاختبارات", "Quiz attempts") },
+                { "Value", ViewBag.TotalQuizAttempts ?? 0 },
+                { "Icon", "clipboard" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-md-4">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("تسليمات التكليفات", "Assignment submissions") },
+                { "Value", ViewBag.TotalAssignmentSubmissions ?? 0 },
+                { "Icon", "file-text" },
+                { "Color", "info" }
+            })
+        </div>
+    </div>
+
+    <!-- Course Performance Breakdown -->
+    @if (ViewBag.CoursePerformance != null && ((IEnumerable<dynamic>)ViewBag.CoursePerformance).Any())
+    {
+        <div class="row mb-4">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("أداء الدورات", "Course performance")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الدورة", "Course")</th>
+                                        <th>@Html.T("الطلاب", "Students")</th>
+                                        <th>@Html.T("متوسط التقدم", "Avg progress")</th>
+                                        <th>@Html.T("معدل الإكمال", "Completion rate")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var course in ViewBag.CoursePerformance)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <a href="@Url.Action("CourseDetails", new { courseId = course.CourseId })" class="fw-bold text-dark">
+                                                    @course.CourseTitle
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-primary text-primary">@course.Enrollments</span>
+                                            </td>
+                                            <td>
+                                                <div class="progress" style="height: 8px; width: 100px;">
+                                                    <div class="progress-bar bg-success" role="progressbar" style="width: @(course.AverageProgress)%"></div>
+                                                </div>
+                                                <span class="fs-11 text-muted ms-2">@(((double)course.AverageProgress).ToString("F1"))%</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-@(course.CompletionRate >= thresholdGood ? "success" : course.CompletionRate >= thresholdWarning ? "warning" : "danger")">
+                                                    @(((double)course.CompletionRate).ToString("F1"))%
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Performance Tips -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card bg-soft-info">
+                <div class="card-body">
+                    <h5 class="card-title text-info">
+                        <i class="feather-info me-2"></i>
+                        @Html.T("نصائح لتحسين الأداء", "Tips to improve performance")
+                    </h5>
+                    <ul class="mb-0">
+                        <li>@Html.T("قم بإضافة اختبارات قصيرة بعد كل قسم لقياس الفهم", "Add short quizzes after each section to measure understanding")</li>
+                        <li>@Html.T("شجع الطلاب على إكمال الدورة من خلال التواصل المستمر", "Encourage students to complete the course through ongoing communication")</li>
+                        <li>@Html.T("حدّث محتوى الدورة بانتظام بناءً على ملاحظات الطلاب", "Update course content regularly based on student feedback")</li>
+                        <li>@Html.T("قدم دعماً سريعاً للطلاب الذين يواجهون صعوبات", "Provide quick support to students who face difficulties")</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Date pickers already work with native HTML5 input type="date"
+        });
+    </script>
+}
+

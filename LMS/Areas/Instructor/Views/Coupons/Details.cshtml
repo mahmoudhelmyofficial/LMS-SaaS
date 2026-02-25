@@ -1,0 +1,437 @@
+@model LMS.Domain.Entities.Payments.Coupon
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل الكوبون", "Coupon Details");
+    ViewData["Subtitle"] = $"معلومات الكوبون: {Model.Code}";
+    
+    var now = DateTime.UtcNow;
+    var isValid = Model.ValidFrom <= now && Model.ValidTo >= now;
+    var usagePercent = Model.MaxUses.HasValue && Model.MaxUses > 0 
+        ? (double)Model.UsedCount / Model.MaxUses.Value * 100 
+        : 0;
+    
+    var editUrl = Url.Action("Edit", new { id = Model.Id });
+    var statisticsUrl = Url.Action("Statistics", new { id = Model.Id });
+    var indexUrl = Url.Action("Index");
+    
+    // Load platform settings
+    var usageCritical = await PlatformSettings.GetIntSettingAsync("Threshold.Usage.Critical", 90);
+    var usageWarning = await PlatformSettings.GetIntSettingAsync("Threshold.Usage.Warning", 70);
+    var recentUsagesLimit = await PlatformSettings.GetIntSettingAsync("UI.RecentItems.Limit", 20);
+}
+
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw($@"
+        <a href='{editUrl}' class='btn btn-light'>
+            <i class='feather-edit me-2'></i>
+            تعديل
+        </a>
+        <a href='{statisticsUrl}' class='btn btn-light'>
+            <i class='feather-bar-chart-2 me-2'></i>
+            الإحصائيات
+        </a>
+        <a href='{indexUrl}' class='btn btn-light'>
+            <i class='feather-arrow-right me-2'></i>
+            العودة للقائمة
+        </a>
+    ") }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Status Alert -->
+    @if (!Model.IsActive)
+    {
+        <div class="alert alert-warning mb-4">
+            <div class="d-flex align-items-center">
+                <i class="feather-alert-triangle fs-4 me-3"></i>
+                <div>
+                    <h6 class="mb-1">@Html.T("الكوبون غير نشط", "Coupon is inactive")</h6>
+                    <p class="mb-0">@Html.T("هذا الكوبون معطل حالياً ولا يمكن للطلاب استخدامه.", "This coupon is currently disabled and cannot be used by students.")</p>
+                </div>
+            </div>
+        </div>
+    }
+    else if (!isValid)
+    {
+        <div class="alert alert-danger mb-4">
+            <div class="d-flex align-items-center">
+                <i class="feather-x-circle fs-4 me-3"></i>
+                <div>
+                    <h6 class="mb-1">@Html.T("الكوبون منتهي الصلاحية", "Coupon expired")</h6>
+                    <p class="mb-0">@Html.T("هذا الكوبون خارج نطاق الصلاحية الزمنية.", "This coupon is outside its validity period.")</p>
+                </div>
+            </div>
+        </div>
+    }
+    else if (Model.MaxUses.HasValue && Model.UsedCount >= Model.MaxUses.Value)
+    {
+        <div class="alert alert-info mb-4">
+            <div class="d-flex align-items-center">
+                <i class="feather-info fs-4 me-3"></i>
+                <div>
+                    <h6 class="mb-1">@Html.T("تم استنفاد الكوبون", "Coupon exhausted")</h6>
+                    <p class="mb-0">@Html.T("وصل الكوبون إلى الحد الأقصى للاستخدام.", "The coupon has reached its maximum usage limit.")</p>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="row">
+        <!-- Main Information -->
+        <div class="col-lg-8">
+            <!-- Coupon Details Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-tag me-2 text-primary"></i>
+                        معلومات الكوبون
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <label class="text-muted small mb-2">كود الكوبون</label>
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="avatar-text avatar-lg bg-soft-primary text-primary">
+                                    <i class="feather-tag"></i>
+                                </div>
+                                <div>
+                                    <h4 class="fw-bold mb-0">@Model.Code</h4>
+                                    <button class="btn btn-sm btn-link p-0" onclick="copyCouponCode('@Model.Code')">
+                                        <i class="feather-copy"></i> نسخ الكود
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="text-muted small mb-2">الحالة</label>
+                            <div>
+                                @if (Model.Status == LMS.Domain.Enums.CouponStatus.Active && isValid)
+                                {
+                                    <span class="badge bg-soft-success text-success fs-6 px-3 py-2">
+                                        <i class="feather-check-circle"></i> نشط ومتاح
+                                    </span>
+                                }
+                                else if (Model.Status == LMS.Domain.Enums.CouponStatus.Expired || !isValid)
+                                {
+                                    <span class="badge bg-soft-danger text-danger fs-6 px-3 py-2">
+                                        <i class="feather-x-circle"></i> منتهي
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-soft-secondary text-secondary fs-6 px-3 py-2">
+                                        <i class="feather-pause-circle"></i> غير نشط
+                                    </span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <label class="text-muted small mb-2">الوصف</label>
+                            <p class="mb-0">@(Model.Description ?? "لا يوجد وصف")</p>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="text-muted small mb-2">نوع الخصم</label>
+                            <div>
+                                @if (Model.DiscountType == LMS.Domain.Enums.DiscountType.Percentage)
+                                {
+                                    <span class="badge bg-soft-info text-info">
+                                        <i class="feather-percent"></i> نسبة مئوية
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-soft-success text-success">
+                                        @{ ViewBag.CurrencyIconClass = ""; }
+                                        @await Html.PartialAsync("_CurrencyIcon")
+                                        <span>مبلغ ثابت</span>
+                                    </span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="text-muted small mb-2">قيمة الخصم</label>
+                            <h4 class="fw-bold text-primary mb-0">
+                                @if (Model.DiscountType == LMS.Domain.Enums.DiscountType.Percentage)
+                                {
+                                    @Model.DiscountValue.ToString("F0")<text>%</text>
+                                }
+                                else
+                                {
+                                    @Model.DiscountValue.ToEGP()
+                                }
+                            </h4>
+                        </div>
+
+                        @if (Model.MaxDiscountAmount.HasValue)
+                        {
+                            <div class="col-md-6">
+                                <label class="text-muted small mb-2">الحد الأقصى للخصم</label>
+                                <p class="mb-0 fw-medium">@Model.MaxDiscountAmount.Value.ToEGP()</p>
+                            </div>
+                        }
+
+                        @if (Model.MinimumPurchaseAmount.HasValue && Model.MinimumPurchaseAmount > 0)
+                        {
+                            <div class="col-md-6">
+                                <label class="text-muted small mb-2">الحد الأدنى للشراء</label>
+                                <p class="mb-0 fw-medium">@Model.MinimumPurchaseAmount.Value.ToEGP()</p>
+                            </div>
+                        }
+
+                        <div class="col-md-6">
+                            <label class="text-muted small mb-2">تاريخ البدء</label>
+                            <p class="mb-0">
+                                <i class="feather-calendar text-muted me-2"></i>
+                                @Model.ValidFrom.ToString("dd/MM/yyyy hh:mm tt")
+                            </p>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="text-muted small mb-2">تاريخ الانتهاء</label>
+                            <p class="mb-0">
+                                <i class="feather-calendar text-muted me-2"></i>
+                                @Model.ValidTo.ToString("dd/MM/yyyy hh:mm tt")
+                            </p>
+                        </div>
+
+                        @if (Model.FirstPurchaseOnly)
+                        {
+                            <div class="col-md-12">
+                                <div class="alert alert-info mb-0">
+                                    <i class="feather-info me-2"></i>
+                                    متاح للمشتريات الأولى فقط
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Usage History -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-activity me-2 text-primary"></i>
+                        سجل الاستخدام
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.Usages != null && Model.Usages.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الطالب", "Student")</th>
+                                        <th>@Html.T("الدورة", "Course")</th>
+                                        <th>@Html.T("قيمة الخصم", "Discount amount")</th>
+                                        <th>@Html.T("تاريخ الاستخدام", "Used date")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var usage in Model.Usages.OrderByDescending(u => u.UsedAt).Take(recentUsagesLimit))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                        <i class="feather-user"></i>
+                                                    </div>
+                                                    <span>@usage.User?.FullName</span>
+                                                </div>
+                                            </td>
+                                            <td>@usage.Course?.Title</td>
+                                            <td>
+                                                <span class="text-success fw-bold">@usage.DiscountAmount.ToEGP()</span>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">@usage.UsedAt.ToString("dd/MM/yyyy hh:mm tt")</small>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-5">
+                            <div class="avatar-text avatar-lg bg-soft-secondary text-secondary mb-3 mx-auto">
+                                <i class="feather-inbox"></i>
+                            </div>
+                            <p class="text-muted mb-0">لم يتم استخدام هذا الكوبون بعد</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Usage Statistics -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("إحصائيات الاستخدام", "Usage statistics")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">مرات الاستخدام</span>
+                            <span class="fw-bold">
+                                @Model.UsedCount
+                                @if (Model.MaxUses.HasValue)
+                                {
+                                    <text> / @Model.MaxUses</text>
+                                }
+                            </span>
+                        </div>
+                        @if (Model.MaxUses.HasValue)
+                        {
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar @(usagePercent >= 90 ? "bg-danger" : usagePercent >= 70 ? "bg-warning" : "bg-success")" 
+                                     role="progressbar" style="width: @usagePercent.ToString("F0")%"></div>
+                            </div>
+                            <small class="text-muted">@usagePercent.ToString("F1")% مستخدم</small>
+                        }
+                        else
+                        {
+                            <div class="alert alert-info mb-0">
+                                <small>
+                                    <i class="feather-infinity me-1"></i>
+                                    غير محدود
+                                </small>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">الحد الأقصى لكل طالب</span>
+                            <span class="fw-bold">@Model.MaxUsesPerUser</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">إجمالي التوفير</span>
+                            <span class="fw-bold text-success">
+                                @((Model.Usages?.Sum(u => u.DiscountAmount) ?? 0).ToEGP())
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-muted">عدد المستخدمين</span>
+                            <span class="fw-bold">@(Model.Usages?.Select(u => u.UserId).Distinct().Count() ?? 0)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الإجراءات", "Actions")</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="@Url.Action("Edit", new { id = Model.Id })" class="btn btn-primary">
+                            <i class="feather-edit me-2"></i>
+                            تعديل الكوبون
+                        </a>
+                        
+                        <form asp-action="ToggleStatus" asp-route-id="@Model.Id" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-@(Model.IsActive ? "warning" : "success") w-100">
+                                <i class="feather-power me-2"></i>
+                                @(Model.IsActive ? "تعطيل" : "تفعيل") الكوبون
+                            </button>
+                        </form>
+
+                        <button class="btn btn-info" onclick="shareCoupon()">
+                            <i class="feather-share-2 me-2"></i>
+                            مشاركة الكوبون
+                        </button>
+
+                        <hr />
+
+                        <button class="btn btn-danger" onclick="confirmDelete('@Url.Action("Delete", new { id = Model.Id })', 'هل أنت متأكد من حذف الكوبون: @Model.Code؟')">
+                            <i class="feather-trash-2 me-2"></i>
+                            حذف الكوبون
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Applicable Courses -->
+            @if (!string.IsNullOrEmpty(Model.ApplicableCourseIds))
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الدورات المطبقة", "Applied courses")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info mb-0">
+                            <i class="feather-info me-2"></i>
+                            هذا الكوبون مخصص لدورات محددة فقط
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("نطاق التطبيق", "Scope")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-success mb-0">
+                            <i class="feather-check-circle me-2"></i>
+                            صالح لجميع دوراتك
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@await Html.PartialAsync("_DeleteModal")
+
+@section Scripts {
+    <script>
+        function copyCouponCode(code) {
+            navigator.clipboard.writeText(code).then(function() {
+                alert('تم نسخ كود الكوبون: ' + code);
+            }, function() {
+                alert('فشل نسخ الكود');
+            });
+        }
+
+        function shareCoupon() {
+            const code = '@Model.Code';
+            const text = `استخدم كود الخصم: ${code} للحصول على خصم خاص!`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'كود خصم',
+                    text: text
+                });
+            } else {
+                copyCouponCode(code);
+                alert('تم نسخ معلومات الكوبون. يمكنك مشاركتها الآن!');
+            }
+        }
+    </script>
+}
+

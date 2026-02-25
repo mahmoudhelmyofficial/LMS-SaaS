@@ -1,0 +1,148 @@
+@model List<LMS.Areas.Student.ViewModels.NotificationDisplayViewModel>
+@{
+    ViewData["Title"] = Html.T("الإشعارات", "Notifications");
+}
+
+@section Styles {
+<style>
+    .notification-item {
+        transition: all 0.2s ease;
+    }
+    .notification-item:hover {
+        background-color: #f9fafb;
+    }
+    .notification-item.unread {
+        background-color: #eff6ff;
+        border-right: 3px solid #3b82f6;
+    }
+    .notification-item .flex-grow-1 { min-width: 0; }
+    .notification-item .d-flex { flex-wrap: wrap; }
+    .notification-item .d-flex.align-items-start { align-items: flex-start; }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-bell text-primary me-2"></i>
+                    @Html.T("الإشعارات", "Notifications")
+                </h3>
+                <p class="text-muted mb-0">@Model.Count(n => !n.IsRead) @Html.T("إشعار غير مقروء", "Unread notifications")</p>
+            </div>
+            <div class="d-flex gap-2">
+                <form asp-action="MarkAllAsRead" method="post">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="feather-check-circle me-2"></i>
+                        @Html.T("تمييز الكل كمقروء", "Mark All as Read")
+                    </button>
+                </form>
+                <a asp-area="Student" asp-controller="Settings" asp-action="Index" asp-route-tab="notifications" class="btn btn-outline-secondary">
+                    <i class="feather-settings me-2"></i>
+                    @Html.T("الإعدادات", "Settings")
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notifications List -->
+<div class="card stretch stretch-full">
+    <div class="card-body p-0">
+        @if (Model.Any())
+        {
+            <div class="list-group list-group-flush">
+                @foreach (var notification in Model)
+                {
+                    <div class="list-group-item notification-item @(notification.IsRead ? "" : "unread")">
+                        <div class="d-flex align-items-start flex-wrap gap-2">
+                            <div class="avatar-text avatar-md @(GetNotificationIconClass(notification.Type)) flex-shrink-0 me-2 me-md-3">
+                                <i class="feather-@(GetNotificationIcon(notification.Type))"></i>
+                            </div>
+                            <div class="flex-grow-1 min-w-0">
+                                <div class="d-flex flex-column flex-sm-row flex-sm-wrap justify-content-between align-items-start gap-1 mb-1">
+                                    <h6 class="fw-bold mb-0 text-break">@notification.Title</h6>
+                                    <small class="text-muted flex-shrink-0">@GetTimeAgo(notification.CreatedAt)</small>
+                                </div>
+                                <p class="text-muted mb-2 mb-md-2 text-break">@notification.Message</p>
+                                @if (!string.IsNullOrEmpty(notification.ActionUrl))
+                                {
+                                    <a href="@notification.ActionUrl" class="btn btn-sm btn-outline-primary">
+                                        @(notification.ActionText ?? Html.T("عرض التفاصيل", "View Details"))
+                                    </a>
+                                }
+                            </div>
+                            @if (!notification.IsRead)
+                            {
+                                <form asp-action="MarkAsRead" asp-route-id="@notification.Id" method="post" class="flex-shrink-0 ms-auto ms-md-2">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-icon btn-outline-secondary" title="@Html.T("تمييز كمقروء", "Mark as Read")">
+                                        <i class="feather-check"></i>
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="p-5">
+                @{
+                    ViewData["Icon"] = "bell";
+                    ViewData["Title"] = Html.T("لا توجد إشعارات", "No Notifications");
+                    ViewData["Message"] = Html.T("لا توجد إشعارات لعرضها حالياً.", "No notifications to display at the moment.");
+                }
+                @await Html.PartialAsync("_EmptyState")
+            </div>
+        }
+    </div>
+</div>
+
+@functions {
+    string GetNotificationIcon(LMS.Domain.Enums.NotificationType type)
+    {
+        return type switch
+        {
+            LMS.Domain.Enums.NotificationType.CourseEnrollment => "book-open",
+            LMS.Domain.Enums.NotificationType.AssignmentGraded => "check-circle",
+            LMS.Domain.Enums.NotificationType.NewAnnouncement => "volume-2",
+            LMS.Domain.Enums.NotificationType.LiveClassReminder => "video",
+            LMS.Domain.Enums.NotificationType.CertificateIssued => "award",
+            LMS.Domain.Enums.NotificationType.BadgeEarned => "star",
+            _ => "bell"
+        };
+    }
+
+    string GetNotificationIconClass(LMS.Domain.Enums.NotificationType type)
+    {
+        return type switch
+        {
+            LMS.Domain.Enums.NotificationType.CourseEnrollment => "bg-soft-primary text-primary",
+            LMS.Domain.Enums.NotificationType.AssignmentGraded => "bg-soft-success text-success",
+            LMS.Domain.Enums.NotificationType.NewAnnouncement => "bg-soft-info text-info",
+            LMS.Domain.Enums.NotificationType.LiveClassReminder => "bg-soft-warning text-warning",
+            LMS.Domain.Enums.NotificationType.CertificateIssued => "bg-soft-success text-success",
+            LMS.Domain.Enums.NotificationType.BadgeEarned => "bg-soft-warning text-warning",
+            _ => "bg-soft-secondary text-secondary"
+        };
+    }
+
+    string GetTimeAgo(DateTime dateTime)
+    {
+        var timeSpan = DateTime.UtcNow - dateTime;
+        if (timeSpan.TotalMinutes < 1) return Html.T("الآن", "Just now");
+        if (timeSpan.TotalHours < 1) return Html.T($"منذ {(int)timeSpan.TotalMinutes} دقيقة", $"{(int)timeSpan.TotalMinutes} minutes ago");
+        if (timeSpan.TotalDays < 1) return Html.T($"منذ {(int)timeSpan.TotalHours} ساعة", $"{(int)timeSpan.TotalHours} hours ago");
+        if (timeSpan.TotalDays < 7) return Html.T($"منذ {(int)timeSpan.TotalDays} يوم", $"{(int)timeSpan.TotalDays} days ago");
+        return dateTime.ToString("dd/MM/yyyy");
+    }
+}
+

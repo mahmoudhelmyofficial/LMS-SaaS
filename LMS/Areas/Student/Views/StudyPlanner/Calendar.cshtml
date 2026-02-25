@@ -1,0 +1,258 @@
+@model StudyPlannerCalendarViewModel
+@{
+    ViewData["Title"] = Html.T("تقويم الدراسة", "Study Calendar");
+}
+
+@section Styles {
+<style>
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 1px;
+        background: #e5e7eb;
+        border: 1px solid #e5e7eb;
+    }
+    .calendar-day {
+        background: white;
+        padding: 12px;
+        min-height: 120px;
+        position: relative;
+    }
+    .calendar-day.other-month {
+        background: #f9fafb;
+        color: #9ca3af;
+    }
+    .calendar-day.today {
+        background: #dbeafe;
+    }
+    .day-number {
+        font-weight: bold;
+        margin-bottom: 8px;
+    }
+    .session-item {
+        font-size: 11px;
+        padding: 4px 6px;
+        border-radius: 4px;
+        margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: pointer;
+    }
+    .session-pending { background: #dbeafe; color: #1e40af; }
+    .session-completed { background: #d1fae5; color: #065f46; }
+    .session-missed { background: #fee2e2; color: #991b1b; }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between">
+            <div>
+                <h3 class="fw-bold mb-2">
+                    <i class="feather-calendar text-primary me-2"></i>
+                    @Html.T("تقويم الدراسة", "Study Calendar")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("خطط وتتبع جلسات الدراسة اليومية", "Plan and track your daily study sessions")</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a asp-action="Calendar" asp-route-year="@Model.Year" asp-route-month="@(Model.Month - 1)" 
+                   class="btn btn-outline-secondary">
+                    <i class="feather-chevron-right"></i>
+                </a>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSessionModal">
+                    <i class="feather-plus me-2"></i>
+                    @Html.T("جلسة جديدة", "New Session")
+                </button>
+                <a asp-action="Calendar" asp-route-year="@Model.Year" asp-route-month="@(Model.Month + 1)" 
+                   class="btn btn-outline-secondary">
+                    <i class="feather-chevron-left"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Summary -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <div style="font-size: 32px; margin-bottom: 8px;">📅</div>
+                <h4 class="fw-bold mb-1">@Model.Stats.TotalSessions</h4>
+                <small class="text-muted">@Html.T("جلسة مجدولة", "Scheduled Session")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <div style="font-size: 32px; margin-bottom: 8px;">✅</div>
+                <h4 class="fw-bold text-success mb-1">@Model.Stats.CompletedSessions</h4>
+                <small class="text-muted">@Html.T("مكتملة", "Completed")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <div style="font-size: 32px; margin-bottom: 8px;">⏱️</div>
+                <h4 class="fw-bold text-primary mb-1">@Model.Stats.PendingSessions</h4>
+                <small class="text-muted">@Html.T("قادمة", "Upcoming")</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body text-center">
+                <div style="font-size: 32px; margin-bottom: 8px;">❌</div>
+                <h4 class="fw-bold text-danger mb-1">@Model.Stats.MissedSessions</h4>
+                <small class="text-muted">@Html.T("فائتة", "Missed")</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Calendar -->
+<div class="card stretch stretch-full">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="fw-bold mb-0">
+                @(new DateTime(Model.Year, Model.Month, 1).ToString("MMMM yyyy"))
+            </h4>
+            <div class="d-flex gap-3">
+                <span class="badge bg-soft-primary text-primary">
+                    <i class="feather-clock me-1"></i>
+                    @Html.T("قادمة", "Upcoming")
+                </span>
+                <span class="badge bg-soft-success text-success">
+                    <i class="feather-check me-1"></i>
+                    @Html.T("مكتملة", "Completed")
+                </span>
+                <span class="badge bg-soft-danger text-danger">
+                    <i class="feather-x me-1"></i>
+                    @Html.T("فائتة", "Missed")
+                </span>
+            </div>
+        </div>
+
+        <!-- Day Headers -->
+        <div class="calendar-grid mb-0" style="border-bottom: none;">
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الأحد", "Sun")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الإثنين", "Mon")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الثلاثاء", "Tue")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الأربعاء", "Wed")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الخميس", "Thu")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("الجمعة", "Fri")</div>
+            <div class="text-center fw-bold p-2 bg-light">@Html.T("السبت", "Sat")</div>
+        </div>
+
+        <!-- Calendar Days -->
+        <div class="calendar-grid">
+            @{
+                var firstDay = new DateTime(Model.Year, Model.Month, 1);
+                var daysInMonth = DateTime.DaysInMonth(Model.Year, Model.Month);
+                var startDayOfWeek = (int)firstDay.DayOfWeek;
+                var today = DateTime.UtcNow.Date;
+
+                // Previous month days
+                var prevMonth = firstDay.AddMonths(-1);
+                var daysInPrevMonth = DateTime.DaysInMonth(prevMonth.Year, prevMonth.Month);
+                for (int i = daysInPrevMonth - startDayOfWeek + 1; i <= daysInPrevMonth; i++)
+                {
+                    <div class="calendar-day other-month">
+                        <div class="day-number">@i</div>
+                    </div>
+                }
+
+                // Current month days
+                for (int day = 1; day <= daysInMonth; day++)
+                {
+                    var currentDate = new DateTime(Model.Year, Model.Month, day);
+                    var isToday = currentDate == today;
+                    var daySessions = Model.Sessions.Where(s => s.Date.Date == currentDate).ToList();
+
+                    <div class="calendar-day @(isToday ? "today" : "")">
+                        <div class="day-number">@day</div>
+                        @foreach (var session in daySessions)
+                        {
+                            var statusClass = session.IsCompleted ? "session-completed" : 
+                                            session.Date < DateTime.UtcNow && !session.IsCompleted ? "session-missed" : "session-pending";
+                            
+                            <div class="session-item @statusClass" title="@session.Title - @session.Duration @Html.T("دقيقة", "min")" 
+                                 onclick="viewSession(@session.Id)">
+                                <i class="feather-book-open"></i> @session.Title
+                            </div>
+                        }
+                    </div>
+                }
+
+                // Next month days
+                var totalCells = startDayOfWeek + daysInMonth;
+                var remainingCells = 35 - totalCells;
+                if (remainingCells < 7 && totalCells > 28) remainingCells += 7;
+                
+                for (int i = 1; i <= remainingCells; i++)
+                {
+                    <div class="calendar-day other-month">
+                        <div class="day-number">@i</div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Add Session Modal -->
+<div class="modal fade" id="addSessionModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form asp-action="AddSession" method="post">
+                <div class="modal-header">
+                    <h5 class="modal-title">@Html.T("إضافة جلسة دراسية", "Add Study Session")</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("الدورة", "Course")</label>
+                        <select name="enrollmentId" class="form-select" required>
+                            <option value="">@Html.T("اختر دورة", "Select a course")</option>
+                            @foreach (var enrollment in Model.AvailableCourses)
+                            {
+                                <option value="@enrollment.Id">@enrollment.Course.Title</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("التاريخ والوقت", "Date and Time")</label>
+                        <input type="datetime-local" name="date" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("المدة (دقيقة)", "Duration (minutes)")</label>
+                        <input type="number" name="duration" class="form-control" value="60" min="15" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("الهدف", "Goal")</label>
+                        <textarea name="goal" class="form-control" rows="2" placeholder="@Html.T("ماذا تريد أن تحقق في هذه الجلسة؟", "What do you want to achieve in this session?")"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-primary">@Html.T("إضافة", "Add")</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    function viewSession(sessionId) {
+        window.location.href = '@Url.Action("Index")?sessionId=' + sessionId;
+    }
+</script>
+}

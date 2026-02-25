@@ -1,0 +1,382 @@
+@model IEnumerable<LMS.Domain.Entities.LiveSessions.LiveClass>
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إدارة البث المباشر", "Live Session Management");
+    ViewData["Subtitle"] = Html.T("جدولة وإدارة جلسات البث المباشر", "Schedule and manage live sessions");
+    
+    // Load platform settings
+    var startWindowMinutes = await PlatformSettings.GetIntSettingAsync("LiveClass.StartWindowMinutes", 15);
+}
+
+@{
+    var createUrl = Url.Action("Create");
+    var actionButtonsHtml = "<a href='" + createUrl + "' class='btn btn-primary'>" +
+        "<i class='feather-plus me-2'></i>" +
+        Html.T("جدولة بث مباشر جديد", "Schedule New Live Session") +
+        "</a>" +
+        "<button class='btn btn-light' onclick='window.location.reload()'>" +
+            "<i class='feather-refresh-cw me-2'></i>" +
+            Html.T("تحديث", "Refresh") +
+        "</button>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("إجمالي الجلسات", "Total Sessions") },
+                { "Value", Model.Count() },
+                { "Icon", "video" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("جلسات مجدولة", "Scheduled Sessions") },
+                { "Value", Model.Count(l => l.Status == LMS.Domain.Enums.LiveClassStatus.Scheduled) },
+                { "Icon", "calendar" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("جلسات مباشرة الآن", "Live Now") },
+                { "Value", Model.Count(l => l.Status == LMS.Domain.Enums.LiveClassStatus.Live) },
+                { "Icon", "radio" },
+                { "Color", "danger" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", Html.T("جلسات مكتملة", "Completed Sessions") },
+                { "Value", Model.Count(l => l.Status == LMS.Domain.Enums.LiveClassStatus.Completed) },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("الدورة", "Course")</label>
+                            <select name="courseId" class="form-select" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                @if (ViewBag.Courses != null)
+                                {
+                                    foreach (var course in ViewBag.Courses)
+                                    {
+                                        <option value="@course.Id" selected="@(ViewBag.CourseId == course.Id)">@course.Title</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">@Html.T("الحالة", "Status")</label>
+                            <select name="status" class="form-select" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الحالات", "All Statuses")</option>
+                                <option value="Scheduled" selected="@(ViewBag.Status?.ToString() == "Scheduled")">@Html.T("مجدولة", "Scheduled")</option>
+                                <option value="Live" selected="@(ViewBag.Status?.ToString() == "Live")">@Html.T("مباشرة الآن", "Live Now")</option>
+                                <option value="Completed" selected="@(ViewBag.Status?.ToString() == "Completed")">@Html.T("مكتملة", "Completed")</option>
+                                <option value="Cancelled" selected="@(ViewBag.Status?.ToString() == "Cancelled")">@Html.T("ملغية", "Cancelled")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">@Html.T("نوع التسعير", "Pricing Type")</label>
+                            <select name="pricingType" class="form-select" onchange="this.form.submit()">
+                                <option value="">@Html.T("جميع الأنواع", "All Types")</option>
+                                <option value="Free" selected="@(ViewBag.PricingType?.ToString() == "Free")">@Html.T("مجانية", "Free")</option>
+                                <option value="Paid" selected="@(ViewBag.PricingType?.ToString() == "Paid")">@Html.T("مدفوعة", "Paid")</option>
+                                <option value="SubscriptionOnly" selected="@(ViewBag.PricingType?.ToString() == "SubscriptionOnly")">@Html.T("اشتراك فقط", "Subscription Only")</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="feather-filter me-2"></i>
+                                @Html.T("تصفية", "Filter")
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Classes List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("جلسات البث المباشر", "Live Sessions")</h5>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="d-md-none p-3">
+                            @foreach (var liveClass in Model)
+                            {
+                                <div class="card mb-3 border">
+                                    <div class="card-body">
+                                        <a href="@Url.Action("Details", new { id = liveClass.Id })" class="fw-bold text-dark text-break d-block">@liveClass.Title</a>
+                                        <p class="fs-12 text-muted mb-1">@liveClass.Course?.Title</p>
+                                        <p class="fs-12 mb-2">@liveClass.ScheduledStartTime.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @liveClass.DurationMinutes @Html.T("دقيقة", "min")</p>
+                                        <span class="badge @(liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Live ? "bg-soft-danger text-danger" : liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Scheduled ? "bg-soft-warning text-warning" : "bg-soft-success text-success")">@liveClass.Status</span>
+                                        <a href="@Url.Action("Details", new { id = liveClass.Id })" class="btn btn-sm btn-primary mt-2 w-100"><i class="feather-eye me-1"></i>@Html.T("عرض", "View")</a>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="d-none d-md-block">
+                            <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>@Html.T("العنوان", "Title")</th>
+                                            <th>@Html.T("الدورة", "Course")</th>
+                                            <th>@Html.T("المنصة", "Platform")</th>
+                                            <th>@Html.T("التاريخ والوقت", "Date & Time")</th>
+                                            <th>@Html.T("المدة", "Duration")</th>
+                                            <th>@Html.T("الحالة", "Status")</th>
+                                            <th>@Html.T("التسعير", "Pricing")</th>
+                                            <th>@Html.T("المشاركون", "Participants")</th>
+                                            <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var liveClass in Model)
+                                    {
+                                        var isUpcoming = liveClass.ScheduledStartTime > DateTime.UtcNow && liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Scheduled;
+                                        var canStart = Math.Abs((liveClass.ScheduledStartTime - DateTime.UtcNow).TotalMinutes) <= startWindowMinutes && liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Scheduled;
+                                        
+                                        <tr class="@(liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Live ? "table-danger" : "")">
+                                            <td>
+                                                <div>
+                                                    <a href="@Url.Action("Details", new { id = liveClass.Id })" class="fw-bold text-dark">
+                                                        @liveClass.Title
+                                                    </a>
+                                                    @if (!string.IsNullOrEmpty(liveClass.Description))
+                                                    {
+                                                        <p class="fs-12 text-muted mb-0">@(liveClass.Description.Length > 50 ? liveClass.Description.Substring(0, 50) + "..." : liveClass.Description)</p>
+                                                    }
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-primary text-primary">@liveClass.Course?.Title</span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    @if (liveClass.Platform == "Zoom")
+                                                    {
+                                                        <i class="feather-video text-primary"></i>
+                                                    }
+                                                    else if (liveClass.Platform == "GoogleMeet")
+                                                    {
+                                                        <i class="feather-video text-success"></i>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="feather-monitor text-info"></i>
+                                                    }
+                                                    <span>@liveClass.Platform</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div>
+                                                    <div class="fw-medium">@liveClass.ScheduledStartTime.ToLocalTime().ToString("dd/MM/yyyy")</div>
+                                                    <div class="fs-12 text-muted">@liveClass.ScheduledStartTime.ToLocalTime().ToString("hh:mm tt")</div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-info text-info">@liveClass.DurationMinutes @Html.T("دقيقة", "min")</span>
+                                            </td>
+                                            <td>
+                                                @switch (liveClass.Status)
+                                                {
+                                                    case LMS.Domain.Enums.LiveClassStatus.Scheduled:
+                                                        <span class="badge bg-soft-warning text-warning">
+                                                            <i class="feather-clock me-1"></i>@Html.T("مجدولة", "Scheduled")
+                                                        </span>
+                                                        break;
+                                                    case LMS.Domain.Enums.LiveClassStatus.Live:
+                                                        <span class="badge bg-soft-danger text-danger">
+                                                            <i class="feather-radio me-1"></i>@Html.T("مباشرة الآن", "Live Now")
+                                                        </span>
+                                                        break;
+                                                    case LMS.Domain.Enums.LiveClassStatus.Completed:
+                                                        <span class="badge bg-soft-success text-success">
+                                                            <i class="feather-check-circle me-1"></i>@Html.T("مكتملة", "Completed")
+                                                        </span>
+                                                        break;
+                                                    case LMS.Domain.Enums.LiveClassStatus.Cancelled:
+                                                        <span class="badge bg-soft-secondary text-secondary">
+                                                            <i class="feather-x-circle me-1"></i>@Html.T("ملغية", "Cancelled")
+                                                        </span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (liveClass.PricingType)
+                                                {
+                                                    case LMS.Domain.Enums.LiveSessionPricingType.Free:
+                                                        <span class="badge bg-soft-success text-success">@Html.T("مجانية", "Free")</span>
+                                                        break;
+                                                    case LMS.Domain.Enums.LiveSessionPricingType.Paid:
+                                                        <span class="fw-bold text-primary">@liveClass.Price.ToString("N0") @Html.T("ج.م", "EGP")</span>
+                                                        break;
+                                                    case LMS.Domain.Enums.LiveSessionPricingType.SubscriptionOnly:
+                                                        <span class="badge bg-soft-info text-info">@Html.T("اشتراك", "Subscription")</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="feather-users text-muted"></i>
+                                                    <span>@(liveClass.MaxParticipants?.ToString() ?? Html.T("غير محدود", "Unlimited"))</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { id = liveClass.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    
+                                                    @if (liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Scheduled)
+                                                    {
+                                                        <a href="@Url.Action("Edit", new { id = liveClass.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                            <i class="feather-edit"></i>
+                                                        </a>
+                                                        
+                                                        @if (canStart)
+                                                        {
+                                                            <form method="post" asp-action="Start" asp-route-id="@liveClass.Id" class="d-inline">
+                                                                @Html.AntiForgeryToken()
+                                                                <button type="submit" class="avatar-text avatar-md bg-soft-success text-success" data-bs-toggle="tooltip" title="@Html.T("بدء البث", "Start Stream")">
+                                                                    <i class="feather-play-circle"></i>
+                                                                </button>
+                                                            </form>
+                                                        }
+                                                    }
+                                                    
+                                                    @if (liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Live)
+                                                    {
+                                                        <a href="@liveClass.MeetingUrl" target="_blank" class="avatar-text avatar-md bg-soft-danger text-danger" data-bs-toggle="tooltip" title="@Html.T("الانضمام للبث", "Join Stream")">
+                                                            <i class="feather-radio"></i>
+                                                        </a>
+                                                        
+                                                        <form method="post" asp-action="End" asp-route-id="@liveClass.Id" class="d-inline">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="avatar-text avatar-md bg-soft-warning text-warning" data-bs-toggle="tooltip" title="@Html.T("إنهاء البث", "End Stream")">
+                                                                <i class="feather-stop-circle"></i>
+                                                            </button>
+                                                        </form>
+                                                    }
+                                                    
+                                                    <div class="dropdown">
+                                                        <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown">
+                                                            <i class="feather-more-horizontal"></i>
+                                                        </a>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li>
+                                                                <a class="dropdown-item" href="@liveClass.MeetingUrl" target="_blank">
+                                                                    <i class="feather-external-link me-3"></i>
+                                                                    <span>@Html.T("فتح رابط الاجتماع", "Open Meeting Link")</span>
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)" onclick="copyToClipboard('@liveClass.MeetingUrl')">
+                                                                    <i class="feather-copy me-3"></i>
+                                                                    <span>@Html.T("نسخ رابط الاجتماع", "Copy Meeting Link")</span>
+                                                                </a>
+                                                            </li>
+                                                            @if (liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Scheduled || liveClass.Status == LMS.Domain.Enums.LiveClassStatus.Live)
+                                                            {
+                                                                <li><hr class="dropdown-divider"></li>
+                                                                <li>
+                                                                    <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="cancelClass(@liveClass.Id)">
+                                                                        <i class="feather-x-circle me-3"></i>
+                                                                        <span>@Html.T("إلغاء الجلسة", "Cancel Session")</span>
+                                                                    </a>
+                                                                </li>
+                                                            }
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-video"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا توجد جلسات بث مباشر", "No live sessions found")</h5>
+                            <p class="text-muted mb-4">@Html.T("ابدأ بجدولة أول جلسة بث مباشر لطلابك", "Start by scheduling your first live session for your students")</p>
+                            <a href="@Url.Action("Create")" class="btn btn-primary">
+                                <i class="feather-plus me-2"></i>
+                                @Html.T("جدولة بث مباشر جديد", "Schedule New Live Session")
+                            </a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Form (Hidden) -->
+<form id="cancelForm" method="post" style="display:none;">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="reason" id="cancelReason" />
+</form>
+
+@section Scripts {
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert('@Html.T("تم نسخ رابط الاجتماع", "Meeting link copied")');
+            }, function(err) {
+                console.error('Error copying text: ', err);
+            });
+        }
+
+        function cancelClass(id) {
+            var reason = prompt('@Html.T("أدخل سبب الإلغاء (اختياري):", "Enter cancellation reason (optional):")');
+            if (reason !== null) { // User clicked OK (not Cancel)
+                var form = document.getElementById('cancelForm');
+                document.getElementById('cancelReason').value = reason || '';
+                form.action = '@Url.Action("Cancel")/' + id;
+                form.submit();
+            }
+        }
+
+        // Initialize tooltips
+        $(document).ready(function () {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+}

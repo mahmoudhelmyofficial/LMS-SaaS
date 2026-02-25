@@ -1,0 +1,515 @@
+@model List<LMS.Services.Interfaces.CourseRecommendation>
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("الخطوات التالية", "Next Steps");
+    var completedCourseId = ViewContext.RouteData.Values["completedCourseId"];
+    
+    // UI settings
+    var nextStepsLimit = await PlatformSettings.GetIntSettingAsync("UI.NextSteps.Limit", 3);
+    var skillsPreviewLimit = await PlatformSettings.GetIntSettingAsync("UI.SkillsPreview.Limit", 3);
+}
+
+<style>
+    .celebration-banner {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 48px 32px;
+        border-radius: 20px;
+        margin-bottom: 32px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .celebration-banner::before {
+        content: '🎉';
+        position: absolute;
+        font-size: 200px;
+        opacity: 0.1;
+        top: -50px;
+        right: -50px;
+        animation: float 3s ease-in-out infinite;
+    }
+    
+    @@keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-20px); }
+    }
+    
+    .certificate-preview {
+        background: white;
+        padding: 32px;
+        border-radius: 16px;
+        border: 3px dashed #fbbf24;
+        text-align: center;
+        box-shadow: 0 8px 30px rgba(251, 191, 36, 0.2);
+    }
+    
+    .next-step-card {
+        background: white;
+        border-radius: 16px;
+        padding: 28px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        height: 100%;
+        transition: all 0.3s ease;
+        border-top: 4px solid;
+    }
+    
+    .next-step-card.recommended { border-color: #22c55e; }
+    .next-step-card.advanced { border-color: #3b82f6; }
+    .next-step-card.related { border-color: #fbbf24; }
+    
+    .next-step-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 35px rgba(0,0,0,0.15);
+    }
+    
+    .skill-gained {
+        display: inline-block;
+        padding: 8px 16px;
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        color: #16a34a;
+        border-radius: 20px;
+        margin: 4px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    
+    .achievement-icon {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 50px;
+        margin: 0 auto 20px;
+        box-shadow: 0 8px 25px rgba(251, 191, 36, 0.4);
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @@keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+    
+    .stats-highlight {
+        background: #f9fafb;
+        padding: 24px;
+        border-radius: 12px;
+        margin: 16px 0;
+    }
+    
+    .recommendation-badge {
+        position: absolute;
+        top: -12px;
+        right: 20px;
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        color: white;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+    }
+    
+    .social-share-btn {
+        padding: 12px 24px;
+        border-radius: 12px;
+        border: 2px solid #e5e7eb;
+        background: white;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .social-share-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+</style>
+
+<!-- Celebration Banner -->
+<div class="celebration-banner">
+    <div class="achievement-icon">
+        🏆
+    </div>
+    <h1 class="mb-3">@Html.T("مبروك! لقد أكملت الدورة", "Congratulations! You completed the course")</h1>
+    <p class="fs-5 mb-4 opacity-90">@Html.T("أحسنت! حان الوقت للانتقال إلى المستوى التالي", "Well done! Time to move to the next level")</p>
+    <div class="d-flex justify-content-center gap-3 flex-wrap">
+        <button class="btn btn-light btn-lg" onclick="downloadCertificate()">
+            <i class="feather-download me-2"></i>
+            @Html.T("تحميل الشهادة", "Download certificate")
+        </button>
+        <button class="btn btn-outline-light btn-lg" onclick="shareAchievement()">
+            <i class="feather-share-2 me-2"></i>
+            @Html.T("مشاركة الإنجاز", "Share achievement")
+        </button>
+    </div>
+</div>
+
+<!-- Achievement Stats -->
+@{
+    var finalScore = ViewBag.FinalScore ?? 0.0;
+    var studyHours = ViewBag.StudyHours ?? 0.0;
+    var completedLessons = ViewBag.CompletedLessons ?? 0;
+    var totalLessons = ViewBag.TotalLessons ?? 0;
+    var pointsEarned = ViewBag.PointsEarned ?? 0;
+    var skills = ViewBag.Skills as List<string> ?? new List<string>();
+}
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="stats-highlight text-center">
+            <i class="feather-award text-warning mb-2" style="font-size: 32px;"></i>
+            <h3 class="mb-1 text-warning">@(((double)finalScore).ToString("F0"))%</h3>
+            <p class="text-muted small mb-0">@Html.T("التقييم النهائي", "Final grade")</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stats-highlight text-center">
+            <i class="feather-clock text-primary mb-2" style="font-size: 32px;"></i>
+            <h3 class="mb-1 text-primary">@(((double)studyHours).ToString("F0"))</h3>
+            <p class="text-muted small mb-0">@Html.T("ساعة تعليمية", "learning hours")</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stats-highlight text-center">
+            <i class="feather-check-circle text-success mb-2" style="font-size: 32px;"></i>
+            <h3 class="mb-1 text-success">@completedLessons/@totalLessons</h3>
+            <p class="text-muted small mb-0">@Html.T("دروس مكتملة", "Lessons completed")</p>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stats-highlight text-center">
+            <i class="feather-star text-info mb-2" style="font-size: 32px;"></i>
+            <h3 class="mb-1 text-info">+@pointsEarned</h3>
+            <p class="text-muted small mb-0">@Html.T("نقاط مكتسبة", "Points earned")</p>
+        </div>
+    </div>
+</div>
+
+<!-- Skills Gained -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="next-step-card" style="border-color: #22c55e;">
+            <h4 class="mb-4">
+                <i class="feather-check-square text-success me-2"></i>
+                @Html.T("المهارات التي اكتسبتها", "Skills you gained")
+            </h4>
+            <div class="d-flex flex-wrap">
+                @if (skills.Any())
+                {
+                    foreach (var skill in skills)
+                    {
+                        <span class="skill-gained">@skill</span>
+                    }
+                }
+                else
+                {
+                    <span class="text-muted">@Html.T("لم يتم تحديد المهارات لهذه الدورة", "No skills defined for this course")</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Certificate Preview -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="certificate-preview">
+            <h3 class="mb-4 text-primary">🎓 @Html.T("شهادة إتمام الدورة", "Course completion certificate")</h3>
+            <p class="text-muted mb-4">@Html.T("شهادتك جاهزة للتحميل والمشاركة", "Your certificate is ready to download and share")</p>
+            <div class="mb-4">
+                <img src="/assets/images/certificate-preview.png" alt="@Html.T("شهادة", "Certificate")" class="img-fluid rounded" style="max-height: 300px;" onerror="this.src='/assets/images/placeholder.png'">
+            </div>
+            <div class="d-grid gap-2">
+                <button class="btn btn-warning btn-lg">
+                    <i class="feather-download me-2"></i>
+                    @Html.T("تحميل الشهادة (PDF)", "Download certificate (PDF)")
+                </button>
+                <button class="btn btn-outline-warning">
+                    <i class="feather-share-2 me-2"></i>
+                    @Html.T("مشاركة على لينكد إن", "Share on LinkedIn")
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6">
+        <div class="next-step-card" style="border-color: #667eea;">
+            <h4 class="mb-4">
+                <i class="feather-trending-up text-primary me-2"></i>
+                @Html.T("تأثيرك التعليمي", "Your learning impact")
+            </h4>
+            <div class="mb-4">
+                <div style="height: 250px;">
+                    <canvas id="progressChart"></canvas>
+                </div>
+            </div>
+            @{
+                var statsData = ViewBag.Stats as LMS.Services.Interfaces.StudentLearningStats;
+                var improvementRateFromViewBag = ViewBag.ImprovementRate as int?;
+                var improvementRate = improvementRateFromViewBag ?? ((statsData?.AverageGrade ?? 0) > 70 ? (int)((statsData?.AverageGrade ?? 0) - 50) : 0);
+            }
+            @if (improvementRate > 0)
+            {
+                <div class="alert alert-info" style="border-radius: 12px;">
+                    <strong>@Html.T("رائع!", "Great!")</strong> @Html.T("لقد تحسن أداؤك بنسبة", "Your performance improved by") <strong>@improvementRate%</strong> @Html.T("خلال هذه الدورة", "during this course")
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info" style="border-radius: 12px;">
+                    <strong>@Html.T("استمر!", "Keep going!")</strong> @Html.T("تابع التعلم لتحقيق تحسن ملموس في مهاراتك", "Continue learning to achieve tangible improvement in your skills")
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<!-- Recommended Next Steps -->
+<div class="mb-4">
+    <h3 class="mb-3">
+        <i class="feather-arrow-right text-primary me-2"></i>
+        @Html.T("الخطوات التالية الموصى بها", "Recommended next steps")
+    </h3>
+    <p class="text-muted">@Html.T("بناءً على إنجازك، إليك أفضل الخيارات للمتابعة", "Based on your achievement, here are the best options to continue")</p>
+</div>
+
+<div class="row g-4 mb-4">
+    @if (Model != null && Model.Any())
+    {
+        foreach (var course in Model.Take(3))
+        {
+            <div class="col-lg-4">
+                <div class="next-step-card @(course.Priority == 1 ? "recommended" : course.Priority == 2 ? "advanced" : "related")" style="position: relative;">
+                    @if (course.Priority == 1)
+                    {
+                        <span class="recommendation-badge">
+                            <i class="feather-star me-1"></i>
+                            @Html.T("الأنسب لك", "Best for you")
+                        </span>
+                    }
+                    <div class="mb-3">
+                        <img src="@(course.ThumbnailUrl ?? "/assets/images/course-placeholder.jpg")" alt="@course.Title" class="img-fluid rounded" style="height: 180px; width: 100%; object-fit: cover;">
+                    </div>
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <span class="badge bg-primary">@course.Level</span>
+                        <div class="text-end">
+                            <small class="text-muted">@Html.T("تطابق", "Match")</small>
+                            <div class="fw-bold text-success">@course.MatchScore%</div>
+                        </div>
+                    </div>
+                    <h5 class="mb-2">@course.Title</h5>
+                    <p class="text-muted small mb-3">@course.Description</p>
+                    
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-2">@Html.T("ستتعلم:", "You'll learn:")</small>
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach (var skill in course.SkillsYoullLearn.Take(skillsPreviewLimit))
+                            {
+                                <span class="badge bg-light text-primary">@skill</span>
+                            }
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <small class="text-muted">
+                            <i class="feather-clock me-1"></i>
+                            @course.Duration @Html.T("ساعة", "hr")
+                        </small>
+                        <small class="text-muted">
+                            <i class="feather-users me-1"></i>
+                            @course.EnrolledStudents @Html.T("طالب", "students")
+                        </small>
+                    </div>
+                    
+                    <div class="alert alert-success-subtle mb-3" style="border-radius: 10px;">
+                        <small>
+                            <i class="feather-info me-2"></i>
+                            <strong>@Html.T("لماذا؟", "Why?")</strong> @course.Reason
+                        </small>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <a href="@Url.Action("Details", "Courses", new { area = "", id = course.CourseId })" class="btn btn-primary">
+                            <i class="feather-arrow-left me-2"></i>
+                            @Html.T("ابدأ هذه الدورة", "Start this course")
+                        </a>
+                        <button class="btn btn-outline-primary" onclick="addToWishlist(@course.CourseId)">
+                            <i class="feather-bookmark me-2"></i>
+                            @Html.T("حفظ للاحقاً", "Save for later")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<!-- Learning Path Continuation -->
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="next-step-card" style="border-color: #667eea;">
+            <h4 class="mb-4">
+                <i class="feather-map text-primary me-2"></i>
+                @Html.T("مسار التعلم الكامل", "Full learning path")
+            </h4>
+            <p class="text-muted mb-4">@Html.T("تتبع تقدمك في مسار التطوير الشامل", "Track your progress on the full development path")</p>
+            
+            @{
+                var stats = ViewBag.Stats as LMS.Services.Interfaces.StudentLearningStats;
+                var completedCourses = stats?.CompletedCourses ?? 0;
+                var basicLevelProgress = Math.Min(100, completedCourses >= 3 ? 100 : (completedCourses * 33));
+                var advancedLevelProgress = Math.Max(0, completedCourses >= 3 ? Math.Min(100, (completedCourses - 3) * 25) : 0);
+                var proLevelProgress = Math.Max(0, completedCourses >= 7 ? Math.Min(100, (completedCourses - 7) * 33) : 0);
+            }
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="p-3 bg-@(basicLevelProgress >= 100 ? "success" : "primary")-subtle rounded">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="feather-@(basicLevelProgress >= 100 ? "check-circle text-success" : "activity text-primary") me-2"></i>
+                            <strong>@Html.T("المستوى 1: الأساسيات", "Level 1: Basics")</strong>
+                        </div>
+                        <div class="progress mb-2" style="height: 6px;">
+                            <div class="progress-bar bg-@(basicLevelProgress >= 100 ? "success" : "primary")" style="width: @basicLevelProgress%"></div>
+                        </div>
+                        <small class="text-muted">@basicLevelProgress% @Html.T("مكتمل", "complete")@(basicLevelProgress >= 100 ? "" : " - " + Html.T("تابع الآن", "Continue now"))</small>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="p-3 bg-@(advancedLevelProgress >= 100 ? "success" : (advancedLevelProgress > 0 ? "warning" : "secondary"))-subtle rounded">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="feather-@(advancedLevelProgress >= 100 ? "check-circle text-success" : (advancedLevelProgress > 0 ? "activity text-warning" : "lock text-secondary")) me-2"></i>
+                            <strong>@Html.T("المستوى 2: المتقدم", "Level 2: Advanced")</strong>
+                        </div>
+                        <div class="progress mb-2" style="height: 6px;">
+                            <div class="progress-bar bg-@(advancedLevelProgress >= 100 ? "success" : (advancedLevelProgress > 0 ? "warning" : "secondary"))" style="width: @advancedLevelProgress%"></div>
+                        </div>
+                        <small class="text-muted">@(advancedLevelProgress > 0 ? $"{advancedLevelProgress}% " + Html.T("مكتمل", "complete") : Html.T("أكمل الأساسيات أولاً", "Complete basics first"))</small>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="p-3 bg-@(proLevelProgress >= 100 ? "success" : (proLevelProgress > 0 ? "info" : "secondary"))-subtle rounded">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="feather-@(proLevelProgress >= 100 ? "check-circle text-success" : (proLevelProgress > 0 ? "activity text-info" : "lock text-secondary")) me-2"></i>
+                            <strong>@Html.T("المستوى 3: الاحترافي", "Level 3: Professional")</strong>
+                        </div>
+                        <div class="progress mb-2" style="height: 6px;">
+                            <div class="progress-bar bg-@(proLevelProgress >= 100 ? "success" : (proLevelProgress > 0 ? "info" : "secondary"))" style="width: @proLevelProgress%"></div>
+                        </div>
+                        <small class="text-muted">@(proLevelProgress > 0 ? $"{proLevelProgress}% " + Html.T("مكتمل", "complete") : Html.T("سيتم فتحه قريباً", "Coming soon"))</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="text-center mt-4">
+                <button class="btn btn-primary btn-lg">
+                    <i class="feather-play me-2"></i>
+                    @Html.T("متابعة المسار التعليمي", "Continue learning path")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Social Sharing -->
+<div class="row g-4">
+    <div class="col-12">
+        <div class="next-step-card" style="border-color: #3b82f6;">
+            <h4 class="mb-4">
+                <i class="feather-share-2 text-primary me-2"></i>
+                @Html.T("شارك إنجازك مع العالم", "Share your achievement with the world")
+            </h4>
+            <p class="text-muted mb-4">@Html.T("اجعل الآخرين يعرفون عن نجاحك!", "Let others know about your success!")</p>
+            
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <button class="social-share-btn w-100" style="border-color: #1877f2;">
+                        <i class="feather-facebook text-primary mb-2" style="font-size: 24px;"></i>
+                        <div class="fw-bold">@Html.T("فيسبوك", "Facebook")</div>
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <button class="social-share-btn w-100" style="border-color: #1da1f2;">
+                        <i class="feather-twitter text-info mb-2" style="font-size: 24px;"></i>
+                        <div class="fw-bold">@Html.T("تويتر", "Twitter")</div>
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <button class="social-share-btn w-100" style="border-color: #0a66c2;">
+                        <i class="feather-linkedin text-primary mb-2" style="font-size: 24px;"></i>
+                        <div class="fw-bold">@Html.T("لينكد إن", "LinkedIn")</div>
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <button class="social-share-btn w-100" style="border-color: #25d366;">
+                        <i class="feather-message-circle text-success mb-2" style="font-size: 24px;"></i>
+                        <div class="fw-bold">@Html.T("واتساب", "WhatsApp")</div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    // Dynamic chart data from server
+    var chartLabels = @Html.Raw(Json.Serialize(ViewBag.ChartLabels ?? new List<string> { System.Threading.Thread.CurrentThread.CurrentUICulture.TwoLetterISOLanguageName == "ar" ? "الإنجاز" : "Achievement" }));
+    var chartData = @Html.Raw(Json.Serialize(ViewBag.ChartData ?? new List<int> { 100 }));
+    
+    // Progress Chart
+    const ctx = document.getElementById('progressChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartLabels,
+            datasets: [{
+                label: '@Html.Raw(Html.T("التقدم", "Progress").ToString().Replace("'", "\\'"))',
+                data: chartData,
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 6,
+                pointBackgroundColor: '#667eea'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, max: 100 }
+            }
+        }
+    });
+    
+    function downloadCertificate() {
+        window.open('/Student/Certificates/Download/@completedCourseId', '_blank');
+    }
+    
+    function shareAchievement() {
+        const text = (window.__T && window.__T.ShareText) || 'You just completed a great course! 🎉';
+        if (navigator.share) {
+            navigator.share({ title: (window.__T && window.__T.NewAchievement) || 'New achievement', text: text });
+        } else {
+            alert((window.__T && window.__T.LinkCopied) || 'Link copied!');
+        }
+    }
+    
+    function addToWishlist(courseId) {
+        fetch(`/Student/Courses/AddToWishlist`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ courseId })
+        }).then(r => r.json()).then(d => {
+            if (d.success) alert((window.__T && window.__T.AddedToWishlist) || 'Added to wishlist!');
+        });
+    }
+</script>
+}

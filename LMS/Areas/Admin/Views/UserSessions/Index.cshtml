@@ -1,0 +1,326 @@
+@model IEnumerable<LMS.Domain.Entities.Security.UserSession>
+
+@{
+    ViewData["Title"] = Html.T("جلسات المستخدمين", "User Sessions");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الأمان", "Security"), null),
+        (Html.T("الجلسات النشطة", "Active Sessions"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+    <style>
+        .session-active {
+            animation: pulse-dot 2s infinite;
+        }
+        @@keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-activity"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("جلسات نشطة", "Active Sessions")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(s => s.IsActive).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-users"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("مستخدمون متصلون", "Connected Users")</span>
+                            <h3 class="fw-bolder d-block">@Model.Where(s => s.IsActive).Select(s => s.UserId).Distinct().Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-monitor"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("سطح المكتب", "Desktop")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(s => s.DeviceType == "Desktop").ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-smartphone"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("جوال", "Mobile")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(s => s.DeviceType == "Mobile").ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("الجلسات النشطة", "Active Sessions")</h5>
+                    <div class="d-flex gap-2">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                                <i class="feather-download me-2"></i>@Html.T("تصدير", "Export")
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/sessions?format=csv">
+                                        <i class="feather-file-text me-2 text-success"></i>@Html.T("تصدير CSV", "Export CSV")
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/sessions?format=excel">
+                                        <i class="feather-file me-2 text-primary"></i>@Html.T("تصدير Excel", "Export Excel")
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="/api/export/sessions?format=pdf">
+                                        <i class="feather-file-text me-2 text-danger"></i>@Html.T("تصدير PDF", "Export PDF")
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="javascript:void(0)" onclick="window.print()">
+                                        <i class="feather-printer me-2 text-secondary"></i>@Html.T("طباعة", "Print")
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#terminateAllModal">
+                            <i class="feather-x-circle me-2"></i>
+                            @Html.T("إنهاء جميع الجلسات", "Terminate All Sessions")
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="sessionsTable">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("المستخدم", "User")</th>
+                                    <th>@Html.T("الجهاز", "Device")</th>
+                                    <th>@Html.T("المتصفح", "Browser")</th>
+                                    <th>@Html.T("عنوان IP", "IP Address")</th>
+                                    <th>@Html.T("الموقع", "Location")</th>
+                                    <th>@Html.T("بدأت في", "Started At")</th>
+                                    <th>@Html.T("آخر نشاط", "Last Activity")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var session in Model.OrderByDescending(s => s.LastActivityAt))
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (session.User != null)
+                                            {
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                        @session.User.FirstName?.Substring(0, 1)
+                                                    </div>
+                                                    <div>
+                                                        <span class="fw-semibold d-block">@session.User.FirstName @session.User.LastName</span>
+                                                        <small class="text-muted">@session.User.Email</small>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                @switch (session.DeviceType)
+                                                {
+                                                    case "Desktop":
+                                                        <i class="feather-monitor text-primary"></i>
+                                                        break;
+                                                    case "Mobile":
+                                                        <i class="feather-smartphone text-success"></i>
+                                                        break;
+                                                    case "Tablet":
+                                                        <i class="feather-tablet text-info"></i>
+                                                        break;
+                                                    default:
+                                                        <i class="feather-monitor text-secondary"></i>
+                                                        break;
+                                                }
+                                                <span>@session.DeviceType</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span>@session.Browser</span>
+                                        </td>
+                                        <td>
+                                            <span class="font-monospace small">@session.IpAddress</span>
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(session.Country))
+                                            {
+                                                <div>
+                                                    <span class="d-block">@session.Country</span>
+                                                    @if (!string.IsNullOrEmpty(session.City))
+                                                    {
+                                                        <small class="text-muted">@session.City</small>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted">-</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="small">@session.CreatedAt.ToString("dd/MM/yyyy hh:mm tt")</span>
+                                        </td>
+                                        <td>
+                                            <span class="small">@(session.LastActivityAt > DateTime.MinValue ? session.LastActivityAt.ToString("dd/MM/yyyy hh:mm tt") : "-")</span>
+                                        </td>
+                                        <td>
+                                            @if (session.IsActive)
+                                            {
+                                                <span class="badge bg-soft-success text-success">
+                                                    <span class="session-active">●</span>
+                                                    @Html.T("نشط", "Active")
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-secondary text-secondary">@Html.T("منتهي", "Ended")</span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="@Url.Action("Details", "UserSessions", new { id = session.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                @if (session.IsActive)
+                                                {
+                                                    <form asp-action="Terminate" asp-controller="UserSessions" asp-route-id="@session.Id" method="post" class="d-inline" onsubmit="return confirm('@(Html.T("هل تريد إنهاء هذه الجلسة؟", "Do you want to terminate this session?"))');">
+                                                        @Html.AntiForgeryToken()
+                                                        <button type="submit" class="avatar-text avatar-md text-danger border-0 bg-transparent p-0" data-bs-toggle="tooltip" title="@Html.T("إنهاء الجلسة", "Terminate Session")">
+                                                            <i class="feather-x-circle"></i>
+                                                        </button>
+                                                    </form>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Terminate All Sessions Modal -->
+<div class="modal fade" id="terminateAllModal" tabindex="-1" data-bs-backdrop="false" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="feather-alert-triangle me-2"></i>
+                    @Html.T("تأكيد إنهاء جميع الجلسات", "Confirm Terminate All Sessions")
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="@Html.T("إغلاق", "Close")"></button>
+            </div>
+            <form asp-action="TerminateAll" asp-controller="UserSessions" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="alert alert-danger">
+                        <h6 class="alert-heading mb-2">
+                            <i class="feather-alert-circle me-2"></i>
+                            @Html.T("تحذير هام!", "Important Warning!")
+                        </h6>
+                        <p class="mb-0">@Html.T("هذا الإجراء سيقوم بإنهاء", "This action will terminate") <strong>@Html.T("جميع الجلسات النشطة", "all active sessions")</strong> @Html.T("في النظام، مما يعني:", "in the system, which means:")</p>
+                        <ul class="mb-0 mt-2">
+                            <li>@Html.T("سيتم تسجيل خروج جميع المستخدمين فوراً", "All users will be logged out immediately")</li>
+                            <li>@Html.T("سيفقد المستخدمون أي عمل غير محفوظ", "Users will lose any unsaved work")</li>
+                            <li>@Html.T("سيحتاج الجميع لإعادة تسجيل الدخول", "Everyone will need to log in again")</li>
+                        </ul>
+                    </div>
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" id="confirmTerminateAll" required>
+                        <label class="form-check-label" for="confirmTerminateAll">
+                            @Html.T("أفهم العواقب وأريد المتابعة", "I understand the consequences and want to proceed")
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="feather-x-circle me-2"></i>
+                        @Html.T("إنهاء جميع الجلسات", "Terminate All Sessions")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            var table = $('#sessionsTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "order": [[6, "desc"]],
+                "pageLength": 50
+            });
+
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+

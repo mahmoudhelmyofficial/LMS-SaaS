@@ -1,0 +1,328 @@
+@model LMS.Areas.Instructor.ViewModels.ProctoringSettingViewModel
+@inject IPlatformSettingsService PlatformSettings
+
+@{
+    ViewData["Title"] = Html.T("إضافة إعدادات مراقبة", "Add Proctoring Settings");
+    ViewData["Subtitle"] = Html.T("إنشاء إعدادات مراقبة جديدة للاختبار", "Create new proctoring settings for quiz");
+    
+    // Load platform settings
+    var screenshotIntervalMin = await PlatformSettings.GetIntSettingAsync("Proctoring.ScreenshotInterval.Min", 10);
+    var screenshotIntervalMax = await PlatformSettings.GetIntSettingAsync("Proctoring.ScreenshotInterval.Max", 600);
+    var maxTabSwitches = await PlatformSettings.GetIntSettingAsync("Proctoring.MaxTabSwitches", 10);
+}
+
+<div class="page-header">
+    <div class="page-header-left d-flex align-items-center">
+        <div class="page-header-title">
+            <h5 class="m-b-10">@ViewData["Title"]</h5>
+            <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+        </div>
+    </div>
+    <div class="page-header-right ms-auto">
+        <div class="d-flex gap-2">
+            <a asp-action="Index" class="btn btn-light">
+                <i class="feather-arrow-right me-2"></i>
+                @Html.T("العودة للقائمة", "Back to list")
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Create" method="post">
+        @Html.AntiForgeryToken()
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Basic Settings -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الإعدادات الأساسية", "Basic settings")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label class="form-label" asp-for="QuizId">@Html.T("الاختبار", "Quiz") <span class="text-danger">*</span></label>
+                                <select asp-for="QuizId" class="form-select" required>
+                                    <option value="">-- @Html.T("اختر الاختبار", "Choose quiz") --</option>
+                                    @if (ViewBag.Quizzes != null)
+                                    {
+                                        foreach (var quiz in ViewBag.Quizzes as IEnumerable<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>)
+                                        {
+                                            <option value="@quiz.Value">@quiz.Text</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="QuizId" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="IsEnabled" id="isEnabled" checked />
+                                    <label class="form-check-label fw-bold" for="isEnabled">
+                                        @Html.T("تفعيل المراقبة", "Enable proctoring")
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Camera & Recording -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الكاميرا والتسجيل", "Camera & recording")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="RequireWebcam" id="requireWebcam" checked />
+                                    <label class="form-check-label fw-bold" for="requireWebcam">
+                                        @Html.T("تفعيل الكاميرا", "Require webcam")
+                                    </label>
+                                    <div class="form-text">@Html.T("مطلوب تشغيل كاميرا الطالب", "Student webcam required")</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="RecordVideo" id="recordVideo" />
+                                    <label class="form-check-label fw-bold" for="recordVideo">
+                                        @Html.T("تسجيل الفيديو", "Record video")
+                                    </label>
+                                    <div class="form-text">@Html.T("تسجيل فيديو الاختبار كاملاً", "Record full exam video")</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="CaptureScreenshots" id="captureScreenshots" />
+                                    <label class="form-check-label fw-bold" for="captureScreenshots">
+                                        @Html.T("التقاط صور دورية", "Capture periodic screenshots")
+                                    </label>
+                                </div>
+                                <div class="mt-2" id="screenshotInterval" style="display:none;">
+                                    <label class="form-label" asp-for="ScreenshotInterval">@Html.T("فترة التقاط الصور (بالثواني)", "Screenshot interval (seconds)")</label>
+                                    <input type="number" class="form-control" asp-for="ScreenshotInterval" min="@screenshotIntervalMin" max="@screenshotIntervalMax" />
+                                    <span asp-validation-for="ScreenshotInterval" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="EnableFaceDetection" id="enableFaceDetection" />
+                                    <label class="form-check-label fw-bold" for="enableFaceDetection">
+                                        @Html.T("كشف الوجه", "Face detection")
+                                    </label>
+                                    <div class="form-text">@Html.T("كشف وجه الطالب تلقائياً", "Automatically detect student face")</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="DetectMultiplePeople" id="detectMultiplePeople" />
+                                    <label class="form-check-label fw-bold" for="detectMultiplePeople">
+                                        @Html.T("كشف الأشخاص المتعددين", "Detect multiple people")
+                                    </label>
+                                    <div class="form-text">@Html.T("تحذير عند وجود أكثر من شخص", "Warn when more than one person detected")</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="RequireIdVerification" id="requireIdVerification" />
+                                    <label class="form-check-label fw-bold" for="requireIdVerification">
+                                        @Html.T("التحقق من الهوية", "ID verification")
+                                    </label>
+                                    <div class="form-text">@Html.T("مطلوب رفع صورة الهوية", "Require ID upload")</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security Settings -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إعدادات الأمان", "Security settings")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="PreventTabSwitch" id="preventTabSwitch" checked />
+                                    <label class="form-check-label fw-bold" for="preventTabSwitch">
+                                        @Html.T("منع التبديل بين النوافذ", "Prevent tab/window switching")
+                                    </label>
+                                </div>
+                                <div class="mt-2">
+                                    <label class="form-label" asp-for="MaxTabSwitchWarnings">@Html.T("عدد التحذيرات المسموحة", "Max warnings allowed")</label>
+                                    <input type="number" class="form-control" asp-for="MaxTabSwitchWarnings" min="1" max="@maxTabSwitches" />
+                                    <span asp-validation-for="MaxTabSwitchWarnings" class="text-danger"></span>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="PreventCopyPaste" id="preventCopyPaste" checked />
+                                    <label class="form-check-label fw-bold" for="preventCopyPaste">
+                                        @Html.T("منع النسخ واللصق", "Prevent copy & paste")
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="DisableRightClick" id="disableRightClick" checked />
+                                    <label class="form-check-label fw-bold" for="disableRightClick">
+                                        @Html.T("تعطيل كليك يمين", "Disable right-click")
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="RequireFullscreen" id="requireFullscreen" />
+                                    <label class="form-check-label fw-bold" for="requireFullscreen">
+                                        @Html.T("وضع ملء الشاشة", "Fullscreen required")
+                                    </label>
+                                    <div class="form-text">@Html.T("مطلوب وضع الشاشة الكاملة", "Fullscreen mode required")</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="LockBrowser" id="lockBrowser" />
+                                    <label class="form-check-label fw-bold" for="lockBrowser">
+                                        @Html.T("قفل المتصفح", "Lock browser")
+                                    </label>
+                                    <div class="form-text">@Html.T("منع الخروج من صفحة الاختبار", "Prevent leaving exam page")</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" asp-for="AutoTerminate" id="autoTerminate" />
+                                    <label class="form-check-label fw-bold" for="autoTerminate">
+                                        @Html.T("الإنهاء التلقائي", "Auto terminate")
+                                    </label>
+                                    <div class="form-text">@Html.T("إنهاء الاختبار عند اكتشاف الغش", "End exam when cheating detected")</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Messages -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("الرسائل والملاحظات", "Messages & notes")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label class="form-label" asp-for="WarningMessage">@Html.T("رسالة التحذير", "Warning message")</label>
+                                <textarea class="form-control" asp-for="WarningMessage" rows="3" placeholder="@Html.T("رسالة تظهر للطالب قبل بدء الاختبار", "Message shown to the student before starting the exam")"></textarea>
+                                <span asp-validation-for="WarningMessage" class="text-danger"></span>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label" asp-for="Notes">@Html.T("ملاحظات", "Notes")</label>
+                                <textarea class="form-control" asp-for="Notes" rows="3" placeholder="@Html.T("ملاحظات خاصة للمدرس", "Private notes for the instructor")"></textarea>
+                                <span asp-validation-for="Notes" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Help Card -->
+                <div class="card bg-soft-info border-0 mb-4">
+                    <div class="card-body">
+                        <h6 class="fw-bold mb-3">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("إرشادات المراقبة", "Proctoring guidelines")
+                        </h6>
+                        <ul class="list-unstyled fs-13 mb-0">
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("المراقبة تضمن نزاهة الاختبارات", "Proctoring ensures exam integrity")
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("يُنصح بتفعيل الكاميرا للاختبارات المهمة", "Enable webcam for important exams")
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("كشف الوجه يحتاج إلى اتصال إنترنت جيد", "Face detection requires good internet")
+                            </li>
+                            <li class="mb-0">
+                                <i class="feather-check text-success me-2"></i>
+                                @Html.T("تأكد من إخبار الطلاب بمتطلبات المراقبة", "Inform students of proctoring requirements")
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Recommended Settings -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">@Html.T("إعدادات موصى بها", "Recommended settings")</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="fw-bold mb-1">@Html.T("للاختبارات المهمة:", "For important exams:")</div>
+                            <ul class="fs-13 mb-0">
+                                <li>@Html.T("تفعيل الكاميرا", "Enable webcam")</li>
+                                <li>@Html.T("تسجيل الفيديو", "Record video")</li>
+                                <li>@Html.T("كشف الوجه", "Face detection")</li>
+                                <li>@Html.T("منع التبديل", "Prevent switching")</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <div class="fw-bold mb-1">@Html.T("للاختبارات العادية:", "For regular exams:")</div>
+                            <ul class="fs-13 mb-0">
+                                <li>@Html.T("تفعيل الكاميرا", "Enable webcam")</li>
+                                <li>@Html.T("منع التبديل", "Prevent switching")</li>
+                                <li>@Html.T("منع النسخ", "Prevent copy")</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="card">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2">
+                            <i class="feather-check me-2"></i>
+                            @Html.T("إنشاء إعدادات المراقبة", "Create proctoring settings")
+                        </button>
+                        <a href="@Url.Action("Index")" class="btn btn-light w-100">
+                            <i class="feather-x me-2"></i>
+                            @Html.T("إلغاء", "Cancel")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    
+    <script>
+        $(document).ready(function() {
+            // Toggle screenshot interval visibility
+            $('#captureScreenshots').change(function() {
+                $('#screenshotInterval').toggle(this.checked);
+            });
+        });
+    </script>
+}
+

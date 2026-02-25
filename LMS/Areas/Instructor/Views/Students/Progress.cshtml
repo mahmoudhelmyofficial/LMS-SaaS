@@ -1,0 +1,294 @@
+@model LMS.Domain.Entities.Learning.Enrollment
+
+@{
+    ViewData["Title"] = Html.T("تقدم الطالب", "Student Progress");
+    ViewData["Subtitle"] = Model.Student?.FullName + " - " + Model.Course?.Title;
+    
+    var totalLessons = ViewBag.TotalLessons ?? 0;
+    var completedLessons = ViewBag.CompletedLessons ?? 0;
+    var inProgressLessons = ViewBag.InProgressLessons ?? 0;
+    var notStartedLessons = ViewBag.NotStartedLessons ?? 0;
+    var completionPercentage = ViewBag.CompletionPercentage ?? 0;
+}
+
+@{
+    var detailsUrl = Url.Action("Details", new { enrollmentId = Model.Id });
+    var indexUrl = Url.Action("Index");
+    var actionButtonsHtml = "<a href='" + detailsUrl + "' class='btn btn-light'>" +
+        "<i class='feather-user me-2'></i>" +
+        "معلومات الطالب" +
+        "</a>" +
+        "<a href='" + indexUrl + "' class='btn btn-light'>" +
+            "<i class='feather-arrow-right me-2'></i>" +
+            "العودة" +
+        "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Student Info Banner -->
+    <div class="card stretch stretch-full mb-4 bg-soft-primary">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl bg-primary text-white">
+                            @Model.Student?.FirstName?.Substring(0, 1)
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-1">@Model.Student?.FullName</h5>
+                            <p class="text-muted mb-0">@Model.Student?.Email</p>
+                            <p class="mb-0 fs-13">
+                                <i class="feather-calendar me-1"></i>
+                                انضم في @Model.EnrolledAt.ToString("dd MMMM yyyy")
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                    <h2 class="fw-bold text-primary mb-1">@completionPercentage.ToString("F0")%</h2>
+                    <p class="text-muted mb-0">نسبة الإكمال</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Statistics -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "إجمالي الدروس" },
+                { "Value", totalLessons },
+                { "Icon", "book" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "دروس مكتملة" },
+                { "Value", completedLessons },
+                { "Icon", "check-circle" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "قيد التقدم" },
+                { "Value", inProgressLessons },
+                { "Icon", "activity" },
+                { "Color", "warning" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6 mb-3">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "لم تبدأ" },
+                { "Value", notStartedLessons },
+                { "Icon", "circle" },
+                { "Color", "secondary" }
+            })
+        </div>
+    </div>
+
+    <!-- Progress Details by Module -->
+    @if (Model.Course?.Modules != null && Model.Course.Modules.Any())
+    {
+        foreach (var module in Model.Course.Modules.OrderBy(m => m.OrderIndex))
+        {
+            var moduleLessons = module.Lessons?.OrderBy(l => l.OrderIndex).ToList() ?? new List<LMS.Domain.Entities.Courses.Lesson>();
+            var completedInModule = moduleLessons.Count(l => Model.LessonProgress?.Any(lp => lp.LessonId == l.Id && lp.IsCompleted) == true);
+            var moduleProgress = moduleLessons.Any() ? (completedInModule * 100.0 / moduleLessons.Count) : 0;
+
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center w-100">
+                        <div>
+                            <h5 class="card-title mb-1">
+                                <i class="feather-folder me-2 text-primary"></i>
+                                @module.Title
+                            </h5>
+                            <p class="text-muted fs-13 mb-0">@module.Description</p>
+                        </div>
+                        <div class="text-end">
+                            <div class="badge bg-soft-primary text-primary fs-14">
+                                @completedInModule / @moduleLessons.Count دروس
+                            </div>
+                            <div class="text-muted fs-12 mt-1">@moduleProgress.ToString("F0")% مكتمل</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Module Progress Bar -->
+                    <div class="mb-3">
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar @(moduleProgress >= 75 ? "bg-success" : moduleProgress >= 50 ? "bg-info" : moduleProgress >= 25 ? "bg-warning" : "bg-danger")" 
+                                 role="progressbar" 
+                                 style="width: @moduleProgress%" 
+                                 aria-valuenow="@moduleProgress" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lessons List -->
+                    @if (moduleLessons.Any())
+                    {
+                        <div class="list-group">
+                            @foreach (var lesson in moduleLessons)
+                            {
+                                var lessonProgress = Model.LessonProgress?.FirstOrDefault(lp => lp.LessonId == lesson.Id);
+                                var isCompleted = lessonProgress?.IsCompleted ?? false;
+                                var isStarted = lessonProgress?.LastAccessedAt != null;
+                                var watchedSeconds = lessonProgress?.WatchedSeconds ?? 0;
+                                var lessonDurationMin = lesson.DurationMinutes > 0 ? lesson.DurationMinutes : 10;
+                                var watchPercentage = (watchedSeconds / 60.0 / lessonDurationMin * 100);
+                                watchPercentage = Math.Min(watchPercentage, 100);
+
+                                <div class="list-group-item">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <!-- Lesson Status Icon -->
+                                        <div class="avatar-text avatar-md @(isCompleted ? "bg-soft-success text-success" : isStarted ? "bg-soft-warning text-warning" : "bg-soft-secondary text-secondary")">
+                                            @if (isCompleted)
+                                            {
+                                                <i class="feather-check-circle"></i>
+                                            }
+                                            else if (isStarted)
+                                            {
+                                                <i class="feather-play-circle"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="feather-circle"></i>
+                                            }
+                                        </div>
+
+                                        <!-- Lesson Info -->
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <div>
+                                                    <h6 class="fw-bold mb-1">@lesson.Title</h6>
+                                                    <div class="d-flex flex-wrap gap-2">
+                                                        <span class="badge bg-soft-primary text-primary">
+                                                            <i class="feather-@(lesson.Type == LMS.Domain.Enums.LessonType.Video ? "video" : lesson.Type == LMS.Domain.Enums.LessonType.Text ? "file-text" : "link") me-1"></i>
+                                                            @lesson.Type
+                                                        </span>
+                                                        @if (lesson.DurationMinutes > 0)
+                                                        {
+                                                            <span class="badge bg-soft-secondary text-secondary">
+                                                                <i class="feather-clock me-1"></i>
+                                                                @lesson.DurationMinutes دقيقة
+                                                            </span>
+                                                        }
+                                                    </div>
+                                                </div>
+                                                <div class="text-end">
+                                                    @if (isCompleted)
+                                                    {
+                                                        <span class="badge bg-soft-success text-success">
+                                                            <i class="feather-check-circle me-1"></i>
+                                                            مكتمل
+                                                        </span>
+                                                        @if (lessonProgress?.CompletedAt.HasValue == true)
+                                                        {
+                                                            <div class="text-muted fs-11 mt-1">
+                                                                @lessonProgress.CompletedAt.Value.ToString("dd/MM/yyyy")
+                                                            </div>
+                                                        }
+                                                    }
+                                                    else if (isStarted)
+                                                    {
+                                                        <span class="badge bg-soft-warning text-warning">
+                                                            <i class="feather-activity me-1"></i>
+                                                            جاري
+                                                        </span>
+                                                        @if (lessonProgress != null)
+                                                        {
+                                                            <div class="text-muted fs-11 mt-1">
+                                                                آخر دخول: @lessonProgress.LastAccessedAt.ToString("dd/MM")
+                                                            </div>
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="badge bg-soft-secondary text-secondary">
+                                                            <i class="feather-circle me-1"></i>
+                                                            لم تبدأ
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+
+                                            <!-- Watch Progress Bar (for started lessons) -->
+                                            @if (isStarted && !isCompleted && lesson.Type == LMS.Domain.Enums.LessonType.Video)
+                                            {
+                                                <div class="mt-2">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <span class="fs-12 text-muted">المشاهدة:</span>
+                                                        <span class="fs-12 fw-bold">@watchPercentage.ToString("F0")%</span>
+                                                    </div>
+                                                    <div class="progress" style="height: 4px;">
+                                                        <div class="progress-bar bg-info" 
+                                                             role="progressbar" 
+                                                             style="width: @watchPercentage%" 
+                                                             aria-valuenow="@watchPercentage" 
+                                                             aria-valuemin="0" 
+                                                             aria-valuemax="100">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center py-3">
+                            <p class="text-muted mb-0">@Html.T("لا توجد دروس في هذه الوحدة", "No lessons in this module")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="card stretch stretch-full">
+            <div class="card-body text-center py-5">
+                <div class="avatar-text avatar-xl bg-soft-secondary text-secondary mb-4 mx-auto">
+                    <i class="feather-folder"></i>
+                </div>
+                <h5 class="fw-bold mb-2">@Html.T("لا توجد وحدات في هذه الدورة", "No modules in this course")</h5>
+                <p class="text-muted">لم يتم إضافة محتوى بعد</p>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Add some interactivity
+            $('.list-group-item').hover(
+                function() {
+                    $(this).addClass('bg-soft-light');
+                },
+                function() {
+                    $(this).removeClass('bg-soft-light');
+                }
+            );
+        });
+    </script>
+}
+

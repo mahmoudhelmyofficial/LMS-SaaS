@@ -1,0 +1,523 @@
+@model LMS.Areas.Instructor.Controllers.InstructorDashboardViewModel
+@inject IPlatformSettingsService PlatformSettings
+@using LMS.Helpers
+
+@{
+    ViewData["Title"] = Html.T("لوحة التحكم", "Dashboard");
+    ViewData["Subtitle"] = Html.T("نظرة عامة على أدائك وإحصائياتك", "Overview of your performance and statistics");
+    var chartDataLimit = await PlatformSettings.GetIntSettingAsync("UI.ChartData.Limit", 7);
+    var totalTasks = Model.PendingAssignments + Model.UnreadDiscussions + Model.UnansweredReviews + Model.PendingQuizReviews + Model.ContentUpdatesNeeded;
+    var createCourseUrl = Url.Action("CreateWizard", "Courses");
+    var earningsUrl = Url.Action("Index", "Earnings");
+    var withdrawalUrl = Url.Action("Create", "WithdrawalRequests");
+    var profileUrl = Url.Action("Edit", "Profile");
+    var hour = DateTime.Now.Hour;
+    var greeting = hour < 12 ? Html.T("صباح الخير،", "Good morning,") : hour < 18 ? Html.T("مساء الخير،", "Good afternoon,") : Html.T("مساء النور،", "Good evening,");
+}
+
+@await Html.PartialAsync("_PageHeader", ViewDataDictionaryHelper.CreateWith(
+    ViewData,
+    "ActionButtons",
+    Html.Raw("<a href='" + createCourseUrl + "' class='btn btn-primary'><i class='feather-plus me-2'></i>" + Html.T("إنشاء دورة", "Create Course") + "</a><a href='" + earningsUrl + "' class='btn btn-light'><i class='feather-dollar-sign me-2'></i>" + Html.T("الأرباح", "Earnings") + "</a>")
+))
+
+@await Html.PartialAsync("_AlertMessages")
+
+@if (ViewBag.ProfileWarning != null)
+{
+    <div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="feather-alert-triangle me-2 fs-4"></i>
+            <div class="flex-grow-1">
+                <strong>@Html.T("إكمال الملف الشخصي", "Complete your profile")</strong>
+                <p class="mb-0 mt-1">@ViewBag.ProfileWarning</p>
+            </div>
+            <a href="@profileUrl" class="btn btn-sm btn-warning ms-2">@Html.T("إكمال الآن", "Complete now")</a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="@Html.T("إغلاق", "Close")"></button>
+        </div>
+    </div>
+}
+
+<!-- Welcome Hero -->
+<div class="card border-0 mb-4 overflow-hidden" style="border-radius: 16px; background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%)); box-shadow: 0 10px 40px rgba(0, 85, 196, 0.25);">
+    <div class="card-body p-4 p-lg-5">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <div class="d-flex align-items-center gap-4">
+                    <div class="avatar-text avatar-xl rounded-circle bg-white bg-opacity-25 text-white" style="width: 72px; height: 72px; display: flex; align-items: center; justify-content: center;">
+                        <i class="feather-sun" style="font-size: 36px;"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-white mb-1">@greeting @Model.InstructorName! 👋</h4>
+                        <p class="text-white mb-0 opacity-90">@Html.T("لديك", "You have") @Model.PublishedCourses @Html.T("دورات نشطة و", "active courses and") @Model.TotalStudents @Html.T("طالباً يتابعون محتواك التعليمي", "students following your content")</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mt-3 mt-lg-0 text-lg-end">
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-lg-end">
+                    <a href="@createCourseUrl" class="btn btn-hero-cta btn-lg">
+                        <i class="feather-plus me-2"></i>@Html.T("إنشاء دورة", "Create Course")
+                    </a>
+                    @if (Model.AvailableBalance > 0)
+                    {
+                        <a href="@withdrawalUrl" class="btn btn-hero-cta btn-hero-cta-success btn-lg">
+                            <i class="feather-credit-card me-2"></i>@Html.T("طلب سحب", "Request Withdrawal")
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Row -->
+<div class="row g-4 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stretch stretch-full border-0 shadow-sm dashboard-card" style="border-radius: 16px;">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <p class="text-muted fs-13 mb-1">@Html.T("إجمالي الدورات", "Total Courses")</p>
+                        <h3 class="fw-bold mb-0">@Model.TotalCourses</h3>
+                        <small class="text-success"><i class="feather-trending-up me-1"></i>@Model.PublishedCourses @Html.T("نشطة", "active")</small>
+                    </div>
+                    <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                        <i class="feather-book"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stretch stretch-full border-0 shadow-sm dashboard-card" style="border-radius: 16px;">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <p class="text-muted fs-13 mb-1">@Html.T("إجمالي الطلاب", "Total Students")</p>
+                        <h3 class="fw-bold mb-0">@Model.TotalStudents.ToString("N0")</h3>
+                        <small class="text-success"><i class="feather-trending-up me-1"></i>+@Model.NewStudentsThisMonth @Html.T("هذا الشهر", "this month")</small>
+                    </div>
+                    <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                        <i class="feather-users"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stretch stretch-full border-0 shadow-sm dashboard-card" style="border-radius: 16px;">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <p class="text-muted fs-13 mb-1">@Html.T("التقييم العام", "Overall Rating")</p>
+                        <h3 class="fw-bold mb-0">@Model.AverageRating.ToString("F1")</h3>
+                        <small class="text-muted"><i class="feather-star me-1 text-warning"></i>@Html.T("من", "from") @Model.TotalReviews @Html.T("تقييم", "reviews")</small>
+                    </div>
+                    <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                        <i class="feather-award"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card stretch stretch-full border-0 shadow-sm dashboard-card" style="border-radius: 16px;">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <p class="text-muted fs-13 mb-1">@Html.T("أرباح هذا الشهر", "This Month's Earnings")</p>
+                        <h3 class="fw-bold mb-0">@Html.FormatCurrency(Model.MonthlyRevenue, 0)</h3>
+                        <small class="@(Model.RevenueGrowthPercent >= 0 ? "text-success" : "text-danger")">
+                            <i class="feather-trending-@(Model.RevenueGrowthPercent >= 0 ? "up" : "down") me-1"></i>
+                            @(Model.RevenueGrowthPercent >= 0 ? "+" : "")@Model.RevenueGrowthPercent.ToString("F1")% @Html.T("من الشهر الماضي", "vs last month")
+                        </small>
+                    </div>
+                    <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                        <i class="feather-dollar-sign"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts + Balance -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="card stretch stretch-full border-0 shadow-sm dashboard-card" style="border-radius: 16px;">
+            <div class="card-header border-0 bg-white py-3 d-flex align-items-center dashboard-card-header">
+                <div>
+                    <h5 class="card-title mb-0">
+                        <i class="feather-trending-up me-2 text-primary"></i>
+                        @Html.T("أداء الدورات", "Course Performance")
+                    </h5>
+                    <small class="text-muted">@Html.T("آخر 7 أيام - التسجيلات", "Last 7 days - Enrollments")</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="performanceChart" height="120"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card stretch stretch-full border-0 shadow-sm dashboard-card mb-4" style="border-radius: 16px;">
+            <div class="card-header border-0 bg-white py-3 d-flex align-items-center dashboard-card-header">
+                <h5 class="card-title mb-0">
+                    <i class="feather-credit-card me-2 text-success"></i>
+                    @Html.T("الرصيد المتاح", "Available Balance")
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <h3 class="text-success fw-bold mb-2">@Html.FormatCurrency(Model.AvailableBalance, 0)</h3>
+                <p class="text-muted small mb-3">@Html.T("متاح للسحب", "Available for withdrawal")</p>
+                @if (Model.PendingBalance > 0)
+                {
+                    <p class="small text-warning mb-3">
+                        <i class="feather-clock me-1"></i>
+                        @Html.FormatCurrency(Model.PendingBalance, 0) @Html.T("رصيد معلق", "pending")
+                    </p>
+                }
+                <a href="@withdrawalUrl" class="btn btn-success w-100">
+                    <i class="feather-credit-card me-2"></i>@Html.T("طلب سحب", "Request Withdrawal")
+                </a>
+            </div>
+        </div>
+        <div class="card stretch stretch-full border-0 shadow-sm dashboard-card" style="border-radius: 16px;">
+            <div class="card-header border-0 bg-white py-3 d-flex align-items-center dashboard-card-header">
+                <h5 class="card-title mb-0">
+                    <i class="feather-bar-chart me-2 text-primary"></i>
+                    @Html.T("الأرباح الأخيرة", "Recent Earnings")
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="earningsChart" height="180"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Active Courses | Pending Tasks | Recent Enrollments -->
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card stretch stretch-full border-0 shadow-sm dashboard-card" style="border-radius: 16px;">
+            <div class="card-header border-0 bg-white py-3 d-flex justify-content-between align-items-center dashboard-card-header">
+                <h5 class="card-title mb-0">
+                    <i class="feather-book me-2 text-primary"></i>
+                    @Html.T("دوراتي النشطة", "My Active Courses")
+                </h5>
+                <span class="dashboard-card-header-action">
+                    <a asp-controller="Courses" asp-action="Index" class="btn btn-sm btn-light">@Html.T("عرض الكل", "View All")</a>
+                </span>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.ActiveCourses.Any())
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var course in Model.ActiveCourses)
+                        {
+                            <a asp-controller="Courses" asp-action="Details" asp-route-id="@course.CourseId" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
+                                <div>
+                                    <strong class="d-block">@course.Title</strong>
+                                    <small class="text-muted">@course.StudentCount @Html.T("طالب", "students") • @course.Rating.ToString("F1") <i class="feather-star text-warning small"></i></small>
+                                </div>
+                                <span class="badge bg-soft-success text-success">@Html.T("منشورة", "Published")</span>
+                            </a>
+                        }
+                    </div>
+                    @if (Model.DraftCourses > 0)
+                    {
+                        <div class="p-3 border-top">
+                            <a asp-controller="Courses" asp-action="Index" asp-route-status="Draft" class="d-flex justify-content-between align-items-center text-decoration-none text-dark">
+                                <span>@Model.DraftCourses @Html.T("دورات مسودة", "draft courses")</span>
+                                <span class="badge bg-soft-warning text-warning">@Html.T("مسودة", "Draft")</span>
+                            </a>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center py-5 px-3">
+                        <div class="avatar-text avatar-xl bg-soft-primary text-primary rounded-circle mb-3 mx-auto" style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;">
+                            <i class="feather-book-open"></i>
+                        </div>
+                        <p class="text-muted mb-3">@Html.T("لا توجد دورات نشطة بعد", "No active courses yet")</p>
+                        <a asp-controller="Courses" asp-action="CreateWizard" class="btn btn-primary btn-sm">
+                            <i class="feather-plus me-2"></i>@Html.T("إنشاء دورة جديدة", "Create New Course")
+                        </a>
+                    </div>
+                    @if (Model.DraftCourses > 0)
+                    {
+                        <div class="p-3 border-top">
+                            <a asp-controller="Courses" asp-action="Index" asp-route-status="Draft" class="d-flex justify-content-between align-items-center text-decoration-none text-dark">
+                                <span>@Model.DraftCourses @Html.T("دورات مسودة", "draft courses")</span>
+                                <span class="badge bg-soft-warning text-warning">@Html.T("مسودة", "Draft")</span>
+                            </a>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card stretch stretch-full border-0 shadow-sm dashboard-card" style="border-radius: 16px;">
+            <div class="card-header border-0 bg-white py-3 d-flex justify-content-between align-items-center dashboard-card-header">
+                <h5 class="card-title mb-0">
+                    <i class="feather-clipboard me-2 text-warning"></i>
+                    @Html.T("المهام المعلقة", "Pending Tasks")
+                </h5>
+                <span class="dashboard-card-header-action">
+                    @if (totalTasks > 0)
+                    {
+                        <span class="badge bg-warning">@totalTasks</span>
+                    }
+                </span>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.PendingAssignments > 0)
+                {
+                    <a asp-controller="AssignmentSubmissions" asp-action="Pending" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between py-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-sm bg-soft-info text-info rounded">
+                                <i class="feather-file-text"></i>
+                            </div>
+                            <div>
+                                <strong class="d-block">@Html.T("إجابات الواجبات", "Assignment Submissions")</strong>
+                                <small class="text-muted">@Model.PendingAssignments @Html.T("في انتظار التقييم", "awaiting grading")</small>
+                            </div>
+                        </div>
+                        <i class="feather-chevron-left text-muted"></i>
+                    </a>
+                }
+                @if (Model.UnreadDiscussions > 0)
+                {
+                    <a asp-controller="Discussions" asp-action="Index" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between py-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-sm bg-soft-primary text-primary rounded">
+                                <i class="feather-message-square"></i>
+                            </div>
+                            <div>
+                                <strong class="d-block">@Html.T("أسئلة الطلاب", "Student Questions")</strong>
+                                <small class="text-muted">@Model.UnreadDiscussions @Html.T("أسئلة جديدة", "new questions")</small>
+                            </div>
+                        </div>
+                        <i class="feather-chevron-left text-muted"></i>
+                    </a>
+                }
+                @if (Model.UnansweredReviews > 0)
+                {
+                    <a asp-controller="Reviews" asp-action="Index" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between py-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-sm bg-soft-warning text-warning rounded">
+                                <i class="feather-star"></i>
+                            </div>
+                            <div>
+                                <strong class="d-block">@Html.T("تقييمات جديدة", "New Reviews")</strong>
+                                <small class="text-muted">@Model.UnansweredReviews @Html.T("تحتاج ردك", "need your reply")</small>
+                            </div>
+                        </div>
+                        <i class="feather-chevron-left text-muted"></i>
+                    </a>
+                }
+                @if (Model.PendingQuizReviews > 0)
+                {
+                    <a asp-controller="QuizAttempts" asp-action="Index" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between py-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-sm bg-soft-info text-info rounded">
+                                <i class="feather-check-square"></i>
+                            </div>
+                            <div>
+                                <strong class="d-block">@Html.T("مراجعة اختبارات", "Quiz Reviews")</strong>
+                                <small class="text-muted">@Model.PendingQuizReviews @Html.T("محاولات تحتاج مراجعة", "attempts need review")</small>
+                            </div>
+                        </div>
+                        <i class="feather-chevron-left text-muted"></i>
+                    </a>
+                }
+                @if (Model.ContentUpdatesNeeded > 0)
+                {
+                    <a asp-controller="Lessons" asp-action="Index" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between py-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="avatar-text avatar-sm bg-soft-success text-success rounded">
+                                <i class="feather-video"></i>
+                            </div>
+                            <div>
+                                <strong class="d-block">@Html.T("تحديث المحتوى", "Content Updates")</strong>
+                                <small class="text-muted">@Model.ContentUpdatesNeeded @Html.T("درس يحتاج تحديث", "lessons need updating")</small>
+                            </div>
+                        </div>
+                        <i class="feather-chevron-left text-muted"></i>
+                    </a>
+                }
+                @if (totalTasks == 0)
+                {
+                    <div class="text-center py-5 px-3">
+                        <div class="avatar-text avatar-xl bg-soft-success text-success rounded-circle mb-3 mx-auto" style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <p class="text-muted mb-0">@Html.T("لا توجد مهام معلقة!", "No pending tasks!") 🎉</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card stretch stretch-full border-0 shadow-sm dashboard-card" style="border-radius: 16px;">
+            <div class="card-header border-0 bg-white py-3 d-flex justify-content-between align-items-center dashboard-card-header">
+                <h5 class="card-title mb-0">
+                    <i class="feather-user-plus me-2 text-info"></i>
+                    @Html.T("آخر التسجيلات", "Recent Enrollments")
+                </h5>
+                <span class="dashboard-card-header-action">
+                    <a asp-controller="Students" asp-action="Index" class="btn btn-sm btn-light">@Html.T("عرض", "View")</a>
+                </span>
+            </div>
+            <div class="card-body p-0">
+                @if (Model.RecentEnrollments != null && Model.RecentEnrollments.Any())
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var enrollment in Model.RecentEnrollments)
+                        {
+                            <div class="list-group-item d-flex align-items-center py-3">
+                                <div class="avatar-text avatar-sm bg-soft-primary text-primary rounded-circle me-3">
+                                    @((enrollment.Student?.FirstName?.Substring(0, 1) ?? "?") + (enrollment.Student?.LastName?.Substring(0, 1) ?? "?"))
+                                </div>
+                                <div class="flex-grow-1 min-width-0">
+                                    <strong class="d-block text-truncate">@(enrollment.Student?.FullName ?? Html.T("طالب", "Student"))</strong>
+                                    <small class="text-muted text-truncate d-block">@enrollment.Course?.Title</small>
+                                </div>
+                                <small class="text-muted">@enrollment.EnrolledAt.ToString("dd/MM/yy")</small>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-5 px-3">
+                        <div class="avatar-text avatar-xl bg-soft-info text-info rounded-circle mb-3 mx-auto" style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;">
+                            <i class="feather-users"></i>
+                        </div>
+                        <p class="text-muted mb-0">@Html.T("لا تسجيلات حديثة", "No recent enrollments")</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Styles {
+<style>
+    /* Dashboard card headers: aligned height and right-edge action slot */
+    .dashboard-card-header {
+        min-height: 56px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .dashboard-card-header-action {
+        min-width: 100px;
+        text-align: end;
+        flex-shrink: 0;
+    }
+    /* Hero CTA buttons (glass/outline on blue hero) */
+    .btn-hero-cta {
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        color: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+        transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+    .btn-hero-cta:hover {
+        background: rgba(255, 255, 255, 0.35);
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.7);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        transform: translateY(-1px);
+    }
+    .btn-hero-cta.btn-hero-cta-success:hover {
+        background: rgba(255, 255, 255, 0.25);
+    }
+    /* Subtle border on content cards (not hero) */
+    .dashboard-card {
+        border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    }
+</style>
+}
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var enrollmentLabels = @Html.Raw(Json.Serialize(Model.EnrollmentChartData.Take(chartDataLimit).Select(x => x.Label)));
+            var enrollmentData = @Html.Raw(Json.Serialize(Model.EnrollmentChartData.Take(chartDataLimit).Select(x => x.Value)));
+
+            var performanceCtx = document.getElementById('performanceChart');
+            if (performanceCtx) {
+                new Chart(performanceCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: enrollmentLabels,
+                        datasets: [{
+                            label: '@Html.T("التسجيلات", "Enrollments")',
+                            data: enrollmentData,
+                            borderColor: '#004aad',
+                            backgroundColor: 'rgba(0, 74, 173, 0.08)',
+                            fill: true,
+                            tension: 0.4,
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: { display: true, position: 'bottom' }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { borderDash: [5, 5] },
+                                ticks: { stepSize: 1 }
+                            },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            }
+
+            var earningsCtx = document.getElementById('earningsChart');
+            if (earningsCtx) {
+                var earningsLabels = @Html.Raw(Json.Serialize(Model.EarningsChartData.Select(x => x.Label)));
+                var earningsData = @Html.Raw(Json.Serialize(Model.EarningsChartData.Select(x => x.Value)));
+                var primaryColor = @Html.Raw(Json.Serialize(Constants.ChartColors.Primary));
+
+                new Chart(earningsCtx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: earningsLabels,
+                        datasets: [{
+                            data: earningsData,
+                            backgroundColor: primaryColor || 'rgba(0, 74, 173, 0.8)',
+                            borderRadius: 8,
+                            barThickness: 32
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        var code = '@(ViewBag.DefaultCurrencyCode ?? "EGP")';
+                                        return value.toLocaleString('ar-SA', { style: 'currency', currency: code, minimumFractionDigits: 0 });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+}

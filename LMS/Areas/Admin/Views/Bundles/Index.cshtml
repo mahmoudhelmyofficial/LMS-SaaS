@@ -1,0 +1,298 @@
+@model IEnumerable<LMS.Domain.Entities.Marketing.CourseBundle>
+
+@{
+    ViewData["Title"] = Html.T("حزم الدورات", "Course Bundles");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الدورات", "Courses"), null),
+        (Html.T("الحزم", "Bundles"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إنشاء حزمة", "Create Bundle"), "feather-plus", Url.Action("Create", "Bundles"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .bundle-card {
+            transition: all 0.3s ease;
+        }
+        .bundle-card:hover {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transform: translateY(-5px);
+        }
+        .course-badge {
+            background: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@{
+    var totalSales = Model?.Sum(b => b.SalesCount) ?? 0;
+    var totalRevenue = Model?.Sum(b => b.SalesCount * b.Price) ?? 0;
+    var avgDiscount = Model != null && Model.Any() && Model.Sum(b => b.OriginalPrice) > 0 
+        ? Math.Round(Model.Average(b => b.OriginalPrice > 0 ? ((b.OriginalPrice - b.Price) / b.OriginalPrice) * 100 : 0))
+        : 0;
+    var activeBundles = Model?.Count(b => b.IsActive) ?? 0;
+}
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-package"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي الحزم", "Total Bundles")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                    <div class="badge bg-soft-success text-success">@activeBundles @Html.T("نشطة", "Active")</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-shopping-cart"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("مبيعات", "Sales")</span>
+                            <h3 class="fw-bolder d-block">@totalSales.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-dollar-sign"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي الإيرادات", "Total Revenue")</span>
+                            <h3 class="fw-bolder d-block">@totalRevenue.ToString("N0") @Html.T("ج.م", "EGP")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-percent"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("متوسط الخصم", "Average Discount")</span>
+                            <h3 class="fw-bolder d-block">@avgDiscount%</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Export Row -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">@Html.T("الحزم المتاحة", "Available Bundles")</h5>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-success dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="feather-download me-2"></i>@Html.T("تصدير", "Export")
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <a class="dropdown-item" href="/api/export/bundles?format=csv">
+                                <i class="feather-file-text me-2 text-success"></i>@Html.T("تصدير CSV", "Export CSV")
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/api/export/bundles?format=excel">
+                                <i class="feather-file me-2 text-primary"></i>@Html.T("تصدير Excel", "Export Excel")
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="/api/export/bundles?format=pdf">
+                                <i class="feather-file-text me-2 text-danger"></i>@Html.T("تصدير PDF", "Export PDF")
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="javascript:void(0)" onclick="window.print()">
+                                <i class="feather-printer me-2 text-secondary"></i>@Html.T("طباعة", "Print")
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        @if (Model != null && Model.Any())
+        {
+            @foreach (var bundle in Model)
+            {
+                <div class="col-lg-4 mb-4">
+                    <div class="card bundle-card">
+                        <div style="height: 200px; background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%)); position: relative; border-radius: 12px 12px 0 0;">
+                            <div class="position-absolute top-0 start-0 m-3">
+                                @if (bundle.IsActive)
+                                {
+                                    <span class="badge bg-success">@Html.T("نشط", "Active")</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary">@Html.T("غير نشط", "Inactive")</span>
+                                }
+                            </div>
+                            <div class="position-absolute bottom-0 start-0 m-3">
+                                <span class="course-badge">
+                                    <i class="feather-book me-1"></i>
+                                    @(bundle.BundleCourses?.Count() ?? bundle.CoursesCount) @Html.T("دورات", "courses")
+                                </span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <h5 class="mb-2">@bundle.Title</h5>
+                            <p class="text-muted small mb-3">@bundle.Description</p>
+                            
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <div>
+                                    <span class="text-muted text-decoration-line-through d-block small">@bundle.OriginalPrice.ToEGP()</span>
+                                    <h4 class="text-success mb-0">@bundle.BundlePrice.ToEGP()</h4>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-soft-success text-success">
+                                        @Html.T("وفر", "Save") @((bundle.OriginalPrice > 0 ? ((bundle.OriginalPrice - bundle.BundlePrice) / bundle.OriginalPrice * 100) : 0).ToString("F0"))%
+                                    </span>
+                                </div>
+                            </div>
+
+                            @if (bundle.BundleCourses != null && bundle.BundleCourses.Any())
+                            {
+                                <div class="mb-3">
+                                    <small class="text-muted d-block mb-2">@Html.T("الدورات المضمنة", "Included courses"):</small>
+                                    @foreach (var bundleCourse in bundle.BundleCourses.Take(3))
+                                    {
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            <i class="feather-check-circle text-success small"></i>
+                                            <small>@(bundleCourse.Course?.Title ?? bundleCourse.Title)</small>
+                                        </div>
+                                    }
+                                    @if (bundle.BundleCourses.Count() > 3)
+                                    {
+                                        <small class="text-primary">+@(bundle.BundleCourses.Count() - 3) @Html.T("دورة أخرى", "more course(s)")</small>
+                                    }
+                                </div>
+                            }
+
+                            <div class="d-flex gap-2">
+                                <a href="@Url.Action("Edit", "Bundles", new { id = bundle.Id })" class="btn btn-light flex-grow-1">
+                                    <i class="feather-edit me-1"></i>
+                                    @Html.T("تعديل", "Edit")
+                                </a>
+                                <a href="@Url.Action("Details", "Bundles", new { id = bundle.Id })" class="btn btn-light">
+                                    <i class="feather-eye"></i>
+                                </a>
+                                <div class="dropdown">
+                                    <button class="btn btn-light" data-bs-toggle="dropdown">
+                                        <i class="feather-more-vertical"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                                        <li>
+                                                            <form asp-action="Duplicate" asp-controller="Bundles" asp-route-id="@bundle.Id" method="post" class="d-inline w-100">
+                                                                @Html.AntiForgeryToken()
+                                                                <button type="submit" class="dropdown-item" onclick="return confirm('@(Html.T("هل تريد نسخ هذه الحزمة؟", "Do you want to duplicate this bundle?"))');">
+                                                                    <i class="feather-copy me-3"></i>
+                                                                    @Html.T("نسخ", "Duplicate")
+                                                                </button>
+                                                            </form>
+                                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="@Url.Action("Analytics", "Bundles", new { id = bundle.Id })">
+                                                <i class="feather-bar-chart-2 me-3"></i>
+                                                @Html.T("إحصائيات", "Statistics")
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item text-danger" href="javascript:void(0)" onclick="confirmDelete('@bundle.Id')">
+                                                <i class="feather-trash-2 me-3"></i>
+                                                @Html.T("حذف", "Delete")
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="feather-package fs-1 text-muted mb-3"></i>
+                        <h5>@Html.T("لا توجد حزم بعد", "No bundles yet")</h5>
+                        <p class="text-muted mb-4">@Html.T("ابدأ بإنشاء حزم دورات بأسعار مخفضة", "Start by creating course bundles at discounted prices")</p>
+                        <a href="@Url.Action("Create", "Bundles")" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إنشاء حزمة جديدة", "Create new bundle")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Hidden form for delete operations -->
+<form id="deleteForm" method="post" style="display:none;">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="id" id="deleteId" value="" />
+</form>
+
+@section Scripts {
+    <script>
+        function confirmDelete(bundleId) {
+            if (confirm('@(Html.T("هل أنت متأكد من حذف هذه الحزمة؟", "Are you sure you want to delete this bundle?"))')) {
+                var form = document.getElementById('deleteForm');
+                form.action = '@Url.Action("Delete", "Bundles")';
+                document.getElementById('deleteId').value = bundleId;
+                form.submit();
+            }
+        }
+    </script>
+}
+

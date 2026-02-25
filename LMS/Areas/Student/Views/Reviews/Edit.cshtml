@@ -1,0 +1,375 @@
+@model LMS.Areas.Student.ViewModels.EditReviewViewModel
+@using LMS.Services.Interfaces
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("تعديل التقييم", "Edit Review");
+    var course = ViewBag.Course as LMS.Domain.Entities.Courses.Course;
+    
+    // Review settings
+    var reviewTitleMaxLength = await PlatformSettings.GetIntSettingAsync("Reviews.TitleMaxLength", 100);
+    var reviewContentMaxLength = await PlatformSettings.GetIntSettingAsync("Reviews.ContentMaxLength", 2000);
+}
+
+@section Styles {
+<style>
+    .rating-stars {
+        font-size: 48px;
+        direction: ltr;
+        display: inline-flex;
+        gap: 10px;
+    }
+    .rating-stars i {
+        cursor: pointer;
+        color: #e5e7eb;
+        transition: all 0.2s ease;
+    }
+    .rating-stars i.active,
+    .rating-stars i:hover {
+        color: #fbbf24;
+        transform: scale(1.2);
+    }
+    
+    .review-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+    }
+    
+    .course-info-box {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 30px;
+        margin-bottom: 30px;
+    }
+    
+    .char-counter {
+        position: absolute;
+        bottom: 10px;
+        left: 15px;
+        font-size: 12px;
+        color: #6b7280;
+    }
+    .char-counter.warning { color: #f59e0b; }
+    .char-counter.danger { color: #ef4444; }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Page Header -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center">
+            <a href="@Url.Action("Index")" class="btn btn-sm btn-light me-3">
+                <i class="feather-arrow-right me-1"></i>
+                @Html.T("رجوع", "Back")
+            </a>
+            <div>
+                <h3 class="fw-bold mb-1">
+                    <i class="feather-edit text-warning me-2"></i>
+                    @Html.T("تعديل التقييم", "Edit review")
+                </h3>
+                <p class="text-muted mb-0">@Html.T("قم بتحديث تقييمك للدورة", "Update your course review")</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Course Info Box -->
+@if (course != null)
+{
+    <div class="course-info-box">
+        <div class="row align-items-center">
+            <div class="col-md-2 text-center mb-3 mb-md-0">
+                <div class="avatar-text avatar-xl bg-white bg-opacity-25 text-white">
+                    <i class="feather-book-open"></i>
+                </div>
+            </div>
+            <div class="col-md-10">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <h4 class="text-white fw-bold mb-0">@course.Title</h4>
+                    <span class="badge bg-white bg-opacity-25 text-white">
+                        <i class="feather-edit me-1"></i>
+                        @Html.T("تعديل", "Edit")
+                    </span>
+                </div>
+                <p class="text-white opacity-75 mb-0">@course.Instructor.FullName</p>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="row g-4">
+    <!-- Edit Form -->
+    <div class="col-lg-8">
+        <div class="review-card">
+            <form asp-action="Edit" asp-route-id="@Model.Id" method="post" id="editReviewForm">
+                @Html.AntiForgeryToken()
+                @Html.HiddenFor(m => m.Id)
+                @Html.HiddenFor(m => m.CourseId)
+                
+                <!-- Info Alert -->
+                <div class="alert alert-warning mb-4">
+                    <div class="d-flex align-items-start">
+                        <i class="feather-info fs-4 me-3"></i>
+                        <div>
+                            <h6 class="fw-bold mb-1">@Html.T("ملاحظة مهمة", "Important note")</h6>
+                            <p class="mb-0 small">
+                                @Html.T("بعد التعديل، سيتم مراجعة تقييمك من قبل الإدارة قبل نشره مرة أخرى.", "After editing, your review will be moderated before being published again.")
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Rating Section -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold fs-5 mb-3">
+                        @Html.T("كيف تقيّم هذه الدورة؟", "How do you rate this course?")
+                        <span class="text-danger">*</span>
+                    </label>
+                    
+                    <div class="text-center py-4">
+                        <div class="rating-stars" id="ratingStars">
+                            <i class="feather-star" data-rating="1"></i>
+                            <i class="feather-star" data-rating="2"></i>
+                            <i class="feather-star" data-rating="3"></i>
+                            <i class="feather-star" data-rating="4"></i>
+                            <i class="feather-star" data-rating="5"></i>
+                        </div>
+                        <input type="hidden" asp-for="Rating" id="ratingValue">
+                        <div class="mt-3">
+                            <h4 class="fw-bold mb-0" id="ratingText">@Html.T("اختر التقييم", "Choose rating")</h4>
+                            <small class="text-muted" id="ratingDesc">@Html.T("انقر على النجوم للتقييم", "Click stars to rate")</small>
+                        </div>
+                    </div>
+                    <span asp-validation-for="Rating" class="text-danger"></span>
+                </div>
+                
+                <hr class="my-4">
+                
+                <!-- Title -->
+                <div class="mb-4">
+                    <label asp-for="Title" class="form-label fw-bold">
+                        @Html.T("عنوان التقييم", "Review title")
+                    </label>
+                    <input asp-for="Title" 
+                           class="form-control form-control-lg" 
+                           placeholder="@Html.T("مثال: دورة ممتازة ومفيدة جداً", "e.g. Excellent and very useful course")"
+                           maxlength="@reviewTitleMaxLength"
+                           oninput="updatePreview()">
+                    <span asp-validation-for="Title" class="text-danger"></span>
+                </div>
+                
+                <!-- Comment -->
+                <div class="mb-4">
+                    <label asp-for="Comment" class="form-label fw-bold">
+                        @Html.T("رأيك في الدورة", "Your opinion of the course")
+                        <span class="text-danger">*</span>
+                    </label>
+                    <div style="position: relative;">
+                        <textarea asp-for="Comment" 
+                                  class="form-control" 
+                                  rows="8" 
+                                  id="commentText"
+                                  placeholder="@Html.T("شارك تجربتك التفصيلية مع الدورة...", "Share your detailed experience with the course...")"
+                                  maxlength="@reviewContentMaxLength"
+                                  oninput="updateCharCount()"></textarea>
+                        <span class="char-counter" id="charCounter">
+                            <span id="charCount">@(Model.Comment?.Length ?? 0)</span> / @reviewContentMaxLength
+                        </span>
+                    </div>
+                    <span asp-validation-for="Comment" class="text-danger"></span>
+                </div>
+                
+                <!-- Submit Buttons -->
+                <div class="d-flex gap-3 mt-4">
+                    <button type="submit" class="btn btn-warning btn-lg flex-grow-1">
+                        <i class="feather-save me-2"></i>
+                        حفظ التعديلات
+                    </button>
+                    <a href="@Url.Action("Index")" class="btn btn-outline-danger btn-lg">
+                        <i class="feather-x me-2"></i>
+                        إلغاء
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Preview -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="feather-eye text-primary me-2"></i>
+                    معاينة التقييم
+                </h6>
+            </div>
+            <div class="card-body" id="previewBox">
+                <p class="text-center text-muted small mb-0">
+                    جاري التحميل...
+                </p>
+            </div>
+        </div>
+        
+        <!-- Guidelines -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="feather-info text-info me-2"></i>
+                    إرشادات
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="small mb-0">
+                    <li class="mb-2">@Html.T("كن صادقاً وموضوعياً في تقييمك", "Be honest and objective in your review")</li>
+                    <li class="mb-2">@Html.T("ركز على محتوى الدورة وجودة الشرح", "Focus on course content and quality of explanation")</li>
+                    <li class="mb-2">@Html.T("استخدم لغة محترمة وبناءة", "Use respectful and constructive language")</li>
+                    <li class="mb-2">@Html.T("تجنب المعلومات الشخصية", "Avoid personal information")</li>
+                    <li>@Html.T("سيتم مراجعة التقييم قبل نشره", "Your review will be moderated before publishing")</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+@{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+<script>
+    (function() {
+        window.__T = window.__T || {};
+        Object.assign(window.__T, {
+            Rating0: '',
+            Rating1: '@Html.Raw(Html.T("سيئة جداً 😞", "Very poor 😞").Replace("'", "\\'"))',
+            Rating2: '@Html.Raw(Html.T("غير مرضية 😕", "Unsatisfactory 😕").Replace("'", "\\'"))',
+            Rating3: '@Html.Raw(Html.T("جيدة 🙂", "Good 🙂").Replace("'", "\\'"))',
+            Rating4: '@Html.Raw(Html.T("ممتازة 😊", "Excellent 😊").Replace("'", "\\'"))',
+            Rating5: '@Html.Raw(Html.T("استثنائية! 🌟", "Exceptional! 🌟").Replace("'", "\\'"))',
+            YourRatingFormat: '@Html.Raw(Html.T("تقييمك: {0} نجوم", "Your rating: {0} stars").Replace("'", "\\'"))',
+            ClickStarsToRate: '@Html.Raw(Html.T("انقر على النجوم للتقييم", "Click the stars to rate").Replace("'", "\\'"))'
+        });
+    })();
+    let selectedRating = @Model.Rating;
+    const ratingTexts = ['', (window.__T && window.__T.Rating1) || 'Very poor 😞', (window.__T && window.__T.Rating2) || 'Unsatisfactory 😕', (window.__T && window.__T.Rating3) || 'Good 🙂', (window.__T && window.__T.Rating4) || 'Excellent 😊', (window.__T && window.__T.Rating5) || 'Exceptional! 🌟'];
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        updateStars();
+        updateCharCount();
+        updatePreview();
+    });
+    
+    // Rating stars functionality
+    document.querySelectorAll('#ratingStars i').forEach(star => {
+        star.addEventListener('click', function() {
+            selectedRating = parseInt(this.dataset.rating);
+            document.getElementById('ratingValue').value = selectedRating;
+            updateStars();
+            updatePreview();
+        });
+        
+        star.addEventListener('mouseenter', function() {
+            const rating = parseInt(this.dataset.rating);
+            highlightStars(rating);
+        });
+    });
+    
+    document.getElementById('ratingStars').addEventListener('mouseleave', function() {
+        highlightStars(selectedRating);
+    });
+    
+    function highlightStars(rating) {
+        document.querySelectorAll('#ratingStars i').forEach((star, index) => {
+            if (index < rating) {
+                star.classList.add('active');
+            } else {
+                star.classList.remove('active');
+            }
+        });
+    }
+    
+    function updateStars() {
+        highlightStars(selectedRating);
+        document.getElementById('ratingText').textContent = ratingTexts[selectedRating];
+        var fmt = (window.__T && window.__T.YourRatingFormat) || 'Your rating: {0} stars';
+        var clickText = (window.__T && window.__T.ClickStarsToRate) || 'Click the stars to rate';
+        document.getElementById('ratingDesc').textContent = 
+            selectedRating > 0 ? fmt.replace('{0}', selectedRating) : clickText;
+    }
+    
+    // Character counter
+    function updateCharCount() {
+        const textarea = document.getElementById('commentText');
+        const counter = document.getElementById('charCount');
+        const counterContainer = document.getElementById('charCounter');
+        const length = textarea.value.length;
+        
+        counter.textContent = length;
+        
+        const maxLength = @reviewContentMaxLength;
+        counterContainer.classList.remove('warning', 'danger');
+        if (length > maxLength * 0.9) {
+            counterContainer.classList.add('danger');
+        } else if (length > maxLength * 0.75) {
+            counterContainer.classList.add('warning');
+        }
+        
+        updatePreview();
+    }
+    
+    // Preview
+    function updatePreview() {
+        const title = document.querySelector('input[name="Title"]')?.value || '';
+        const comment = document.getElementById('commentText').value;
+        const preview = document.getElementById('previewBox');
+        
+        if (selectedRating > 0 || title || comment) {
+            let html = '';
+            
+            if (selectedRating > 0) {
+                html += '<div class="mb-3">';
+                for (let i = 0; i < 5; i++) {
+                    html += i < selectedRating ? 
+                        '<i class="feather-star text-warning"></i> ' : 
+                        '<i class="feather-star text-muted"></i> ';
+                }
+                html += '</div>';
+            }
+            
+            if (title) {
+                html += `<h6 class="fw-bold mb-2">${title}</h6>`;
+            }
+            
+            if (comment) {
+                html += `<p class="small text-muted mb-0">${comment}</p>`;
+            }
+            
+            preview.innerHTML = html;
+        }
+    }
+    
+    // Form validation
+    document.getElementById('editReviewForm').addEventListener('submit', function(e) {
+        const rating = parseInt(document.getElementById('ratingValue').value);
+        const comment = document.getElementById('commentText').value.trim();
+        
+        if (rating === 0) {
+            e.preventDefault();
+            alert('@Html.Raw(Html.T("يرجى اختيار تقييم من النجوم", "Please select a star rating").Replace("'", "\\'"))');
+            return false;
+        }
+        
+        if (comment.length < 10) {
+            e.preventDefault();
+            alert('@Html.Raw(Html.T("يجب أن يكون التعليق 10 أحرف على الأقل", "Comment must be at least 10 characters").Replace("'", "\\'"))');
+            return false;
+        }
+        
+        return true;
+    });
+</script>
+}

@@ -1,0 +1,459 @@
+@model IEnumerable<LMS.Domain.Entities.Learning.Enrollment>
+
+@using LMS.Views.Shared
+@using LMS.Helpers
+@inject IPlatformSettingsService PlatformSettings
+@{
+    ViewData["Title"] = Html.T("إدارة الطلاب", "Students Management");
+    ViewData["Subtitle"] = Html.T("عرض وإدارة الطلاب المسجلين في دوراتك", "View and manage students enrolled in your courses");
+    var courseId = ViewBag.CourseId as int?;
+    var exportParams = courseId.HasValue 
+        ? new Dictionary<string, string> { { "courseId", courseId.Value.ToString() } }
+        : null;
+    
+    // Load platform settings
+    var defaultPageSize = await PlatformSettings.GetIntSettingAsync("UI.PageSize.Default", 10);
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1">@ViewData["Title"]</h4>
+        <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+    </div>
+    <div class="d-flex gap-2">
+        @await Html.PartialAsync("_ExportDropdown", new ExportDropdownModel 
+        { 
+            ExportUrl = "/api/export/students",
+            EntityType = "students",
+            AdditionalParams = exportParams
+        })
+        <button class="btn btn-light" data-bs-toggle="modal" data-bs-target="#messageStudentsModal">
+            <i class="feather-mail me-2"></i>@Html.T("مراسلة الطلاب", "Message Students")
+        </button>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("إجمالي الطلاب", "Total Students")),
+                ("Value", ViewBag.TotalStudents ?? 0),
+                ("Icon", "users"),
+                ("Color", "primary")
+            ))
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @{
+                var activeStudentChange = ViewBag.ActiveStudentChange as double? ?? 0;
+                var changePrefix = activeStudentChange >= 0 ? "+" : "";
+            }
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("الطلاب النشطون", "Active Students")),
+                ("Value", ViewBag.ActiveStudents ?? 0),
+                ("Icon", "user-check"),
+                ("Color", "success"),
+                ("Change", $"{changePrefix}{activeStudentChange:F1}%"),
+                ("ChangeText", Html.T("هذا الشهر", "this month"))
+            ))
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("معدل الإكمال", "Completion Rate")),
+                ("Value", $"{ViewBag.CompletionRate ?? 0}%"),
+                ("Icon", "trending-up"),
+                ("Color", "info")
+            ))
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", ViewDataDictionaryHelper.CreateWith(
+                ViewData,
+                ("Label", Html.T("متوسط التقدم", "Average Progress")),
+                ("Value", $"{ViewBag.AverageProgress ?? 0}%"),
+                ("Icon", "activity"),
+                ("Color", "warning")
+            ))
+        </div>
+    </div>
+
+    <!-- Students List -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full border-0" style="border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06);">
+                <div class="card-header d-flex align-items-center justify-content-between" style="border-bottom: 1px solid var(--border-color-light, #f1f5f9); padding: 1rem 1.5rem;">
+                    <h5 class="card-title mb-0 fw-bold">@Html.T("قائمة الطلاب", "Students List")</h5>
+                    <div class="view-toggle btn-group" role="group" style="border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                        <button type="button" class="btn btn-sm" id="tableViewBtn" onclick="switchStudentsView('table')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0);">
+                            <i class="feather-list" style="font-size: 15px;"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm active" id="cardViewBtn" onclick="switchStudentsView('card')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); border-right: none;">
+                            <i class="feather-grid" style="font-size: 15px;"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <!-- Filters -->
+                    <div class="p-4 border-bottom" style="background: var(--light, #f8fafc);">
+                        <form method="get" class="row g-3">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control" name="searchTerm" placeholder="@Html.T("البحث عن طالب...", "Search students...")" value="@ViewBag.SearchTerm">
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" name="courseId" onchange="this.form.submit()">
+                                    <option value="">@Html.T("جميع الدورات", "All Courses")</option>
+                                    @if (ViewBag.Courses != null)
+                                    {
+                                        foreach (var course in ViewBag.Courses)
+                                        {
+                                            var isSelected = courseId.HasValue && courseId.Value == (int)course.Id;
+                                            if (isSelected)
+                                            {
+                                                <option value="@course.Id" selected>@course.Title</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@course.Id">@course.Title</option>
+                                            }
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select class="form-select" name="status" onchange="this.form.submit()">
+                                    <option value="">@Html.T("جميع الحالات", "All Statuses")</option>
+                                    <option value="Active">@Html.T("نشط", "Active")</option>
+                                    <option value="Completed">@Html.T("مكتمل", "Completed")</option>
+                                    <option value="Suspended">@Html.T("موقوف", "Suspended")</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="feather-search"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    @if (Model != null && Model.Any())
+                    {
+                        <!-- Table View Panel -->
+                        <div id="tableView" class="courses-view-panel d-none">
+                            <div class="d-md-none p-3">
+                                @foreach (var enrollment in Model)
+                                {
+                                    var statusBadge = enrollment.Status == LMS.Domain.Enums.EnrollmentStatus.Active ? "bg-soft-success text-success" : enrollment.Status == LMS.Domain.Enums.EnrollmentStatus.Completed ? "bg-soft-primary text-primary" : "bg-soft-danger text-danger";
+                                    <div class="card mb-3 border">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center gap-2 mb-2">
+                                                <div class="avatar-text avatar-md bg-soft-primary text-primary flex-shrink-0">@enrollment.Student.FullName?.Substring(0, 1)</div>
+                                                <div class="min-w-0 flex-grow-1">
+                                                    <a href="@Url.Action("Details", new { enrollmentId = enrollment.Id })" class="fw-bold text-dark text-break">@enrollment.Student.FullName</a>
+                                                    <p class="fs-12 text-muted mb-0 text-break">@enrollment.Student.Email</p>
+                                                </div>
+                                                <span class="badge @statusBadge">@(enrollment.Status == LMS.Domain.Enums.EnrollmentStatus.Active ? Html.T("نشط", "Active") : enrollment.Status == LMS.Domain.Enums.EnrollmentStatus.Completed ? Html.T("مكتمل", "Completed") : Html.T("موقوف", "Suspended"))</span>
+                                            </div>
+                                            <p class="fs-12 mb-2"><a href="@Url.Action("Details", "Courses", new { id = enrollment.CourseId })" class="text-dark">@enrollment.Course.Title</a></p>
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <span class="fs-12 text-muted">@enrollment.EnrolledAt.ToString("dd/MM/yyyy")</span>
+                                                <span class="fw-medium">@enrollment.ProgressPercentage%</span>
+                                            </div>
+                                            <div class="progress mb-2" style="height: 6px;"><div class="progress-bar @(enrollment.ProgressPercentage >= 75 ? "bg-success" : enrollment.ProgressPercentage >= 50 ? "bg-primary" : "bg-warning")" style="width: @enrollment.ProgressPercentage%"></div></div>
+                                            <div class="d-flex gap-2">
+                                                <a href="@Url.Action("Details", new { enrollmentId = enrollment.Id })" class="btn btn-sm btn-primary flex-grow-1"><i class="feather-eye"></i></a>
+                                                <a href="@Url.Action("Progress", new { enrollmentId = enrollment.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-bar-chart"></i></a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="d-none d-md-block">
+                                <div class="table-responsive" style="-webkit-overflow-scrolling: touch; max-width: 100%;">
+                                    <table class="table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th><input type="checkbox" class="form-check-input" id="selectAll"></th>
+                                        <th>@Html.T("الطالب", "Student")</th>
+                                        <th>@Html.T("الدورة", "Course")</th>
+                                        <th>@Html.T("تاريخ التسجيل", "Enrollment Date")</th>
+                                        <th>@Html.T("التقدم", "Progress")</th>
+                                        <th>@Html.T("آخر نشاط", "Last Activity")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                        <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var enrollment in Model)
+                                    {
+                                        <tr>
+                                            <td><input type="checkbox" class="form-check-input" value="@enrollment.Id"></td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-3">
+                                                    <div class="avatar-text avatar-md bg-soft-primary text-primary">
+                                                        @enrollment.Student.FullName?.Substring(0, 1)
+                                                    </div>
+                                                    <div>
+                                                        <a href="@Url.Action("Details", new { enrollmentId = enrollment.Id })" class="fw-bold text-dark">
+                                                            @enrollment.Student.FullName
+                                                        </a>
+                                                        <p class="fs-12 text-muted mb-0">@enrollment.Student.Email</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <a href="@Url.Action("Details", "Courses", new { id = enrollment.CourseId })" class="text-dark">
+                                                    @enrollment.Course.Title
+                                                </a>
+                                            </td>
+                                            <td>
+                                                <span class="fs-13">@enrollment.EnrolledAt.ToString("dd/MM/yyyy")</span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="progress flex-grow-1" style="height: 8px; width: 80px;">
+                                                        <div class="progress-bar @(enrollment.ProgressPercentage >= 75 ? "bg-success" : enrollment.ProgressPercentage >= 50 ? "bg-primary" : "bg-warning")" 
+                                                             style="width: @enrollment.ProgressPercentage%"></div>
+                                                    </div>
+                                                    <span class="fs-12 fw-medium">@enrollment.ProgressPercentage%</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="fs-13 text-muted">@(enrollment.LastAccessedAt?.ToString("dd/MM/yyyy") ?? Html.T("لم يتم الدخول", "Not accessed").ToString())</span>
+                                            </td>
+                                            <td>
+                                                @switch (enrollment.Status)
+                                                {
+                                                    case LMS.Domain.Enums.EnrollmentStatus.Active:
+                                                        <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span>
+                                                        break;
+                                                    case LMS.Domain.Enums.EnrollmentStatus.Completed:
+                                                        <span class="badge bg-soft-primary text-primary">@Html.T("مكتمل", "Completed")</span>
+                                                        break;
+                                                    case LMS.Domain.Enums.EnrollmentStatus.Suspended:
+                                                        <span class="badge bg-soft-danger text-danger">@Html.T("موقوف", "Suspended")</span>
+                                                        break;
+                                                    default:
+                                                        <span class="badge bg-soft-secondary text-secondary">@enrollment.Status</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Details", new { enrollmentId = enrollment.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض", "View")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                    <a href="@Url.Action("Progress", new { enrollmentId = enrollment.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التقدم", "Progress")">
+                                                        <i class="feather-bar-chart"></i>
+                                                    </a>
+                                                    <div class="dropdown">
+                                                        <a href="javascript:void(0)" class="avatar-text avatar-md" data-bs-toggle="dropdown">
+                                                            <i class="feather-more-horizontal"></i>
+                                                        </a>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li>
+                                                                <a class="dropdown-item" href="@Url.Action("SendMessage", new { studentId = enrollment.StudentId })">
+                                                                    <i class="feather-mail me-2"></i>
+                                                                    @Html.T("إرسال رسالة", "Send message")
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <form asp-action="ResetProgress" asp-route-id="@enrollment.Id" method="post" style="display:inline;" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إعادة تعيين تقدم هذا الطالب؟ سيتم حذف جميع بيانات التقدم.", "Are you sure you want to reset this student's progress? All progress data will be deleted.").Replace("'", "\\'"))');">
+                                                                    @Html.AntiForgeryToken()
+                                                                    <button type="submit" class="dropdown-item">
+                                                                        <i class="feather-refresh-cw me-2"></i>
+                                                                        @Html.T("إعادة تعيين التقدم", "Reset progress")
+                                                                    </button>
+                                                                </form>
+                                                            </li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            @if (enrollment.Status == LMS.Domain.Enums.EnrollmentStatus.Active)
+                                                            {
+                                                                <li>
+                                                                    <form asp-action="Suspend" asp-route-id="@enrollment.Id" method="post" style="display:inline;" onsubmit="return confirm('@Html.Raw(Html.T("هل أنت متأكد من إيقاف هذا الطالب؟", "Are you sure you want to suspend this student?").Replace("'", "\\'"))');">
+                                                                        @Html.AntiForgeryToken()
+                                                                        <button type="submit" class="dropdown-item text-danger">
+                                                                            <i class="feather-x-circle me-2"></i>
+                                                                            @Html.T("إيقاف الطالب", "Suspend student")
+                                                                        </button>
+                                                                    </form>
+                                                                </li>
+                                                            }
+                                                            else if (enrollment.Status == LMS.Domain.Enums.EnrollmentStatus.Suspended)
+                                                            {
+                                                                <li>
+                                                                    <form asp-action="Reactivate" asp-route-id="@enrollment.Id" method="post" style="display:inline;">
+                                                                        @Html.AntiForgeryToken()
+                                                                        <button type="submit" class="dropdown-item text-success">
+                                                                            <i class="feather-check-circle me-2"></i>
+                                                                            @Html.T("تفعيل الطالب", "Reactivate student")
+                                                                        </button>
+                                                                    </form>
+                                                                </li>
+                                                            }
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                            </div>
+                        </div>
+
+                        <!-- Card View Panel -->
+                        <div id="cardView" class="courses-view-panel courses-view-active">
+                            <div class="p-4">
+                                <div class="row g-4">
+                                    @foreach (var enrollment in Model)
+                                    {
+                                        var statusBadge = enrollment.Status == LMS.Domain.Enums.EnrollmentStatus.Active ? "bg-soft-success text-success" : enrollment.Status == LMS.Domain.Enums.EnrollmentStatus.Completed ? "bg-soft-primary text-primary" : "bg-soft-danger text-danger";
+                                        <div class="col-12 col-sm-6 col-xl-4 col-xxl-3">
+                                            <div class="card border h-100" style="border-radius: 12px;">
+                                                <div class="card-body">
+                                                    <div class="d-flex align-items-start gap-2 mb-2">
+                                                        <div class="avatar-text avatar-md bg-soft-primary text-primary flex-shrink-0">@enrollment.Student.FullName?.Substring(0, 1)</div>
+                                                        <div class="min-w-0 flex-grow-1">
+                                                            <a href="@Url.Action("Details", new { enrollmentId = enrollment.Id })" class="fw-bold text-dark d-block text-break">@enrollment.Student.FullName</a>
+                                                            <span class="badge @statusBadge fs-10">@(enrollment.Status == LMS.Domain.Enums.EnrollmentStatus.Active ? Html.T("نشط", "Active") : enrollment.Status == LMS.Domain.Enums.EnrollmentStatus.Completed ? Html.T("مكتمل", "Completed") : Html.T("موقوف", "Suspended"))</span>
+                                                        </div>
+                                                    </div>
+                                                    <p class="fs-12 text-muted mb-2 text-break"><a href="@Url.Action("Details", "Courses", new { id = enrollment.CourseId })" class="text-dark">@enrollment.Course.Title</a></p>
+                                                    <div class="d-flex justify-content-between fs-12 mb-2">
+                                                        <span>@enrollment.EnrolledAt.ToString("dd/MM/yyyy")</span>
+                                                        <span class="fw-medium">@enrollment.ProgressPercentage%</span>
+                                                    </div>
+                                                    <div class="progress mb-3" style="height: 6px;"><div class="progress-bar @(enrollment.ProgressPercentage >= 75 ? "bg-success" : enrollment.ProgressPercentage >= 50 ? "bg-primary" : "bg-warning")" style="width: @enrollment.ProgressPercentage%"></div></div>
+                                                    <div class="d-flex gap-2">
+                                                        <a href="@Url.Action("Details", new { enrollmentId = enrollment.Id })" class="btn btn-sm btn-primary flex-grow-1"><i class="feather-eye"></i></a>
+                                                        <a href="@Url.Action("Progress", new { enrollmentId = enrollment.Id })" class="btn btn-sm btn-outline-primary"><i class="feather-bar-chart"></i></a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pagination -->
+                        @await Html.PartialAsync("_Pagination", ViewDataDictionaryHelper.CreateWith(
+                            ViewData,
+                            ("CurrentPage", ViewBag.CurrentPage ?? 1),
+                            ("TotalPages", ViewBag.TotalPages ?? 1),
+                            ("TotalItems", ViewBag.TotalItems ?? 0),
+                            ("PageSize", ViewBag.PageSize ?? defaultPageSize),
+                            ("Action", "Index"),
+                            ("Controller", "Students")
+                        ))
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-users"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا يوجد طلاب بعد", "No students yet")</h5>
+                            <p class="text-muted mb-0">@Html.T("لم يسجل أي طالب في دوراتك حتى الآن", "No students have enrolled in your courses yet")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Message Students Modal -->
+<div class="modal fade" id="messageStudentsModal" tabindex="-1" data-bs-backdrop="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@Html.T("مراسلة الطلاب", "Message Students")</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form asp-controller="Messages" asp-action="BulkMessage" method="post">
+                @Html.AntiForgeryToken()
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("الدورة (اتركها فارغة لإرسال لجميع الطلاب)", "Course (leave empty to send to all students)")</label>
+                        <select class="form-select" name="CourseId">
+                            <option value="">@Html.T("جميع الطلاب في جميع دوراتي", "All students in all my courses")</option>
+                            @if (ViewBag.Courses != null)
+                            {
+                                foreach (var course in ViewBag.Courses as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>())
+                                {
+                                    <option value="@course.Id">@course.Title</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("الموضوع", "Subject") <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="Subject" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">@Html.T("الرسالة", "Message") <span class="text-danger">*</span></label>
+                        <textarea class="form-control" name="Body" rows="5" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">@Html.T("إلغاء", "Cancel")</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="feather-send me-2"></i>
+                        @Html.T("إرسال", "Send")
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Select all
+            $('#selectAll').on('change', function () {
+                $('tbody input[type="checkbox"]').prop('checked', this.checked);
+            });
+
+            // Tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            // Restore view preference (default grid)
+            var savedView = localStorage.getItem('instructor_students_view');
+            if (savedView === 'table') { switchStudentsView('table'); } else { switchStudentsView('card'); }
+        });
+
+        function switchStudentsView(mode) {
+            var tableView = document.getElementById('tableView');
+            var cardView = document.getElementById('cardView');
+            var tableBtn = document.getElementById('tableViewBtn');
+            var cardBtn = document.getElementById('cardViewBtn');
+            if (mode === 'card') {
+                tableView.classList.add('d-none'); tableView.classList.remove('courses-view-active');
+                cardView.classList.remove('d-none'); cardView.classList.add('courses-view-active');
+                cardBtn.classList.add('active'); tableBtn.classList.remove('active');
+            } else {
+                cardView.classList.add('d-none'); cardView.classList.remove('courses-view-active');
+                tableView.classList.remove('d-none'); tableView.classList.add('courses-view-active');
+                tableBtn.classList.add('active'); cardBtn.classList.remove('active');
+            }
+            localStorage.setItem('instructor_students_view', mode);
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.forEach(function (el) {
+                var t = bootstrap.Tooltip.getInstance(el);
+                if (!t) new bootstrap.Tooltip(el);
+            });
+        }
+    </script>
+}
+

@@ -1,0 +1,376 @@
+@model IEnumerable<LMS.Areas.Admin.ViewModels.WithdrawalMethodListViewModel>
+
+@{
+    ViewData["Title"] = Html.T("طرق السحب", "Withdrawal Methods");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الإدارة المالية", "Finance"), null),
+        (Html.T("طرق السحب", "Withdrawal Methods"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إضافة طريقة سحب", "Add Withdrawal Method"), "feather-plus", Url.Action("Create", "WithdrawalMethods"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/dataTables.bs5.min.css" />
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-credit-card"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي الطرق", "Total Methods")</span>
+                            <h3 class="fw-bolder d-block">@ViewBag.TotalMethods.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("طرق مفعلة", "Enabled Methods")</span>
+                            <h3 class="fw-bolder d-block">@ViewBag.EnabledMethods.ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-trending-up"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي الاستخدام", "Total Usage")</span>
+                            <h3 class="fw-bolder d-block">@Model.Sum(m => m.UsageCount).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-dollar-sign"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("طرق معطلة", "Disabled Methods")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(m => !m.IsEnabled).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section FilterDropdown {
+    <a href="@Url.Action("Index", "WithdrawalMethods")" class="dropdown-item">
+        <i class="feather-eye me-3"></i>
+        <span>@Html.T("الكل", "All")</span>
+    </a>
+    <a href="@Url.Action("Index", "WithdrawalMethods", new { enabled = true })" class="dropdown-item">
+        <i class="feather-check-circle me-3"></i>
+        <span>@Html.T("المفعلة", "Enabled")</span>
+    </a>
+    <a href="@Url.Action("Index", "WithdrawalMethods", new { enabled = false })" class="dropdown-item">
+        <i class="feather-x-circle me-3"></i>
+        <span>@Html.T("المعطلة", "Disabled")</span>
+    </a>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header d-flex align-items-center justify-content-between" style="border-bottom: 1px solid var(--border-color-light, #f1f5f9); padding: 1rem 1.5rem;">
+                    <h5 class="card-title mb-0 fw-bold">@Html.T("طرق السحب", "Withdrawal Methods")</h5>
+                    <div class="view-toggle btn-group" role="group" style="border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                        <button type="button" class="btn btn-sm" id="tableViewBtn" onclick="switchAdminWithdrawalMethodsView('table')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); transition: all 0.25s ease;"><i class="feather-list" style="font-size: 15px;"></i></button>
+                        <button type="button" class="btn btn-sm active" id="cardViewBtn" onclick="switchAdminWithdrawalMethodsView('card')" style="padding: 6px 14px; border: 1px solid var(--border-color, #e2e8f0); border-right: none; transition: all 0.25s ease;"><i class="feather-grid" style="font-size: 15px;"></i></button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="tableView" class="courses-view-panel d-none">
+                        <div class="table-responsive" style="overflow: visible;">
+                            <table class="table table-hover courses-table-modern" id="withdrawalMethodsTable">
+                            <thead>
+                                <tr>
+                                    <th>@Html.T("الترتيب", "Order")</th>
+                                    <th>@Html.T("الطريقة", "Method")</th>
+                                    <th>@Html.T("النوع", "Type")</th>
+                                    <th>@Html.T("الحد الأدنى", "Min")</th>
+                                    <th>@Html.T("الحد الأقصى", "Max")</th>
+                                    <th>@Html.T("الرسوم", "Fees")</th>
+                                    <th>@Html.T("الاستخدام", "Usage")</th>
+                                    <th>@Html.T("الحالة", "Status")</th>
+                                    <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sortable-methods">
+                                @foreach (var method in Model.OrderBy(m => m.DisplayOrder))
+                                {
+                                    <tr data-id="@method.Id">
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <i class="feather-menu cursor-move text-muted"></i>
+                                                <span class="fw-bold">#@method.DisplayOrder</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-3">
+                                                @if (!string.IsNullOrEmpty(method.IconUrl))
+                                                {
+                                                    <img src="@method.IconUrl" alt="@method.DisplayName" class="avatar avatar-sm rounded" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="avatar-text avatar-sm bg-soft-primary text-primary">
+                                                        <i class="feather-credit-card"></i>
+                                                    </div>
+                                                }
+                                                <div>
+                                                    <a href="@Url.Action("Details", "WithdrawalMethods", new { id = method.Id })" class="fw-bold text-dark">
+                                                        @method.DisplayName
+                                                    </a>
+                                                    <div class="fs-12 text-muted">@method.Name</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-info text-info">@method.MethodType</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-semibold">@method.MinAmount.ToEGP()</span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-semibold">@method.MaxAmount.ToEGP()</span>
+                                        </td>
+                                        <td>
+                                            <div>
+                                                @if (method.FeePercentage > 0)
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning">@method.FeePercentage%</span>
+                                                }
+                                                @if (method.FixedFee > 0)
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning">+@method.FixedFee.ToEGP()</span>
+                                                }
+                                                @if (method.FeePercentage == 0 && method.FixedFee == 0)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">@Html.T("مجاني", "Free")</span>
+                                                }
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-soft-primary text-primary">@method.UsageCount عملية</span>
+                                        </td>
+                                        <td>
+                                            @if (method.IsEnabled)
+                                            {
+                                                <span class="badge bg-soft-success text-success">
+                                                    <i class="feather-check-circle fs-12 me-1"></i>
+                                                    مفعلة
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-soft-danger text-danger">
+                                                    <i class="feather-x-circle fs-12 me-1"></i>
+                                                    معطلة
+                                                </span>
+                                            }
+                                        </td>
+                                        <td class="text-end">
+                                            <div class="hstack gap-2 justify-content-end">
+                                                <a href="@Url.Action("Details", "WithdrawalMethods", new { id = method.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("التفاصيل", "Details")">
+                                                    <i class="feather-eye"></i>
+                                                </a>
+                                                <a href="@Url.Action("Edit", "WithdrawalMethods", new { id = method.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("تعديل", "Edit")">
+                                                    <i class="feather-edit"></i>
+                                                </a>
+                                                <form method="post" action="@Url.Action("ToggleEnabled", "WithdrawalMethods", new { id = method.Id })" style="display:inline;">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="avatar-text avatar-md border-0 bg-transparent" data-bs-toggle="tooltip" title="@(method.IsEnabled ? Html.T("تعطيل", "Disable") : Html.T("تفعيل", "Enable"))">
+                                                        <i class="feather-@(method.IsEnabled ? "toggle-right text-success" : "toggle-left text-muted")"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        </div>
+                    </div>
+                    <div id="cardView" class="courses-view-panel courses-view-active">
+                        <div class="p-4">
+                            <div class="row g-4">
+                                @foreach (var method in Model.OrderBy(m => m.DisplayOrder))
+                                {
+                                    <div class="col-12 col-sm-6 col-xl-4 col-xxl-3">
+                                        <div class="card stretch stretch-full border-0" style="border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06); border: 1px solid var(--border-color-light, #f1f5f9); height: 100%;">
+                                            <div class="card-body p-3 d-flex flex-column">
+                                                <div class="d-flex align-items-center gap-3 mb-2">
+                                                    @if (!string.IsNullOrEmpty(method.IconUrl))
+                                                    {
+                                                        <img src="@method.IconUrl" alt="@method.DisplayName" class="avatar avatar-lg rounded" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="avatar-text avatar-lg bg-soft-primary text-primary"><i class="feather-credit-card"></i></div>
+                                                    }
+                                                    <div>
+                                                        <a href="@Url.Action("Details", "WithdrawalMethods", new { id = method.Id })" class="fw-bold text-dark">@method.DisplayName</a>
+                                                        <div class="fs-12 text-muted">@method.Name</div>
+                                                    </div>
+                                                </div>
+                                                <div class="mb-2">
+                                                    <span class="badge bg-soft-info text-info">@method.MethodType</span>
+                                                    <span class="badge bg-soft-primary text-primary ms-1">@method.UsageCount @Html.T("استخدام", "uses")</span>
+                                                </div>
+                                                <div class="small text-muted">@method.MinAmount.ToEGP() - @method.MaxAmount.ToEGP()</div>
+                                                <div class="mt-auto pt-3" style="border-top: 1px solid var(--border-color-light, #f1f5f9);">
+                                                    @if (method.IsEnabled) { <span class="badge bg-soft-success text-success">@Html.T("مفعلة", "Enabled")</span> } else { <span class="badge bg-soft-danger text-danger">@Html.T("معطلة", "Disabled")</span> }
+                                                    <div class="hstack gap-2 mt-2">
+                                                        <a href="@Url.Action("Details", "WithdrawalMethods", new { id = method.Id })" class="btn btn-sm btn-light"><i class="feather-eye"></i></a>
+                                                        <a href="@Url.Action("Edit", "WithdrawalMethods", new { id = method.Id })" class="btn btn-sm btn-light"><i class="feather-edit"></i></a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden AntiForgeryToken for AJAX calls -->
+@Html.AntiForgeryToken()
+
+@section Scripts {
+    <script src="~/assets/vendors/js/dataTables.min.js"></script>
+    <script src="~/assets/vendors/js/dataTables.bs5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTables without ordering (to allow drag-drop)
+            var dataTableLangUrl = "@(Html.IsRtl() ? "//cdn.datatables.net/plug-ins/1.13.7/i18n/ar.json" : "//cdn.datatables.net/plug-ins/1.13.7/i18n/en-GB.json")";
+            var table = $('#withdrawalMethodsTable').DataTable({
+                "language": { "url": dataTableLangUrl },
+                "ordering": false, // Disable DataTables ordering to prevent conflict with SortableJS
+                "pageLength": 25
+            });
+
+            $('[data-bs-toggle="tooltip"]').tooltip();
+
+            // Only initialize Sortable if table body exists
+            var sortableEl = document.getElementById('sortable-methods');
+            if (sortableEl && sortableEl.children.length > 0) {
+                new Sortable(sortableEl, {
+                    handle: '.cursor-move',
+                    animation: 150,
+                    onEnd: function (evt) {
+                        var itemId = $(evt.item).data('id');
+                        var newOrder = evt.newIndex;
+                        var token = $('input[name="__RequestVerificationToken"]').val();
+                        
+                        $.ajax({
+                            url: '@Url.Action("UpdateOrder", "WithdrawalMethods")',
+                            method: 'POST',
+                            headers: {
+                                'RequestVerificationToken': token
+                            },
+                            data: {
+                                id: itemId,
+                                newOrder: newOrder,
+                                __RequestVerificationToken: token
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    // Update order numbers in UI
+                                    $('#sortable-methods tr').each(function(index) {
+                                        $(this).find('td:first span.fw-bold').text('#' + index);
+                                    });
+                                    // Show success toast/message
+                                    console.log('Order updated successfully');
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                console.error('Failed to update order:', error);
+                                // Reload page to restore original order on failure
+                                location.reload();
+                            }
+                        });
+                    }
+                });
+            }
+            var savedView = localStorage.getItem('admin_withdrawalmethods_index_view');
+            if (savedView === 'table') { switchAdminWithdrawalMethodsView('table'); } else { switchAdminWithdrawalMethodsView('card'); }
+        });
+        function switchAdminWithdrawalMethodsView(mode) {
+            var tableView = document.getElementById('tableView');
+            var cardView = document.getElementById('cardView');
+            var tableBtn = document.getElementById('tableViewBtn');
+            var cardBtn = document.getElementById('cardViewBtn');
+            if (mode === 'card') {
+                if (tableView) { tableView.classList.add('d-none'); tableView.classList.remove('courses-view-active'); }
+                if (cardView) { cardView.classList.remove('d-none'); cardView.classList.add('courses-view-active'); }
+                if (cardBtn) cardBtn.classList.add('active');
+                if (tableBtn) tableBtn.classList.remove('active');
+            } else {
+                if (cardView) { cardView.classList.add('d-none'); cardView.classList.remove('courses-view-active'); }
+                if (tableView) { tableView.classList.remove('d-none'); tableView.classList.add('courses-view-active'); }
+                if (tableBtn) tableBtn.classList.add('active');
+                if (cardBtn) cardBtn.classList.remove('active');
+                if (typeof $ !== 'undefined' && $('#withdrawalMethodsTable').length && $.fn.DataTable && $('#withdrawalMethodsTable').DataTable) { try { $('#withdrawalMethodsTable').DataTable().columns().adjust(); } catch (e) {} }
+            }
+            localStorage.setItem('admin_withdrawalmethods_index_view', mode);
+            [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]')).forEach(function (el) { if (!bootstrap.Tooltip.getInstance(el)) new bootstrap.Tooltip(el); });
+        }
+    </script>
+    <style>
+        .cursor-move {
+            cursor: move;
+        }
+        .cursor-move:hover {
+            color: #3454d1;
+        }
+    </style>
+}
+

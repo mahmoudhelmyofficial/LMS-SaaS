@@ -1,0 +1,225 @@
+@model IEnumerable<LMS.Domain.Entities.Learning.Enrollment>
+
+@using LMS.Views.Shared
+@{
+    ViewData["Title"] = Html.T("تقدم الطلاب", "Student Progress");
+    var course = ViewBag.Course as LMS.Domain.Entities.Courses.Course;
+    ViewData["Subtitle"] = course?.Title;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="mb-1">@ViewData["Title"]</h4>
+        <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+    </div>
+    <div class="d-flex gap-2">
+        @await Html.PartialAsync("_ExportDropdown", new ExportDropdownModel 
+        { 
+            ExportUrl = "/api/export/progress",
+            EntityType = "progress",
+            ButtonClass = "btn-success",
+            ButtonText = "تصدير التقرير",
+            AdditionalParams = new Dictionary<string, string> { { "courseId", course?.Id.ToString() ?? "0" } }
+        })
+        <button class="btn btn-light" onclick="window.location.reload()">
+            <i class="feather-refresh-cw me-2"></i>
+            تحديث
+        </button>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <!-- Course Info -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h4 class="fw-bold mb-2">@course?.Title</h4>
+                    <p class="text-muted mb-0">@course?.Description</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="fs-13 text-muted mb-1">إجمالي الوحدات</div>
+                    <div class="fs-24 fw-bold">@(course?.Modules?.Count ?? 0)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "إجمالي الطلاب" },
+                { "Value", Model.Count() },
+                { "Icon", "users" },
+                { "Color", "primary" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "متوسط التقدم" },
+                { "Value", Model.Any() ? Model.Average(e => e.ProgressPercentage).ToString("F0") + "%" : "0%" },
+                { "Icon", "trending-up" },
+                { "Color", "success" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "مكملين الدورة" },
+                { "Value", Model.Count(e => e.IsCompleted) },
+                { "Icon", "award" },
+                { "Color", "info" }
+            })
+        </div>
+        <div class="col-xxl-3 col-md-6">
+            @await Html.PartialAsync("_StatCard", new ViewDataDictionary(ViewData)
+            {
+                { "Label", "متوسط الوقت" },
+                { "Value", Model.Any() ? (Model.Average(e => e.TotalWatchTimeMinutes) / 60.0).ToString("F1") + " ساعة" : "0" },
+                { "Icon", "clock" },
+                { "Color", "warning" }
+            })
+        </div>
+    </div>
+
+    <!-- Progress Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">@Html.T("تقدم الطلاب", "Student progress")</h5>
+                    <div class="card-header-action">
+                        <input type="text" class="form-control form-control-sm" id="searchStudent" placeholder="@Html.T("بحث...", "Search...")">
+                    </div>
+                </div>
+                <div class="card-body custom-card-action p-0">
+                    @if (Model != null && Model.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0" id="progressTable">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الطالب", "Student")</th>
+                                        <th>@Html.T("تاريخ التسجيل", "Enrolled")</th>
+                                        <th>@Html.T("نسبة التقدم", "Progress")</th>
+                                        <th>@Html.T("الدروس المكتملة", "Lessons completed")</th>
+                                        <th>@Html.T("الوقت المستغرق", "Time spent")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                        <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var enrollment in Model)
+                                    {
+                                        var completedLessons = enrollment.LessonProgress?.Count(lp => lp.IsCompleted) ?? 0;
+                                        var totalLessons = course?.Modules?.SelectMany(m => m.Lessons).Count() ?? 0;
+                                        var progressColor = enrollment.ProgressPercentage >= 75 ? "success" : enrollment.ProgressPercentage >= 50 ? "warning" : "danger";
+                                        
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-3">
+                                                    <div class="avatar-text avatar-md">
+                                                        @enrollment.Student?.FirstName?.Substring(0, 1)
+                                                    </div>
+                                                    <div>
+                                                        <div class="fw-medium">@enrollment.Student?.FullName</div>
+                                                        <div class="fs-12 text-muted">@enrollment.Student?.Email</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="fs-13">@enrollment.EnrolledAt.ToString("dd/MM/yyyy")</span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <div class="progress flex-fill" style="width: 100px; height: 8px;">
+                                                        <div class="progress-bar bg-@progressColor" role="progressbar" style="width: @enrollment.ProgressPercentage%"></div>
+                                                    </div>
+                                                    <span class="fw-bold">@enrollment.ProgressPercentage.ToString("F0")%</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-soft-info text-info">
+                                                    @completedLessons / @totalLessons
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <i class="feather-clock text-muted"></i>
+                                                    <span>@((enrollment.TotalTimeSpent / 3600).ToString("F1")) ساعة</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                @if (enrollment.IsCompleted)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">
+                                                        <i class="feather-check-circle me-1"></i>مكتمل
+                                                    </span>
+                                                }
+                                                else if (enrollment.ProgressPercentage > 0)
+                                                {
+                                                    <span class="badge bg-soft-warning text-warning">
+                                                        <i class="feather-activity me-1"></i>قيد التقدم
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">
+                                                        <i class="feather-circle me-1"></i>لم يبدأ
+                                                    </span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="hstack gap-2 justify-content-end">
+                                                    <a href="@Url.Action("Student", new { enrollmentId = enrollment.Id })" class="avatar-text avatar-md" data-bs-toggle="tooltip" title="@Html.T("عرض التفاصيل", "View details")">
+                                                        <i class="feather-eye"></i>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="p-5 text-center">
+                            <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-4 mx-auto">
+                                <i class="feather-users"></i>
+                            </div>
+                            <h5 class="fw-bold mb-2">@Html.T("لا يوجد طلاب مسجلين", "No enrolled students")</h5>
+                            <p class="text-muted">@Html.T("لا يوجد طلاب مسجلين في هذه الدورة بعد", "No students enrolled in this course yet")</p>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+
+            // Search functionality
+            $('#searchStudent').on('keyup', function() {
+                var value = $(this).val().toLowerCase();
+                $('#progressTable tbody tr').filter(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+                });
+            });
+        });
+    </script>
+}
+

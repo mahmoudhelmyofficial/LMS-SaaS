@@ -1,0 +1,404 @@
+@model LMS.Areas.Instructor.ViewModels.MediaUploadViewModel
+
+@{
+    ViewData["Title"] = Html.T("رفع ملف جديد", "Upload New File");
+    ViewData["Subtitle"] = Html.T("رفع ملفات الوسائط إلى مكتبتك", "Upload media files to your library");
+    var indexUrl = Url.Action("Index");
+}
+
+<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-4">
+    <div>
+        <h4 class="mb-1">@ViewData["Title"]</h4>
+        <p class="text-muted mb-0">@ViewData["Subtitle"]</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="@indexUrl" class="btn btn-light">
+            <i class="feather-arrow-right me-2"></i>
+            العودة للمكتبة
+        </a>
+    </div>
+</div>
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <form asp-action="Upload" method="post" enctype="multipart/form-data" id="uploadForm">
+        @Html.AntiForgeryToken()
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Drag & Drop Upload Area -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="upload-dropzone border-2 border-dashed rounded-3 p-5 text-center position-relative"
+                             id="dropzone"
+                             style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-color: #0284c7 !important; min-height: 280px; cursor: pointer; transition: all 0.3s ease;">
+                            
+                            <input type="file" 
+                                   asp-for="File" 
+                                   class="position-absolute w-100 h-100 opacity-0" 
+                                   style="top: 0; left: 0; cursor: pointer;"
+                                   id="fileInput"
+                                   accept="image/*,video/*,audio/*,.pdf,application/pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.epub,.mobi">
+                            
+                            <!-- Upload Placeholder -->
+                            <div id="uploadPlaceholder">
+                                <div class="avatar-text avatar-xl bg-soft-primary text-primary mb-3 mx-auto">
+                                    <i class="feather-upload-cloud fs-1"></i>
+                                </div>
+                                <h5 class="fw-bold mb-2">@Html.T("اسحب الملفات هنا أو انقر للاختيار", "Drag files here or click to select")</h5>
+                                <p class="text-muted mb-1">يدعم: الصور، الفيديوهات، المستندات (PDF, Word, Excel, PPT)، الملفات الصوتية</p>
+                                <p class="text-muted small mb-0">الحجم الأقصى: 50 ميجابايت (100 ميجابايت للمستندات والكتب)</p>
+                            </div>
+
+                            <!-- File Preview -->
+                            <div id="filePreview" class="d-none">
+                                <div class="mb-3">
+                                    <i class="feather-file fs-1 text-primary" id="previewIcon"></i>
+                                </div>
+                                <h6 class="fw-bold mb-2" id="fileName">filename.jpg</h6>
+                                <p class="text-muted small mb-3" id="fileSize">0 KB</p>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearFile()">
+                                    <i class="feather-x me-1"></i>
+                                    إزالة
+                                </button>
+                            </div>
+
+                            <!-- Image Preview -->
+                            <div id="imagePreviewContainer" class="d-none mt-3">
+                                <img id="imagePreview" src="" alt="معاينة" class="img-fluid rounded" style="max-height: 200px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Information -->
+                <div class="card mb-4" id="fileInfoCard">
+                    <div class="card-header">
+                        <h5 class="card-title">
+                            <i class="feather-info me-2 text-primary"></i>
+                            معلومات الملف
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label asp-for="Title" class="form-label fw-bold">
+                                    عنوان الملف <span class="text-danger">*</span>
+                                </label>
+                                <input asp-for="Title" class="form-control form-control-lg" 
+                                       id="titleInput"
+                                       placeholder="@Html.T("سيتم استخدام اسم الملف تلقائياً إذا ترك فارغاً", "File name will be used automatically if left empty")">
+                                <span asp-validation-for="Title" class="text-danger"></span>
+                                <div class="form-text">
+                                    <i class="feather-lightbulb me-1"></i>
+                                    يتم تعبئة العنوان تلقائياً من اسم الملف - يمكنك تعديله
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label asp-for="Description" class="form-label fw-bold">@Html.T("الوصف (اختياري)", "Description (optional)")</label>
+                                <textarea asp-for="Description" class="form-control" rows="3" 
+                                          placeholder="@Html.T("وصف مختصر للملف...", "Brief description of the file...")"></textarea>
+                                <span asp-validation-for="Description" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- External URL Option -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title d-flex align-items-center">
+                            <i class="feather-link me-2 text-primary"></i>
+                            أو استخدم رابط خارجي
+                            <span class="badge bg-soft-secondary text-secondary ms-2">بديل</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="feather-globe"></i></span>
+                            <input asp-for="ExternalUrl" type="url" class="form-control" 
+                                   placeholder="https://example.com/file.jpg">
+                        </div>
+                        <span asp-validation-for="ExternalUrl" class="text-danger"></span>
+                        <div class="form-text">
+                            إذا كان الملف موجوداً على خدمة خارجية (Google Drive, Dropbox, إلخ)
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="col-lg-4">
+                <!-- Supported Formats -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0">
+                            <i class="feather-check-circle me-2 text-success"></i>
+                            الصيغ المدعومة
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-soft-success text-success me-2">
+                                    <i class="feather-image"></i>
+                                </span>
+                                <span class="fw-bold">@Html.T("الصور", "Images")</span>
+                            </div>
+                            <div class="small text-muted">JPG, PNG, GIF, WebP, SVG</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-soft-danger text-danger me-2">
+                                    <i class="feather-video"></i>
+                                </span>
+                                <span class="fw-bold">@Html.T("الفيديوهات", "Videos")</span>
+                            </div>
+                            <div class="small text-muted">MP4, WebM, MOV, AVI</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-soft-info text-info me-2">
+                                    <i class="feather-music"></i>
+                                </span>
+                                <span class="fw-bold">@Html.T("الصوتيات", "Audio")</span>
+                            </div>
+                            <div class="small text-muted">MP3, WAV, OGG, M4A</div>
+                        </div>
+                        <div>
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-soft-warning text-warning me-2">
+                                    <i class="feather-file-text"></i>
+                                </span>
+                                <span class="fw-bold">@Html.T("المستندات", "Documents")</span>
+                            </div>
+                            <div class="small text-muted">PDF (حتى 100 MB), DOC, DOCX, PPT, PPTX, XLS, XLSX, EPUB, MOBI</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tips -->
+                <div class="card mb-4 bg-soft-info border-0">
+                    <div class="card-body">
+                        <h6 class="fw-bold text-info mb-3">
+                            <i class="feather-lightbulb me-2"></i>
+                            نصائح
+                        </h6>
+                        <ul class="list-unstyled mb-0 small">
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                اختر اسماً وصفياً يسهل البحث
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                استخدم صور عالية الجودة
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check text-success me-2"></i>
+                                ضغط الفيديو قبل الرفع
+                            </li>
+                            <li>
+                                <i class="feather-check text-success me-2"></i>
+                                الملفات متاحة في كل دوراتك
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="card">
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100 mb-2" id="submitBtn">
+                            <i class="feather-upload me-2"></i>
+                            رفع الملف
+                        </button>
+                        <a href="@Url.Action("Index")" class="btn btn-light w-100">
+                            <i class="feather-x me-2"></i>
+                            إلغاء
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Styles {
+    <style>
+        .upload-dropzone {
+            transition: all 0.3s ease;
+        }
+
+        .upload-dropzone:hover {
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%) !important;
+            border-color: #0369a1 !important;
+        }
+
+        .upload-dropzone.dragover {
+            background: linear-gradient(135deg, #bae6fd 0%, #7dd3fc 100%) !important;
+            border-color: #0284c7 !important;
+            transform: scale(1.01);
+        }
+
+        .avatar-text {
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+
+        .bg-soft-primary {
+            background-color: rgba(13, 110, 253, 0.1) !important;
+        }
+
+        .bg-soft-success {
+            background-color: rgba(25, 135, 84, 0.1) !important;
+        }
+
+        .bg-soft-danger {
+            background-color: rgba(220, 53, 69, 0.1) !important;
+        }
+
+        .bg-soft-info {
+            background-color: rgba(13, 202, 240, 0.1) !important;
+        }
+
+        .bg-soft-warning {
+            background-color: rgba(255, 193, 7, 0.1) !important;
+        }
+
+        .bg-soft-secondary {
+            background-color: rgba(108, 117, 125, 0.1) !important;
+        }
+    </style>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropzone = document.getElementById('dropzone');
+            const fileInput = document.getElementById('fileInput');
+            const titleInput = document.getElementById('titleInput');
+            const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+            const filePreview = document.getElementById('filePreview');
+            const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+            const imagePreview = document.getElementById('imagePreview');
+
+            // Drag and drop events
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, () => dropzone.classList.add('dragover'), false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, () => dropzone.classList.remove('dragover'), false);
+            });
+
+            dropzone.addEventListener('drop', function(e) {
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    fileInput.files = files;
+                    handleFile(files[0]);
+                }
+            });
+
+            // File input change
+            fileInput.addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0]);
+                }
+            });
+
+            function handleFile(file) {
+                // Show file preview
+                uploadPlaceholder.classList.add('d-none');
+                filePreview.classList.remove('d-none');
+
+                document.getElementById('fileName').textContent = file.name;
+                document.getElementById('fileSize').textContent = formatFileSize(file.size);
+
+                // Set title from filename if empty
+                if (!titleInput.value) {
+                    titleInput.value = file.name.replace(/\.[^/.]+$/, "");
+                }
+
+                // Update icon based on file type
+                const previewIcon = document.getElementById('previewIcon');
+                const fileType = file.type.split('/')[0];
+
+                if (fileType === 'image') {
+                    previewIcon.className = 'feather-image fs-1 text-success';
+                    
+                    // Show image preview
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        imagePreview.src = e.target.result;
+                        imagePreviewContainer.classList.remove('d-none');
+                    };
+                    reader.readAsDataURL(file);
+                } else if (fileType === 'video') {
+                    previewIcon.className = 'feather-video fs-1 text-danger';
+                    imagePreviewContainer.classList.add('d-none');
+                } else if (fileType === 'audio') {
+                    previewIcon.className = 'feather-music fs-1 text-info';
+                    imagePreviewContainer.classList.add('d-none');
+                } else if (file.type === 'application/pdf' || file.name.match(/\.(doc|docx|ppt|pptx|xls|xlsx)$/i)) {
+                    previewIcon.className = 'feather-file-text fs-1 text-warning';
+                    imagePreviewContainer.classList.add('d-none');
+                } else {
+                    previewIcon.className = 'feather-file fs-1 text-secondary';
+                    imagePreviewContainer.classList.add('d-none');
+                }
+            }
+
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+            }
+
+            window.clearFile = function() {
+                fileInput.value = '';
+                uploadPlaceholder.classList.remove('d-none');
+                filePreview.classList.add('d-none');
+                imagePreviewContainer.classList.add('d-none');
+            };
+
+            // Form validation
+            document.getElementById('uploadForm').addEventListener('submit', function(e) {
+                const hasFile = fileInput.files.length > 0;
+                const hasUrl = document.querySelector('[name="ExternalUrl"]').value.trim() !== '';
+                const hasTitle = titleInput.value.trim() !== '';
+
+                if (!hasFile && !hasUrl) {
+                    e.preventDefault();
+                    alert('يرجى رفع ملف أو إدخال رابط خارجي');
+                    return false;
+                }
+
+                if (!hasTitle && hasFile) {
+                    // Auto-fill title from filename
+                    titleInput.value = fileInput.files[0].name.replace(/\.[^/.]+$/, "");
+                }
+            });
+        });
+    </script>
+}
+
+

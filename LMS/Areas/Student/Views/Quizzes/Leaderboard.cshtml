@@ -1,0 +1,228 @@
+@model QuizLeaderboardViewModel
+@{
+    ViewData["Title"] = Html.T("لوحة المتصدرين", "Leaderboard");
+}
+
+@section Styles {
+<style>
+    .leaderboard-header {
+        background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+        color: white;
+        border-radius: 16px;
+        padding: 40px;
+        text-align: center;
+        margin-bottom: 24px;
+    }
+    .rank-1 {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border: 2px solid #f59e0b;
+    }
+    .rank-2 {
+        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        border: 2px solid #9ca3af;
+    }
+    .rank-3 {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border: 2px solid #d97706;
+    }
+    .rank-medal {
+        font-size: 32px;
+        margin-left: 12px;
+    }
+</style>
+}
+
+<!-- Alert Messages -->
+@await Html.PartialAsync("_AlertMessage")
+
+<!-- Header -->
+<div class="leaderboard-header">
+    <div style="font-size: 64px; margin-bottom: 16px;">🏆</div>
+    <h2 class="text-white mb-2">@Html.T("لوحة المتصدرين", "Leaderboard")</h2>
+    <p class="mb-0 opacity-75">@Model.Quiz.Title</p>
+</div>
+
+<!-- Filter Options -->
+<div class="card stretch stretch-full mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="btn-group">
+                <a asp-action="Leaderboard" asp-route-quizId="@Model.Quiz.Id" asp-route-period="all" 
+                   class="btn @(Model.Period == "all" ? "btn-primary" : "btn-outline-primary")">
+                    @Html.T("الكل", "All")
+                </a>
+                <a asp-action="Leaderboard" asp-route-quizId="@Model.Quiz.Id" asp-route-period="month" 
+                   class="btn @(Model.Period == "month" ? "btn-primary" : "btn-outline-primary")">
+                    @Html.T("هذا الشهر", "This month")
+                </a>
+                <a asp-action="Leaderboard" asp-route-quizId="@Model.Quiz.Id" asp-route-period="week" 
+                   class="btn @(Model.Period == "week" ? "btn-primary" : "btn-outline-primary")">
+                    @Html.T("هذا الأسبوع", "This week")
+                </a>
+            </div>
+            
+            <span class="text-muted">
+                <i class="feather-users me-1"></i>
+                @Model.TotalParticipants @Html.T("مشارك", "participants")
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- Top 3 -->
+@if (Model.TopThree.Any())
+{
+    <div class="row g-4 mb-4">
+        @foreach (var (entry, index) in Model.TopThree.Select((e, i) => (e, i)))
+        {
+            var rank = index + 1;
+            var rankClass = rank == 1 ? "rank-1" : rank == 2 ? "rank-2" : "rank-3";
+            var medal = rank == 1 ? "🥇" : rank == 2 ? "🥈" : "🥉";
+            
+            <div class="col-md-4">
+                <div class="card @rankClass">
+                    <div class="card-body text-center">
+                        <div class="rank-medal">@medal</div>
+                        
+                        @if (!string.IsNullOrEmpty(entry.ProfilePictureUrl))
+                        {
+                            <img src="@entry.ProfilePictureUrl" alt="@entry.StudentName" 
+                                 class="rounded-circle mb-3" style="width: 80px; height: 80px; object-fit: cover;" />
+                        }
+                        else
+                        {
+                            <div class="avatar-text avatar-xl bg-primary text-white mb-3 mx-auto">
+                                @entry.StudentName.Substring(0, 1)
+                            </div>
+                        }
+                        
+                        <h5 class="fw-bold mb-1">@entry.StudentName</h5>
+                        <h3 class="fw-bold text-primary mb-2">@entry.Score%</h3>
+                        <small class="text-muted">
+                            <i class="feather-clock me-1"></i>
+                            @entry.CompletionTime @Html.T("دقيقة", "min")
+                        </small>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- Full Leaderboard -->
+<div class="card stretch stretch-full">
+    <div class="card-body">
+        <h5 class="fw-bold mb-4">
+            <i class="feather-list text-primary me-2"></i>
+            @Html.T("التصنيف الكامل", "Full ranking")
+        </h5>
+        
+        @if (Model.Entries.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 80px;">@Html.T("الترتيب", "Rank")</th>
+                            <th>@Html.T("الطالب", "Student")</th>
+                            <th class="text-center">@Html.T("الدرجة", "Score")</th>
+                            <th class="text-center">@Html.T("الوقت", "Time")</th>
+                            <th class="text-center">@Html.T("التاريخ", "Date")</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in Model.Entries)
+                        {
+                            <tr class="@(entry.IsCurrentUser ? "table-active" : "")">
+                                <td class="text-center">
+                                    <span class="badge @(entry.Rank <= 3 ? "bg-warning" : "bg-secondary") rounded-pill">
+                                        #@entry.Rank
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        @if (!string.IsNullOrEmpty(entry.ProfilePictureUrl))
+                                        {
+                                            <img src="@entry.ProfilePictureUrl" alt="@entry.StudentName" 
+                                                 class="rounded-circle me-2" style="width: 40px; height: 40px; object-fit: cover;" />
+                                        }
+                                        else
+                                        {
+                                            <div class="avatar-text avatar-sm bg-primary text-white me-2">
+                                                @entry.StudentName.Substring(0, 1)
+                                            </div>
+                                        }
+                                        <div>
+                                            <strong>@entry.StudentName</strong>
+                                            @if (entry.IsCurrentUser)
+                                            {
+                                                <span class="badge bg-soft-primary text-primary ms-2">@Html.T("أنت", "You")</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge @(entry.Score >= 90 ? "bg-success" : entry.Score >= 70 ? "bg-primary" : "bg-warning")">
+                                        @entry.Score%
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    <span class="text-muted">@entry.CompletionTime @Html.T("دقيقة", "min")</span>
+                                </td>
+                                <td class="text-center">
+                                    <small class="text-muted">@entry.CompletedAt.ToString("yyyy/MM/dd")</small>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            ViewData["Icon"] = "list";
+            ViewData["Title"] = Html.T("لا توجد نتائج بعد", "No results yet");
+            ViewData["Message"] = Html.T("كن أول من يشارك!", "Be the first to participate!");
+            @await Html.PartialAsync("_EmptyState")
+        }
+    </div>
+</div>
+
+<!-- Your Stats -->
+@if (Model.CurrentUserEntry != null)
+{
+    <div class="card stretch stretch-full">
+        <div class="card-body">
+            <h6 class="fw-bold mb-3">
+                <i class="feather-user text-info me-2"></i>
+                @Html.T("إحصائياتك", "Your stats")
+            </h6>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="text-center p-3 rounded" style="background: #f3f4f6;">
+                        <h4 class="fw-bold mb-1">#@Model.CurrentUserEntry.Rank</h4>
+                        <small class="text-muted">@Html.T("ترتيبك", "Your rank")</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center p-3 rounded" style="background: #dbeafe;">
+                        <h4 class="fw-bold text-primary mb-1">@Model.CurrentUserEntry.Score%</h4>
+                        <small class="text-muted">@Html.T("درجتك", "Your score")</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center p-3 rounded" style="background: #fef3c7;">
+                        <h4 class="fw-bold text-warning mb-1">@Model.CurrentUserEntry.CompletionTime</h4>
+                        <small class="text-muted">@Html.T("الوقت (دقيقة)", "Time (min)")</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center p-3 rounded" style="background: #d1fae5;">
+                        <h4 class="fw-bold text-success mb-1">@Model.CurrentUserEntry.AttemptsCount</h4>
+                        <small class="text-muted">@Html.T("المحاولات", "Attempts")</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}

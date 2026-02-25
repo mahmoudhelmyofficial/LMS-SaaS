@@ -1,0 +1,464 @@
+@model LMS.Domain.Entities.Learning.LearningPath
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل المسار التعليمي", "Learning path details");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("المسارات التعليمية", "Learning paths"), Url.Action("Index", "LearningPaths")),
+        (Html.T("تفاصيل المسار", "Path details"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("تعديل", "Edit"), "feather-edit", Url.Action("Edit", "LearningPaths", new { id = Model.Id }), "btn-primary"),
+        (Html.T("حذف", "Delete"), "feather-trash-2", "javascript:void(0)", "btn-danger delete-btn")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .path-header {
+            background: var(--gradient-hero, linear-gradient(135deg, #004aad 0%, #0055c4 50%, #1a5cb9 100%));
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .course-step {
+            position: relative;
+            padding: 20px;
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+        .course-step:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .course-step::before {
+            content: '';
+            position: absolute;
+            right: 30px;
+            top: -15px;
+            width: 2px;
+            height: 15px;
+            background: #dee2e6;
+        }
+        .course-step:first-child::before {
+            display: none;
+        }
+        .step-number {
+            width: 40px;
+            height: 40px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .stats-box {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        .stats-box:hover {
+            transform: translateY(-5px);
+        }
+        .enrollment-chart {
+            height: 300px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<div class="main-content">
+    <!-- Path Header -->
+    <div class="path-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <span class="badge bg-white text-primary">@Model.Level</span>
+                    @if (Model.IsPublished)
+                    {
+                        <span class="badge bg-success">
+                            <i class="feather-check-circle"></i>
+                            نشط
+                        </span>
+                    }
+                    @if (Model.IsFeatured)
+                    {
+                        <span class="badge bg-warning">
+                            <i class="feather-star"></i>
+                            مميز
+                        </span>
+                    }
+                </div>
+                <h2 class="text-white mb-2">@Model.Title</h2>
+                <p class="text-white-50 mb-0">@Model.Category?.Name</p>
+            </div>
+            <div class="col-md-4 text-end">
+                @if (Model.ImageUrl != null)
+                {
+                    <img src="@Model.ImageUrl" alt="@Model.Title" class="img-thumbnail" style="max-height: 150px;">
+                }
+            </div>
+        </div>
+        <hr class="my-3 border-white opacity-25">
+        <div class="row g-3 text-white">
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">عدد الدورات</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-book"></i>
+                    <span class="fw-semibold">@Model.Courses?.Count() دورة</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">المدة التقديرية</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-clock"></i>
+                    <span class="fw-semibold">@Model.EstimatedHours ساعة</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">الطلاب المسجلين</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-users"></i>
+                    <span class="fw-semibold">@Model.EnrolledStudentsCount طالب</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <small class="text-white-50 d-block">السعر</small>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="feather-dollar-sign"></i>
+                    <span class="fw-semibold">
+                        @if (Model.Price.HasValue && Model.Price > 0)
+                        {
+                            if (Model.DiscountPrice.HasValue && Model.DiscountPrice < Model.Price)
+                            {
+                                <span class="text-decoration-line-through opacity-75">@Model.Price ريال</span>
+                                <span>@Model.DiscountPrice ريال</span>
+                            }
+                            else
+                            {
+                                <span>@Model.Price ريال</span>
+                            }
+                        }
+                        else
+                        {
+                            <span>مجاني</span>
+                        }
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Description -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-file-text me-2"></i>
+                        وصف المسار
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        @Html.Raw(Model.Description)
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(Model.WhatYouWillLearn))
+                    {
+                        <h6 class="mb-3">
+                            <i class="feather-check-circle me-2 text-success"></i>
+                            ماذا ستتعلم
+                        </h6>
+                        <div class="mb-4">
+                            @Html.Raw(Model.WhatYouWillLearn)
+                        </div>
+                    }
+                    
+                    @if (!string.IsNullOrEmpty(Model.Prerequisites))
+                    {
+                        <h6 class="mb-3">
+                            <i class="feather-alert-circle me-2 text-warning"></i>
+                            المتطلبات الأساسية
+                        </h6>
+                        <div>
+                            @Html.Raw(Model.Prerequisites)
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Courses in Path -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-list me-2"></i>
+                        الدورات في المسار (@Model.Courses?.Count())
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (Model.Courses != null && Model.Courses.Any())
+                    {
+                        @foreach (var course in Model.Courses.OrderBy(c => c.Order))
+                        {
+                            <div class="course-step">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="step-number">@course.Order</div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">@course.Course?.Title</h6>
+                                        <div class="d-flex align-items-center gap-3 text-muted small">
+                                            <span>
+                                                <i class="feather-clock me-1"></i>
+                                                @((course.Course?.TotalDurationMinutes ?? 0) / 60) ساعة
+                                            </span>
+                                            <span>
+                                                <i class="feather-video me-1"></i>
+                                                @(course.Course?.TotalLessons ?? 0) درس
+                                            </span>
+                                            <span>
+                                                <i class="feather-users me-1"></i>
+                                                @(course.Course?.TotalStudents ?? 0) طالب
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <a asp-controller="Courses" asp-action="Details" asp-route-id="@course.CourseId" class="btn btn-sm btn-light-brand">
+                                            <i class="feather-eye me-2"></i>
+                                            عرض الدورة
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <i class="feather-inbox fs-3 mb-2"></i>
+                            <p>لا توجد دورات في هذا المسار</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Enrollment Statistics -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-trending-up me-2"></i>
+                        إحصائيات التسجيل
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="enrollmentChart" class="enrollment-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Statistics -->
+            <div class="row g-3 mb-4">
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-primary text-primary mb-2">
+                            <i class="feather-users"></i>
+                        </div>
+                        <h3 class="mb-1">@Model.EnrolledStudentsCount</h3>
+                        <small class="text-muted">طالب مسجل</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-success text-success mb-2">
+                            <i class="feather-award"></i>
+                        </div>
+                        <h3 class="mb-1">@Model.CompletedCount</h3>
+                        <small class="text-muted">أتموا المسار</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-warning text-warning mb-2">
+                            <i class="feather-star"></i>
+                        </div>
+                        <h3 class="mb-1">@(Model.AverageRating > 0 ? Model.AverageRating.ToString("F1") : "0.0")</h3>
+                        <small class="text-muted">متوسط التقييم</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stats-box">
+                        <div class="avatar-text bg-soft-info text-info mb-2">
+                            <i class="feather-percent"></i>
+                        </div>
+                        <h3 class="mb-1">
+                            @(Model.EnrolledStudentsCount > 0 ? $"{(Model.CompletedCount * 100.0 / Model.EnrolledStudentsCount):F1}%" : "0%")
+                        </h3>
+                        <small class="text-muted">معدل الإتمام</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Path Info -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-info me-2"></i>
+                        معلومات المسار
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="vstack gap-3">
+                        <div>
+                            <small class="text-muted d-block mb-1">المستوى</small>
+                            <span class="badge bg-soft-primary text-primary">@Model.Level</span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block mb-1">التصنيف</small>
+                            <span class="fw-semibold">@Model.Category?.Name</span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block mb-1">الإتمام التسلسلي</small>
+                            @if (Model.RequireSequentialCompletion)
+                            {
+                                <span class="text-success"><i class="feather-check-circle"></i> مطلوب</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted"><i class="feather-x-circle"></i> غير مطلوب</span>
+                            }
+                        </div>
+                        <div>
+                            <small class="text-muted d-block mb-1">إصدار شهادة</small>
+                            @if (Model.IssueCertificate)
+                            {
+                                <span class="text-success"><i class="feather-check-circle"></i> نعم</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted"><i class="feather-x-circle"></i> لا</span>
+                            }
+                        </div>
+                        <div>
+                            <small class="text-muted d-block mb-1">تاريخ الإنشاء</small>
+                            <span class="fw-semibold">@Model.CreatedAt.ToString("dd/MM/yyyy")</span>
+                        </div>
+                        @if (Model.UpdatedAt.HasValue)
+                        {
+                            <div>
+                                <small class="text-muted d-block mb-1">آخر تحديث</small>
+                                <span class="fw-semibold">@Model.UpdatedAt.Value.ToString("dd/MM/yyyy")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card stretch stretch-full">
+                <div class="card-header">
+                    <h5 class="card-title">
+                        <i class="feather-zap me-2"></i>
+                        @Html.T("إجراءات سريعة", "Quick actions")
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-light-brand">
+                            <i class="feather-edit me-2"></i>
+                            تعديل المسار
+                        </a>
+                        <form asp-action="Duplicate" asp-route-id="@Model.Id" method="post" class="d-grid">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-light-brand" id="duplicateBtn">
+                                <i class="feather-copy me-2"></i>
+                                تكرار المسار
+                            </button>
+                        </form>
+                        <a href="#" class="btn btn-light-brand" target="_blank">
+                            <i class="feather-eye me-2"></i>
+                            معاينة للطلاب
+                        </a>
+                        <hr>
+                        <button type="button" class="btn btn-danger delete-btn">
+                            <i class="feather-trash-2 me-2"></i>
+                            حذف المسار
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Form -->
+<form asp-action="Delete" asp-route-id="@Model.Id" method="post" id="deleteForm">
+    @Html.AntiForgeryToken()
+</form>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        window.__LearningPathsDetailsT = { deleteConfirm: '@Html.Raw(Html.T("هل أنت متأكد من حذف هذا المسار؟ سيتم أيضاً إلغاء تسجيل جميع الطلاب.", "Are you sure you want to delete this path? All student enrollments will also be cancelled.").Replace("'", "\\'"))' };
+        $(document).ready(function() {
+            // Dynamic Enrollment Chart Data
+            var chartLabels = @Html.Raw(Json.Serialize(ViewBag.ChartLabels ?? new List<string>()));
+            var chartData = @Html.Raw(Json.Serialize(ViewBag.ChartData ?? new List<int>()));
+            
+            // Enrollment Chart
+            const ctx = document.getElementById('enrollmentChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: 'التسجيلات الجديدة',
+                        data: chartData,
+                        borderColor: 'rgb(102, 126, 234)',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Delete confirmation
+            $('.delete-btn').click(function() {
+                if (confirm(window.__LearningPathsDetailsT.deleteConfirm)) {
+                    $('#deleteForm').submit();
+                }
+            });
+        });
+    </script>
+}
+

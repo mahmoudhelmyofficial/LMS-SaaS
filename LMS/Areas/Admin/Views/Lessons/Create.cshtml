@@ -1,0 +1,373 @@
+@model LMS.Domain.Entities.Courses.Lesson
+
+@{
+    ViewData["Title"] = Html.T("إضافة درس جديد", "Add new lesson");
+    var moduleId = ViewBag.ModuleId as string;
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("المحتوى التعليمي", "Content"), null),
+        (Html.T("الدروس", "Lessons"), Url.Action("Index", "Lessons", new { moduleId })),
+        (Html.T("إضافة درس", "Add lesson"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/assets/vendors/css/select2.min.css" />
+    <style>
+        .lesson-type-selector {
+            cursor: pointer;
+            border: 2px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+        .lesson-type-selector:hover {
+            border-color: #3454d1;
+            background-color: #f8f9ff;
+        }
+        .lesson-type-selector.active {
+            border-color: #3454d1;
+            background-color: #f8f9ff;
+        }
+        .video-provider-box {
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .video-provider-box.active {
+            border-color: #3454d1;
+            background-color: #f8f9ff;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+<!-- Main Content -->
+<div class="main-content">
+    <form asp-action="Create" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="ModuleId" value="@moduleId" />
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <!-- Lesson Type Selection -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("نوع الدرس", "Lesson type")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <div class="lesson-type-selector text-center p-3 rounded" onclick="selectLessonType('Video')">
+                                    <i class="feather-video fs-1 text-primary mb-2"></i>
+                                    <h6>@Html.T("فيديو", "Video")</h6>
+                                    <input type="radio" name="Type" value="0" class="d-none" id="typeVideo">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="lesson-type-selector text-center p-3 rounded" onclick="selectLessonType('Article')">
+                                    <i class="feather-file-text fs-1 text-success mb-2"></i>
+                                    <h6>@Html.T("مقال", "Article")</h6>
+                                    <input type="radio" name="Type" value="1" class="d-none" id="typeArticle">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="lesson-type-selector text-center p-3 rounded" onclick="selectLessonType('Quiz')">
+                                    <i class="feather-help-circle fs-1 text-warning mb-2"></i>
+                                    <h6>@Html.T("اختبار", "Quiz")</h6>
+                                    <input type="radio" name="Type" value="2" class="d-none" id="typeQuiz">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="lesson-type-selector text-center p-3 rounded" onclick="selectLessonType('Document')">
+                                    <i class="feather-file fs-1 text-info mb-2"></i>
+                                    <h6>@Html.T("ملف", "Document")</h6>
+                                    <input type="radio" name="Type" value="3" class="d-none" id="typeDocument">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Basic Information -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("المعلومات الأساسية", "Basic information")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label asp-for="Title" class="form-label">@Html.T("عنوان الدرس", "Lesson title") <span class="text-danger">*</span></label>
+                            <input asp-for="Title" class="form-control" placeholder="@Html.T("مثال: مقدمة في HTML", "e.g. Introduction to HTML")" required />
+                            <span asp-validation-for="Title" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Description" class="form-label">@Html.T("وصف الدرس", "Lesson description")</label>
+                            <textarea asp-for="Description" class="form-control" rows="3" placeholder="@Html.T("وصف مختصر عن محتوى الدرس", "Brief description of the lesson content")"></textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="OrderIndex" class="form-label">@Html.T("ترتيب الدرس", "Lesson order") <span class="text-danger">*</span></label>
+                                <input asp-for="OrderIndex" type="number" class="form-control" min="1" value="1" required />
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label asp-for="DurationMinutes" class="form-label">@Html.T("المدة (دقيقة)", "Duration (minutes)") <span class="text-danger">*</span></label>
+                                <input asp-for="DurationMinutes" type="number" class="form-control" min="1" required />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Video Content -->
+                <div class="card stretch stretch-full mb-4" id="videoContent" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("محتوى الفيديو", "Video content")</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Video Provider Selection -->
+                        <div class="mb-4">
+                            <label class="form-label">@Html.T("مزود الفيديو", "Video provider")</label>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="video-provider-box text-center" onclick="selectVideoProvider('YouTube')">
+                                        <i class="feather-youtube fs-2 text-danger mb-2"></i>
+                                        <h6>YouTube</h6>
+                                        <input type="radio" name="VideoProvider" value="0" class="d-none">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="video-provider-box text-center" onclick="selectVideoProvider('Vimeo')">
+                                        <i class="feather-video fs-2 text-primary mb-2"></i>
+                                        <h6>Vimeo</h6>
+                                        <input type="radio" name="VideoProvider" value="1" class="d-none">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="video-provider-box text-center" onclick="selectVideoProvider('Upload')">
+                                        <i class="feather-upload-cloud fs-2 text-success mb-2"></i>
+                                        <h6>@Html.T("رفع مباشر", "Direct upload")</h6>
+                                        <input type="radio" name="VideoProvider" value="2" class="d-none">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="videoUrlField" style="display: none;">
+                            <div class="mb-3">
+                                <label asp-for="VideoUrl" class="form-label">@Html.T("رابط الفيديو", "Video URL")</label>
+                                <input asp-for="VideoUrl" type="url" class="form-control" placeholder="@Html.T("مثال: https://www.youtube.com/watch?v=...", "e.g. https://www.youtube.com/watch?v=...")" />
+                            </div>
+                        </div>
+
+                        <div id="videoUploadField" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">@Html.T("رفع الفيديو", "Upload video")</label>
+                                <input type="file" class="form-control" name="VideoFile" accept="video/*" />
+                                <small class="text-muted">@Html.T("الحد الأقصى: 500 ميجابايت، الصيغ المدعومة: MP4, WebM, MOV", "Max: 500 MB. Supported: MP4, WebM, MOV")</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Article Content -->
+                <div class="card stretch stretch-full mb-4" id="articleContent" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("محتوى المقال", "Article content")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label asp-for="Content" class="form-label">@Html.T("المحتوى", "Content")</label>
+                            <textarea asp-for="Content" class="form-control" rows="10" id="articleEditor"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quiz Content -->
+                <div class="card stretch stretch-full mb-4" id="quizContent" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إعدادات الاختبار", "Quiz settings")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <i class="feather-info me-2"></i>
+                            @Html.T("سيتم إعادة توجيهك إلى صفحة إنشاء الاختبار بعد حفظ الدرس", "You will be redirected to the quiz creation page after saving the lesson")
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("عدد الأسئلة", "Number of questions")</label>
+                            <input type="number" class="form-control" min="1" value="10" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("مدة الاختبار (دقيقة)", "Quiz duration (minutes)")</label>
+                            <input type="number" class="form-control" min="1" value="30" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Document Content -->
+                <div class="card stretch stretch-full mb-4" id="documentContent" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("رفع المستند", "Document upload")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">@Html.T("المستند", "Document")</label>
+                            <input type="file" class="form-control" name="DocumentFile" accept=".pdf,.doc,.docx,.ppt,.pptx" />
+                            <small class="text-muted">@Html.T("الصيغ المدعومة: PDF, DOC, DOCX, PPT, PPTX", "Supported: PDF, DOC, DOCX, PPT, PPTX")</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <!-- Actions -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إجراءات", "Actions")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="feather-save me-2"></i>
+                                @Html.T("حفظ الدرس", "Save lesson")
+                            </button>
+                            <a asp-action="Index" asp-route-moduleId="@moduleId" class="btn btn-light">
+                                <i class="feather-x me-2"></i>
+                                @Html.T("إلغاء", "Cancel")
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings -->
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("إعدادات الدرس", "Lesson settings")</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="isPublishedSwitch" asp-for="IsPublished">
+                            <label class="form-check-label" for="isPublishedSwitch">
+                                نشر الدرس
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="isFreeSwitch" asp-for="IsFree">
+                            <label class="form-check-label" for="isFreeSwitch">
+                                درس مجاني (معاينة)
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="allowDownloadSwitch">
+                            <label class="form-check-label" for="allowDownloadSwitch">
+                                السماح بالتحميل
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="allowCommentsSwitch" checked>
+                            <label class="form-check-label" for="allowCommentsSwitch">
+                                السماح بالتعليقات
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tips -->
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("نصائح", "Tips")</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-2">
+                                <i class="feather-check-circle text-success me-2"></i>
+                                استخدم عنواناً واضحاً
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check-circle text-success me-2"></i>
+                                حدد المدة بدقة
+                            </li>
+                            <li class="mb-2">
+                                <i class="feather-check-circle text-success me-2"></i>
+                                استخدم فيديوهات عالية الجودة
+                            </li>
+                            <li>
+                                <i class="feather-check-circle text-success me-2"></i>
+                                اجعل الدرس الأول مجانياً
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/assets/vendors/js/select2.min.js"></script>
+    <script>
+        function selectLessonType(type) {
+            // Remove active class from all
+            $('.lesson-type-selector').removeClass('active');
+            
+            // Hide all content sections
+            $('#videoContent, #articleContent, #quizContent, #documentContent').hide();
+            
+            // Show selected type
+            switch(type) {
+                case 'Video':
+                    $('.lesson-type-selector').eq(0).addClass('active');
+                    $('#typeVideo').prop('checked', true);
+                    $('#videoContent').show();
+                    break;
+                case 'Article':
+                    $('.lesson-type-selector').eq(1).addClass('active');
+                    $('#typeArticle').prop('checked', true);
+                    $('#articleContent').show();
+                    break;
+                case 'Quiz':
+                    $('.lesson-type-selector').eq(2).addClass('active');
+                    $('#typeQuiz').prop('checked', true);
+                    $('#quizContent').show();
+                    break;
+                case 'Document':
+                    $('.lesson-type-selector').eq(3).addClass('active');
+                    $('#typeDocument').prop('checked', true);
+                    $('#documentContent').show();
+                    break;
+            }
+        }
+
+        function selectVideoProvider(provider) {
+            $('.video-provider-box').removeClass('active');
+            
+            switch(provider) {
+                case 'YouTube':
+                case 'Vimeo':
+                    $('.video-provider-box').eq(provider === 'YouTube' ? 0 : 1).addClass('active');
+                    $('#videoUrlField').show();
+                    $('#videoUploadField').hide();
+                    $('input[name="VideoProvider"]').eq(provider === 'YouTube' ? 0 : 1).prop('checked', true);
+                    break;
+                case 'Upload':
+                    $('.video-provider-box').eq(2).addClass('active');
+                    $('#videoUrlField').hide();
+                    $('#videoUploadField').show();
+                    $('input[name="VideoProvider"]').eq(2).prop('checked', true);
+                    break;
+            }
+        }
+
+        // Set default lesson type
+        $(document).ready(function() {
+            selectLessonType('Video');
+        });
+    </script>
+}
+

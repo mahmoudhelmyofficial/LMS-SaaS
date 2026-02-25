@@ -1,0 +1,271 @@
+@model LMS.Domain.Entities.Social.DirectMessage
+
+@{
+    ViewData["Title"] = Html.T("تفاصيل الرسالة", "Message Details");
+    ViewData["Subtitle"] = Model.Subject;
+    var isSender = Model.SenderId == User.FindFirstValue(ClaimTypes.NameIdentifier);
+}
+
+@{
+    var sentUrl = Url.Action("Sent");
+    var replyUrl = Url.Action("Reply", new { id = Model.Id });
+    var indexUrl = Url.Action("Index");
+    var actionButtonsHtml = isSender 
+        ? "<a href='" + sentUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة للمرسلة", "Back to sent") + "</a>"
+        : "<a href='" + replyUrl + "' class='btn btn-primary'><i class='feather-corner-up-right me-2'></i>" + Html.T("رد", "Reply") + "</a><a href='" + indexUrl + "' class='btn btn-light'><i class='feather-arrow-right me-2'></i>" + Html.T("العودة للوارد", "Back to inbox") + "</a>";
+}
+@await Html.PartialAsync("_PageHeader", new ViewDataDictionary(ViewData)
+{
+    { "ActionButtons", Html.Raw(actionButtonsHtml) }
+})
+
+<div class="main-content">
+    @await Html.PartialAsync("_AlertMessages")
+
+    <div class="row">
+        <!-- Main Content -->
+        <div class="col-lg-8">
+            <!-- Message Card -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-body">
+                    <!-- Message Header -->
+                    <div class="d-flex align-items-start gap-3 mb-4 pb-4 border-bottom">
+                        @{
+                            var displayUser = isSender ? (Model.Recipient ?? Model.Receiver) : Model.Sender;
+                            var displayName = displayUser?.FullName ?? "مستخدم";
+                            var displayInitial = !string.IsNullOrEmpty(displayUser?.FirstName) && displayUser.FirstName.Length > 0
+                                ? displayUser.FirstName.Substring(0, 1)
+                                : (!string.IsNullOrEmpty(displayName) && displayName.Length > 0
+                                    ? displayName.Substring(0, 1)
+                                    : "?");
+                        }
+                        <div class="avatar-text avatar-lg @(isSender ? "bg-soft-primary text-primary" : "bg-soft-success text-success")">
+                            @displayInitial
+                        </div>
+                        <div class="flex-grow-1">
+                            @if (isSender)
+                            {
+                                var recipient = Model.Recipient ?? Model.Receiver;
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="fw-bold mb-1">@Html.T("إلى:", "To:") @(recipient?.FullName ?? Html.T("مستخدم", "User"))</h6>
+                                        @if (!string.IsNullOrEmpty(recipient?.Email))
+                                        {
+                                            <p class="text-muted fs-13 mb-0">@recipient.Email</p>
+                                        }
+                                    </div>
+                                    @if (Model.IsRead)
+                                    {
+                                        <span class="badge bg-soft-success text-success">
+                                            <i class="feather-check-circle me-1"></i>
+                                            تمت القراءة
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-soft-warning text-warning">
+                                            <i class="feather-mail me-1"></i>
+                                            لم تُقرأ
+                                        </span>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="fw-bold mb-1">@Html.T("من:", "From:") @(Model.Sender?.FullName ?? Html.T("مستخدم", "User"))</h6>
+                                        @if (!string.IsNullOrEmpty(Model.Sender?.Email))
+                                        {
+                                            <p class="text-muted fs-13 mb-0">@Model.Sender.Email</p>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            <p class="text-muted fs-12 mb-0">
+                                <i class="feather-calendar me-1"></i>
+                                @Model.SentAt.ToString("dd MMMM yyyy - hh:mm tt")
+                                @if (Model.IsRead && Model.ReadAt.HasValue && !isSender)
+                                {
+                                    <span class="me-2">•</span>
+                                    <i class="feather-check me-1"></i>
+                                    <span>قُرئت في @Model.ReadAt.Value.ToString("dd/MM hh:mm tt")</span>
+                                }
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Message Subject -->
+                    <div class="mb-4">
+                        <h5 class="fw-bold mb-3">@Html.T("الموضوع:", "Subject:")</h5>
+                        <h4 class="text-dark">@(Model.Subject ?? "بدون موضوع")</h4>
+                    </div>
+
+                    <!-- Message Body -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-3">@Html.T("الرسالة:", "Message:")</h6>
+                        <div class="bg-soft-light p-4 rounded">
+                            <p class="mb-0 text-dark" style="white-space: pre-wrap; line-height: 1.8;">@(Model.Message ?? Model.Body ?? "لا يوجد محتوى")</p>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="d-flex gap-2 pt-3 border-top">
+                        @if (!isSender)
+                        {
+                            <a href="@Url.Action("Reply", new { id = Model.Id })" class="btn btn-primary">
+                                <i class="feather-corner-up-right me-2"></i>
+                                رد على الرسالة
+                            </a>
+                        }
+                        
+                        <form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-inline" onsubmit="return confirm('@Html.Raw(Html.T("هل تريد حذف هذه الرسالة؟", "Do you want to delete this message?").Replace("'", "\\'"))')">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-light text-danger">
+                                <i class="feather-trash-2 me-2"></i>
+                                حذف الرسالة
+                            </button>
+                        </form>
+
+                        <button type="button" class="btn btn-light" onclick="window.print()">
+                            <i class="feather-printer me-2"></i>
+                            طباعة
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Message Info -->
+            <div class="card stretch stretch-full mb-4">
+                <div class="card-header">
+                    <h6 class="card-title">@Html.T("معلومات الرسالة", "Message details")</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">الحالة:</span>
+                        @if (Model.IsRead)
+                        {
+                            <span class="badge bg-soft-success text-success">
+                                <i class="feather-check-circle me-1"></i>
+                                مقروءة
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-soft-warning text-warning">
+                                <i class="feather-mail me-1"></i>
+                                غير مقروءة
+                            </span>
+                        }
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">تاريخ الإرسال:</span>
+                        <span class="fw-bold fs-13">@Model.SentAt.ToString("dd/MM/yyyy")</span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                        <span class="text-muted">وقت الإرسال:</span>
+                        <span class="fw-bold fs-13">@Model.SentAt.ToString("hh:mm tt")</span>
+                    </div>
+
+                    @if (Model.IsRead && Model.ReadAt.HasValue)
+                    {
+                        <div class="d-flex justify-content-between mb-3 pb-3 border-bottom">
+                            <span class="text-muted">تاريخ القراءة:</span>
+                            <span class="fw-bold fs-13">@Model.ReadAt.Value.ToString("dd/MM/yyyy")</span>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">وقت القراءة:</span>
+                            <span class="fw-bold fs-13">@Model.ReadAt.Value.ToString("hh:mm tt")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            @if (!isSender)
+            {
+                <div class="card stretch stretch-full mb-4">
+                    <div class="card-header">
+                        <h6 class="card-title">@Html.T("إجراءات سريعة", "Quick actions")</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="@Url.Action("Reply", new { id = Model.Id })" class="btn btn-primary">
+                                <i class="feather-corner-up-right me-2"></i>
+                                رد
+                            </a>
+                            <a href="@Url.Action("Compose", new { receiverId = Model.SenderId })" class="btn btn-light">
+                                <i class="feather-send me-2"></i>
+                                رسالة جديدة
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Participant Info -->
+            <div class="card stretch stretch-full bg-soft-info">
+                <div class="card-body">
+                    <h6 class="fw-bold text-info mb-3">
+                        <i class="feather-user me-2"></i>
+                        @(isSender ? "المستلم" : "المرسل")
+                    </h6>
+                    @{
+                        var participantUser = isSender ? (Model.Recipient ?? Model.Receiver) : Model.Sender;
+                        var participantName = participantUser?.FullName ?? "مستخدم";
+                        var participantInitial = !string.IsNullOrEmpty(participantUser?.FirstName) && participantUser.FirstName.Length > 0
+                            ? participantUser.FirstName.Substring(0, 1)
+                            : (!string.IsNullOrEmpty(participantName) && participantName.Length > 0
+                                ? participantName.Substring(0, 1)
+                                : "?");
+                    }
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="avatar-text avatar-lg @(isSender ? "bg-info text-white" : "bg-success text-white")">
+                            @participantInitial
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">@participantName</h6>
+                            @if (!string.IsNullOrEmpty(participantUser?.Email))
+                            {
+                                <p class="text-muted fs-13 mb-0">@participantUser.Email</p>
+                            }
+                        </div>
+                    </div>
+                    @if (isSender)
+                    {
+                        var recipientId = Model.RecipientId ?? Model.ReceiverId;
+                        if (!string.IsNullOrEmpty(recipientId))
+                        {
+                            <a href="@Url.Action("Details", "Students", new { studentId = recipientId })" class="btn btn-sm btn-light w-100">
+                                <i class="feather-user me-2"></i>
+                                عرض الملف الشخصي
+                            </a>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Mark message as read automatically if viewing as receiver
+            @if (!isSender && !Model.IsRead)
+            {
+                <text>
+                // Message will be marked as read by the controller
+                </text>
+            }
+        });
+    </script>
+}
+

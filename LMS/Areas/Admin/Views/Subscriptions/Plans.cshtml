@@ -1,0 +1,445 @@
+@model IEnumerable<LMS.Domain.Entities.Payments.SubscriptionPlan>
+
+@{
+    ViewData["Title"] = Html.T("خطط الاشتراك", "Subscription Plans");
+    var breadcrumbs = new List<(string Name, string? Url)>
+    {
+        (Html.T("الاشتراكات", "Subscriptions"), Url.Action("Index", "Subscriptions")),
+        (Html.T("الخطط", "Plans"), null)
+    };
+    ViewData["Breadcrumbs"] = breadcrumbs;
+    ViewData["ShowStats"] = true;
+    var actions = new List<(string Text, string Icon, string Url, string? CssClass)>
+    {
+        (Html.T("إضافة خطة جديدة", "Add New Plan"), "feather-plus", Url.Action("CreatePlan", "Subscriptions"), "btn-primary")
+    };
+    ViewData["HeaderActions"] = actions;
+}
+
+@section Styles {
+    <style>
+        .plan-card {
+            transition: all 0.3s ease;
+            border: 2px solid #e9ecef;
+            position: relative;
+            overflow: hidden;
+        }
+        .plan-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        }
+        .plan-card.featured {
+            border-color: #3454d1;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        }
+        .featured-badge {
+            position: absolute;
+            top: 15px;
+            left: -35px;
+            background: #3454d1;
+            color: white;
+            padding: 5px 40px;
+            transform: rotate(-45deg);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .price-display {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #3454d1;
+        }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        .feature-icon {
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            margin-left: 10px;
+        }
+    </style>
+}
+
+@await Html.PartialAsync("_PageHeader")
+
+@section StatsCards {
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-primary text-primary">
+                            <i class="feather-layers"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي الخطط", "Total Plans")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count().ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-success text-success">
+                            <i class="feather-check-circle"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("خطط نشطة", "Active Plans")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(p => p.IsActive).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-warning text-warning">
+                            <i class="feather-star"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("خطط مميزة", "Featured Plans")</span>
+                            <h3 class="fw-bolder d-block">@Model.Count(p => p.IsFeatured).ToString("N0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xxl-3 col-md-6">
+        <div class="card stretch stretch-full">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="avatar-text avatar-xl rounded bg-soft-info text-info">
+                            <i class="feather-users"></i>
+                        </div>
+                        <div>
+                            <span class="text-truncate-1-line">@Html.T("إجمالي المشتركين", "Total subscribers")</span>
+                            <h3 class="fw-bolder d-block">@(ViewBag.TotalSubscribers?.ToString("N0") ?? "0")</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Main Content -->
+<div class="main-content">
+    <!-- Plans Grid -->
+    <div class="row">
+        @foreach (var plan in Model.OrderBy(p => p.DisplayOrder))
+        {
+            <div class="col-lg-4 col-md-6 mb-4">
+                <div class="card plan-card @(plan.IsFeatured ? "featured" : "") stretch stretch-full">
+                    @if (plan.IsFeatured)
+                    {
+                        <div class="featured-badge">@Html.T("الأكثر شعبية", "Most popular")</div>
+                    }
+                    
+                    <div class="card-header text-center border-0 pt-4">
+                        <h3 class="fw-bold mb-2">@plan.Name</h3>
+                        @if (!string.IsNullOrEmpty(plan.Description))
+                        {
+                            <p class="text-muted mb-3">@plan.Description</p>
+                        }
+                        <div class="price-display">
+                            @plan.Price.ToString("N0")
+                            <small class="fs-6 text-muted">@Html.T("جنيه", "EGP")</small>
+                        </div>
+                        <small class="text-muted">@Html.T("لمدة", "For") @plan.DurationDays @Html.T("يوم", "days")</small>
+                    </div>
+
+                    <div class="card-body">
+                        <ul class="feature-list">
+                            <li>
+                                <div class="d-flex align-items-center">
+                                    <span class="feature-icon bg-soft-primary text-primary">
+                                        <i class="feather-book fs-6"></i>
+                                    </span>
+                                    <span>
+                                        @(plan.CoursesLimit == -1 ? Html.T("دورات غير محدودة", "Unlimited courses") : plan.CoursesLimit + " " + Html.T("دورات", "courses"))
+                                    </span>
+                                </div>
+                            </li>
+                            
+                            @if (plan.AccessToPremiumContent)
+                            {
+                                <li>
+                                    <div class="d-flex align-items-center">
+                                        <span class="feature-icon bg-soft-success text-success">
+                                            <i class="feather-star fs-6"></i>
+                                        </span>
+                                        <span>@Html.T("الوصول للمحتوى المميز", "Access to premium content")</span>
+                                    </div>
+                                </li>
+                            }
+
+                            @if (plan.AccessToLiveClasses)
+                            {
+                                <li>
+                                    <div class="d-flex align-items-center">
+                                        <span class="feature-icon bg-soft-warning text-warning">
+                                            <i class="feather-video fs-6"></i>
+                                        </span>
+                                        <span>@Html.T("حضور الفصول المباشرة", "Attend live classes")</span>
+                                    </div>
+                                </li>
+                            }
+
+                            @if (plan.PrioritySupport)
+                            {
+                                <li>
+                                    <div class="d-flex align-items-center">
+                                        <span class="feature-icon bg-soft-info text-info">
+                                            <i class="feather-headphones fs-6"></i>
+                                        </span>
+                                        <span>@Html.T("دعم فني ذو أولوية", "Priority support")</span>
+                                    </div>
+                                </li>
+                            }
+
+                            @if (plan.CertificatesIncluded)
+                            {
+                                <li>
+                                    <div class="d-flex align-items-center">
+                                        <span class="feature-icon bg-soft-danger text-danger">
+                                            <i class="feather-award fs-6"></i>
+                                        </span>
+                                        <span>@Html.T("شهادات إتمام", "Completion certificates")</span>
+                                    </div>
+                                </li>
+                            }
+
+                            @if (plan.TrialPeriodDays > 0)
+                            {
+                                <li>
+                                    <div class="d-flex align-items-center">
+                                        <span class="feature-icon bg-soft-secondary text-secondary">
+                                            <i class="feather-clock fs-6"></i>
+                                        </span>
+                                        <span>@plan.TrialPeriodDays @Html.T("أيام تجربة مجانية", "days free trial")</span>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+
+                    <div class="card-footer border-0 pb-4">
+                        <div class="d-flex gap-2 mb-3">
+                            <a href="@Url.Action("EditPlan", "Subscriptions", new { id = plan.Id })" class="btn btn-primary flex-grow-1">
+                                <i class="feather-edit me-2"></i>
+                                @Html.T("تعديل الخطة", "Edit plan")
+                            </a>
+                            <form asp-action="DeletePlan" asp-route-id="@plan.Id" method="post" class="d-inline" 
+                                  onsubmit="return confirm('@(Html.Raw(Html.T("هل أنت متأكد من حذف خطة", "Are you sure you want to delete plan").ToString().Replace("'", "\\'"))) @plan.Name? @(Html.Raw(Html.T("هذا الإجراء لا يمكن التراجع عنه.", "This action cannot be undone.").ToString().Replace("'", "\\'")))');">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-outline-danger" title="@Html.T("حذف", "Delete")">
+                                    <i class="feather-trash-2"></i>
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                @if (plan.IsActive)
+                                {
+                                    <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-soft-secondary text-secondary">@Html.T("معطل", "Disabled")</span>
+                                }
+                                
+                                @if (plan.IsFeatured)
+                                {
+                                    <span class="badge bg-soft-warning text-warning">@Html.T("مميز", "Featured")</span>
+                                }
+                            </div>
+                            <small class="text-muted">@Html.T("ترتيب:", "Order:") @plan.DisplayOrder</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (!Model.Any())
+        {
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="feather-inbox text-muted" style="font-size: 4rem;"></i>
+                        <h5 class="mt-3">@Html.T("لا توجد خطط اشتراك", "No subscription plans")</h5>
+                        <p class="text-muted">@Html.T("ابدأ بإضافة خطة اشتراك جديدة", "Start by adding a new subscription plan")</p>
+                        <a asp-action="CreatePlan" class="btn btn-primary">
+                            <i class="feather-plus me-2"></i>
+                            @Html.T("إضافة خطة جديدة", "Add new plan")
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Comparison Table -->
+    @if (Model.Any())
+    {
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card stretch stretch-full">
+                    <div class="card-header">
+                        <h5 class="card-title">@Html.T("مقارنة الخطط", "Compare plans")</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>@Html.T("الخطة", "Plan")</th>
+                                        <th>@Html.T("السعر", "Price")</th>
+                                        <th>@Html.T("المدة", "Duration")</th>
+                                        <th>@Html.T("الدورات", "Courses")</th>
+                                        <th>@Html.T("المحتوى المميز", "Premium content")</th>
+                                        <th>@Html.T("الفصول المباشرة", "Live classes")</th>
+                                        <th>@Html.T("الشهادات", "Certificates")</th>
+                                        <th>@Html.T("التجربة المجانية", "Free trial")</th>
+                                        <th>@Html.T("الحالة", "Status")</th>
+                                        <th class="text-end">@Html.T("الإجراءات", "Actions")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var plan in Model.OrderBy(p => p.DisplayOrder))
+                                    {
+                                        <tr>
+                                            <td>
+                                                <span class="fw-bold">@plan.Name</span>
+                                                @if (plan.IsFeatured)
+                                                {
+                                                    <i class="feather-star text-warning ms-2"></i>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="fw-bold text-primary">@plan.Price.ToEGP()</span>
+                                            </td>
+                                            <td>@plan.DurationDays @Html.T("يوم", "days")</td>
+                                            <td>
+                                                @if (plan.CoursesLimit == -1)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">@Html.T("غير محدود", "Unlimited")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>@plan.CoursesLimit</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (plan.AccessToPremiumContent)
+                                                {
+                                                    <i class="feather-check text-success"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="feather-x text-danger"></i>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (plan.AccessToLiveClasses)
+                                                {
+                                                    <i class="feather-check text-success"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="feather-x text-danger"></i>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (plan.CertificatesIncluded)
+                                                {
+                                                    <i class="feather-check text-success"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="feather-x text-danger"></i>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (plan.TrialPeriodDays > 0)
+                                                {
+                                                    <span>@plan.TrialPeriodDays @Html.T("أيام", "days")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">-</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (plan.IsActive)
+                                                {
+                                                    <span class="badge bg-soft-success text-success">@Html.T("نشط", "Active")</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-soft-secondary text-secondary">@Html.T("معطل", "Disabled")</span>
+                                                }
+                                            </td>
+                                                <td class="text-end">
+                                                    <div class="hstack gap-2 justify-content-end">
+                                                        <a href="@Url.Action("EditPlan", "Subscriptions", new { id = plan.Id })" 
+                                                           class="avatar-text avatar-md" 
+                                                           data-bs-toggle="tooltip" 
+                                                           title="@Html.T("تعديل", "Edit")">
+                                                            <i class="feather-edit"></i>
+                                                        </a>
+                                                        <form asp-action="DeletePlan" asp-route-id="@plan.Id" method="post" class="d-inline" 
+                                                              onsubmit="return confirm('@(Html.T("هل أنت متأكد من حذف خطة", "Are you sure you want to delete plan")) @plan.Name?');">
+                                                            @Html.AntiForgeryToken()
+                                                            <button type="submit" class="avatar-text avatar-md border-0 bg-transparent" data-bs-toggle="tooltip" title="@Html.T("حذف", "Delete")">
+                                                                <i class="feather-trash-2 text-danger"></i>
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        function viewPlanDetails(planId) {
+            window.location.href = `/Admin/Subscriptions/EditPlan/${planId}`;
+        }
+
+        $(document).ready(function() {
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+    </script>
+}
+
